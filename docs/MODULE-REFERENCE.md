@@ -168,8 +168,16 @@ migration and browser acceptance remain pending.
 
 ## Classes UI composition (22 October 2026)
 
-The student catalog uses Selia Card/Field/Input/Button, with one card per class and
-separate detail links. Details separate curriculum from enrollment. Admin class
+The student catalog uses Selia Card/Field/Input/Button, with one compact card per
+class whose full surface links to its detail page. Details use a divider-based
+session list and separate curriculum from enrollment, placing enrollment first
+on mobile. `ClassEnrollmentPanel` consumes the existing `_app` route session,
+retaining the student + verified-email gate. Its UI distinguishes
+signed-out, unverified student, and non-student states; email verification links
+return to the current class. The current class routes remain student-only:
+signed-out visits redirect to login and non-students redirect to dashboard.
+The reserve action explicitly confirms Marks; hover translation respects
+reduced-motion preferences. Admin class
 studio groups published/postponed management and the draft editor into tabs, with
 existing management panels inside a Selia Accordion. Draft panel mounting retains
 local editor/file-input state across tab changes. Publishing selects the list.

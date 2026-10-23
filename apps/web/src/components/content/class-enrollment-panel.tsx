@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import type { CogitoUser } from "@cogito-app/auth";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -28,7 +28,6 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { getUserFacingError } from "@/lib/error-message";
-import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
 import { ClassCancellationPanel } from "./class-cancellation-panel";
@@ -78,7 +77,7 @@ export function ClassEnrollmentPanel({
   sessions,
 }: ClassEnrollmentPanelProps) {
   const queryClient = useQueryClient();
-  const auth = authClient.useSession();
+  const { session: auth } = useRouteContext({ from: "/_app" });
   const sessionUser = auth.data?.user as CogitoUser | undefined;
   const isStudent =
     sessionUser?.role === "student" && sessionUser.emailVerified;
@@ -307,18 +306,45 @@ export function ClassEnrollmentPanel({
     });
   }
 
-  if (auth.isPending) {
+  if (sessionUser && !isStudent) {
     return (
-      <Card aria-busy="true">
+      <Card>
         <CardHeader>
-          <CardTitle>Checking your account</CardTitle>
-          <CardDescription>Loading student enrollment access.</CardDescription>
+          <CardTitle>
+            {sessionUser.role === "student"
+              ? "Verify your email to enroll"
+              : "Student account required"}
+          </CardTitle>
+          <CardDescription>
+            {sessionUser.role === "student"
+              ? "You are signed in. Verify your email before reserving a class seat."
+              : "You are signed in. Class enrollment is available to student accounts."}
+          </CardDescription>
         </CardHeader>
+        {sessionUser.role === "student" ? (
+          <CardFooter>
+            <Button
+              nativeButton={false}
+              render={
+                <Link
+                  to="/verify-email"
+                  aria-label="Verify email"
+                  search={{
+                    email: sessionUser.email,
+                    redirect: `/classes/${classId}`,
+                  }}
+                />
+              }
+            >
+              Verify email
+            </Button>
+          </CardFooter>
+        ) : null}
       </Card>
     );
   }
 
-  if (!isStudent) {
+  if (!sessionUser) {
     return (
       <Card>
         <CardHeader>
@@ -331,7 +357,11 @@ export function ClassEnrollmentPanel({
         <CardFooter>
           <Button
             nativeButton={false}
-            render={<Link to="/login">Sign in to enroll</Link>}
+            render={
+              <Link to="/login" search={{ redirect: `/classes/${classId}` }}>
+                Sign in to enroll
+              </Link>
+            }
           >
             Sign in to enroll
           </Button>
@@ -381,9 +411,10 @@ export function ClassEnrollmentPanel({
     <Stack direction="column" spacing="lg">
       <Card>
         <CardHeader>
-          <CardTitle>Your class enrollment</CardTitle>
+          <CardTitle level={2}>Enrollment & payment</CardTitle>
           <CardDescription>
-            Choose your plan and review the cost before reserving a seat.
+            Manage your existing enrollment or choose a plan below. Review the
+            payment summary before reserving a seat.
           </CardDescription>
         </CardHeader>
         <CardBody className="space-y-4">
@@ -567,9 +598,10 @@ export function ClassEnrollmentPanel({
 
           {allowedPlans.length > 0 ? (
             <div className="space-y-4 border-t border-border pt-4">
+              <Text className="font-semibold">Choose your enrollment plan</Text>
               <div className="flex flex-wrap items-end gap-4">
                 {allowedPlans.length > 1 ? (
-                  <Field className="min-w-0 w-full sm:w-auto sm:min-w-48">
+                  <Field className="w-full min-w-0">
                     <FieldLabel htmlFor={`class-plan-${classId}`}>
                       Plan
                     </FieldLabel>
@@ -687,6 +719,7 @@ export function ClassEnrollmentPanel({
                   </CardBody>
                   <CardFooter>
                     <Button
+                      className="w-full"
                       progress={createEnrollment.isPending}
                       disabled={createEnrollment.isPending}
                       onClick={() =>

@@ -43,7 +43,15 @@ export function ClassDetailPage() {
   const academyClass = useQuery(
     orpc.classes.get.queryOptions({ input: { id: classId } }),
   );
-  if (academyClass.isPending) return <Loader />;
+  if (academyClass.isPending)
+    return (
+      <Stack direction="column" spacing="md" aria-busy="true">
+        <Text className="text-muted" role="status">
+          Loading class details…
+        </Text>
+        <Loader />
+      </Stack>
+    );
   if (
     academyClass.isError ||
     !["published", "postponed"].includes(academyClass.data.state)
@@ -77,17 +85,30 @@ export function ClassDetailPage() {
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
-      <Button
-        nativeButton={false}
-        variant="plain"
-        render={<Link to="/classes" aria-label="Browse classes" />}
-        className="w-fit"
-      >
-        <IconArrowLeft /> All classes
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button
+          nativeButton={false}
+          variant="plain"
+          render={<Link to="/classes" aria-label="Browse classes" />}
+          className="w-fit"
+        >
+          <IconArrowLeft /> All classes
+        </Button>
+        <Button
+          variant="plain"
+          nativeButton={false}
+          render={<Link to="/class-reports" aria-label="My class reports" />}
+        >
+          <IconCalendarEvent /> My class reports
+        </Button>
+      </div>
       <Card className="overflow-hidden">
         {coverUrl ? (
-          <img src={coverUrl} alt="" className="max-h-64 w-full object-cover" />
+          <img
+            src={coverUrl}
+            alt=""
+            className="max-h-40 w-full object-cover sm:max-h-52"
+          />
         ) : null}
         <CardBody className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
@@ -106,7 +127,11 @@ export function ClassDetailPage() {
           </div>
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div className="min-w-0 space-y-3">
-              <Heading level={1} className="break-words leading-tight">
+              <Heading
+                level={1}
+                size="md"
+                className="break-words leading-tight"
+              >
                 {item.titleEn}
               </Heading>
               <Text className="flex items-center gap-2 text-sm text-muted">
@@ -144,9 +169,35 @@ export function ClassDetailPage() {
         </CardBody>
       </Card>
 
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
-        <div className="min-w-0 space-y-8">
-          <section aria-labelledby="class-about-title" className="space-y-3">
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)]">
+        {enrollmentKind ? (
+          <aside
+            aria-label="Class enrollment"
+            className="min-w-0 xl:col-start-2 xl:row-start-1"
+          >
+            <ClassEnrollmentPanel
+              classId={item.id}
+              kind={enrollmentKind}
+              rates={{
+                cohortFullRateMarks: item.cohortFullRateMarks,
+                cohortHalfRateMarks: item.cohortHalfRateMarks,
+                cohortSingleRateMarks: item.cohortSingleRateMarks,
+                masterclassRateMarks: item.masterclassRateMarks,
+              }}
+              sessions={item.sessions.map((session) => ({
+                id: session.id,
+                sequenceNumber: session.sequenceNumber,
+                titleEn: session.titleEn,
+                startAt: session.startAt,
+              }))}
+            />
+          </aside>
+        ) : null}
+        <div className="min-w-0 space-y-6 xl:col-start-1 xl:row-start-1">
+          <section
+            aria-labelledby="class-about-title"
+            className="space-y-3 border-b border-border pb-6"
+          >
             <Heading level={2} size="sm" id="class-about-title">
               About this class
             </Heading>
@@ -166,87 +217,78 @@ export function ClassDetailPage() {
               </Heading>
               <Text className="text-xs text-muted">WIB · UTC+7</Text>
             </div>
-            <ol className="space-y-3">
-              {item.sessions.map((session) => (
-                <li key={session.id}>
-                  <Card>
-                    <CardBody className="flex items-start gap-4">
-                      <span
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent font-semibold tabular-nums"
-                        aria-label={`Session ${session.sequenceNumber}`}
-                      >
-                        {session.sequenceNumber}
-                      </span>
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <Heading
-                            level={3}
-                            size="sm"
-                            className="break-words text-base leading-snug"
-                          >
-                            {session.titleEn}
-                          </Heading>
-                          <Badge variant="secondary-outline">
-                            {session.mode === "online" ? "Online" : "In person"}
-                          </Badge>
-                        </div>
-                        <div className="space-y-1 text-sm text-muted">
-                          <Text>{formatDate(session.startAt)}</Text>
-                          <Text className="flex items-center gap-2">
-                            <IconClock
-                              className="size-4 shrink-0"
-                              aria-hidden="true"
-                            />
-                            Starts {formatTime(session.startAt)} WIB
-                          </Text>
-                        </div>
-                        {session.curriculumEn ? (
-                          <Text className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {session.curriculumEn}
-                          </Text>
-                        ) : null}
-                        <Text className="flex items-start gap-2 text-sm text-muted">
-                          <IconUser
-                            className="mt-0.5 size-4 shrink-0"
+            {item.sessions.length === 0 ? (
+              <EmptyStateCard
+                icon={<IconCalendarEvent />}
+                title="Schedule to be announced"
+                description="Session details will appear here when the schedule is available."
+              />
+            ) : (
+              <ol className="divide-y divide-border border-t border-border">
+                {item.sessions.map((session) => (
+                  <li
+                    key={session.id}
+                    className="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-3 py-4 sm:grid-cols-[2.5rem_minmax(0,1fr)] sm:gap-4"
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent font-semibold tabular-nums sm:size-10">
+                      <span className="sr-only">Session </span>
+                      {session.sequenceNumber}
+                    </span>
+                    <div className="min-w-0 space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <Heading
+                          level={3}
+                          size="sm"
+                          className="break-words leading-snug"
+                        >
+                          {session.titleEn}
+                        </Heading>
+                        <Badge variant="secondary-outline">
+                          {session.mode === "online" ? "Online" : "In person"}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+                        <Text className="flex items-center gap-2">
+                          <IconCalendarEvent
+                            className="size-4 shrink-0"
                             aria-hidden="true"
                           />
-                          <span>
-                            {session.tutor?.name ?? "Tutor to be announced"}
-                          </span>
+                          {formatDate(session.startAt)}
                         </Text>
-                        {session.mode === "online" ? (
-                          <Text className="text-xs text-muted">
-                            Meeting details are available to enrolled students.
-                          </Text>
-                        ) : null}
+                        <Text className="flex items-center gap-2">
+                          <IconClock
+                            className="size-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          {formatTime(session.startAt)} WIB
+                        </Text>
                       </div>
-                    </CardBody>
-                  </Card>
-                </li>
-              ))}
-            </ol>
+                      {session.curriculumEn ? (
+                        <Text className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {session.curriculumEn}
+                        </Text>
+                      ) : null}
+                      <Text className="flex items-start gap-2 text-sm text-muted">
+                        <IconUser
+                          className="mt-0.5 size-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          {session.tutor?.name ?? "Tutor to be announced"}
+                        </span>
+                      </Text>
+                      {session.mode === "online" ? (
+                        <Text className="text-xs text-muted">
+                          Meeting details are available to enrolled students.
+                        </Text>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
         </div>
-        {enrollmentKind ? (
-          <aside aria-label="Class enrollment" className="min-w-0">
-            <ClassEnrollmentPanel
-              classId={item.id}
-              kind={enrollmentKind}
-              rates={{
-                cohortFullRateMarks: item.cohortFullRateMarks,
-                cohortHalfRateMarks: item.cohortHalfRateMarks,
-                cohortSingleRateMarks: item.cohortSingleRateMarks,
-                masterclassRateMarks: item.masterclassRateMarks,
-              }}
-              sessions={item.sessions.map((session) => ({
-                id: session.id,
-                sequenceNumber: session.sequenceNumber,
-                titleEn: session.titleEn,
-                startAt: session.startAt,
-              }))}
-            />
-          </aside>
-        ) : null}
       </div>
     </Stack>
   );

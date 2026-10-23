@@ -1,5 +1,6 @@
 "use client";
 
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,6 +28,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
+  IconArrowLeft,
   IconCalendarEvent,
   IconDownload,
   IconFileText,
@@ -447,6 +449,16 @@ export function ClassSessionReportsPage() {
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
+      {isStudent ? (
+        <Button
+          variant="plain"
+          nativeButton={false}
+          className="w-fit"
+          render={<Link to="/classes" aria-label="All classes" />}
+        >
+          <IconArrowLeft /> All classes
+        </Button>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2 text-muted">
@@ -455,7 +467,9 @@ export function ClassSessionReportsPage() {
               Private class records
             </Text>
           </div>
-          <Heading level={1}>Session reports</Heading>
+          <Heading level={1} size="md">
+            Session reports
+          </Heading>
           <Text className="mt-2 max-w-2xl text-muted">
             {isStudent
               ? "Reports for your eligible delivered sessions, including sessions retained in class history."
