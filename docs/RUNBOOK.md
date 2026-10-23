@@ -1,5 +1,41 @@
 # Cogito Runbook
 
+## KOL settlement source handoff (23 October 2026)
+
+0073_kol_external_settlement is additive (one table, two restrictive FKs, operation
+unique index, decision index and entry-shape check). SQL, snapshot and journal are
+generated/reviewed only; no DB migration, provider, seed/reset or worker ran.
+Generation used ENV_FILE pointing to a nonexistent path and an unused loopback
+port-1 URL; drizzle-kit generate does not connect. Parent must own application
+and verification on the guarded test DB before exposing settlement routes/UI.
+
+Parent: apply 0073 to isolated test 6769/cogito-test, run only the existing guarded
+non-reset `referral-kol-commission.test.ts` acceptance with NODE_ENV=test and no
+reset flags. New cases cover AC-K03, concurrent same/distinct-key transfers,
+conflicting/stale adjustments, cross-decision operation reuse, audit rollback,
+refund after/concurrent with transfer, retained choice/history. Existing PR312
+cases must continue passing. Also verify actual partial-refund reconciliation,
+earlier-provider correction after settled transfers, schema FK/CHECK/unique
+constraints, CSV month-end/backdated transfer and snapshot consistency, and admin
+versus non-admin access in browser/RPC. No parent acceptance is claimed here.
+
+UI: existing admin KOL commission page -> View settlement -> record actual amount,
+WIB date and reference after external transfer. Record signed obligation correction
+only with approved amount and reason; negative reduces liability, positive adds.
+No proration is supplied. On uncertain request, retry same operation; review
+history before starting a new record. Do not edit/delete cash history or offset
+future commissions. Full refund shows zero obligation and retained cash as
+overpayment; partial refund remains flagged even after a manual adjustment.
+Export selects a WIB activity month but reports current lifetime balances;
+sum only summary rows. This is reconciliation, not historical closing/tax reporting.
+
+DB-free checks: 19 focused settlement/referral units / 47 expectations, normal
+check-types (4 tasks; 2 cached), changed-file lint and formatting. Raw API-project
+typecheck includes pre-existing test typing errors;
+use normal project hook checks for the source gate. Browser and DB proof remain
+parent-owned. Earlier transfer-deferred source notes below are historical.
+
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The

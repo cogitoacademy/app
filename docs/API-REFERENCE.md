@@ -1,5 +1,35 @@
 # Cogito API Reference
 
+## KOL external settlement source (23 October 2026)
+
+All four procedures are admin-only, under `/rpc/adminReferral/`. Request bodies
+use `{"json": input}` and results use the existing JSON envelope.
+
+| Procedure | Input | Output |
+| --- | --- | --- |
+| `getKolSettlement` | `decisionId` UUID | Decision, ordered immutable entries, calculated/adjustment/obligation/transferred/outstanding/overpayment IDR and status |
+| `recordKolTransfer` | `decisionId`, globally unique `operationId` UUID, positive whole `amountIdr` (max 1e9), `paidAt` ISO timestamp not in future, nonempty `reference` (max600) | Current settlement readback |
+| `adjustKolCommission` | `decisionId`, `operationId`, nonzero signed whole `amountIdr` (absolute max1e9), `expectedObligationIdr`, required `reason` (3..600) | Current settlement readback |
+| `exportKolMonthly` | `month` YYYY-MM (2000..2099) | `filename`, UTF-8 BOM `csv` |
+
+Same operation/payload/actor retries return current readback without another entry
+or audit. Reusing a key with changed financial fields or another actor/decision
+conflicts. Stale adjustment obligation conflicts; void/unresolved commission and
+negative resulting obligation reject adjustment. `KOL_SETTLEMENT_CONFLICT` maps
+to CONFLICT; `KOL_SETTLEMENT_INVALID` maps to BAD_REQUEST. No transfer edit/delete,
+wallet mutation or saved-choice correction endpoint is added.
+
+Export selects decisions with provider success (or unresolved decision creation),
+actual transfer date or adjustment recording in the selected half-open WIB month.
+A repeatable-read snapshot returns current lifetime totals, not historical closing
+balances. `summary` rows contain one total per decision; `transfer`/`adjustment`
+detail rows repeat those totals and show only the month's entries. Sum summary
+rows only. Includes campaign/code/student/purchase/refund state, cash reference,
+reason, actor and timestamps; dates are labeled UTC. Formula-like cells are
+neutralized. More than 5000 selected decisions fails explicitly, never truncates.
+Earlier transfer-deferred notes refer to the preceding decision-only checkpoint.
+
+
 ## AUTH-02 and referral source contract (22 October 2026)
 
 Deployment prerequisite: additive migration `0071_referral_registration_rewards`

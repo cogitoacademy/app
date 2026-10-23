@@ -1,5 +1,18 @@
 # Cogito release v3 - Product Requirements Document
 
+## KOL settlement implementation boundary (23 October 2026)
+
+REQ-KOL-02/03 source now includes decision-bound actual transfers, partial and
+overpaid readback, immutable reasoned signed obligation adjustments, admin
+history/forms and monthly current reconciliation CSV. A transfer never allocates
+to another commission or offsets future liability. Corrections preserve saved
+student choice and cash history. Full invalidation voids the effective obligation
+while retaining transfers/adjustments; partial-refund proration remains undefined
+and is never inferred. Only explicit approved manual adjustment amounts are entered.
+This supersedes earlier transfer-deferred implementation notes below. Migration
+0073 and parent DB/browser acceptance are pending; AC-K03 is not release-accepted.
+
+
 Date: 20 October 2026. Owner: project owner; client approval owner to be confirmed (Q14). Status: **scope baseline locked for quotation COGITO-V3-ADD-20261019-R1; client acceptance pending**. Owner policies Q01-Q03 and Q05-Q13 are resolved; Q04 is partially resolved; Q14-Q15 remain open gates for dependent behavior. No implementation completion is implied. Entry point for development: this PRD, then SPEC and TASKS.
 
 ## 1. Purpose and authority

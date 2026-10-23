@@ -4,6 +4,7 @@ import { db } from "@cogito-app/db";
 import {
   auditLog,
   kolCommissionDecision,
+  kolSettlementEntry,
   ledgerEntry,
   paymentRecord,
   referralCampaign,
@@ -215,6 +216,13 @@ afterAll(async () => {
   const auditTargets = [...ownedCampaignIds, ...decisions.map((row) => row.id)];
   if (auditTargets.length)
     await db.delete(auditLog).where(inArray(auditLog.targetId, auditTargets));
+  if (decisions.length)
+    await db.delete(kolSettlementEntry).where(
+      inArray(
+        kolSettlementEntry.decisionId,
+        decisions.map((row) => row.id),
+      ),
+    );
   await db
     .delete(kolCommissionDecision)
     .where(inArray(kolCommissionDecision.referredUserId, ownedUsers));
@@ -826,8 +834,9 @@ describe("first eligible KOL purchase commission", () => {
       }
     }
 
-    const seen: Array<{ referredUserId: string; createdAt: Date; id: string }> =
-      [];
+    const seen: Awaited<
+      ReturnType<typeof referral.listKolCommissions>
+    >["items"] = [];
     let cursor: string | undefined;
     const seenUsers = new Set<string>();
     do {
@@ -1232,5 +1241,204 @@ describe("first eligible KOL purchase commission", () => {
         .from(kolCommissionDecision)
         .where(eq(kolCommissionDecision.referredUserId, referredId)),
     ).toHaveLength(0);
+  });
+});
+
+describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
+  async function fixture() {
+    const signup = await createKolSignup({
+      name: "Settlement acceptance",
+      percentBps: 1000,
+    });
+    const payment = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350000,
+      providerSuccessAt: day(1),
+    });
+    await confirmPayment(payment, 350000);
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    return { signup, payment, decisionId: decision!.id };
+  }
+  const transfer = (decisionId: string, amountIdr: number) => ({
+    decisionId,
+    amountIdr,
+    operationId: crypto.randomUUID(),
+    paidAt: day(-1),
+    reference: "External bank acceptance",
+  });
+
+  test("AC-K03, simultaneous same-key replay, distinct transfers, audited correction, refund retention", async () => {
+    const { decisionId, payment, signup } = await fixture();
+    const first = transfer(decisionId, 10000);
+    const retries = await Promise.all([
+      referral.recordKolTransfer(adminId, first),
+      referral.recordKolTransfer(adminId, first),
+    ]);
+    expect(retries.map((row) => row.outstandingIdr)).toEqual([25000, 25000]);
+    const overpaid = await referral.recordKolTransfer(
+      adminId,
+      transfer(decisionId, 30000),
+    );
+    expect(overpaid).toMatchObject({
+      transferredIdr: 40000,
+      outstandingIdr: 0,
+      overpaymentIdr: 5000,
+      status: "overpaid",
+    });
+    expect(overpaid.entries).toHaveLength(2);
+    const correction = {
+      decisionId,
+      operationId: crypto.randomUUID(),
+      amountIdr: -5000,
+      expectedObligationIdr: 35000,
+      reason: "Explicit approved reconciliation",
+    };
+    const corrected = await referral.adjustKolCommission(adminId, correction);
+    expect(corrected).toMatchObject({
+      obligationIdr: 30000,
+      overpaymentIdr: 10000,
+    });
+    expect(
+      (await referral.adjustKolCommission(adminId, correction)).entries,
+    ).toHaveLength(3);
+    await expect(
+      referral.recordKolTransfer(adminId, { ...first, amountIdr: 9999 }),
+    ).rejects.toThrow("different values");
+    const history = corrected.entries.filter((row) => row.kind === "transfer");
+    await confirmPayment(payment, 350000);
+    expect(
+      (await referral.getKolSettlement({ decisionId })).obligationIdr,
+    ).toBe(30000);
+    await refundPayment(payment, day(1));
+    const reversed = await referral.getKolSettlement({ decisionId });
+    expect(reversed).toMatchObject({
+      obligationIdr: 0,
+      transferredIdr: 40000,
+      overpaymentIdr: 40000,
+    });
+    expect(reversed.entries.filter((row) => row.kind === "transfer")).toEqual(
+      history,
+    );
+    const [choice] = await db
+      .select()
+      .from(referralChoice)
+      .where(eq(referralChoice.userId, signup.userId));
+    expect(choice!.campaignId).toBe(signup.campaignId);
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, decisionId),
+          eq(auditLog.action, "kol_commission_adjusted"),
+        ),
+      );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.beforeState).toMatchObject({
+      obligationIdr: 35000,
+      transferredIdr: 40000,
+    });
+    expect(audits[0]!.afterState).toMatchObject({
+      obligationIdr: 30000,
+      overpaymentIdr: 10000,
+    });
+  });
+
+  test("distinct concurrent transfers add once; stale simultaneous corrections conflict", async () => {
+    const { decisionId } = await fixture();
+    await Promise.all([
+      referral.recordKolTransfer(adminId, transfer(decisionId, 10000)),
+      referral.recordKolTransfer(adminId, transfer(decisionId, 30000)),
+    ]);
+    expect(
+      (await referral.getKolSettlement({ decisionId })).transferredIdr,
+    ).toBe(40000);
+    const adjustment = {
+      decisionId,
+      amountIdr: -1000,
+      expectedObligationIdr: 35000,
+      reason: "Concurrent admin correction",
+    };
+    const results = await Promise.allSettled([
+      referral.adjustKolCommission(adminId, {
+        ...adjustment,
+        operationId: crypto.randomUUID(),
+      }),
+      referral.adjustKolCommission(adminId, {
+        ...adjustment,
+        operationId: crypto.randomUUID(),
+      }),
+    ]);
+    expect(results.filter((row) => row.status === "fulfilled")).toHaveLength(1);
+    expect(
+      (await referral.getKolSettlement({ decisionId })).obligationIdr,
+    ).toBe(34000);
+  });
+
+  test("audit failure rolls back cash entry; operation key cannot cross decisions", async () => {
+    const first = await fixture();
+    const second = await fixture();
+    const input = transfer(first.decisionId, 10000);
+    const failing = createReferralService({
+      db,
+      wallet: walletService,
+      audit: {
+        record: async () => {
+          throw new Error("audit unavailable");
+        },
+      },
+      clock: () => signupAt,
+    });
+    await expect(failing.recordKolTransfer(adminId, input)).rejects.toThrow(
+      "audit unavailable",
+    );
+    expect(
+      (await referral.getKolSettlement({ decisionId: first.decisionId }))
+        .entries,
+    ).toHaveLength(0);
+    await referral.recordKolTransfer(adminId, input);
+    await expect(
+      referral.recordKolTransfer(adminId, {
+        ...input,
+        decisionId: second.decisionId,
+      }),
+    ).rejects.toThrow();
+    expect(
+      (await referral.getKolSettlement({ decisionId: second.decisionId }))
+        .transferredIdr,
+    ).toBe(0);
+  });
+  test("refund concurrent with transfer converges without erasing external money", async () => {
+    const { decisionId, payment } = await fixture();
+    await Promise.all([
+      referral.recordKolTransfer(adminId, transfer(decisionId, 10000)),
+      refundPayment(payment, day(1)),
+    ]);
+    expect(await referral.getKolSettlement({ decisionId })).toMatchObject({
+      obligationIdr: 0,
+      transferredIdr: 10000,
+      overpaymentIdr: 10000,
+    });
+  });
+  test("monthly CSV includes purchase and cash detail with current balances", async () => {
+    const { decisionId } = await fixture();
+    await referral.recordKolTransfer(adminId, {
+      ...transfer(decisionId, 10000),
+      reference: "=external,reference",
+    });
+    const result = await referral.exportKolMonthly({ month: "2100-01" });
+    expect(result.csv).toContain("Calculated IDR (current)");
+    expect(result.csv).toContain("Transferred IDR (lifetime)");
+    expect(result.csv).toContain('"35000","0","35000","10000","25000","0"');
+    expect(result.csv).toContain("'=external,reference");
+    const ownRows = result.csv
+      .split("\r\n")
+      .filter((row) => row.includes(decisionId));
+    expect(ownRows).toHaveLength(2);
+    expect(ownRows[0]).toContain('"summary"');
+    expect(ownRows[1]).toContain('"transfer"');
   });
 });

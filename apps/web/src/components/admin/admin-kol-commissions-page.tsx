@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@cogito-app/ui/components/selia/button";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { KolSettlementPanel } from "./kol-settlement-panel";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
@@ -18,7 +22,7 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { client, orpc } from "@/utils/orpc";
 import { TablePagination } from "@/components/table-pagination";
@@ -48,6 +52,27 @@ function paymentStatusVariant(status: string) {
 }
 
 export function AdminKolCommissionsPage() {
+  const [selected, setSelected] = useState<CommissionRow | null>(null);
+  const [month, setMonth] = useState(
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+    }).format(new Date()),
+  );
+  const exporter = useMutation({
+    mutationFn: () => client.adminReferral.exportKolMonthly({ month }),
+    onSuccess: (result) => {
+      const url = URL.createObjectURL(
+        new Blob([result.csv], { type: "text/csv;charset=utf-8" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
+  });
   const [page, setPage] = useState(0);
   const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([
     undefined,
@@ -78,25 +103,62 @@ export function AdminKolCommissionsPage() {
         <Heading level={1}>KOL commission decisions</Heading>
         <Text className="text-muted">
           First eligible top-up decisions use the terms saved at signup. Amounts
-          below are calculated commissions; no transfer has been recorded here.
+          below are calculated commissions. Open settlement history to record
+          actual transfers or explicit obligation adjustments.
         </Text>
       </header>
 
       <Card>
         <CardBody>
           <Text>
-            Transfers, partial-payment amounts, overpayments, CSV exports, and
-            settled-transfer reversal adjustments are handled in a later finance
-            slice. A partial refund keeps its historical calculated commission
-            visible but marks it for manual reconciliation; it is not presented
-            as a final valid amount. A full refund retains the first-purchase
-            reservation and sets commission to zero. If Midtrans cannot return
-            its original success time, the commission stays on hold until that
-            ordering evidence is resolved.
+            Partial refunds retain their historical calculation and require
+            manual reconciliation; no proration is calculated. Full reversals
+            void the obligation while preserving external transfers. No
+            automatic recovery or future offset is made.
           </Text>
         </CardBody>
       </Card>
 
+      <Card>
+        <CardBody className="space-y-3">
+          <Field>
+            <FieldLabel>Activity month (WIB)</FieldLabel>
+            <Input
+              type="month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+            />
+          </Field>
+          <Text>
+            CSV includes purchases and settlement activity in this month, with
+            current lifetime balances. Summary amounts repeat on detail rows;
+            sum summary rows only.
+          </Text>
+          <Button
+            disabled={!month || exporter.isPending}
+            onClick={() => exporter.mutate()}
+          >
+            Export monthly reconciliation CSV
+          </Button>
+          {exporter.isError ? (
+            <Text role="alert" className="text-danger">
+              {exporter.error.message}
+            </Text>
+          ) : null}
+        </CardBody>
+      </Card>
+      {selected ? (
+        <div className="space-y-2">
+          <Button variant="plain" onClick={() => setSelected(null)}>
+            Close settlement
+          </Button>
+          <KolSettlementPanel
+            key={selected.id}
+            decisionId={selected.id}
+            label={`${selected.campaignName} · ${selected.referredUserEmail}`}
+          />
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Latest decisions</CardTitle>
@@ -181,6 +243,12 @@ export function AdminKolCommissionsPage() {
                       </TableCell>
                       <TableCell className="font-medium">
                         {formatIdr(row.commissionAmountIdr)}
+                        <Button
+                          variant="plain"
+                          onClick={() => setSelected(row)}
+                        >
+                          View settlement
+                        </Button>
                         {row.refundReconciliationState === "partial_refund" ? (
                           <Text className="text-warning-foreground">
                             Historical calculation; manual reconciliation

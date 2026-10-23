@@ -512,6 +512,13 @@
       "when": 1792727633256,
       "tag": "0072_kol_first_successful_topup_commission",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792774252615,
+      "tag": "0073_kol_external_settlement",
+      "breakpoints": true
     }
   ]
 }

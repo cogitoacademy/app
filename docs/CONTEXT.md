@@ -1,5 +1,26 @@
 # Cogito App — Codebase Context
 
+## KOL settlement source checkpoint (23 October 2026)
+
+REQ-KOL-02/03 and AC-K03 source now extend the existing admin commission page
+with actual external transfer recording, append-only signed obligation adjustments,
+history/readback and monthly reconciliation CSV. Transfers bind to one decision;
+there is no cross-campaign allocation, automatic recovery, future offset, bank
+execution or worker. Rp35,000 minus Rp10,000 leaves Rp25,000 outstanding; another
+Rp30,000 leaves Rp5,000 overpayment. Adjustments require reason and expected current
+obligation, preserve choice/transfer rows, and audit actor/time/before/after.
+Provider ordering and partial-refund semantics from PR312 remain unchanged.
+Full reversal makes effective obligation zero, including prior adjustments, while
+all history survives; unresolved time holds obligation at zero. Partial refunds
+remain flagged for explicit manual reconciliation; no proration policy is added.
+
+Additive 0073 SQL/snapshot/journal are generated and reviewed, **unapplied**.
+DB-free focused units and web typecheck are the validation scope; guarded parent
+PostgreSQL/concurrency, admin browser and migration/deployment acceptance remain
+open. Earlier settlement-deferred checkpoints below describe their historical
+source slices, superseded here for implementation only. T09 remains in progress.
+
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The
