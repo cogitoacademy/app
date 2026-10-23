@@ -430,10 +430,13 @@ and rechecks tutor ownership, state, exact schedule, report absence and the
 current event key inside the same transaction as the in-app notification and
 existing email outbox row. Only the assigned tutor is notified. No report,
 delivery, settlement, wallet or fee state changes, and no migration is needed.
-The initial focused unit suite passed 7 tests / 27 expectations; the review
-follow-up expands it to 8 tests / 33 expectations. The serial workspace
-typecheck runs through the repository's normal pre-push hook. DB and browser
-acceptance remain with parent integration.
+The SQL finder calculates due periods and exact schedule fingerprints from the
+full stored timestamp precision. Only keyset pagination normalizes timestamps
+to milliseconds. The initial focused unit suite passed 7 tests / 27
+expectations and its fairness follow-up passed 8 / 33; the current suite passes
+10 tests / 44 expectations, including a pg-proxy regression for a sub-
+millisecond end just before 24 elapsed hours. Parent verified four uncached
+workspace checks at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it. DB and browser acceptance remain with parent integration.
 
 The bounded scan keeps an in-process keyset cursor in schedule-end, booking-ID,
 then child-session-ID order. It advances after each candidate even when its
@@ -443,11 +446,14 @@ pass. A process restart resets the cursor to the beginning; event keys and the
 transactional outbox remain durable, but retry fairness position is not. No
 per-candidate retry table or migration is used. The follow-up unit test covers
 100 persistent failures, progress to a later eligible booking, and retry after
-wraparound. A guarded PostgreSQL regression test is authored but awaits the
-parent's exact 6769/cogito-test target preflight and run. The expanded focused
-unit suite passes 8 tests / 33 expectations. The normal pre-push hook runs the
-serial workspace typecheck for the current branch; guarded DB acceptance
-remains pending parent integration.
+wraparound. Guarded PostgreSQL regressions now also exercise the production SQL
+finder and locked writer at microsecond boundaries: 101-row pagination
+progress, single and series-child day boundaries, exact-end eligibility, and
+same-millisecond reschedule rejection. They are authored but unrun; parent
+must preflight and run them only against loopback 6769/cogito-test. The current
+focused unit suite passes 10 tests / 44 expectations. Parent's serial workspace
+check passed at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it.
+DB/browser acceptance remains pending.
 
 ## V3 class session report and settlement boundary (2026-10-21)
 

@@ -2201,7 +2201,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF remains open. Legacy on-demand reminders are implemented in the 23 October continuation; focused unit tests pass 9 / 40 after the SQL cursor precision correction, serial typecheck runs through the normal pre-push hook, and parent-owned DB/browser acceptance remains pending. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF remains open. Legacy on-demand reminders are implemented in the 23 October continuation; focused unit tests pass 10 / 44 after SQL timestamp precision fixes; guarded SQL cursor and period/write regressions are authored but unrun. Parent workspace checks passed at b0b80bec; the current period-precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it, and parent-owned DB/browser acceptance remains pending. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2684,7 +2684,9 @@ submitted reports stop reminders. It does not touch report, delivery, wallet,
 allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
 PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
 only owned UUID fixtures. No live email, browser or external provider was used.
-Legacy solo/group/series reminder coverage remains pending. PDF export and the
+At this 21 October class-only checkpoint, legacy solo/group/series reminder
+coverage remained pending; the 23 October continuation below records its
+implementation. PDF export and the
 dedicated on-demand admin correction workflow remain pending.
 
 ### T07 legacy on-demand missing-report reminders (23 October)
@@ -2699,17 +2701,22 @@ transaction. Whole-session cancel/completed/no-show states are excluded;
 participant-level group/series no-show does not by itself mean the remaining
 session was not delivered. The message explicitly asks tutors to report only if
 delivery occurred. It does not mutate completion, report, wallet, fee or
-settlement state and adds no migration. The initial focused suite passed 7 tests
-/ 27 expectations; the fairness follow-up expands it to 8 tests / 33
-expectations. The serial workspace typecheck runs through the repository's
-normal pre-push hook. Parent-owned DB/browser gaps remain; PDF remains open.
+settlement state and adds no migration. SQL eligibility, elapsed periods, and
+locked schedule fingerprints use full stored timestamp precision; only the
+pagination cursor is normalized to milliseconds. Historical focused suites
+passed 7 / 27 and 8 / 33; the current unit suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. Parent workspace checks
+passed at `b0b80bec`; the current precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it. Parent-owned DB/browser gaps remain; PDF remains open.
 
 The global bounded scan advances a process-local keyset cursor after each
 candidate, including failed outbox writes, and wraps to retry the oldest due
 items. Restart returns to the oldest item; event-key/outbox dedupe is durable,
 but the fairness cursor is not. A unit regression covers a failed 100-item
-batch progressing to later eligible bookings and wraparound retry. A guarded
-PostgreSQL test for actual report/state rechecks, duplicate scheduling and
-tutor-only email outbox identity is authored but unrun; parent DB acceptance is
-pending. The expanded focused unit suite passes 8 tests / 33 expectations.
-Serial workspace typechecking is enforced by the normal pre-push hook.
+batch progressing to later eligible bookings and wraparound retry. Guarded
+PostgreSQL regressions for actual report/state rechecks, duplicate scheduling,
+tutor-only email outbox identity, microsecond cursor progress, single and
+series-child 24-hour boundaries, due-at-end and same-millisecond reschedule
+rejection are authored but unrun; parent DB acceptance is pending. The current
+focused unit suite
+passes 10 tests / 44 expectations. Parent's serial workspace checks passed at
+`b0b80bec`; the current period-precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it.

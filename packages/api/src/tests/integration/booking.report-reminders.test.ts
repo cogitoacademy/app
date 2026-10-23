@@ -4,6 +4,7 @@ import { db } from "@cogito-app/db";
 import {
   booking as bookingTable,
   bookingParticipant,
+  bookingSession,
   ledgerEntry,
   notification,
   notificationDispatch,
@@ -14,7 +15,6 @@ import {
 import { services } from "../../services";
 import {
   bookingReportReminderEventKey,
-  bookingReportReminderPeriod,
   createBookingReportReminderProcessor,
   createBookingReportReminderRepo,
   type BookingReportReminderRepo,
@@ -23,6 +23,13 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fixtureEndAt = new Date("1900-01-01T01:00:00.000Z");
+const epochSeconds = (date: Date) => String(date.getTime() / 1000);
+const datePeriodForTest = (endAt: Date, nowAt: Date) => {
+  const elapsed = nowAt.getTime() - endAt.getTime();
+  return Number.isFinite(elapsed) && elapsed >= 0
+    ? Math.floor(elapsed / DAY_MS)
+    : null;
+};
 const feedback = {
   discussion: ["Reviewed the learner's approach"],
   strengths: ["Explained the first step clearly"],
@@ -71,7 +78,8 @@ function compareCandidates(
   right: LegacyBookingReportReminderCandidate,
 ) {
   return (
-    left.scheduledEndAt.getTime() - right.scheduledEndAt.getTime() ||
+    left.cursorScheduledEndAt.getTime() -
+      right.cursorScheduledEndAt.getTime() ||
     left.bookingId.localeCompare(right.bookingId) ||
     (left.sessionId ?? "").localeCompare(right.sessionId ?? "")
   );
@@ -80,6 +88,11 @@ const processorRepo: BookingReportReminderRepo = {
   async findDue(_database, nowAt, limit, after) {
     return [...fixtureCandidates.values()]
       .filter((candidate) => candidate.scheduledEndAt <= nowAt)
+      .map((candidate) =>
+        Object.assign({}, candidate, {
+          reminderPeriod: datePeriodForTest(candidate.scheduledEndAt, nowAt)!,
+        }),
+      )
       .toSorted(compareCandidates)
       .filter((candidate) => !after || compareCandidates(candidate, after) > 0)
       .slice(0, limit);
@@ -181,6 +194,9 @@ function candidateFor(
     sessionId: null,
     scheduledStartAt,
     scheduledEndAt,
+    scheduledStartAtEpoch: epochSeconds(scheduledStartAt),
+    scheduledEndAtEpoch: epochSeconds(scheduledEndAt),
+    reminderPeriod: 0,
     cursorScheduledEndAt: scheduledEndAt,
   };
 }
@@ -189,17 +205,18 @@ async function writeIfPending(
   candidate: LegacyBookingReportReminderCandidate,
   nowAt: Date,
 ) {
-  const period = bookingReportReminderPeriod(candidate.scheduledEndAt, nowAt);
+  const period = datePeriodForTest(candidate.scheduledEndAt, nowAt);
   if (period === null) throw new Error("Expected an ended reminder candidate");
+  const currentCandidate = { ...candidate, reminderPeriod: period };
   const eventKey = bookingReportReminderEventKey(
-    candidate.bookingId,
-    candidate.sessionId,
+    currentCandidate.bookingId,
+    currentCandidate.sessionId,
     period,
   );
   let notificationWriteCalled = false;
   const queued = await repo.writeIfPending(
     db,
-    candidate,
+    currentCandidate,
     nowAt,
     eventKey,
     async (tx) => {
@@ -364,7 +381,7 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
       duplicateProcessor.processPendingReportReminders(),
     ]);
 
-    const period = bookingReportReminderPeriod(active.scheduledEndAt, nowAt)!;
+    const period = datePeriodForTest(active.scheduledEndAt, nowAt)!;
     const eventKey = bookingReportReminderEventKey(active.id, null, period);
     const records = await reminderRecords(eventKey);
     expect(records.notifications).toHaveLength(1);
@@ -414,10 +431,7 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
       clock: () => nowAt,
     }).processPendingReportReminders();
 
-    const nextPeriod = bookingReportReminderPeriod(
-      active.scheduledEndAt,
-      nowAt,
-    )!;
+    const nextPeriod = datePeriodForTest(active.scheduledEndAt, nowAt)!;
     expect(
       await reminderRecords(
         bookingReportReminderEventKey(active.id, null, nextPeriod),
@@ -501,7 +515,7 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
     expect(attempts.get(firstPageIds[0] ?? "")).toBe(2);
     expect(attempts.get(healthyId)).toBe(1);
 
-    const period = bookingReportReminderPeriod(
+    const period = datePeriodForTest(
       new Date("1000-01-01T00:00:00.000Z"),
       nowAt,
     );
@@ -511,5 +525,146 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
     );
     expect(records.notifications).toHaveLength(1);
     expect(records.dispatches).toHaveLength(1);
+  });
+
+  test("SQL finder and locked writer keep exact reminder-period precision", async () => {
+    const fixtures = await createScheduledBookingBatch(tutorId, studentId, 5);
+    const cases = [
+      {
+        name: "just-before-24-hours",
+        startAt: "0001-01-01T02:00:00.000000Z",
+        endAt: "0001-01-01T03:00:00.000001Z",
+        period: 0,
+      },
+      {
+        name: "just-after-24-hours",
+        startAt: "0001-01-01T01:59:59.999999Z",
+        endAt: "0001-01-01T02:59:59.999999Z",
+        period: 1,
+      },
+      {
+        name: "exact-due-end",
+        startAt: "0001-01-02T02:00:00.000000Z",
+        endAt: "0001-01-02T03:00:00.000000Z",
+        period: 0,
+      },
+      {
+        name: "microsecond-reschedule",
+        startAt: "0001-01-01T02:00:00.000000Z",
+        endAt: "0001-01-01T03:00:00.000500Z",
+        period: 0,
+      },
+      {
+        name: "series-child-boundary",
+        startAt: "0001-01-01T02:00:00.000000Z",
+        endAt: "0001-01-01T03:00:00.000001Z",
+        period: 0,
+      },
+    ] as const;
+    for (const [index, fixture] of fixtures.entries()) {
+      const testCase = cases[index];
+      if (!testCase) throw new Error("Expected a timestamp precision case");
+      if (testCase.name === "series-child-boundary") {
+        const sessionId = crypto.randomUUID();
+        // eslint-disable-next-line no-await-in-loop -- Convert this owned parent before adding its series child.
+        await db
+          .update(bookingTable)
+          .set({ type: "series" })
+          .where(eq(bookingTable.id, fixture.id));
+        // eslint-disable-next-line no-await-in-loop -- Insert the child after its parent has the series identity.
+        await db.insert(bookingSession).values({
+          id: sessionId,
+          seriesBookingId: fixture.id,
+          scheduledStartAt: sql<Date>`${testCase.startAt}::timestamptz`,
+          scheduledEndAt: sql<Date>`${testCase.endAt}::timestamptz`,
+          currentState: "scheduled",
+          holdAmount: 0,
+        });
+      }
+      // eslint-disable-next-line no-await-in-loop -- Keep each fixture's raw microseconds paired with its owned UUID.
+      await db
+        .update(bookingTable)
+        .set({
+          scheduledStartAt: sql<Date>`${testCase.startAt}::timestamptz`,
+          scheduledEndAt: sql<Date>`${testCase.endAt}::timestamptz`,
+        })
+        .where(eq(bookingTable.id, fixture.id));
+    }
+
+    const nowAt = new Date("0001-01-02T03:00:00.000Z");
+    const fixtureIds = new Set(fixtures.map(({ id }) => id));
+    const found = await repo.findDue(db, nowAt, 100);
+    const candidates = new Map(
+      found
+        .filter((candidate) => fixtureIds.has(candidate.bookingId))
+        .map((candidate) => [candidate.bookingId, candidate] as const),
+    );
+    expect([...candidates.keys()].toSorted()).toEqual(
+      fixtures.map(({ id }) => id).toSorted(),
+    );
+
+    for (const [index, fixture] of fixtures.entries()) {
+      const testCase = cases[index];
+      const candidate = candidates.get(fixture.id);
+      if (!testCase || !candidate) {
+        throw new Error("Expected a fixture-owned SQL reminder candidate");
+      }
+      expect(candidate.reminderPeriod).toBe(testCase.period);
+    }
+    const beforeBoundary = candidates.get(fixtures[0]!.id)!;
+    expect(datePeriodForTest(beforeBoundary.scheduledEndAt, nowAt)).toBe(1);
+
+    async function writeCandidate(
+      candidate: LegacyBookingReportReminderCandidate,
+    ) {
+      let writeCalled = false;
+      const eventKey = bookingReportReminderEventKey(
+        candidate.bookingId,
+        candidate.sessionId,
+        candidate.reminderPeriod,
+      );
+      const queued = await repo.writeIfPending(
+        db,
+        candidate,
+        nowAt,
+        eventKey,
+        async () => {
+          writeCalled = true;
+        },
+      );
+      return { queued, writeCalled };
+    }
+
+    expect(await writeCandidate(beforeBoundary)).toEqual({
+      queued: true,
+      writeCalled: true,
+    });
+    expect(await writeCandidate(candidates.get(fixtures[1]!.id)!)).toEqual({
+      queued: true,
+      writeCalled: true,
+    });
+    expect(await writeCandidate(candidates.get(fixtures[2]!.id)!)).toEqual({
+      queued: true,
+      writeCalled: true,
+    });
+    expect(await writeCandidate(candidates.get(fixtures[4]!.id)!)).toEqual({
+      queued: true,
+      writeCalled: true,
+    });
+
+    const rescheduled = candidates.get(fixtures[3]!.id)!;
+    await db
+      .update(bookingTable)
+      .set({
+        scheduledEndAt: sql<Date>`'0001-01-01T03:00:00.000999Z'::timestamptz`,
+      })
+      .where(eq(bookingTable.id, rescheduled.bookingId));
+    expect(rescheduled.scheduledEndAt.toISOString()).toBe(
+      "0001-01-01T03:00:00.000Z",
+    );
+    expect(await writeCandidate(rescheduled)).toEqual({
+      queued: false,
+      writeCalled: false,
+    });
   });
 });

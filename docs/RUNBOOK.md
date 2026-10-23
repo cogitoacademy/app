@@ -458,8 +458,9 @@ or tutor fees, and does not interpret a no-show expiry as delivery. No migration
 or new environment variable is required. Observe `class_report_reminder_failed` and the
 `class_enrollment_due_jobs_complete` `reportRemindersQueued`/
 `reportRemindersFailed` fields; email sends still appear under the existing
-notification dispatch logs. Legacy solo/group/series reminder coverage remains
-pending and their existing report/expiry behavior is unchanged.
+notification dispatch logs. At this class-only checkpoint, legacy
+solo/group/series reminder coverage remained pending; the 23 October section
+below records its implementation and current verification state.
 
 The focused fake-clock suite passed 7 tests / 25 expectations. Guarded PostgreSQL
 tests passed 3 / 34 on exact loopback `6769/cogito-test`; the integration test
@@ -502,11 +503,15 @@ needs no schema migration or environment variable. The job result adds
 `bookingReportRemindersQueued` and `bookingReportRemindersFailed` counters; per-
 candidate failures log `booking_report_reminder_failed`.
 
-The initial focused pure suite passed 7 tests / 27 expectations; the review
-follow-up expands it to 8 tests / 33 expectations. The serial workspace
-typecheck runs through the repository's normal pre-push hook. No DB test,
-browser acceptance, migration, provider call, reset or seed ran here; those
-integration checks remain with the parent.
+Elapsed periods and exact schedule fingerprints use the full stored PostgreSQL
+timestamp precision; millisecond normalization is limited to keyset
+pagination. The initial focused pure suite passed 7 tests / 27 expectations and
+its fairness follow-up passed 8 / 33; the current suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. Parent verified four
+uncached workspace checks at `b0b80bec`; this precision delta awaits the
+parent release of the serial workspace check slot after CI.
+No DB test, browser acceptance, migration, provider
+call, reset or seed ran in this worktree.
 
 The worker rotates through a stable keyset cursor after each candidate, including
 failed writes, and wraps to retry older due items once it reaches the end. The
@@ -514,12 +519,15 @@ cursor is process-local and resets to the oldest due item on restart; event-key
 dedupe and email outbox rows remain persistent. No retry state migration is
 required. `packages/api/src/tests/integration/booking.report-reminders.test.ts`
 adds guarded non-reset coverage for report/state rechecks, duplicate jobs and
-notification/outbox identity. It is authored but unrun here; run it only after
-preflighting `NODE_ENV=test` against loopback 6769 `/cogito-test` with reset
-overrides absent. The expanded focused unit suite passes 8 tests / 33
-expectations; the serial workspace typecheck runs through the normal pre-push
-hook. The guarded integration test is authored but unrun; parent DB acceptance
-remains pending.
+notification/outbox identity. Later regressions exercise the production SQL
+finder and locked writer at microsecond boundaries, including 101-row cursor
+progress, single and series-child day boundaries, due-at-end, and same-
+millisecond reschedule rejection. They are authored but unrun; parent must
+preflight them only against loopback `6769/cogito-test` with reset overrides
+absent. The current focused
+unit suite passes 10 tests / 44 expectations. Parent's serial workspace check
+passed at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it.
+DB/browser acceptance remains pending parent integration.
 
 ## Prior local integration checkpoint (21 October)
 

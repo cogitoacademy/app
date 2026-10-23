@@ -22,7 +22,6 @@ import type { TxClient } from "../../lib/tx";
 import { log } from "../../lib/logger";
 import type { NotificationService } from "../notification/notification.service";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 export const BOOKING_REPORT_REMINDER_BATCH_SIZE = 100;
 
 export type LegacyBookingReportReminderCandidate = {
@@ -32,6 +31,9 @@ export type LegacyBookingReportReminderCandidate = {
   sessionId: string | null;
   scheduledStartAt: Date;
   scheduledEndAt: Date;
+  scheduledStartAtEpoch: string;
+  scheduledEndAtEpoch: string;
+  reminderPeriod: number;
   cursorScheduledEndAt: Date;
 };
 
@@ -49,13 +51,6 @@ export interface BookingReportReminderRepo {
     eventKey: string,
     write: (tx: TxClient) => Promise<void>,
   ): Promise<boolean>;
-}
-
-export function bookingReportReminderPeriod(endAt: Date, nowAt: Date) {
-  const elapsed = nowAt.getTime() - endAt.getTime();
-  return Number.isFinite(elapsed) && elapsed >= 0
-    ? Math.floor(elapsed / DAY_MS)
-    : null;
 }
 
 export function bookingReportReminderEventKey(
@@ -88,10 +83,21 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
       if (!candidateLimit) return [];
 
       const nowAtIso = nowAt.toISOString();
-      const singlePeriod = sql`floor(extract(epoch from (${nowAtIso}::timestamptz - ${booking.scheduledEndAt})) / 86400)::bigint`;
+      const singlePeriod =
+        sql<number>`floor(extract(epoch from (${nowAtIso}::timestamptz - ${booking.scheduledEndAt})) / 86400)::bigint`.mapWith(
+          Number,
+        );
       const singleEventKey = sql`'booking:' || ${booking.id} || ':session:booking:missing-report:day:' || (${singlePeriod})::text`;
-      const seriesPeriod = sql`floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint`;
+      const seriesPeriod =
+        sql<number>`floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint`.mapWith(
+          Number,
+        );
       const seriesEventKey = sql`'booking:' || ${booking.id} || ':session:' || ${bookingSession.id} || ':missing-report:day:' || (${seriesPeriod})::text`;
+      // Keep exact business timestamps as text; Drizzle's Date decoder truncates microseconds.
+      const singleStartEpoch = sql<string>`extract(epoch from ${booking.scheduledStartAt})::text`;
+      const singleEndEpoch = sql<string>`extract(epoch from ${booking.scheduledEndAt})::text`;
+      const seriesStartEpoch = sql<string>`extract(epoch from ${bookingSession.scheduledStartAt})::text`;
+      const seriesEndEpoch = sql<string>`extract(epoch from ${bookingSession.scheduledEndAt})::text`;
       // Match JavaScript cursor precision; raw SQL timestamps also need Drizzle's date decoder.
       const singleCursorEndAt =
         sql`date_trunc('milliseconds', ${booking.scheduledEndAt})`.mapWith(
@@ -141,6 +147,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             sessionId: sql<string | null>`null`,
             scheduledStartAt: booking.scheduledStartAt,
             scheduledEndAt: booking.scheduledEndAt,
+            scheduledStartAtEpoch: singleStartEpoch,
+            scheduledEndAtEpoch: singleEndEpoch,
+            reminderPeriod: singlePeriod,
             cursorScheduledEndAt: singleCursorEndAt,
           })
           .from(booking)
@@ -184,6 +193,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             sessionId: bookingSession.id,
             scheduledStartAt: bookingSession.scheduledStartAt,
             scheduledEndAt: bookingSession.scheduledEndAt,
+            scheduledStartAtEpoch: seriesStartEpoch,
+            scheduledEndAtEpoch: seriesEndEpoch,
+            reminderPeriod: seriesPeriod,
             cursorScheduledEndAt: seriesCursorEndAt,
           })
           .from(booking)
@@ -243,6 +255,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
           sessionId: row.sessionId,
           scheduledStartAt: row.scheduledStartAt,
           scheduledEndAt: row.scheduledEndAt,
+          scheduledStartAtEpoch: row.scheduledStartAtEpoch,
+          scheduledEndAtEpoch: row.scheduledEndAtEpoch,
+          reminderPeriod: row.reminderPeriod,
           cursorScheduledEndAt: row.cursorScheduledEndAt,
         }))
         .toSorted(reminderOrder)
@@ -251,6 +266,17 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
 
     async writeIfPending(db, candidate, nowAt, eventKey, write) {
       return db.transaction(async (tx) => {
+        const nowAtIso = nowAt.toISOString();
+        const bookingPeriod = sql<
+          number | null
+        >`case when ${booking.scheduledEndAt} <= ${nowAtIso}::timestamptz then floor(extract(epoch from (${nowAtIso}::timestamptz - ${booking.scheduledEndAt})) / 86400)::bigint else null end`.mapWith(
+          (value) => (value === null ? null : Number(value)),
+        );
+        const sessionPeriod = sql<
+          number | null
+        >`case when ${bookingSession.scheduledEndAt} <= ${nowAtIso}::timestamptz then floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint else null end`.mapWith(
+          (value) => (value === null ? null : Number(value)),
+        );
         const [currentBooking] = await tx
           .select({
             id: booking.id,
@@ -258,8 +284,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             tutorId: booking.tutorId,
             currentState: booking.currentState,
             completedAt: booking.completedAt,
-            scheduledStartAt: booking.scheduledStartAt,
-            scheduledEndAt: booking.scheduledEndAt,
+            scheduledStartAtEpoch: sql<string>`extract(epoch from ${booking.scheduledStartAt})::text`,
+            scheduledEndAtEpoch: sql<string>`extract(epoch from ${booking.scheduledEndAt})::text`,
+            reminderPeriod: bookingPeriod,
           })
           .from(booking)
           .where(eq(booking.id, candidate.bookingId))
@@ -276,8 +303,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
         }
 
         let sessionId: string | null = null;
-        let scheduledStartAt = currentBooking.scheduledStartAt;
-        let scheduledEndAt = currentBooking.scheduledEndAt;
+        let scheduledStartAtEpoch = currentBooking.scheduledStartAtEpoch;
+        let scheduledEndAtEpoch = currentBooking.scheduledEndAtEpoch;
+        let currentPeriod = currentBooking.reminderPeriod;
 
         if (candidate.bookingType === "series") {
           if (!candidate.sessionId) return false;
@@ -286,8 +314,9 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
               id: bookingSession.id,
               currentState: bookingSession.currentState,
               completedAt: bookingSession.completedAt,
-              scheduledStartAt: bookingSession.scheduledStartAt,
-              scheduledEndAt: bookingSession.scheduledEndAt,
+              scheduledStartAtEpoch: sql<string>`extract(epoch from ${bookingSession.scheduledStartAt})::text`,
+              scheduledEndAtEpoch: sql<string>`extract(epoch from ${bookingSession.scheduledEndAt})::text`,
+              reminderPeriod: sessionPeriod,
             })
             .from(bookingSession)
             .where(
@@ -305,23 +334,23 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             return false;
           }
           sessionId = session.id;
-          scheduledStartAt = session.scheduledStartAt;
-          scheduledEndAt = session.scheduledEndAt;
+          scheduledStartAtEpoch = session.scheduledStartAtEpoch;
+          scheduledEndAtEpoch = session.scheduledEndAtEpoch;
+          currentPeriod = session.reminderPeriod;
         } else if (candidate.sessionId !== null) {
           return false;
         }
 
-        const period = bookingReportReminderPeriod(scheduledEndAt, nowAt);
         if (
-          scheduledStartAt.getTime() !== candidate.scheduledStartAt.getTime() ||
-          scheduledEndAt.getTime() !== candidate.scheduledEndAt.getTime() ||
-          scheduledEndAt > nowAt ||
-          period === null ||
+          scheduledStartAtEpoch !== candidate.scheduledStartAtEpoch ||
+          scheduledEndAtEpoch !== candidate.scheduledEndAtEpoch ||
+          currentPeriod === null ||
+          currentPeriod !== candidate.reminderPeriod ||
           eventKey !==
             bookingReportReminderEventKey(
               candidate.bookingId,
               sessionId,
-              period,
+              currentPeriod,
             )
         ) {
           return false;
@@ -390,11 +419,10 @@ export function createBookingReportReminderProcessor(deps: {
     // eslint-disable no-await-in-loop -- Process independently locked candidate rows in sequence.
     for (const candidate of candidates) {
       cursor = candidate;
-      const period = bookingReportReminderPeriod(
-        candidate.scheduledEndAt,
-        nowAt,
-      );
-      if (period === null) {
+      if (
+        !Number.isSafeInteger(candidate.reminderPeriod) ||
+        candidate.reminderPeriod < 0
+      ) {
         skipped += 1;
         continue;
       }
@@ -402,7 +430,7 @@ export function createBookingReportReminderProcessor(deps: {
       const eventKey = bookingReportReminderEventKey(
         candidate.bookingId,
         candidate.sessionId,
-        period,
+        candidate.reminderPeriod,
       );
       try {
         const wasQueued = await deps.repo.writeIfPending(

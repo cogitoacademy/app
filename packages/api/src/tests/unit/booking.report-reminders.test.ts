@@ -8,7 +8,6 @@ import type {
 } from "../../modules/notification/notification.service";
 import {
   bookingReportReminderEventKey,
-  bookingReportReminderPeriod,
   createBookingReportReminderProcessor,
   createBookingReportReminderRepo,
   type BookingReportReminderRepo,
@@ -17,6 +16,73 @@ import {
 import { notificationEmailHtml } from "../../modules/notification/notification.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const epochSeconds = (date: Date) => String(date.getTime() / 1000);
+const datePeriodForTest = (endAt: Date, nowAt: Date) => {
+  const elapsed = nowAt.getTime() - endAt.getTime();
+  return Number.isFinite(elapsed) && elapsed >= 0
+    ? Math.floor(elapsed / DAY_MS)
+    : null;
+};
+
+test("processor uses the SQL period when a sub-millisecond end is still before 24 hours", async () => {
+  const queries: string[] = [];
+  const database = drizzle(async (query) => {
+    queries.push(query);
+    return {
+      rows: query.includes('inner join "booking_session"')
+        ? []
+        : [
+            [
+              "precision-booking",
+              "solo",
+              "precision-tutor",
+              null,
+              "2026-10-20 02:00:00+00",
+              "2026-10-20 03:00:00.000500+00",
+              "1792461600",
+              "1792465200.0005",
+              "0",
+              "2026-10-20 03:00:00+00",
+            ],
+          ],
+    };
+  });
+  const productionRepo = createBookingReportReminderRepo();
+  const nowAt = new Date("2026-10-21T03:00:00.000Z");
+  const writes: NotificationWriteParams[] = [];
+  const eventKeys: string[] = [];
+  const processor = createBookingReportReminderProcessor({
+    db: database as unknown as DbType,
+    repo: {
+      findDue: productionRepo.findDue,
+      async writeIfPending(_db, _candidate, _readAt, eventKey, write) {
+        eventKeys.push(eventKey);
+        await write({} as TxClient);
+        return true;
+      },
+    },
+    notification: {
+      async write(params) {
+        writes.push(params);
+      },
+    },
+    appBaseUrl: "https://cogito.example",
+    clock: () => nowAt,
+  });
+
+  expect(datePeriodForTest(new Date("2026-10-20T03:00:00.000Z"), nowAt)).toBe(
+    1,
+  );
+  await processor.processPendingReportReminders();
+
+  expect(queries.some((query) => query.includes("extract(epoch from"))).toBe(
+    true,
+  );
+  expect(eventKeys).toEqual([
+    "booking:precision-booking:session:booking:missing-report:day:0",
+  ]);
+  expect(writes.map(({ eventKey }) => eventKey)).toEqual(eventKeys);
+});
 
 test("SQL cursors decode normalized timestamps and bind an ISO timestamp boundary", async () => {
   const queries: Array<{ query: string; params: unknown[] }> = [];
@@ -33,6 +99,9 @@ test("SQL cursors decode normalized timestamps and bind an ISO timestamp boundar
               null,
               "2026-10-23 02:00:00+00",
               "2026-10-23 03:00:00.000500+00",
+              "1792720800",
+              "1792724400.0005",
+              "0",
               "2026-10-23 03:00:00+00",
             ],
           ],
@@ -126,7 +195,7 @@ function makeRepo(rows: FakeBooking[]) {
       for (const row of rows) {
         if (row.state !== "scheduled" || row.completed) continue;
         if (row.type !== "series") {
-          const period = bookingReportReminderPeriod(row.scheduledEndAt, nowAt);
+          const period = datePeriodForTest(row.scheduledEndAt, nowAt);
           if (
             row.reportSubmitted ||
             period === null ||
@@ -143,16 +212,16 @@ function makeRepo(rows: FakeBooking[]) {
             sessionId: null,
             scheduledStartAt: row.scheduledStartAt,
             scheduledEndAt: row.scheduledEndAt,
+            scheduledStartAtEpoch: epochSeconds(row.scheduledStartAt),
+            scheduledEndAtEpoch: epochSeconds(row.scheduledEndAt),
+            reminderPeriod: period,
             cursorScheduledEndAt: row.scheduledEndAt,
           });
           continue;
         }
 
         for (const session of row.sessions ?? []) {
-          const period = bookingReportReminderPeriod(
-            session.scheduledEndAt,
-            nowAt,
-          );
+          const period = datePeriodForTest(session.scheduledEndAt, nowAt);
           if (
             session.state !== "scheduled" ||
             session.completed ||
@@ -171,6 +240,9 @@ function makeRepo(rows: FakeBooking[]) {
             sessionId: session.id,
             scheduledStartAt: session.scheduledStartAt,
             scheduledEndAt: session.scheduledEndAt,
+            scheduledStartAtEpoch: epochSeconds(session.scheduledStartAt),
+            scheduledEndAtEpoch: epochSeconds(session.scheduledEndAt),
+            reminderPeriod: period,
             cursorScheduledEndAt: session.scheduledEndAt,
           });
         }
@@ -234,11 +306,12 @@ function makeRepo(rows: FakeBooking[]) {
       const scheduledStartAt =
         session?.scheduledStartAt ?? row.scheduledStartAt;
       const scheduledEndAt = session?.scheduledEndAt ?? row.scheduledEndAt;
-      const period = bookingReportReminderPeriod(scheduledEndAt, nowAt);
+      const period = datePeriodForTest(scheduledEndAt, nowAt);
       if (
-        scheduledStartAt.getTime() !== candidate.scheduledStartAt.getTime() ||
-        scheduledEndAt.getTime() !== candidate.scheduledEndAt.getTime() ||
+        epochSeconds(scheduledStartAt) !== candidate.scheduledStartAtEpoch ||
+        epochSeconds(scheduledEndAt) !== candidate.scheduledEndAtEpoch ||
         period === null ||
+        period !== candidate.reminderPeriod ||
         eventKey !==
           bookingReportReminderEventKey(
             candidate.bookingId,
@@ -282,19 +355,14 @@ function makeProcessor(
 describe("legacy booking missing-report reminders", () => {
   test("starts at session end and repeats on 24-hour elapsed boundaries", () => {
     const endAt = new Date("2026-10-21T03:00:00.000Z");
+    expect(datePeriodForTest(endAt, new Date(endAt.getTime() - 1))).toBe(null);
+    expect(datePeriodForTest(endAt, endAt)).toBe(0);
     expect(
-      bookingReportReminderPeriod(endAt, new Date(endAt.getTime() - 1)),
-    ).toBe(null);
-    expect(bookingReportReminderPeriod(endAt, endAt)).toBe(0);
-    expect(
-      bookingReportReminderPeriod(
-        endAt,
-        new Date(endAt.getTime() + DAY_MS - 1),
-      ),
+      datePeriodForTest(endAt, new Date(endAt.getTime() + DAY_MS - 1)),
     ).toBe(0);
-    expect(
-      bookingReportReminderPeriod(endAt, new Date(endAt.getTime() + DAY_MS)),
-    ).toBe(1);
+    expect(datePeriodForTest(endAt, new Date(endAt.getTime() + DAY_MS))).toBe(
+      1,
+    );
     expect(bookingReportReminderEventKey("b1", null, 1)).toBe(
       "booking:b1:session:booking:missing-report:day:1",
     );
