@@ -721,6 +721,21 @@ existing warnings. The serial pre-push check, push and one manual CI dispatch
 remain; no local database, Redis, seed, migration or provider action is part of
 this remediation.
 
+Run [#39909560681](https://github.com/cogitoacademy/app/actions/runs/39909560681)
+on `6ef0b948` passed Build, Lint and Type Check. The server unit suite finished
+with 152 passes, one skip, and no failures; the resettable, fixture, and payout
+coverage partitions finished with 3,031, 56, and 11 passes respectively. The
+merger failed before writing merged coverage because
+`coverage/api-resettable/lcov.info` was missing, so the 100% gate did not run
+and this run does not establish a threshold failure. The CI log shows Bun 1.3.14
+printing the resettable coverage table without creating the requested custom
+directory. Under the available Bun 1.4.0-canary.1, a focused pure test likewise
+wrote LCOV to configured `coverage/lcov.info` despite a custom
+`--coverage-dir`. The workflow now removes that default profile before each
+partition, requires a fresh non-empty file, and snapshots it to the partition
+path before the next Bun process. The fail-closed merger and thresholds are
+unchanged. E2E status for this run remains pending.
+
 ## T07 on-demand booking report continuation (2026-10-22)
 
 **Status:** The source milestone is in isolated worktree `t3/admin-report-review-fixes`

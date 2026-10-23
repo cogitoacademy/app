@@ -360,11 +360,15 @@ environments and examples remain opt-out. GitHub Actions grants reset consent
 only to reset-based tests on that run's disposable 6769 service and to the
 dedicated payout test command on its separate disposable 6770 service. The
 three report fixture suites that assert reset overrides are absent run separately
-on 6769 with both variables unset; their LCOV output is merged with the other
-coverage runs before the existing gate. The merge rejects missing, empty, or
+on 6769 with both variables unset. Bun writes its LCOV report to the configured
+`coverage/lcov.info`; CI clears that file before each coverage partition and
+snapshots its fresh, non-empty output under `coverage/api-*` before the next
+process runs. The workflow uses this configured output because CI did not
+produce the requested custom `--coverage-dir` paths. Those three raw profiles
+are merged before the existing gate. The merge rejects missing, empty, or
 recordless LCOV profiles. `.github/scripts/merge-lcov.test.ts` covers the union
-and failure behavior. The payout schema is migrated through a
-separate `apps/server/.env.test-payout` file. No helper guard or coverage gate
+and failure behavior. The payout schema is migrated through a separate
+`apps/server/.env.test-payout` file. No helper guard or coverage gate
 was changed. `test-setup.ts` has no database URL fallback; provide a target
 explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures
 were not reset in this task. The non-reset T05 per-run E2E identity path remains
@@ -2861,8 +2865,12 @@ fixture suites, and payout integration tests against their exact database. It
 then runs the server suite in a separate process because its webhook test uses
 module mocking. The previous duplicate uninstrumented API pass is
 intentionally not run. Test + Coverage starts independently from lint and
-typecheck. The coverage merger unions all three profiles into
-`coverage/lcov.merged.info`, leaving the Bun-generated raw
+typecheck. After every process, the workflow copies the fresh configured
+`coverage/lcov.info` to its partition path (`coverage/api-resettable/`,
+`coverage/api-fixtures/`, or `coverage/api-payout/`) and requires that profile
+to be non-empty. It clears the default profile before the next process so no
+partition can reuse stale coverage. The merger unions all three raw profiles
+into `coverage/lcov.merged.info` and leaves the final Bun-generated
 `coverage/lcov.info` untouched. The coverage comment enforces 100% coverage for
 `packages/api` lines, overall lines, functions, and branches from the merged
 file; a 0/0 branch total is treated as 100%. It runs only after successful test

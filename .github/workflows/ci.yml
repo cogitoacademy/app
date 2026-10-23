@@ -295,28 +295,63 @@ jobs:
           set +e
           mkdir -p coverage/api-resettable coverage/api-fixtures coverage/api-payout
 
+          reset_coverage_profile() {
+            rm -f coverage/lcov.info
+            if [ -e coverage/lcov.info ]; then
+              echo "::error::Could not clear the previous Bun LCOV profile at coverage/lcov.info"
+              return 1
+            fi
+          }
+
+          capture_coverage_profile() {
+            local destination="$1"
+            if [ ! -s coverage/lcov.info ]; then
+              echo "::error::Bun did not emit a non-empty LCOV profile at coverage/lcov.info"
+              return 1
+            fi
+            if ! grep -q '^SF:' coverage/lcov.info; then
+              echo "::error::Bun emitted no LCOV source records at coverage/lcov.info"
+              return 1
+            fi
+            if ! cp coverage/lcov.info "$destination"; then
+              echo "::error::Could not snapshot Bun LCOV profile to $destination"
+              return 1
+            fi
+            printf 'Captured Bun LCOV profile: %s (%s bytes)\n' "$destination" "$(wc -c < "$destination")"
+          }
+
+          resettable_lcov_status=0
+          reset_coverage_profile || resettable_lcov_status=1
+
           TEST_DATABASE_ALLOW_RESET=true \
           TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
-            bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/api-resettable --timeout 30000 \
+            bun test --coverage --coverage-reporter=lcov --timeout 30000 \
               --path-ignore-patterns '**/booking-admin-reports.test.ts' \
               --path-ignore-patterns '**/class-enrollment.test.ts' \
               --path-ignore-patterns '**/report-export.test.ts' \
               --path-ignore-patterns '**/booking-payout-g16.test.ts' \
               packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
           resettable_status=$?
+          capture_coverage_profile coverage/api-resettable/lcov.info || resettable_lcov_status=1
 
-          bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/api-fixtures --timeout 30000 \
+          fixture_lcov_status=0
+          reset_coverage_profile || fixture_lcov_status=1
+          bun test --coverage --coverage-reporter=lcov --timeout 30000 \
             packages/api/src/tests/integration/booking-admin-reports.test.ts \
             packages/api/src/tests/integration/class-enrollment.test.ts \
             packages/api/src/tests/integration/report-export.test.ts
           fixture_status=$?
+          capture_coverage_profile coverage/api-fixtures/lcov.info || fixture_lcov_status=1
 
+          payout_lcov_status=0
+          reset_coverage_profile || payout_lcov_status=1
           DATABASE_URL="$PAYOUT_DATABASE_URL" \
           TEST_DATABASE_ALLOW_RESET=true \
           TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
-            bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/api-payout --timeout 30000 \
+            bun test --coverage --coverage-reporter=lcov --timeout 30000 \
               packages/api/src/tests/integration/booking-payout-g16.test.ts
           payout_status=$?
+          capture_coverage_profile coverage/api-payout/lcov.info || payout_lcov_status=1
 
           bun .github/scripts/merge-lcov.ts \
             coverage/api-resettable/lcov.info \
@@ -324,7 +359,10 @@ jobs:
             coverage/api-payout/lcov.info
           merge_status=$?
 
-          if [ "$resettable_status" -ne 0 ] || [ "$fixture_status" -ne 0 ] || [ "$payout_status" -ne 0 ] || [ "$merge_status" -ne 0 ]; then
+          if [ "$resettable_status" -ne 0 ] || [ "$resettable_lcov_status" -ne 0 ] || \
+            [ "$fixture_status" -ne 0 ] || [ "$fixture_lcov_status" -ne 0 ] || \
+            [ "$payout_status" -ne 0 ] || [ "$payout_lcov_status" -ne 0 ] || \
+            [ "$merge_status" -ne 0 ]; then
             exit 1
           fi
         continue-on-error: true
