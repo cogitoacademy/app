@@ -68,6 +68,15 @@ overpayment transfer history, CSV, audited corrections, and reversal behavior.
 Referral choice/code/terms snapshots from this slice are the attribution seam;
 they do not authorize commission or transfer writes.
 
+## Windows workspace typecheck memory
+
+Run the workspace check with `bun run check-types`. Package scripts limit
+TypeScript-Go to one checker, and the root Turbo command runs package tasks one
+at a time. The pre-push hook also runs its typecheck and lint baseline in
+sequence. This is the supported Windows memory-pressure path; `NODE_OPTIONS`
+does not set TypeScript-Go's Go checker count. The current workspace check
+passed 4/4 tasks in 12.832 seconds.
+
 ## Classes UI acceptance (22 October 2026)
 
 Run the synthetic, database-free UI suite from `packages/e2e`:
