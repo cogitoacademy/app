@@ -56,6 +56,18 @@ async function runCoverageGate(workspace: string) {
   return { exitCode, stdout, stderr };
 }
 
+async function writeCoverageGateInput(workspace: string, profile: string) {
+  await writeFile(join(workspace, "coverage/lcov.merged.info"), profile);
+  await writeFile(
+    join(workspace, "coverage/lcov.function-identity.json"),
+    JSON.stringify({
+      version: 1,
+      identityIncompleteSources: [],
+      unresolvedUncoveredSources: [],
+    }),
+  );
+}
+
 test("merges line, function, and branch unions using maximum hits", async () => {
   await withWorkspace(async (workspace) => {
     const rawProfilePath = join(workspace, "coverage/lcov.info");
@@ -146,8 +158,6 @@ test("uses the maximum summary counts and blocks an uncovered summary-only union
       "DA:10,1",
       "LF:1",
       "LH:1",
-      "BRF:0",
-      "BRH:0",
       "end_of_record",
     ].join("\n");
     await writeFile(firstProfile, firstRaw);
@@ -160,8 +170,6 @@ test("uses the maximum summary counts and blocks an uncovered summary-only union
         "DA:10,1",
         "LF:1",
         "LH:1",
-        "BRF:0",
-        "BRH:0",
         "end_of_record",
       ].join("\n"),
     );
@@ -321,6 +329,10 @@ test("rejects missing, empty, and recordless profile inputs", async () => {
         `SF:${resolve(workspace, "src/valid.ts")}`,
         "DA:1,1",
         "LF:1",
+        "FNF:0",
+        "FNH:0",
+        "BRF:0",
+        "BRH:0",
         "end_of_record",
       ].join("\n"),
     );
@@ -391,4 +403,250 @@ test("rejects invalid function summaries and missing required details", async ()
       ).toBe(false);
     });
   }
+});
+
+test("rejects partial line details and source-only records", async () => {
+  const cases = [
+    {
+      body: ["DA:1,1", "LF:100", "LH:1", "BRF:0", "BRH:0"],
+      error: "LCOV LF summary does not match DA details",
+    },
+    { body: [], error: "LCOV record has no coverage data" },
+  ];
+
+  for (const [index, item] of cases.entries()) {
+    await withWorkspace(async (workspace) => {
+      const input = join(workspace, `incomplete-${index}.info`);
+      await writeFile(
+        input,
+        [
+          `SF:${resolve(workspace, `packages/api/src/incomplete-${index}.ts`)}`,
+          ...item.body,
+          "end_of_record",
+        ].join("\n"),
+      );
+      const result = await runMerger(workspace, [input]);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(item.error);
+      expect(
+        await Bun.file(join(workspace, "coverage/lcov.merged.info")).exists(),
+      ).toBe(false);
+    });
+  }
+});
+
+test("rejects negative and fractional counters or invalid coordinates", async () => {
+  const cases = [
+    { entry: "DA:-1,1", error: "Invalid LCOV DA line" },
+    { entry: "DA:1.5,1", error: "Invalid LCOV DA line" },
+    { entry: "DA:1,-1", error: "Invalid LCOV DA count" },
+    { entry: "DA:1,-", error: "Invalid LCOV DA count" },
+    { entry: "DA:1,0.5", error: "Invalid LCOV DA count" },
+    { entry: "FN:0,alpha", error: "Invalid LCOV FN line" },
+    { entry: "FN:1.5,alpha", error: "Invalid LCOV FN line" },
+    { entry: "FNDA:-1,alpha", error: "Invalid LCOV FNDA count" },
+    { entry: "FNDA:0.5,alpha", error: "Invalid LCOV FNDA count" },
+    { entry: "BRDA:-1,0,0,0", error: "Invalid LCOV BRDA line" },
+    { entry: "BRDA:1,-1,0,0", error: "Invalid LCOV BRDA block" },
+    { entry: "BRDA:1,0,0.5,0", error: "Invalid LCOV BRDA branch" },
+    { entry: "BRDA:1,0,0,-1", error: "Invalid LCOV BRDA count" },
+    { entry: "BRDA:1,0,0,0.5", error: "Invalid LCOV BRDA count" },
+    { entry: "LF:-1", error: "Invalid LCOV LF summary" },
+    { entry: "LH:0.5", error: "Invalid LCOV LH summary" },
+    { entry: "BRF:-1", error: "Invalid LCOV BRF summary" },
+    { entry: "BRH:0.5", error: "Invalid LCOV BRH summary" },
+  ];
+
+  for (const [index, item] of cases.entries()) {
+    await withWorkspace(async (workspace) => {
+      const input = join(workspace, `malformed-${index}.info`);
+      await writeFile(
+        input,
+        [
+          `SF:${resolve(workspace, `src/malformed-${index}.ts`)}`,
+          item.entry,
+          "end_of_record",
+        ].join("\n"),
+      );
+      const result = await runMerger(workspace, [input]);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(item.error);
+      expect(
+        await Bun.file(join(workspace, "coverage/lcov.merged.info")).exists(),
+      ).toBe(false);
+    });
+  }
+});
+
+test("accepts untaken branch details and branchless source records", async () => {
+  await withWorkspace(async (workspace) => {
+    const input = join(workspace, "branches.info");
+    const source = resolve(workspace, "packages/api/src/branches.ts");
+    await writeFile(
+      input,
+      [
+        `SF:${source}`,
+        "DA:1,1",
+        "LF:1",
+        "LH:1",
+        "FNF:0",
+        "FNH:0",
+        "BRDA:1,0,0,-",
+        "BRF:1",
+        "BRH:0",
+        "end_of_record",
+        `SF:${resolve(workspace, "packages/api/src/branchless.ts")}`,
+        "DA:1,1",
+        "LF:1",
+        "LH:1",
+        "FNF:0",
+        "FNH:0",
+        "end_of_record",
+      ].join("\n"),
+    );
+
+    const result = await runMerger(workspace, [input]);
+    expect(result.exitCode).toBe(0);
+    const output = await readFile(
+      join(workspace, "coverage/lcov.merged.info"),
+      "utf8",
+    );
+    expect(output).toContain("BRDA:1,0,0,-\nBRF:1\nBRH:0");
+    expect(output).toContain("BRF:0\nBRH:0");
+  });
+});
+
+test("coverage gate rejects malformed LCOV counters and coordinates", async () => {
+  const source = "packages/api/src/comment-validation.ts";
+  const cases = [
+    { entry: "DA:1,-1", error: "Invalid LCOV DA count" },
+    { entry: "DA:1.5,1", error: "Invalid LCOV DA line" },
+    { entry: "FNDA:0.5,alpha", error: "Invalid LCOV FNDA count" },
+    { entry: "FN:-1,alpha", error: "Invalid LCOV FN line" },
+    { entry: "BRDA:1,0,0,-1", error: "Invalid LCOV BRDA count" },
+    { entry: "BRDA:1.5,0,0,0", error: "Invalid LCOV BRDA line" },
+    { entry: "LF:-1", error: "Invalid LCOV LF summary" },
+  ];
+
+  for (const item of cases) {
+    await withWorkspace(async (workspace) => {
+      const profile = [
+        `SF:${source}`,
+        item.entry,
+        "FN:1,alpha",
+        "FNDA:1,alpha",
+        "FNF:1",
+        "FNH:1",
+        "DA:1,1",
+        "LF:1",
+        "LH:1",
+        "BRF:0",
+        "BRH:0",
+        "end_of_record",
+      ].join("\n");
+      await writeCoverageGateInput(workspace, profile);
+      const result = await runCoverageGate(workspace);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(item.error);
+    });
+  }
+});
+
+test("coverage gate requires API line and function denominators but accepts branchless coverage", async () => {
+  await withWorkspace(async (workspace) => {
+    const apiSource = resolve(workspace, "packages/api/src/branchless.ts");
+    const validProfile = [
+      `SF:${apiSource}`,
+      "FN:1,alpha",
+      "FNDA:1,alpha",
+      "FNF:1",
+      "FNH:1",
+      "DA:1,1",
+      "LF:1",
+      "LH:1",
+      "end_of_record",
+    ].join("\n");
+    await writeCoverageGateInput(workspace, validProfile);
+    const valid = await runCoverageGate(workspace);
+    expect(valid.exitCode).toBe(0);
+    expect(valid.stdout).toContain("Branches | 100% (0/0)");
+
+    const missingLineSummary = [
+      `SF:${apiSource}`,
+      "FN:1,alpha",
+      "FNDA:1,alpha",
+      "FNF:1",
+      "FNH:1",
+      "DA:1,1",
+      "LH:1",
+      "BRF:0",
+      "BRH:0",
+      "end_of_record",
+    ].join("\n");
+    await writeCoverageGateInput(workspace, missingLineSummary);
+    const absentLines = await runCoverageGate(workspace);
+    expect(absentLines.exitCode).not.toBe(0);
+    expect(absentLines.stderr).toContain("LCOV LF summary is missing");
+
+    const missingFunctionSummary = [
+      `SF:${apiSource}`,
+      "DA:1,1",
+      "LF:1",
+      "LH:1",
+      "BRF:0",
+      "BRH:0",
+      "end_of_record",
+    ].join("\n");
+    await writeCoverageGateInput(workspace, missingFunctionSummary);
+    const absentFunctions = await runCoverageGate(workspace);
+    expect(absentFunctions.exitCode).not.toBe(0);
+    expect(absentFunctions.stderr).toContain("LCOV FNF summary is missing");
+
+    const untakenBranchProfile = validProfile.replace(
+      "LH:1\nend_of_record",
+      "LH:1\nBRDA:1,0,0,-\nBRF:1\nBRH:0\nend_of_record",
+    );
+    await writeCoverageGateInput(workspace, untakenBranchProfile);
+    const untakenBranch = await runCoverageGate(workspace);
+    expect(untakenBranch.exitCode).not.toBe(0);
+    expect(untakenBranch.stderr).not.toContain("Invalid LCOV");
+    expect(untakenBranch.stdout).toContain("Branches | 0.0% (0/1)");
+
+    const noApiFunctions = [
+      `SF:${apiSource}`,
+      "DA:1,1",
+      "LF:1",
+      "LH:1",
+      "FNF:0",
+      "FNH:0",
+      "BRF:0",
+      "BRH:0",
+      "end_of_record",
+    ].join("\n");
+    await writeCoverageGateInput(workspace, noApiFunctions);
+    const missingFunctions = await runCoverageGate(workspace);
+    expect(missingFunctions.exitCode).not.toBe(0);
+    expect(missingFunctions.stderr).toContain(
+      "API function coverage denominator is missing or zero",
+    );
+
+    const noApiLines = [
+      `SF:${apiSource}`,
+      "FNF:1",
+      "FNH:1",
+      "FN:1,alpha",
+      "FNDA:1,alpha",
+      "LF:0",
+      "LH:0",
+      "BRF:0",
+      "BRH:0",
+      "end_of_record",
+    ].join("\n");
+    await writeCoverageGateInput(workspace, noApiLines);
+    const missingLines = await runCoverageGate(workspace);
+    expect(missingLines.exitCode).not.toBe(0);
+    expect(missingLines.stderr).toContain(
+      "API line coverage denominator is missing or zero",
+    );
+  });
 });

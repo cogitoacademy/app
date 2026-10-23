@@ -2851,19 +2851,64 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 
 ## Test and Coverage
 
-The API test tree includes reset-based integration callers. Do not run this
-coverage command against the old 6767/6768 targets or the retained 6769/6770
-fixtures. Reset-based suites now require an explicitly selected dedicated
-target, the independent reset flag and the exact target URL described above;
-the guard rejects 6767/6768 even when those values are set. The command remains
-the CI coverage invocation, not authorization to reset a local database.
+The CI coverage collection has three separate Bun processes. The former
+combined API coverage command is unsupported as a CI-equivalent: it mixes
+resettable tests, reset-free report fixtures, and payout tests, and it does not
+produce the three raw profiles that CI merges. Run the commands below from the
+repository root only against explicitly prepared disposable databases. Keep the
+reset guards limited to the resettable API and payout commands; the report
+fixture command must run without either reset variable.
 
-Run the CI-equivalent coverage suite from the repository root only after a
-fresh disposable test target has been explicitly prepared:
+For the resettable and report-fixture partitions, provide the same test
+environment shape as CI: `NODE_ENV=test`, `DATABASE_URL` exactly targeting
+`localhost:6769/cogito-test`, Redis at `localhost:6379`, and the test auth,
+CORS, payment-webhook, and Sanity settings. Migrate that disposable database
+before running tests. CI also creates `apps/server/.env` for Drizzle, with
+`PAYMENT_PROVIDER=stub`. Never target the old 6767/6768 databases or the
+retained local 6769/6770 fixtures.
+
+The resettable API/env/auth/DB/OpenAPI partition requires both reset values to
+match `DATABASE_URL` exactly:
 
 ```bash
-bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
+bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+  --path-ignore-patterns '**/booking-admin-reports.test.ts' \
+  --path-ignore-patterns '**/class-enrollment.test.ts' \
+  --path-ignore-patterns '**/report-export.test.ts' \
+  --path-ignore-patterns '**/booking-payout-g16.test.ts' \
+  packages/api/src/tests/ packages/env/src/ packages/auth/src/ \
+  packages/db/src/ apps/server/src/openapi.test.ts
 ```
+
+The reset-free report fixture partition uses the 6769 `DATABASE_URL`, with
+`TEST_DATABASE_ALLOW_RESET` and `TEST_DATABASE_RESET_TARGET` unset:
+
+```bash
+bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-admin-reports.test.ts \
+  packages/api/src/tests/integration/class-enrollment.test.ts \
+  packages/api/src/tests/integration/report-export.test.ts
+```
+
+The payout partition uses a separately migrated `cogito-test-payout` at
+`localhost:6770`, normally via `apps/server/.env.test-payout`. Set
+`PAYOUT_DATABASE_URL` to that exact URL; the test command must point
+`DATABASE_URL` and both reset values at it:
+
+```bash
+DATABASE_URL="$PAYOUT_DATABASE_URL" \
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
+bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-payout-g16.test.ts
+```
+
+CI clears `coverage/lcov.info` before each process, snapshots each fresh profile
+to its `coverage/api-*` path, then merges those three profiles before applying
+the coverage gate. Running the three commands manually without the workflow's
+profile capture/merge steps does not reproduce the complete CI gate.
 
 For the contact-sharing regression path, run the database-preparing wrapper
 with the focused integration test, then the Playwright privacy spec against the

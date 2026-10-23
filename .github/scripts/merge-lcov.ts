@@ -15,10 +15,12 @@ type RawRecord = {
   source: string;
   lines: Map<number, number>;
   branches: Map<string, number | null>;
-  lineDefinitions: number;
+  lineDefinitions?: number;
+  lineHitsSummary?: number;
   functionDefinitions?: number;
   functionHitsSummary?: number;
-  branchDefinitions: number;
+  branchDefinitions?: number;
+  branchHitsSummary?: number;
   functionNames: Array<{ line: number; name: string }>;
   functionHits: Map<string, number>;
 };
@@ -45,12 +47,33 @@ function mergeBranch(
   );
 }
 
-function parseSummaryCount(value: string, field: string, source: string) {
+function parseCount(value: string, field: string, source: string) {
   const count = Number(value);
   if (!/^\d+$/.test(value) || !Number.isSafeInteger(count)) {
-    throw new Error(`Invalid LCOV ${field} summary for ${source}: ${value}`);
+    throw new Error(`Invalid LCOV ${field} for ${source}: ${value}`);
   }
   return count;
+}
+
+function parseSummaryCount(value: string, field: string, source: string) {
+  return parseCount(value, `${field} summary`, source);
+}
+
+function parseCoordinate(
+  value: string,
+  field: string,
+  source: string,
+  minimum: number,
+) {
+  const coordinate = Number(value);
+  if (
+    !/^\d+$/.test(value) ||
+    !Number.isSafeInteger(coordinate) ||
+    coordinate < minimum
+  ) {
+    throw new Error(`Invalid LCOV ${field} for ${source}: ${value}`);
+  }
+  return coordinate;
 }
 
 function summarizeFunctions(record: RawRecord) {
@@ -108,6 +131,85 @@ function summarizeFunctions(record: RawRecord) {
   };
 }
 
+function validateRecord(record: RawRecord) {
+  summarizeFunctions(record);
+  if (
+    [...record.functionHits.keys()].some(
+      (name) => !record.functionNames.some((fn) => fn.name === name),
+    )
+  ) {
+    throw new Error(`LCOV FNDA has no matching FN entry for ${record.source}`);
+  }
+
+  const hasCoverageData =
+    record.lines.size > 0 ||
+    record.branches.size > 0 ||
+    record.functionNames.length > 0 ||
+    record.functionHits.size > 0 ||
+    record.lineDefinitions !== undefined ||
+    record.lineHitsSummary !== undefined ||
+    record.functionDefinitions !== undefined ||
+    record.functionHitsSummary !== undefined ||
+    record.branchDefinitions !== undefined ||
+    record.branchHitsSummary !== undefined;
+  if (!hasCoverageData) {
+    throw new Error(`LCOV record has no coverage data for ${record.source}`);
+  }
+
+  if (record.lineDefinitions === undefined) {
+    throw new Error(`LCOV LF summary is missing for ${record.source}`);
+  }
+  if (record.lineDefinitions > 0 && record.lines.size === 0) {
+    throw new Error(`LCOV line details missing for ${record.source}`);
+  }
+  if (record.lineDefinitions !== record.lines.size) {
+    throw new Error(
+      `LCOV LF summary does not match DA details for ${record.source}`,
+    );
+  }
+  if (record.lineHitsSummary !== undefined) {
+    if (record.lineDefinitions === undefined) {
+      throw new Error(`LCOV LH summary is missing LF for ${record.source}`);
+    }
+    const hits = [...record.lines.values()].filter((count) => count > 0).length;
+    if (record.lineHitsSummary !== hits) {
+      throw new Error(
+        `LCOV LH summary does not match DA details for ${record.source}`,
+      );
+    }
+  }
+
+  if (record.branchDefinitions !== undefined) {
+    if (record.branchDefinitions > 0 && record.branches.size === 0) {
+      throw new Error(`LCOV branch details missing for ${record.source}`);
+    }
+    if (record.branchDefinitions !== record.branches.size) {
+      throw new Error(
+        `LCOV BRF summary does not match BRDA details for ${record.source}`,
+      );
+    }
+  }
+  if (record.branchHitsSummary !== undefined) {
+    if (record.branchDefinitions === undefined) {
+      throw new Error(`LCOV BRH summary is missing BRF for ${record.source}`);
+    }
+    const hits = [...record.branches.values()].filter(
+      (count) => count !== null && count > 0,
+    ).length;
+    if (record.branchHitsSummary !== hits) {
+      throw new Error(
+        `LCOV BRH summary does not match BRDA details for ${record.source}`,
+      );
+    }
+  }
+  if (
+    record.functionDefinitions === undefined &&
+    record.functionNames.length === 0
+  ) {
+    throw new Error(`LCOV FNF summary is missing for ${record.source}`);
+  }
+}
+
 function summarizeMergedFunctions(file: Coverage) {
   const functions = [...file.functions.values()];
   const definitions = Math.max(file.functionDefinitions, functions.length);
@@ -126,12 +228,6 @@ function summarizeMergedFunctions(file: Coverage) {
 function mergeFile(records: RawRecord[], files: Map<string, Coverage>) {
   for (const record of records) {
     const functionSummary = summarizeFunctions(record);
-    if (record.lineDefinitions > 0 && record.lines.size === 0) {
-      throw new Error(`LCOV line details missing for ${record.source}`);
-    }
-    if (record.branchDefinitions > 0 && record.branches.size === 0) {
-      throw new Error(`LCOV branch details missing for ${record.source}`);
-    }
 
     const file = files.get(record.source) ?? {
       source: record.source,
@@ -170,7 +266,7 @@ function parseLcov(content: string) {
   let record: RawRecord | undefined;
   const finish = () => {
     if (record) {
-      summarizeFunctions(record);
+      validateRecord(record);
       records.push(record);
     }
     record = undefined;
@@ -180,60 +276,133 @@ function parseLcov(content: string) {
     if (line.startsWith("SF:")) {
       finish();
       const path = line.slice(3);
+      if (!path) throw new Error("Invalid LCOV SF entry: source path is empty");
       record = {
         source: resolve(path),
         lines: new Map(),
         branches: new Map(),
-        lineDefinitions: 0,
-        branchDefinitions: 0,
         functionNames: [],
         functionHits: new Map(),
       };
     } else if (line.startsWith("FN:") && record) {
       const [lineNumber, ...nameParts] = line.slice(3).split(",");
-      const fnLine = Number(lineNumber);
-      if (Number.isFinite(fnLine) && nameParts.length > 0) {
-        record.functionNames.push({ line: fnLine, name: nameParts.join(",") });
+      const name = nameParts.join(",");
+      if (!name) {
+        throw new Error(`Invalid LCOV FN entry for ${record.source}: ${line}`);
       }
+      const fnLine = parseCoordinate(lineNumber, "FN line", record.source, 1);
+      record.functionNames.push({ line: fnLine, name });
     } else if (line.startsWith("FNDA:") && record) {
       const [count, ...nameParts] = line.slice(5).split(",");
-      const hits = Number(count);
-      if (Number.isFinite(hits) && nameParts.length > 0) {
-        const name = nameParts.join(",");
-        addMax(record.functionHits, name, hits);
+      const name = nameParts.join(",");
+      if (!name) {
+        throw new Error(
+          `Invalid LCOV FNDA entry for ${record.source}: ${line}`,
+        );
       }
+      const hits = parseCount(count, "FNDA count", record.source);
+      addMax(record.functionHits, name, hits);
     } else if (line.startsWith("DA:") && record) {
-      const [lineNumber, count] = line.slice(3).split(",");
-      const number = Number(lineNumber);
-      const hits = Number(count);
-      if (Number.isFinite(number) && Number.isFinite(hits)) {
-        addMax(record.lines, number, hits);
-      }
-    } else if (line.startsWith("BRDA:") && record) {
-      const [lineNumber, block, branch, taken] = line.slice(5).split(",");
-      const hits = taken === "-" ? null : Number(taken);
+      const fields = line.slice(3).split(",");
       if (
-        taken === "-" ||
-        (typeof hits === "number" && Number.isFinite(hits))
+        fields.length < 2 ||
+        fields.length > 3 ||
+        (fields.length === 3 && !fields[2])
       ) {
-        mergeBranch(record.branches, `${lineNumber},${block},${branch}`, hits);
+        throw new Error(`Invalid LCOV DA entry for ${record.source}: ${line}`);
       }
+      const number = parseCoordinate(fields[0], "DA line", record.source, 1);
+      const hits = parseCount(fields[1], "DA count", record.source);
+      if (record.lines.has(number)) {
+        throw new Error(
+          `Duplicate LCOV DA line for ${record.source}: ${number}`,
+        );
+      }
+      record.lines.set(number, hits);
+    } else if (line.startsWith("BRDA:") && record) {
+      const fields = line.slice(5).split(",");
+      if (fields.length !== 4) {
+        throw new Error(
+          `Invalid LCOV BRDA entry for ${record.source}: ${line}`,
+        );
+      }
+      const lineNumber = parseCoordinate(
+        fields[0],
+        "BRDA line",
+        record.source,
+        1,
+      );
+      const block = parseCoordinate(fields[1], "BRDA block", record.source, 0);
+      const branch = parseCoordinate(
+        fields[2],
+        "BRDA branch",
+        record.source,
+        0,
+      );
+      const taken = fields[3];
+      const hits =
+        taken === "-" ? null : parseCount(taken, "BRDA count", record.source);
+      const key = `${lineNumber},${block},${branch}`;
+      if (record.branches.has(key)) {
+        throw new Error(
+          `Duplicate LCOV BRDA branch for ${record.source}: ${key}`,
+        );
+      }
+      record.branches.set(key, hits);
     } else if (line.startsWith("LF:") && record) {
-      record.lineDefinitions = Number(line.slice(3)) || 0;
+      if (record.lineDefinitions !== undefined) {
+        throw new Error(`Duplicate LCOV LF summary for ${record.source}`);
+      }
+      record.lineDefinitions = parseSummaryCount(
+        line.slice(3),
+        "LF",
+        record.source,
+      );
+    } else if (line.startsWith("LH:") && record) {
+      if (record.lineHitsSummary !== undefined) {
+        throw new Error(`Duplicate LCOV LH summary for ${record.source}`);
+      }
+      record.lineHitsSummary = parseSummaryCount(
+        line.slice(3),
+        "LH",
+        record.source,
+      );
     } else if (line.startsWith("FNF:") && record) {
+      if (record.functionDefinitions !== undefined) {
+        throw new Error(`Duplicate LCOV FNF summary for ${record.source}`);
+      }
       record.functionDefinitions = parseSummaryCount(
         line.slice(4),
         "FNF",
         record.source,
       );
     } else if (line.startsWith("FNH:") && record) {
+      if (record.functionHitsSummary !== undefined) {
+        throw new Error(`Duplicate LCOV FNH summary for ${record.source}`);
+      }
       record.functionHitsSummary = parseSummaryCount(
         line.slice(4),
         "FNH",
         record.source,
       );
     } else if (line.startsWith("BRF:") && record) {
-      record.branchDefinitions = Number(line.slice(4)) || 0;
+      if (record.branchDefinitions !== undefined) {
+        throw new Error(`Duplicate LCOV BRF summary for ${record.source}`);
+      }
+      record.branchDefinitions = parseSummaryCount(
+        line.slice(4),
+        "BRF",
+        record.source,
+      );
+    } else if (line.startsWith("BRH:") && record) {
+      if (record.branchHitsSummary !== undefined) {
+        throw new Error(`Duplicate LCOV BRH summary for ${record.source}`);
+      }
+      record.branchHitsSummary = parseSummaryCount(
+        line.slice(4),
+        "BRH",
+        record.source,
+      );
     } else if (line === "end_of_record") {
       finish();
     }
