@@ -1,5 +1,17 @@
 # Cogito Module Reference
 
+## Google user-create default ordering (24 October 2026)
+
+Installed Better Auth 1.6.11 `db/internal-adapter.mjs` createOAuthUser calls
+`createWithHooks` before adapter defaults. `db/with-hooks.mjs` forwards the current
+auth context; actual callback path is `/callback/:id`, role is absent. Resolve
+role=student in Cogito's before hook, then configured production admin, then set
+referralChoicePending for new OAuth students. Existing OAuth identities bypass
+user creation; never reopen attribution. Legacy referral codes remain accepted;
+no code format or reward changes. Browser referral route preserves safe redirect
+and reads a fresh session after save. No migration or backfill is part of this fix.
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.

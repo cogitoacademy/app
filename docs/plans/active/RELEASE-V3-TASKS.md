@@ -1,5 +1,18 @@
 # Release v3 - SDD execution and acceptance plan
 
+## AUTH02 Google first-registration correction — 24 October 2026
+
+Source fix and scoped isolated regressions complete: new Google callback role
+is absent before adapter defaults; normalize before pending check. Preserve safe
+return destination through referral choice. Existing-account reuse policy unchanged.
+Red: actual Better Auth 1.6.11 memory-adapter callback persisted pending=false.
+Green: 13 auth tests / 34 assertions; 3 synthetic Edge UI/wire cases; serial auth,
+web and e2e typechecks. Redirect negative control also failed as expected.
+Pending: real Google consent/cookie journey, PostgreSQL attribution/reward acceptance,
+and owner decision for already-created affected accounts. No DB writes, migrations,
+provider actions, deployment, parent-server changes, push or PR in this task.
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.

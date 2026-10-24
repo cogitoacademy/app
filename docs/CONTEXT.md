@@ -1,5 +1,21 @@
 # Cogito App — Codebase Context
 
+## Google signup referral callback correction (24 October 2026)
+
+Better Auth 1.6.11 invokes user.create.before with `/callback/:id` but without
+additional-field defaults: `role` is undefined for a new Google identity. The
+old student-only condition therefore persisted pending=false. The hook now
+resolves the student default before the administrator override and pending check.
+Existing OAuth reuse does not invoke user creation and is never re-attributed.
+The referral detour carries the validated original destination through reload,
+errors and completion. No schema/data backfill or existing-account policy change.
+Evidence: actual installed callback with memory adapter reproduced false before
+fix; fresh session and reuse regression passes. Three mocked Edge UI/wire cases
+cover friend/KOL/no-code, invalid code, reload and stale cached session. These
+are not PostgreSQL, real Google or reward-ledger acceptance.
+
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.

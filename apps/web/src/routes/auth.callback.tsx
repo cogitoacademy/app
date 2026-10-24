@@ -26,7 +26,10 @@ export const Route = createFileRoute("/auth/callback")({
     }
     const role = sessionUser.role;
     if (role === "student" && sessionUser.referralChoicePending) {
-      throw redirect({ to: "/referral-choice" });
+      throw redirect({
+        to: "/referral-choice",
+        search: { redirect: search.redirect },
+      });
     }
     const tutorOnboardingStatus =
       role === "tutor" && !search.redirect

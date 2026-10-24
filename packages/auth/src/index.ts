@@ -358,6 +358,8 @@ function buildAuth(options?: InternalAuthOptions) {
           // need a second connection to update the new row.
           before: async (user, ctx) => {
             const data = { ...user };
+            // OAuth input reaches this hook before adapter field defaults.
+            data.role ??= "student";
             if (
               options?.verifiedSignupEmail &&
               normalizeEmail(user.email) === options.verifiedSignupEmail

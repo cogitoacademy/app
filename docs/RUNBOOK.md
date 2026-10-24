@@ -1,5 +1,31 @@
 # Cogito Runbook
 
+## Isolated Google referral regression (24 October 2026)
+
+Use `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.google-referral-synthetic.config.ts`.
+This named synthetic workflow starts only Vite on 3320, mocks all API traffic on
+3321 (no API listener), uses installed Edge, one worker and no DB/global setup.
+Three cases pass: friend, legacy KOL and no-code; each checks invalid rejection,
+pending reload, preserved /faq destination and fresh-session reads despite stale
+cached session data. Removing redirect forwarding makes the no-code case fail.
+
+For `bun test packages/auth/src/google-callback.test.ts packages/auth/src/index.test.ts`,
+set NODE_ENV=test, DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:1/never-connect,
+REDIS_URL=redis://127.0.0.1:1, BETTER_AUTH_URL=http://localhost:3321,
+CORS_ORIGIN=http://localhost:3320 and synthetic 32+ character BETTER_AUTH_SECRET
+and PAYMENT_WEBHOOK_SECRET. The callback test substitutes the memory adapter and
+provider methods; no external provider, mail, Redis or PostgreSQL connection is needed.
+13 tests / 34 assertions pass. Auth/web/e2e serial tsgo checks pass.
+
+Remaining live acceptance: with an authorized fresh Google identity, start from
+a protected safe destination, complete real consent, inspect pending=true in the
+fresh session, reject an invalid code, reload, save an actual friend/KOL/no-code
+choice and verify pending=false plus the original destination. Use separate new
+identities for each choice; verify real attribution/rewards and existing account
+reuse without reopening choice. No such provider/DB acceptance ran here. Already
+created affected accounts are not repaired by this source fix; no backfill authorized.
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.

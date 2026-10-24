@@ -1,5 +1,16 @@
 # Cogito API Reference
 
+## Google referral callback handoff (24 October 2026)
+
+No RPC contract change. `POST /rpc/referral/saveGoogleChoice` still receives
+`{"json":{"code":"FRIEND ABC123"}}` (or code=null for explicit no-code), with
+oRPC response envelope. Invalid choice retains pending; successful choice clears
+it transactionally. Browser `/auth/callback?redirect=/faq` routes a pending new
+Google student through `/referral-choice?redirect=/faq`, then resumes the validated
+local destination. Guards use `/api/auth/get-session?disableCookieCache=true`.
+Synthetic browser responses validate wiring only, not server transaction behavior.
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
