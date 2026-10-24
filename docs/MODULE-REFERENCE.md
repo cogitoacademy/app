@@ -1,5 +1,14 @@
 # Cogito Module Reference
 
+## Referral session cache correction (24 October 2026)
+
+Live dev submits returned 200 and persisted pending=false, but Better Auth Redis
+sessions retained pending=true even with disableCookieCache. GET get-session
+now refreshes role/email verification/referral pending from DB using the same
+helper as RPC context, preserving auth cookies and marking the response no-store.
+No referral attribution or reward is reapplied; existing saved choices are retained.
+Two focused response tests cover stale pending and anonymous sessions.
+
 ## Google referral error feedback (24 October 2026)
 
 Failed Google referral saves show a Selia error toast and retain the inline

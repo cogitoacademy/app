@@ -1,3 +1,6 @@
+import { refreshSessionUser } from "@cogito-app/api/context";
+import { db } from "@cogito-app/db";
+import { refreshSessionResponse } from "./session-response";
 import {
   auth,
   assertPasswordPolicy,
@@ -121,7 +124,12 @@ export function registerAuthRoutes(app: Elysia) {
         return status(405);
       }
       if (request.method === "GET") {
-        return auth.handler(request);
+        const response = await auth.handler(request);
+        return new URL(request.url).pathname === "/api/auth/get-session"
+          ? refreshSessionResponse(response, (user) =>
+              refreshSessionUser(db, user),
+            )
+          : response;
       }
       const { body, tooLarge } = await readBodyWithLimit(
         request,
