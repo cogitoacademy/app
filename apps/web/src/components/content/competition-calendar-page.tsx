@@ -1,5 +1,7 @@
 "use client";
+import { Link } from "@tanstack/react-router";
 
+import { wibCalendarDate } from "./calendar-utils";
 import { isValid } from "date-fns";
 import { IconCalendarEvent, IconRefresh } from "@tabler/icons-react";
 import { useMemo } from "react";
@@ -19,7 +21,6 @@ import {
   CompetitionCalendar,
   type CalendarCompetition,
 } from "./competition-calendar";
-import { SanityStudioEditButton } from "./sanity-studio-button";
 
 export function CompetitionCalendarPage() {
   const competitions = useQuery(orpc.content.listCompetitions.queryOptions());
@@ -28,8 +29,8 @@ export function CompetitionCalendarPage() {
   const events = useMemo<CalendarCompetition[]>(
     () =>
       (competitions.data ?? []).flatMap((competition) => {
-        const start = new Date(competition.startDate);
-        const end = new Date(competition.endDate);
+        const start = wibCalendarDate(competition.startDate);
+        const end = wibCalendarDate(competition.endDate);
         if (!isValid(start) || !isValid(end)) return [];
 
         return [
@@ -39,13 +40,14 @@ export function CompetitionCalendarPage() {
             description: competition.description,
             start,
             end,
+            endInstant: competition.endDate,
             location: competition.location,
             categories: competition.categories,
             educationLevels: competition.educationLevels,
             scale: competition.scale,
             organizer: competition.organizer,
             registrationDeadline: competition.registrationDeadline
-              ? new Date(competition.registrationDeadline)
+              ? wibCalendarDate(competition.registrationDeadline)
               : null,
             registrationLink: competition.registrationLink,
             socialMediaLink: competition.socialMediaLink,
@@ -85,10 +87,15 @@ export function CompetitionCalendarPage() {
           </Text>
         </div>
         {isAdmin ? (
-          <SanityStudioEditButton
-            type="competition"
-            label="Edit competitions"
-          />
+          <Button
+            variant="secondary"
+            render={
+              <Link to="/admin-content" aria-label="Manage KB & calendar" />
+            }
+            nativeButton={false}
+          >
+            Manage KB & calendar
+          </Button>
         ) : null}
       </div>
       {events.length > 0 ? (

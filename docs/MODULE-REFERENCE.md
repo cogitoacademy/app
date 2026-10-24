@@ -1,5 +1,25 @@
 # Cogito Module Reference
 
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
 ## Reusable account email shell (24 October 2026)
 
 `auth-email-layout.ts` owns the table-based, inline-CSS layout, optional approved
@@ -45,7 +65,46 @@ bullet has a separate marker gutter and hanging indent; dense lists keep one
 item per bullet and paginate instead of compacting inline. Banner/footer repeat per page; multi-page exports
 include pagination. No changes to selection, ownership or chargeable entitlement.
 
-## KB/calendar single-input migration checkpoint (24 October 2026)
+## KB/calendar destination modules (24 October 2026)
+
+`content-admin` follows repo/service/handler/router composition. Validation is
+single-language-neutral text, trimmed required titles, explicit-offset ISO dates,
+non-reversed ranges, bounded HTTP(S) links and unique catalog category IDs.
+Mutations take the existing catalog advisory lock, check expected row version,
+validate file/category references and write content plus `content.created`,
+`content.updated` or `content.deleted` audit atomically, with admin actor/reason.
+Event audits include category IDs. Imported rows cannot be hard-deleted, retaining
+identity for replay and old links. Native records support versioned deletion.
+Catalog use-count/deletion guards include calendar links only after explicit
+CONTENT_ADMIN_ENABLED or CC_SOURCE=database activation; a restrictive FK also
+prevents deleting referenced categories. Archive retains existing calendar labels.
+
+`private-kb-storage` has only put/read, no public URL/signing method. Local files
+live outside public uploads (including resolved directory aliases); production/
+staging requires a separate private bucket. Immutable SHA-256 object names,
+PDF signature/size validation and readback hash/length checks protect attachment
+identity. Resource DTOs select only ID/title/description/category. File bytes
+remain behind the independent server gate. Unattached uploads are retained
+privately; operators may reconcile orphans only after checking DB references.
+
+`content.service` selects KB and CC adapters independently from explicit config.
+Defaults preserve legacy Sanity reads; no new table is queried on construction.
+DB mode projects current catalog names/palettes and fails closed, without a
+Sanity fallback. Calendar wall-clock dates are display-only WIB values; original
+instants are persisted unchanged. Agenda enumerates each inclusive day and
+suppresses only duplicate event-ID/date pairs, preserving distinct same-title
+records and legitimate multi-day occurrences.
+
+Offline `migration/sanity-content/import.ts` validates all input/assets and an
+explicit source-category-ID -> catalog-parent-ID map before applying. Default is
+dry-run, with no DB connection/provider calls. Apply requires exact DB target,
+existing admin actor, consumers on Sanity and authoring disabled. Per-record
+transactions allow restart: same source identity/hash at version 1 skips;
+changed payload/identity or edited version conflicts rather than overwriting.
+Partial failure may leave earlier records/private orphans; reconcile and rerun.
+Raw source/locale selections remain local archives, never public DTOs or Git data.
+
+## Earlier KB/calendar preparation checkpoint (superseded above)
 
 KB/calendar authored text is language-neutral, one value per field, with no
 translation or bilingual-entry requirement. This is scoped to these modules.

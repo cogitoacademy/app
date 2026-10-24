@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import {
+  calendarEventCategory,
   booking,
   bookingSession,
   economyV3Revision,
@@ -260,6 +261,7 @@ function textArray(values: string[]) {
 export async function countCompetitionCatalogReferences(
   conn: DbOrTx,
   entries: readonly Pick<CompetitionCatalogRow, "id" | "slug">[],
+  includeCalendar = false,
 ) {
   const ids = entries.map((entry) => entry.id);
   const slugs = entries.map((entry) => entry.slug);
@@ -272,6 +274,7 @@ export async function countCompetitionCatalogReferences(
       historicalTutorProfileAudits: 0,
       economyRevisions: 0,
       defaultRates: 0,
+      calendarEvents: 0,
     };
   }
 
@@ -341,6 +344,14 @@ export async function countCompetitionCatalogReferences(
         ),
       ),
   );
+  const calendarEvents = includeCalendar
+    ? await countRows(
+        conn
+          .select({ count: sql<number>`count(*)::int` })
+          .from(calendarEventCategory)
+          .where(inArray(calendarEventCategory.categoryId, ids)),
+      )
+    : 0;
   const defaultRates = slugs.filter((slug) =>
     Object.hasOwn(DEFAULT_V3_ECONOMY_CONFIG.competitionRates, slug),
   ).length;
@@ -353,6 +364,7 @@ export async function countCompetitionCatalogReferences(
     historicalTutorProfileAudits,
     economyRevisions,
     defaultRates,
+    calendarEvents,
   };
 }
 

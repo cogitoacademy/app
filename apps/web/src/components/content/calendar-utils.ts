@@ -258,3 +258,48 @@ export function getWeekEventLanes(
 
   return lanes;
 }
+
+/** A display-only wall-clock Date, never persist or compare it as an instant. */
+export function wibCalendarDate(value: string | Date) {
+  const instant = new Date(value);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return new Date(
+    n("year"),
+    n("month") - 1,
+    n("day"),
+    n("hour"),
+    n("minute"),
+    n("second"),
+  );
+}
+export function getAgendaOccurrences(
+  events: CalendarCompetition[],
+  currentDate: Date,
+  days = AGENDA_DAYS_TO_SHOW,
+) {
+  const occurrences: Array<{
+    event: CalendarCompetition;
+    day: Date;
+    key: string;
+  }> = [];
+  for (let offset = 0; offset < days; offset++) {
+    const day = addDays(startOfDay(currentDate), offset);
+    const seen = new Set<string>();
+    for (const event of getAllEventsForDay(events, day)) {
+      const key = `${event.id}:${format(day, "yyyy-MM-dd")}`;
+      if (!seen.has(key)) occurrences.push({ event, day, key });
+      seen.add(key);
+    }
+  }
+  return occurrences;
+}

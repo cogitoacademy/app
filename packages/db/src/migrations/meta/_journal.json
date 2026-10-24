@@ -526,6 +526,13 @@
       "when": 1792780107013,
       "tag": "0074_kol_settlement_replay_precondition",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792822161322,
+      "tag": "0075_kb_calendar_content",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,5 @@
+import type { ContentAdminRepo } from "../content-admin/content-admin.repo";
+import type { PrivateKbStorage } from "../../lib/private-kb-storage";
 import type { SanityClient } from "@sanity/client";
 
 import type { WalletPort } from "../wallet/wallet.service";
@@ -13,9 +15,13 @@ export function createContentModule(deps: {
   wallet: WalletPort;
   competitionPalette: CompetitionPaletteResolver;
   client?: SanityClient;
+  database?: ContentAdminRepo;
+  privateStorage?: () => PrivateKbStorage;
+  kbSource?: "sanity" | "database";
+  ccSource?: "sanity" | "database";
 }) {
   const service = createContentService({
-    client: deps.client,
+    ...deps,
     competitionPalette: deps.competitionPalette,
   });
   const handler = createContentHandler({

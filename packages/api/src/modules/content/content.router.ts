@@ -10,7 +10,7 @@ export function createContentRouter(handler: ContentHandler) {
         tags: ["Content"],
         summary: "List competition calendar events",
         description:
-          "Returns the published, English competition calendar for authenticated users",
+          "Returns the active competition calendar for authenticated users",
       })
       .handler(handler.listCompetitions),
 

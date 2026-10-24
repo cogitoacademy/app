@@ -1,5 +1,25 @@
 # Cogito App — Codebase Context
 
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
 ## Approved account email branding (24 October 2026)
 
 OTP (pre-account and existing-account verification), welcome and password-reset
@@ -44,7 +64,27 @@ the first text character. Dense bullets stay separate and paginate rather than
 flowing inline. The banner is embedded from bundled JSON to survive server
 bundling without a runtime asset path. Eligibility/endpoints/window are unchanged.
 
-## KB/calendar migration preparation (24 October 2026)
+## KB/calendar source implementation (24 October 2026)
+
+Additive `0075_kb_calendar_content` defines KB files/resources and calendar
+records/category links. It is applied to guarded TEST only; dev/prod remain unapplied. Admin
+`/admin-content` uses single-value text fields, private PDF upload, reasoned
+live-save CRUD and version conflicts. Imported records retain source IDs and
+can be archived, not hard-deleted. Calendar uses catalog parent identities and
+palettes, inclusive WIB dates and agenda identity `(event ID, displayed date)`.
+
+Default `KB_SOURCE=sanity`, `CC_SOURCE=sanity`, `CONTENT_ADMIN_ENABLED=false`
+keeps existing reads working without querying new tables. Explicit DB mode
+fails on DB/storage errors; it never silently falls back to Sanity. Existing
+wallet and independently gated file routes remain. Activities/FAQ/classes/tutor
+localization and global Sanity removal are outside this slice. Source content,
+selection manifests and PDFs stay ignored/local; none belongs in GitHub.
+
+Source implementation is not release acceptance. Migration/import/private bucket
+privacy, guarded PostgreSQL, website redirect, rollback and client UAT remain
+operator/parent gates. See RUNBOOK and migration README for activation order.
+
+## Earlier KB/calendar preparation checkpoint (superseded by source implementation above)
 
 Owner clarified one language-neutral input per KB/calendar text field; English
 is not required for entered content. Other modules' locale policies are unchanged.

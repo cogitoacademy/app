@@ -33,6 +33,7 @@ export type StudentResourceContent = {
 };
 
 export type StudentResourceFile = {
+  bytes?: Uint8Array;
   fileUrl: string;
   fileName: string | null;
   mimeType: string | null;

@@ -1,3 +1,4 @@
+import { createContentAdminRouter } from "./modules/content-admin/content-admin.router";
 import type { RouterClient } from "@orpc/server";
 
 import { publicProcedure } from "./procedures";
@@ -93,6 +94,7 @@ export const appRouter = {
   adminTutor: adminTutorRouter,
   adminMarkPackage: adminMarkPackageRouter,
   adminKnowledgeBank: adminKnowledgeBankRouter,
+  adminContent: createContentAdminRouter(handlers.contentAdmin),
   adminFaq: faqRouter.adminFaq,
   tutor: tutorRouter,
   tutors: discoveryRouter,

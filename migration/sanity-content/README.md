@@ -1,7 +1,8 @@
 # Knowledge Bank and Competition Calendar migration
 
-Status: source inventory and KB asset verification complete; DB/admin/import and
-consumer cutover are not implemented. Activities are deferred.
+Status: source inventory plus DB/admin/private-file/import implementation complete
+in source; generated additive migration 0075 is unapplied. Runtime sources default
+to Sanity. DB/provider and live acceptance remain pending; mocked browser checks are tracked below; Activities are deferred.
 
 ## Working snapshot and verification
 
@@ -92,3 +93,48 @@ and future anonymous calendar DTO must never disclose KB file URLs or keys.
    acceptance; do not remove Sanity globally while Activities still uses it.
 
 No DB/provider writes, upload, runtime cutover or production changes have run.
+
+## Destination implementation and data boundary
+
+Only tooling/schema/synthetic tests/docs are committed. Do not commit extracted
+source JSON, category mapping JSON, selected-text manifests or PDFs. `.gitignore`
+in this directory rejects JSON/assets/PDFs, and source working copies remain in
+ignored `tmp/`. Private storage defaults outside public `uploads`.
+
+`import.ts` defaults to offline dry-run. It requires `--manifest`, `--mapping`
+(source category ID -> destination parent catalog ID) and `--assets`. It validates
+all source identities/ranges/links/PDF size+SHA-256 before any writes. Different
+source IDs are retained even when title/date match. Mapping values may deliberately
+map several legacy categories to one reviewed catalog parent; no name matching.
+Apply additionally requires `--apply --expect-target host:port/database --actor
+existing-admin-id`, server env loaded, consumers still on Sanity and admin
+writing disabled. Identical version-1 imports skip; changed data/admin edits
+conflict. Records commit individually with audits; earlier successes/private
+orphans survive a later failure. This is deliberate restartable import, not an
+all-or-nothing batch. A PDF upload cannot be rolled back by a DB transaction.
+
+See `docs/RUNBOOK.md` for the complete migration/import/activation and rollback
+sequence, private bucket denial proof and manual-upload alternative. No actual
+DB migration/import, provider upload or activation has run in this slice.
+
+## Local validation (implementation slice)
+
+- 56 focused Bun unit/parser/storage/proxy/calendar tests pass; 6 Python audit
+  tests pass. Bun runtime was local 1.4.0-canary.1; pinned CI remains a parent gate.
+- 4 synthetic browser cases pass using installed Edge, isolated Vite 3316 and
+  mocked API 3317. Includes retained stale draft, single-language saves, student
+  navigation denial and ID/date agenda appearances at WIB midnight. Mobile has
+  no horizontal overflow; screenshots reviewed. This proves UI/wire behavior,
+  not server authorization, PostgreSQL races or real private bucket privacy.
+- Serial `tsgo --noEmit --checkers 1 -p apps/server/tsconfig.json`, then web and
+  E2E equivalents pass. Importer/unit/authored PostgreSQL tests also typecheck.
+- `packages/api/src/tests/integration/kb-calendar.test.ts` is authored but NOT RUN.
+  A guarded 6769 DB window and unapplied schema acceptance are still required.
+- Existing source snapshot/three PDFs were read and hashes/IDs reconciled locally
+  without writes. No source content, mapping JSON or asset is included in Git.
+
+Browser command: from `packages/e2e`, set `KB_BROWSER_CHANNEL=msedge` when using
+installed Edge, then `playwright test --config playwright.kb-calendar-synthetic.config.ts`.
+Default channel uses an already-installed Playwright Chromium. Do not install
+browsers as part of this restricted slice. Config starts only its own Vite and
+never seeds a DB. Stop only processes owned by this test run.

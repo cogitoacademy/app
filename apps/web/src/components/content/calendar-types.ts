@@ -6,6 +6,7 @@ export type CalendarCompetition = {
   description: string | null;
   start: Date;
   end: Date;
+  endInstant?: string;
   allDay?: boolean;
   location: string | null;
   categories: Array<{

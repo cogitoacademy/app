@@ -45,6 +45,7 @@ import { CalendarAgendaView } from "./calendar-agenda-view";
 import { CalendarDetailsDrawer } from "./calendar-details-drawer";
 import { CalendarMonthView } from "./calendar-month-view";
 import {
+  wibCalendarDate,
   AGENDA_DAYS_TO_SHOW,
   EVENT_GAP,
   EVENT_HEIGHT,
@@ -69,7 +70,9 @@ export function CompetitionCalendar({
   className,
   initialView = "month",
 }: CompetitionCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [currentDate, setCurrentDate] = useState(() =>
+    wibCalendarDate(new Date()),
+  );
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarCompetition | null>(null);
@@ -141,7 +144,7 @@ export function CompetitionCalendar({
   }
 
   function handleToday() {
-    setCurrentDate(new Date());
+    setCurrentDate(wibCalendarDate(new Date()));
   }
 
   function handleViewChange(value: string) {

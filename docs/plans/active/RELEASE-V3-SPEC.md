@@ -10,7 +10,9 @@ exception to the generic Content row and content-entry language rules below;
 FAQ, Activities, classes, tutor prose and competition taxonomy are unchanged.
 Migration preserves source IDs and all original locale values in its archive,
 selecting the legacy displayed value (nonempty English then first nonempty)
-without translation. The dry-run preparation tool and limitations are documented
+without translation. Additive destination schema, versioned live-save admin CRUD, private PDFs and explicit
+source adapters are implemented in source; migration 0075 is generated/unapplied.
+The deterministic dry-run/import tool and limitations are documented
 in `migration/sanity-content/README.md`; no runtime source switch has occurred.
 
 ## KOL settlement source contract (23 October 2026)

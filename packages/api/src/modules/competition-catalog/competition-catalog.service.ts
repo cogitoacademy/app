@@ -44,6 +44,7 @@ type ImpactCounts = {
   historicalTutorProfileAudits: number;
   economyRevisions: number;
   defaultRates: number;
+  calendarEvents?: number;
 };
 
 function snapshot(row: CompetitionCatalogRow) {
@@ -66,7 +67,7 @@ function snapshot(row: CompetitionCatalogRow) {
 }
 
 function isUsed(counts: ImpactCounts) {
-  return Object.values(counts).some((count) => count > 0);
+  return Object.values(counts).some((count) => (count ?? 0) > 0);
 }
 
 function addReadiness<
@@ -131,6 +132,7 @@ export function createCompetitionCatalogService(deps: {
   audit: AuditPort;
   economy: EconomyService;
   repo?: CompetitionCatalogRepo;
+  includeCalendarReferences?: boolean;
 }) {
   const repo = deps.repo ?? createCompetitionCatalogRepo();
 
@@ -187,6 +189,7 @@ export function createCompetitionCatalogService(deps: {
     const references = await repo.countCompetitionCatalogReferences(
       tx,
       entries,
+      deps.includeCalendarReferences ?? false,
     );
     return {
       childCount: children.length,

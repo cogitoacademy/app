@@ -1,5 +1,25 @@
 # Release v3 - SDD execution and acceptance plan
 
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
 ## Account email design approved (24 October 2026)
 
 Owner approved report banner, orange/blue and full Cogito Academy naming, with
@@ -50,11 +70,20 @@ This UI regression does not establish real Google OAuth completion acceptance.
   PDFs verify against source size/hash; source refs and timestamp ranges pass.
   Eighty differing legacy locale fields retain selection/archive evidence.
   Six focused Python tests pass. See `migration/sanity-content/README.md`.
-- [ ] Integrate/review isolated KB/CC implementation `1b815799` (destination
-  tables, private files, versioned live-save admin CRUD and deterministic import).
-  Worker reports focused/synthetic checks passed; parent PostgreSQL, private
-  bucket, redirect/rollback and UAT gates remain. Migration 0075 is unapplied.
-  Current release runtime still reads Sanity. Activities remain deferred.
+- [x] KB/CC source implementation: additive destination schema/migration 0075,
+  separate private PDF storage, version-checked live-save CRUD, admin editor,
+  deterministic dry-run/import and explicit independent consumer source flags.
+  Default runtime still reads Sanity; Activities remain deferred.
+  Validation: 56 focused Bun tests, 6 Python audit tests and 4 mocked browser
+  cases pass. Serial production server/web and E2E typechecks plus importer/
+  authored-test typecheck pass. Browser uses installed Edge, isolated web 3316
+  and mocked API 3317; no API/DB/seed/provider process. Desktop/mobile screenshots
+  reviewed; source hashes/IDs reconciled read-only. Bun is the locally installed
+  1.4.0-canary.1, not pinned CI runtime. PostgreSQL tests remain authored/unrun.
+- [ ] Apply migration/import/upload only in separately approved windows; verify
+  private bucket denial, PostgreSQL races/audit rollback, role/file gates,
+  website redirects, source activation/rollback and client acceptance.
+  Extracted source data/assets/manifests remain local and must not reach GitHub.
 
 - [ ] T10/T12 content migration: published Sanity snapshot extracted read-only
   on 24 October from project `skfmwuke`, dataset `development`, into ignored
@@ -63,8 +92,8 @@ This UI regression does not establish real Google OAuth completion acceptance.
   1 event scale, 2 locations, 4 file assets and 12 image assets. Raw document
   IDs, references, rich text and locale fields are retained. This is a
   published-only working snapshot, not a full draft/history backup. Next:
-  map KB/calendar fields and access rules to destination schema, reconcile
-  references/dates/locales and validate before any import or website cutover.
+  review explicit source-category mappings and text selections, authorize a DB
+  window and reconcile destination data before any website/source cutover.
 
 - [x] Shorten newly generated friend referral codes to the six-character pattern
   `XXX000`: three uppercase letters derived from the user's name or another

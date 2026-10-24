@@ -32,7 +32,7 @@ export function CalendarEventItem({
   isContinuation?: boolean;
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const isEventInPast = isPast(new Date(event.end));
+  const isEventInPast = isPast(new Date(event.endInstant ?? event.end));
   const category = event.categories[0];
   const eventClass = getCategoryEventClass(category);
   const eventStyle = getCompetitionPaletteStyle(category?.parentColors);

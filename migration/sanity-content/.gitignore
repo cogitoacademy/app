@@ -1,1 +1,4 @@
+*.json
+assets/
+*.pdf
 __pycache__/

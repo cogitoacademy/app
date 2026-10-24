@@ -45,7 +45,6 @@ import { useRole } from "@/hooks/use-role";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
-import { SanityStudioEditButton } from "./sanity-studio-button";
 
 type Resource = {
   id: string;
@@ -166,10 +165,15 @@ export function KnowledgeBankPage() {
             </Text>
           </div>
           {isAdmin ? (
-            <SanityStudioEditButton
-              type="studentResource"
-              label="Edit resources"
-            />
+            <Button
+              variant="secondary"
+              render={
+                <Link to="/admin-content" aria-label="Manage KB & calendar" />
+              }
+              nativeButton={false}
+            >
+              Manage KB & calendar
+            </Button>
           ) : null}
         </div>
 

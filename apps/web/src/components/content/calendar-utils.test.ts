@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  wibCalendarDate,
+  getAgendaOccurrences,
   filterEventsByCompetitionType,
   getCategoryLabel,
   getCategoryBadgeClass,
@@ -329,4 +331,27 @@ describe("getAgendaEventsForPeriod", () => {
 
     expect(getAgendaEventsForPeriod([afterPeriod], currentDate)).toEqual([]);
   });
+});
+
+test("WIB midnight and ID/date agenda identity preserve legitimate multi-day occurrences", () => {
+  const event = {
+    ...makeEvent("a", []),
+    title: "Same title",
+    start: wibCalendarDate("2026-10-24T16:59:00Z"),
+    end: wibCalendarDate("2026-10-24T17:01:00Z"),
+  };
+  expect(event.start.getDate()).toBe(24);
+  expect(event.end.getDate()).toBe(25);
+  const other = { ...event, id: "b" };
+  const result = getAgendaOccurrences(
+    [event, event, other],
+    new Date(2026, 9, 24),
+    2,
+  );
+  expect(result.map((r) => r.key)).toEqual([
+    "a:2026-10-24",
+    "b:2026-10-24",
+    "a:2026-10-25",
+    "b:2026-10-25",
+  ]);
 });

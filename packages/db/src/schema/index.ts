@@ -26,3 +26,5 @@ export * from "./faq";
 export * from "./academy-class";
 export * from "./academy-class-enrollment";
 export * from "./academy-class-session-report";
+
+export * from "./content-v3";

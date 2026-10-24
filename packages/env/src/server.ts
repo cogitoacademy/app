@@ -49,6 +49,11 @@ const serverShape = {
   PAYMENT_PROVIDER: z.enum(["stub", "midtrans"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
+  KB_SOURCE: z.enum(["sanity", "database"]).default("sanity"),
+  CC_SOURCE: z.enum(["sanity", "database"]).default("sanity"),
+  CONTENT_ADMIN_ENABLED: boolSchema(false),
+  KB_PRIVATE_DIR: z.string().optional(),
+  KB_PRIVATE_BUCKET: z.string().optional(),
   SANITY_PROJECT_ID: z.string().min(1).default("skfmwuke"),
   SANITY_DATASET: z.string().min(1).default("development"),
   SANITY_API_VERSION: z

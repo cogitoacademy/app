@@ -1,5 +1,25 @@
 # Cogito Runbook
 
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
 ## Approved account email shell (24 October 2026)
 
 Account email branding is shared in `packages/auth/src/auth-email-layout.ts`.
@@ -53,7 +73,65 @@ The reference layout uses narrower feedback text; long reports can use more
 pages. Bullets have a hanging indent and remain separate even in dense lists.
 Empty eligible sets still return 204, without creating a blank PDF.
 
-## KB/calendar read-only preparation (24 October 2026)
+## KB/calendar activation and rollback (24 October 2026)
+
+Migration `0075_kb_calendar_content` is applied to guarded TEST only. No dev/prod DB
+import/reset/seed, provider upload, production write or runtime activation ran.
+Extracted calendars/KB data, manifests and PDFs MUST remain ignored/local and
+must not be pushed to GitHub. Tooling tests contain synthetic content only.
+
+1. Keep `KB_SOURCE=sanity`, `CC_SOURCE=sanity`, `CONTENT_ADMIN_ENABLED=false`.
+   Back up the exact destination and rehearse restore. Verify the migration
+   journal and regenerate/renumber 0075 if another integration owns that number.
+2. Obtain a guarded DB window and apply the additive migration using the normal
+   runner. This is a separate operator action, never an app-startup side effect.
+3. Configure `KB_PRIVATE_BUCKET` distinct from public `R2_BUCKET`, using existing
+   R2 account credentials; disable r2.dev/custom public domains and prove an
+   anonymous GET cannot read any private PDF. A different bucket name alone is
+   not evidence of privacy. In local development, `KB_PRIVATE_DIR` defaults to
+   `./private-kb`, outside `UPLOAD_DIR`; protect/persist that directory. Production/
+   staging fails private storage use without a private bucket; no local fallback.
+4. Preserve raw published snapshot, assets and 80 text selections in a durable
+   private archive; published-only extraction is not a full history/draft backup.
+   Review the explicit local mapping JSON `{sourceCategoryId: catalogParentId}`.
+   No title/date-based duplicate merge or automatic category-name mapping exists.
+5. From repo root, dry-run with local files:
+   `bun migration/sanity-content/import.ts --manifest <local-prepared.json> --mapping <local-map.json> --assets <local-assets-dir>`.
+   It checks source IDs, dates, links, categories and local PDF size/SHA-256 without
+   loading server env or connecting to DB. It reports only counts/digests.
+6. Only in a separately authorized window, run the same command with server env
+   loaded, `--apply --expect-target <host:port/database> --actor <existing-admin-id>`.
+   Both consumers must still use Sanity and authoring must be disabled. This uploads
+   PDFs privately and inserts per-record transactions/audits. Replay skips identical
+   version-1 source records; edits/different input conflict, never overwrite.
+   Partial failure retains successful records and possible private orphans. Rerun
+   identical inputs after fixing the failure; reconcile changed/edited rows manually.
+   Alternatively enable authoring after migration and manually upload/create in
+   `/admin-content`; explicitly reconcile old IDs/links before switching if manual
+   creation replaces imported source IDs. Do not combine manual copies and import
+   without resolving identity conflicts.
+7. Reconcile counts, stable IDs, categories, prose selections, links, file bytes/
+   hashes and active states. Test anonymous/unsupported/ineligible denials,
+   eligible student/admin-grant/tutor/admin readbacks, metadata privacy, stale
+   admin saves, replay, WIB boundaries, multi-day agenda and website redirects.
+   PostgreSQL test `kb-calendar.test.ts` requires explicit guarded 6769 window and
+   `KB_DB_TEST_WINDOW=confirmed`; it never resets and was authored but not run here.
+8. Activate KB first (`KB_SOURCE=database`), restart only the owning API, verify;
+   activate CC separately (`CC_SOURCE=database`), verify again. Set
+   `CONTENT_ADMIN_ENABLED=true` only after reconciliation. New tables are not
+   automatically read merely by deploying this commit. DB-mode failures never
+   cause a silent Sanity fallback. Keep Activities on its existing source.
+9. Rollback: pause authoring, reconcile/archive DB changes made after activation,
+   explicitly restore each source flag to `sanity` and restart the owning API.
+   Do not drop destination tables/files or remove migration history. A rollback
+   changes the source and can temporarily hide post-cutover entries; confirm
+   this consequence with the owner before executing it. Rehearse website redirect.
+
+PDF upload uses admin RPC base64 with a 5 MiB decoded cap; ensure deployment proxy
+body limits permit its roughly 7 MiB JSON envelope. Never expose private bucket
+objects through generic `/uploads` serving or signed public upload helpers.
+
+## Earlier read-only extraction checkpoint (before implementation)
 
 From the repository root, run
 `python -m unittest discover -s migration/sanity-content -p test_audit.py`, then

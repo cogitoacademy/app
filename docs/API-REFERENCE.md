@@ -1,5 +1,25 @@
 # Cogito API Reference
 
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
 ## Account email presentation approval (24 October 2026)
 
 Verification OTP, signup welcome and reset-password builder contracts retain
@@ -39,7 +59,36 @@ retained. Wrapped bullet lines align with the first text character and dense
 lists paginate without inline compaction. No request, eligibility, response type
 or summary contract changed.
 
-## KB/calendar preparation boundary (24 October 2026)
+## KB/calendar authoring (24 October 2026)
+
+Admin-only procedure keys below use `/rpc/adminContent/<key>` and the standard
+`{"json": input}` envelope. Authoring defaults disabled; disabled requests fail
+before touching new tables/storage. `/admin-content` is the app editor.
+
+| Key | Input | Result |
+| --- | --- | --- |
+| `list` | `kind: resource/event` | Admin records including ID, source identity, version, active/order and editable values; no storage key/URL or source hash |
+| `categories` | none | Catalog ID/name/parent/active for category choices |
+| `create` | `entry: {kind, values}`, `reason` (3..600 chars) | ID/version, immediately live |
+| `update` | create input + `id`, `expectedVersion` positive integer | ID/new version; stale/missing => CONFLICT, reload/review |
+| `remove` | `kind`, `id`, `expectedVersion`, `reason` | Deleted ID; imported identities require archive instead |
+| `uploadPdf` | `fileName`, canonical `base64` | `fileId`, filename, byte count; PDF signature and 5 MiB maximum checked; no public URL/key |
+
+Resource values: required title/category/fileId; nullable description; isActive;
+nonnegative sortOrder. Event values: required title/startDate/endDate; nullable
+description/location/scale/organizer/registrationDeadline/registrationLink/
+socialMediaLink; categoryIds, educationLevels, isActive, sortOrder. Text is one
+language-neutral value per field. ISO timestamps require timezone; end >= start;
+links must be HTTP(S) without credentials. New categories must be active catalog
+parents; existing archived categories may be retained on edits.
+
+`content.listCompetitions` remains authenticated. `content.listStudentResources`
+retains its wallet gate and metadata-only projection. File route/IDs are unchanged:
+`/content/knowledge-bank/:resourceId/file` independently authenticates, checks
+role + 35-Mark/admin-grant eligibility, and returns private/no-store PDF bytes.
+DB mode includes no Sanity URL, storage key or raw source fields in these DTOs.
+
+## Earlier KB/calendar preparation boundary (superseded above)
 
 The single-input KB/calendar decision introduces no new runtime endpoint yet.
 Existing `content.listCompetitions` and `content.listStudentResources` procedure

@@ -1,3 +1,7 @@
+import { createContentAdminModule } from "./modules/content-admin";
+import type { ContentAdminService } from "./modules/content-admin/content-admin.service";
+import type { ContentAdminHandler } from "./modules/content-admin/content-admin.handler";
+import { createPrivateKbStorage } from "./lib/private-kb-storage";
 import { db } from "./lib/db";
 import { env } from "@cogito-app/env/server";
 import { initRedis } from "./lib/redis";
@@ -129,6 +133,7 @@ export interface ServiceRegistry {
   upload: UploadService;
   content: ContentService;
   publicContent: PublicContentService;
+  contentAdmin: ContentAdminService;
   faq: FaqService;
   meeting: MeetingModule;
   contact: ContactService;
@@ -161,6 +166,7 @@ export interface HandlerRegistry {
   upload: UploadHandler;
   content: ContentHandler;
   publicContent: PublicContentHandler;
+  contentAdmin: ContentAdminHandler;
   faq: FaqHandler;
   contact: ContactHandler;
   referral: ReferralHandler;
@@ -282,6 +288,8 @@ function createServices() {
     economy: economy.service,
   });
   const competitionCatalog = createCompetitionCatalogModule({
+    includeCalendarReferences:
+      env.CONTENT_ADMIN_ENABLED || env.CC_SOURCE === "database",
     db,
     audit: audit.service,
     economy: economy.service,
@@ -331,7 +339,18 @@ function createServices() {
     wallet: wallet.service,
     audit: audit.service,
   });
+  const privateKbStorage = () => createPrivateKbStorage(env);
+  const contentAdmin = createContentAdminModule({
+    db,
+    audit: audit.service,
+    storage: privateKbStorage,
+    enabled: () => env.CONTENT_ADMIN_ENABLED,
+  });
   const content = createContentModule({
+    database: contentAdmin.repo,
+    privateStorage: privateKbStorage,
+    kbSource: env.KB_SOURCE,
+    ccSource: env.CC_SOURCE,
     wallet: wallet.service,
     competitionPalette: competitionCatalog.service,
   });
@@ -518,6 +537,7 @@ function createServices() {
     upload: upload.service,
     content: content.service,
     publicContent: publicContent.service,
+    contentAdmin: contentAdmin.service,
     faq: faq.service,
     meeting,
     contact: contact.service,
@@ -550,6 +570,7 @@ function createServices() {
     upload: upload.handler,
     content: content.handler,
     publicContent: publicContent.handler,
+    contentAdmin: contentAdmin.handler,
     faq: faq.handler,
     contact: contact.handler,
     referral: referral.handler,

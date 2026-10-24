@@ -8,6 +8,7 @@ export function createCompetitionCatalogModule(deps: {
   db: DbType;
   audit: AuditPort;
   economy: EconomyService;
+  includeCalendarReferences?: boolean;
 }) {
   const service = createCompetitionCatalogService(deps);
   const handler = createCompetitionCatalogHandler(service);
