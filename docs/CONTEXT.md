@@ -1,5 +1,18 @@
 # Cogito App — Codebase Context
 
+## Student report reference layout (24 October 2026)
+
+PDF export now follows the owner-supplied layout: supplied Cogito banner,
+right-aligned Student Report title, compact two-column inline metadata and
+Tutor Feedback with left-side section labels. Class type, cohort/class, session
+and time remain present. The footer reads Generated date by Cogito Academy;
+multi-page exports retain page numbers and labeled continuation pages. Text
+remains live and paginated; dense lists can span additional pages in the narrower
+feedback column. Bullets use a separate marker gutter; wrapped lines align with
+the first text character. Dense bullets stay separate and paginate rather than
+flowing inline. The banner is embedded from bundled JSON to survive server
+bundling without a runtime asset path. Eligibility/endpoints/window are unchanged.
+
 ## Short FRIEND code source checkpoint (24 October 2026)
 
 New codes allocated by student `referral.getMine` use exactly three ASCII uppercase

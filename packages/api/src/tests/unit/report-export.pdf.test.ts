@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { inflateSync } from "node:zlib";
 import {
   createStudentReportPdf,
@@ -78,6 +78,30 @@ async function textGeometry(bytes: Uint8Array) {
 }
 
 describe("student report PDF layout", () => {
+  test("embeds the supplied header on every report and continuation page", async () => {
+    const bytes = await createStudentReportPdf({
+      studentName: "Sample Student",
+      generatedAt: new Date("2026-10-24T05:00:00Z"),
+      reports: [
+        makeEntry(
+          {
+            discussion: ["Detailed legacy feedback. ".repeat(1000)],
+            strengths: ["A strength"],
+            improvements: ["Next step"],
+          },
+          true,
+        ),
+      ],
+    });
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
+    for (const page of pdf.getPages()) {
+      const objects = page.node.Resources()!.lookup(PDFName.of("XObject")) as {
+        keys(): unknown[];
+      };
+      expect(objects.keys().length).toBeGreaterThan(0);
+    }
+  });
   test("fits three 600-character feedback fields on one page", async () => {
     const entry = makeEntry({
       discussion: ["D".repeat(600)],
@@ -92,7 +116,7 @@ describe("student report PDF layout", () => {
     expect(await pageCount(bytes)).toBe(1);
   });
 
-  test("fits three valid fields made from 300 one-character bullets on one page", async () => {
+  test("paginates dense bullet fields within the reference layout without dropping text", async () => {
     const bullets = Array.from({ length: 300 }, () => "x");
     const entry = makeEntry({
       discussion: bullets,
@@ -108,11 +132,11 @@ describe("student report PDF layout", () => {
     });
     const geometry = await textGeometry(bytes);
 
-    expect(geometry.pageCount).toBe(1);
+    expect(geometry.pageCount).toBeGreaterThan(1);
     expect(geometry.glyphCount).toBeGreaterThanOrEqual(1800);
   });
 
-  test("keeps short legacy line breaks while dense current feedback stays one page", async () => {
+  test("keeps each bullet separate and paginates both legacy and current dense feedback", async () => {
     const bullets = Array.from({ length: 80 }, () => "word");
     expect(bullets[0]!.length * bullets.length + bullets.length - 1).toBe(399);
 
@@ -134,7 +158,7 @@ describe("student report PDF layout", () => {
     const currentBytes = await createStudentReportPdf(makeModel(false));
 
     expect(await pageCount(legacyBytes)).toBeGreaterThan(1);
-    expect(await pageCount(currentBytes)).toBe(1);
+    expect(await pageCount(currentBytes)).toBeGreaterThan(1);
   });
 
   test("paginates 5,000-character metadata without clipping or truncating it", async () => {

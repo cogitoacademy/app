@@ -1,5 +1,18 @@
 # Cogito Module Reference
 
+## Student report PDF reference template (24 October 2026)
+
+`report-export.pdf.ts` embeds the supplied banner from
+`report-export/assets/student-report-header.json` (base64 of the adjacent PNG).
+The two-column metadata keeps student/tutor, competition/date, mode/topic and
+additional class/session details. Feedback display labels map discussion to
+Session focus, strengths to Positive observations, and improvements to Points
+of improvement; stored fields are unchanged. Feedback labels sit left of body
+text. All prose stays live and paginates, retaining legacy line breaks. Each
+bullet has a separate marker gutter and hanging indent; dense lists keep one
+item per bullet and paginate instead of compacting inline. Banner/footer repeat per page; multi-page exports
+include pagination. No changes to selection, ownership or chargeable entitlement.
+
 ## Short FRIEND allocation (24 October 2026)
 
 `referral.friend-code.ts` derives three letters from NFKD-normalized name ASCII

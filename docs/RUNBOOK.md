@@ -1,5 +1,19 @@
 # Cogito Runbook
 
+## Student report banner and layout QA (24 October 2026)
+
+The report banner source is
+`packages/api/src/modules/report-export/assets/student-report-header.png`.
+Its adjacent JSON stores the exact image bytes as a base64 JSON string for
+bundling, following the existing embedded-font approach. When replacing the PNG,
+regenerate its JSON before build; do not introduce a cwd-dependent runtime read.
+Run `bun test packages/api/src/tests/unit/report-export.pdf.test.ts` for header
+embedding, dense bullets, long metadata, Unicode/legacy and pagination coverage.
+Visual QA should include short, populated, long continuation and mixed reports.
+The reference layout uses narrower feedback text; long reports can use more
+pages. Bullets have a hanging indent and remain separate even in dense lists.
+Empty eligible sets still return 204, without creating a blank PDF.
+
 ## Short FRIEND allocation operations (24 October 2026)
 
 This source change needs no schema migration, reset, seed or code rotation.

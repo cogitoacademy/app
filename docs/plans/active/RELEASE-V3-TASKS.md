@@ -1,5 +1,18 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Student report presentation checkpoint (24 October 2026)
+
+- [x] Update student report PDF to the supplied reference layout and header:
+  two-column inline metadata, left-aligned feedback labels, compact footer,
+  preserved class/session details and continuation pagination. Six focused
+  PDF tests pass (20 assertions); regenerated short/normal/mixed/long examples
+  are under local `output/pdf/student-report-examples/`. Visual review of
+  normal and final continuation pages completed. Release UAT remains open.
+  Focused lint, four-task serial production typecheck and full server build pass;
+  extracted text blocks from all four sample PDFs stay within page boundaries.
+  Owner follow-up: hanging bullet indent aligns continuation lines with text;
+  dense items remain separate and paginate instead of flowing inline.
+
 ## Short FRIEND code implementation checkpoint (24 October 2026)
 
 XXX000 source implementation is complete: new codes only, normalized name/identity

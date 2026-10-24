@@ -1,5 +1,15 @@
 # Cogito API Reference
 
+## Student report PDF presentation (24 October 2026)
+
+`POST /reports/student/pdf` retains its existing private access contract and 204
+empty response. Its PDF now uses the supplied branded banner and compact inline
+two-column metadata, with Session focus, Positive observations and Points of
+improvement labels. Additional class/session metadata and continuation pages are
+retained. Wrapped bullet lines align with the first text character and dense
+lists paginate without inline compaction. No request, eligibility, response type
+or summary contract changed.
+
 ## Short FRIEND codes (24 October 2026)
 
 `POST /rpc/referral/getMine` retains its response shape. An existing code is returned
