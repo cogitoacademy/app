@@ -1,5 +1,18 @@
 # Cogito Runbook
 
+## Approved account email shell (24 October 2026)
+
+Account email branding is shared in `packages/auth/src/auth-email-layout.ts`.
+Edit that shell once to update OTP/welcome/reset header/footer; edit the separate
+builders for body-specific copy. The supplied report banner is copied byte-for-byte
+to `apps/web/public/auth-email-header.png`; deploy that asset with the web app
+before deploying sender code. CORS_ORIGIN must be the public HTTPS frontend
+origin in production. External mail clients cannot load a localhost image URL;
+local previews resolve the local asset, and text/alt content remains readable
+when remote images are blocked. No data URI or attachment is required.
+Run `bun test ./packages/auth/src/verification-email.test.ts ./packages/api/src/tests/unit/reset-password-email.test.ts`.
+No provider send or real Gmail/Outlook rendering is part of these checks.
+
 ## Auth form focus regression (24 October 2026)
 
 From `packages/e2e`, run

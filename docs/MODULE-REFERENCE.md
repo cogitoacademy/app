@@ -1,5 +1,15 @@
 # Cogito Module Reference
 
+## Reusable account email shell (24 October 2026)
+
+`auth-email-layout.ts` owns the table-based, inline-CSS layout, optional approved
+banner URL, blue branded footer, orange CTA helper and shared escaping. The three
+account builders supply body HTML and retain OTP/expiry/action semantics. User
+data is escaped at interpolation; action/header URL schemes are restricted to
+HTTP(S). Full Cogito Academy naming is used throughout. User approved the second
+design with the orange rule beneath the banner removed. This shared shell covers
+OTP, welcome and password reset; unrelated notification emails are unchanged.
+
 ## Public auth form lifetime (24 October 2026)
 
 `LoginPage` renders sign-in/signup independently of session pending state. A

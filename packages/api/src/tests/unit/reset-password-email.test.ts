@@ -7,7 +7,7 @@ describe("buildResetPasswordEmail", () => {
       name: "Jane Doe",
       url: "http://localhost:3001/reset-password/abc123?callbackURL=http%3A%2F%2Flocalhost%3A3000%2Freset-password",
     });
-    expect(subject).toContain("Reset your Cogito password");
+    expect(subject).toContain("Reset your Cogito Academy password");
     expect(html).toContain("http://localhost:3001/reset-password/abc123");
   });
 
@@ -28,4 +28,27 @@ describe("buildResetPasswordEmail", () => {
     });
     expect(html).toContain("expires in 1 hour");
   });
+});
+
+test("reset link escapes attributes and query delimiters", () => {
+  const { html } = buildResetPasswordEmail({
+    name: "A & B",
+    url: 'https://app.test/reset?token=abc&next="quoted"',
+  });
+  expect(html).toContain(
+    'href="https://app.test/reset?token=abc&amp;next=&quot;quoted&quot;"',
+  );
+  expect(html).toContain("A &amp; B");
+  expect(html).toContain("Cogito Academy");
+  expect(html).not.toContain("<img");
+});
+test("reset rejects executable and invalid link schemes", () => {
+  for (const url of [
+    "javascript:alert(1)",
+    "data:text/html,test",
+    "//example.com/reset",
+    "not a URL",
+  ]) {
+    expect(() => buildResetPasswordEmail({ name: "A", url })).toThrow();
+  }
 });

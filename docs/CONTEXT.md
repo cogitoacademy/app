@@ -1,5 +1,15 @@
 # Cogito App — Codebase Context
 
+## Approved account email branding (24 October 2026)
+
+OTP (pre-account and existing-account verification), welcome and password-reset
+emails share `packages/auth/src/auth-email-layout.ts`: the approved report banner,
+orange CTA, blue footer and full Cogito Academy name. Owner removed the orange
+rule below the banner. Bodies remain separate builders; future body changes reuse
+the wrapper. The public asset is `/auth-email-header.png`; server senders derive
+its absolute URL from CORS_ORIGIN. Instructions/OTP/links remain live HTML with
+alt-text branding if images are blocked. No other notification templates changed.
+
 ## Login draft retention (24 October 2026)
 
 The public LoginPage no longer replaces sign-in/signup forms with a session

@@ -1,5 +1,14 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Account email design approved (24 October 2026)
+
+Owner approved report banner, orange/blue and full Cogito Academy naming, with
+the orange rule below the header removed. Source is integrated locally into
+the shared OTP/welcome/reset email shell and server sender callbacks. No other
+transactional templates changed. Escaping, safe URL schemes, dynamic OTP/expiry,
+and banner fallback are covered by focused checks. Actual provider sends and
+inbox-client rendering remain unrun; production asset deployment is separate.
+
 ## Auth draft focus repair (24 October 2026)
 
 Signup and sign-in drafts now survive background session refetch on tab return.

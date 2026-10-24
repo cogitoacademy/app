@@ -1,5 +1,14 @@
 # Cogito API Reference
 
+## Account email presentation approval (24 October 2026)
+
+Verification OTP, signup welcome and reset-password builder contracts retain
+their existing required inputs with optional `headerUrl`. All use the shared
+Cogito Academy banner/header/footer layout, without the orange header rule.
+Subjects now use the full Cogito Academy name. Server sender callbacks provide
+the absolute public header URL from CORS_ORIGIN. No endpoint, OTP expiry or
+authentication behavior changed; no new email send was performed for this update.
+
 ## Login focus refresh (24 October 2026)
 
 No API change: anonymous session reads still return null and background session
