@@ -12,6 +12,7 @@ function throwReferralRpcError(error: unknown): never {
         ? "FORBIDDEN"
         : error.code === "REFERRAL_SETTINGS_CONFLICT" ||
             error.code === "REFERRAL_CODE_TAKEN" ||
+            error.code === "REFERRAL_CODE_EXHAUSTED" ||
             error.code === "KOL_SETTLEMENT_CONFLICT"
           ? "CONFLICT"
           : "BAD_REQUEST";

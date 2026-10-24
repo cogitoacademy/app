@@ -1,5 +1,19 @@
 # Cogito Runbook
 
+## Short FRIEND allocation operations (24 October 2026)
+
+This source change needs no schema migration, reset, seed or code rotation.
+Previously shared codes remain valid. `REFERRAL_CODE_EXHAUSTED` (HTTP 409) means
+all 1,000 values under an identity/name prefix are occupied, including KOL codes.
+Do not delete attribution or rotate issued codes to free slots. Support should
+escalate the prefix-capacity decision to the product owner: explicitly authorize
+an alternate identity prefix or a larger format before changing allocation policy.
+A typical new allocation reads occupied values and inserts once; a fully contended
+allocation is bounded by 1,000 insert attempts plus owner rereads. Existing-owner
+requests do not scan the namespace. DB concurrency/provider/browser acceptance
+has not been run for this source slice.
+
+
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and

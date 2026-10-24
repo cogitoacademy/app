@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   calculateFriendReward,
   calculateKolCommission,
-  generateFriendReferralCode,
   getReferralSemester,
   isKolCampaignActive,
   isKolPurchaseEligible,
@@ -16,11 +15,6 @@ describe("referral policy", () => {
     expect(normalizeReferralCode("  kol2026 ")).toBe("KOL2026");
     expect(normalizeReferralCode("bad-code")).toBeNull();
     expect(normalizeReferralCode(" ")).toBeNull();
-  });
-
-  test("generates a unique-format student code", () => {
-    const code = generateFriendReferralCode();
-    expect(code).toMatch(/^F[A-F0-9]{16}$/);
   });
 
   test("uses WIB Jan-Jun and Jul-Dec semesters at their exact boundaries", () => {

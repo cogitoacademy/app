@@ -1,5 +1,31 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Short FRIEND code implementation checkpoint (24 October 2026)
+
+XXX000 source implementation is complete: new codes only, normalized name/identity
+letters, leading-zero suffixes, shared KOL uniqueness, bounded collision retries,
+and explicit full-prefix conflict. Existing codes/attribution remain stable.
+Focused DB-free tests cover policy and getMine wiring; PostgreSQL race and browser
+acceptance remain parent gates. No migrations or dev/provider writes were made.
+Grill verdict: **Good idea, but needs constraints**. The strongest compatible
+version changes only first allocation. Code tracing disproved the need to narrow
+signup validation or add a new uniqueness migration: `referral_code_format`,
+`referral_code_value_uniq` and the owner index already enforce the shared uppercase
+namespace. `completePreAccountSignup` writes choice/credit in its transaction;
+Google choice and existing-account reuse do not allocate codes. The surviving
+capacity risk is 1,000 slots per prefix and up to 1,000 contended insert attempts.
+No silent alternate-prefix or longer-code policy is introduced.
+
+Validation: 22 tests / 63 assertions pass across `referral.friend-code.test.ts`,
+`referral.friend-code-service.test.ts`, `referral.policy.test.ts` and server
+`signup-body.test.ts`; focused Oxlint and diff whitespace checks pass. Service
+wiring uses a scripted DB double, not PostgreSQL proof. Full typecheck, broad
+suites, PostgreSQL concurrency, real signup/provider and browser checks are unrun.
+
+Integration must retain the parent's separate owner TODO and Sanity extraction
+checkpoint; this checkpoint does not close those notes or full T09 acceptance.
+
+
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and

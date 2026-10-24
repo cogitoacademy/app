@@ -32,10 +32,13 @@ import type { DbOrTx } from "../../lib/tx";
 import type { WalletPort } from "../wallet/wallet.service";
 import { ReferralError } from "./referral.errors";
 import {
+  allocateFriendReferralCode,
+  friendReferralPrefix,
+} from "./referral.friend-code";
+import {
   calculateFriendReward,
   calculateKolCommission,
   DEFAULT_REFERRAL_SETTINGS,
-  generateFriendReferralCode,
   getReferralSemester,
   isKolCampaignActive,
   isKolPurchaseEligible,
@@ -373,7 +376,7 @@ export function createReferralService(deps: {
     });
   }
 
-  async function ensureFriendCode(userId: string) {
+  async function ensureFriendCode(userId: string, name: string) {
     const [existing] = await db
       .select({ code: referralCode.code })
       .from(referralCode)
@@ -381,33 +384,53 @@ export function createReferralService(deps: {
       .limit(1);
     if (existing) return existing.code;
 
-    for (let attempt = 0; attempt < 4; attempt++) {
-      // Each retry must observe its insert before deciding whether a global
-      // code collision requires another candidate.
-      // eslint-disable-next-line no-await-in-loop
-      await db
-        .insert(referralCode)
-        .values({
-          code: generateFriendReferralCode(),
-          kind: "friend",
-          referrerUserId: userId,
-          campaignId: null,
-        })
-        .onConflictDoNothing();
-      // eslint-disable-next-line no-await-in-loop
-      const [createdOrRaced] = await db
+    const prefix = friendReferralPrefix(name, userId);
+    const occupied = await db
+      .select({ code: referralCode.code })
+      .from(referralCode)
+      .where(
+        sql`${referralCode.code} >= ${`${prefix}000`} AND ${referralCode.code} <= ${`${prefix}999`}`,
+      );
+    return allocateFriendReferralCode(
+      prefix,
+      new Set(occupied.map((row) => row.code)),
+      async (code) => {
+        await db
+          .insert(referralCode)
+          .values({
+            code,
+            kind: "friend",
+            referrerUserId: userId,
+            campaignId: null,
+          })
+          .onConflictDoNothing();
+        const [createdOrRaced] = await db
+          .select({ code: referralCode.code })
+          .from(referralCode)
+          .where(eq(referralCode.referrerUserId, userId))
+          .limit(1);
+        return createdOrRaced?.code;
+      },
+    ).catch(async (error: unknown) => {
+      if (
+        !(error instanceof ReferralError) ||
+        error.code !== "REFERRAL_CODE_EXHAUSTED"
+      )
+        throw error;
+      // A concurrent request for this owner may have filled the last slot in our snapshot.
+      const [winner] = await db
         .select({ code: referralCode.code })
         .from(referralCode)
         .where(eq(referralCode.referrerUserId, userId))
         .limit(1);
-      if (createdOrRaced) return createdOrRaced.code;
-    }
-    throw new Error("Unable to allocate a friend referral code.");
+      if (winner) return winner.code;
+      throw error;
+    });
   }
 
   async function getMine(userId: string) {
     const [account] = await db
-      .select({ role: user.role })
+      .select({ role: user.role, name: user.name })
       .from(user)
       .where(eq(user.id, userId))
       .limit(1);
@@ -433,7 +456,7 @@ export function createReferralService(deps: {
     const config = await settingsAt(db, at);
     const earnedMarks = usage?.creditedMarks ?? 0;
     return {
-      code: await ensureFriendCode(userId),
+      code: await ensureFriendCode(userId, account.name),
       settings: {
         welcomeMarks: config.welcomeMarks,
         friendRewardMarks: config.friendRewardMarks,

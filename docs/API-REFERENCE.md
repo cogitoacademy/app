@@ -1,5 +1,15 @@
 # Cogito API Reference
 
+## Short FRIEND codes (24 October 2026)
+
+`POST /rpc/referral/getMine` retains its response shape. An existing code is returned
+unchanged; first allocation returns `[A-Z]{3}[0-9]{3}`, including leading zeros.
+A full identity prefix returns HTTP 409 with a contact-support message. Input
+normalization remains trim + uppercase, accepting legacy 4–32 alphanumeric codes
+for email signup, Google choice and KOL campaigns. No signup payload or invitation
+contract changes; RPC request/response envelopes remain unchanged.
+
+
 Adjustment idempotency compares the original expected obligation as well as amount/reason; a changed precondition with the same operation ID returns KOL_SETTLEMENT_CONFLICT. CSV financial integers remain numeric, while textual formula prefixes are neutralized.
 
 ## KOL external settlement source (23 October 2026)

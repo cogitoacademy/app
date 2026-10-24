@@ -1,5 +1,18 @@
 # Cogito App — Codebase Context
 
+## Short FRIEND code source checkpoint (24 October 2026)
+
+New codes allocated by student `referral.getMine` use exactly three ASCII uppercase
+letters and three digits (`AND007`). Existing codes, attribution snapshots and
+shared invitations remain unchanged. Name letters are NFKD-normalized; short names
+are completed with deterministic SHA-256 account-ID letters, and names without
+ASCII letters use those identity letters. No migration or bulk rotation is needed.
+The shared uppercase unique namespace includes KOL codes. Allocation scans at most
+1,000 distinct suffixes, skipping occupied values; prefix exhaustion is explicit
+HTTP 409, never a longer code or a silent alternate prefix. Database concurrency,
+auth/provider and browser acceptance remain parent-owned and unrun for this slice.
+
+
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and

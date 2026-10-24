@@ -1,5 +1,20 @@
 # Cogito Module Reference
 
+## Short FRIEND allocation (24 October 2026)
+
+`referral.friend-code.ts` derives three letters from NFKD-normalized name ASCII
+letters, completed by deterministic SHA-256 user-ID letters when fewer than three
+remain. Empty/non-Latin-only names use identity letters. Only `getMine` lazily
+allocates; email signup's transactional choice writer and Google `saveGoogleChoice`
+continue resolving existing global codes and immutable attribution snapshots.
+Existing owners return their original code before allocation, including after a
+name change. A random starting suffix wraps through all 000–999 values once;
+occupied shared FRIEND/KOL values are skipped. `onConflictDoNothing` and existing
+uppercase/global-code + owner unique constraints arbitrate insert races, with an
+owner reread after each insert and before a final exhaustion error. Infrastructure errors propagate. Exhaustion raises
+`REFERRAL_CODE_EXHAUSTED`, mapped to HTTP 409; format is never weakened.
+
+
 KOL settlement entries persist expected_obligation_idr for adjustment replay matching (additive migration 0074). Monthly CSV SQL binds explicit ISO timestamptz bounds, and the encoder preserves validated numeric adjustments.
 
 ## KOL external settlement source (23 October 2026)

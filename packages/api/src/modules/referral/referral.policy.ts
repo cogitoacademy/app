@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 export const DEFAULT_REFERRAL_SETTINGS = {
   version: 0,
   welcomeMarks: 15,
@@ -24,10 +22,6 @@ export function normalizeReferralCode(value: string | null | undefined) {
   const code = value?.trim().toUpperCase() ?? "";
   if (!code) return null;
   return /^[A-Z0-9]{4,32}$/.test(code) ? code : null;
-}
-
-export function generateFriendReferralCode() {
-  return `F${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
 }
 
 export function getReferralSemester(at: Date): ReferralSemester {
