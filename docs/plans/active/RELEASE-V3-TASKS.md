@@ -1,5 +1,25 @@
 # Release v3 - SDD execution and acceptance plan
 
+## KB/calendar local dev activation (24 October 2026)
+
+Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
+Migration 0075 applied after a local custom-format pg_dump; existing 34 bookings
+and 91 ledger entries were unchanged. Imported 3 KB resources and 63 calendar
+events from the preserved published snapshot, with explicit core-category mapping
+to active parent catalog IDs. One empty education-level placeholder was omitted
+from a derived import manifest; original snapshot and normalization evidence remain
+local. All 66 imported identities/hashes reconcile and qualify for unchanged replay;
+all three local private PDFs match SHA-256. No source documents/PDFs are committed.
+
+Local ignored env now uses KB_SOURCE=database, CC_SOURCE=database and
+CONTENT_ADMIN_ENABLED=true. KB_PRIVATE_DIR points to a separate ignored local
+directory outside public uploads. API restarted; health returns 200, anonymous
+protected file access 401 and the corresponding public upload path 404.
+This establishes local storage denial only, not production R2 privacy. Production
+is untouched. Backup restore rehearsal, real client UAT and production cutover
+remain outstanding. Rollback: disable authoring, set both sources to sanity and
+restart API; retain additive tables and imported files for reconciliation.
+
 ## KB/calendar integration acceptance (24 October 2026)
 
 Migration 0075 was applied only to guarded localhost:6769/cogito-test.

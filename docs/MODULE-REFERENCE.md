@@ -1,5 +1,25 @@
 # Cogito Module Reference
 
+## KB/calendar local dev activation (24 October 2026)
+
+Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
+Migration 0075 applied after a local custom-format pg_dump; existing 34 bookings
+and 91 ledger entries were unchanged. Imported 3 KB resources and 63 calendar
+events from the preserved published snapshot, with explicit core-category mapping
+to active parent catalog IDs. One empty education-level placeholder was omitted
+from a derived import manifest; original snapshot and normalization evidence remain
+local. All 66 imported identities/hashes reconcile and qualify for unchanged replay;
+all three local private PDFs match SHA-256. No source documents/PDFs are committed.
+
+Local ignored env now uses KB_SOURCE=database, CC_SOURCE=database and
+CONTENT_ADMIN_ENABLED=true. KB_PRIVATE_DIR points to a separate ignored local
+directory outside public uploads. API restarted; health returns 200, anonymous
+protected file access 401 and the corresponding public upload path 404.
+This establishes local storage denial only, not production R2 privacy. Production
+is untouched. Backup restore rehearsal, real client UAT and production cutover
+remain outstanding. Rollback: disable authoring, set both sources to sanity and
+restart API; retain additive tables and imported files for reconciliation.
+
 ## KB/calendar integration acceptance (24 October 2026)
 
 Migration 0075 was applied only to guarded localhost:6769/cogito-test.
@@ -1314,6 +1334,10 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 The DTO exposes only `id` (tutor profile ID), `name`, `profileImageUrl`, `shortBio`, `affiliation`, `education`, `achievements`, `experiences`, `subjects`, and `modality`. Subject rows expose app-catalog `id`, `slug`, English `name`, nullable `nameId`, and a parent with the same identity/name fields plus the four explicit light/dark text/background palette values; each child receives its parent's palette. Inactive child or parent categories are filtered from the query and checked again by the mapper; activity flags are never public. JSON profile entries and related catalog rows are mapped field by field, so new database or JSON properties do not flow through. The repository selects only the fields used by that DTO. `modality` describes teaching format; the tutor schema has no physical city/location field. `tutors.listPublished` remains student-authenticated and retains its existing booking-discovery projection.
 
 ## FAQ Module
+
+The read-only app view presents questions as rounded Selia accordion rows with
+circular plus/close indicators and inline expanded answers. It preserves the
+existing headings, public projection, and loading/error/empty states.
 
 **Purpose:** Manage bilingual FAQ content in the app and provide backward-compatible, request-time public projections with localized rich documents while keeping admin fields private.
 
