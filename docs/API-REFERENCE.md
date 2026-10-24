@@ -1703,6 +1703,10 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 
 ### `adminFaq.update`
 
+The admin controls on `/faq` use the existing admin procedures; student/tutor
+views continue to use `publicContent.faq.list`. Saving refreshes both query
+families. No RPC input, output, or authorization contract changed.
+
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/update` with the standard `{"json": <input>}` envelope
 - **Input:** The create fields plus `{ id, expectedVersion }`

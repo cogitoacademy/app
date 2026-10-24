@@ -1666,11 +1666,21 @@ the website read does not migrate or fall back to Sanity tutor data.
 
 ## FAQ admin and public API slice (2026-10-19)
 
+FAQ management is consolidated into `/faq`: admins get All/Active/Inactive
+filters, add/edit controls, a desktop split editor and a mobile drawer. Dirty
+drafts are guarded on close, switch and navigation. Students/tutors retain the
+read-only public view. `/admin-faq` and its duplicate sidebar item are removed.
+
+The app FAQ uses one medium-sized FAQ heading and the same full-width layout
+as bookings. Rounded question rows expand inline with circular plus/close
+controls; answer spacing sits inside the panel's 250 ms height transition so
+closing reaches zero height. Reduced-motion preferences disable the transition.
+
 The app `/faq` question/answer section uses separate rounded accordion rows with
 theme-accent collapsed surfaces, card surfaces when expanded, and circular
 plus/close indicators. Existing heading text and FAQ content remain unchanged.
 
-FAQ entries are owned by the app database and edited by admins at `/admin-faq`. Authenticated students, tutors, and admins read active FAQs at `/faq` through the anonymous public projection and Selia accordion; the editor remains admin-only. The sidebar exposes FAQ to all app roles and keeps a separate “Manage FAQs” link for admins. Migration `0059_faq_rich_text.sql` adds rich JSONB documents while preserving and backfilling the legacy question/answer columns. The English question and answer are required; Indonesian fields are optional and hidden in the new-entry form until requested. The admin editor supports bold, italic, safe links, and ordered/unordered lists. Admin rows are alphabetized by the English question, numbered for scanning, and show their modified date. The `showOnLanding` selection is limited to six active entries and serialized in the database transaction.
+FAQ entries are owned by the app database and edited by admins at `/faq`. Authenticated students and tutors read active FAQs at `/faq` through the anonymous public projection and Selia accordion; admins use the admin projection and editor on the same page. The sidebar exposes FAQ to all app roles and uses a single FAQ link for all roles. Migration `0059_faq_rich_text.sql` adds rich JSONB documents while preserving and backfilling the legacy question/answer columns. The English question and answer are required; Indonesian fields are optional and hidden in the new-entry form until requested. The admin editor supports bold, italic, safe links, and ordered/unordered lists. Admin rows are alphabetized by the English question and show their modified date. The `showOnLanding` selection is limited to six active entries and serialized in the database transaction.
 
 The anonymous `publicContent.faq.list` endpoint keeps the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents; the additive fields preserve existing consumers. Entries remain alphabetized by the question displayed for the requested locale, and `landing` also filters to `showOnLanding`. Admin visibility/version fields remain private; writes require admin authorization and updates use expected-version checks. The marketing adapter reads both surfaces server-side with `no-store`, requires the response `json` field while allowing absent or array-valued `meta`, validates rich documents and safe links, and falls back to the legacy fields when an older API omits rich fields. It renders rich formatting, answers, and lists; links inside question triggers remain non-interactive to preserve button semantics. FAQ JSON-LD continues to use the plain-text projection. Empty results and API/configuration errors retain their separate localized states. No FAQ copy was seeded and neither Sanity nor legacy FAQ fallback is used.
 
@@ -1845,7 +1855,7 @@ contract change.
 - **Overview:** Dashboard, Operations.
 - **Teaching:** Bookings, Classes, Session reports, Tutors.
 - **Finance:** Tutor payouts, KOL commissions, Economy.
-- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ.
 
 Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
 Classes, My Bookings, Session reports, Achievements, My referrals). Tutor links use

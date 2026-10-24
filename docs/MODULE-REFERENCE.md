@@ -1141,7 +1141,7 @@ rule.
 - **Overview:** Dashboard, Operations.
 - **Teaching:** Bookings, Classes, Session reports, Tutors.
 - **Finance:** Tutor payouts, KOL commissions, Economy.
-- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ.
 
 Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
 Classes, My Bookings, Session reports, Achievements, My referrals). Tutor links use
@@ -1335,6 +1335,17 @@ The DTO exposes only `id` (tutor profile ID), `name`, `profileImageUrl`, `shortB
 
 ## FAQ Module
 
+`/faq` is the single app entry point. Admins use the admin list, including inactive
+entries, with All/Active/Inactive filters and add/edit controls. Editing opens a
+split panel at 1024px and above, or a modal drawer below that width. Switching or
+closing a dirty draft offers Discard/Keep editing; navigation and reload are
+guarded. Saves retain version checks and invalidate admin/public FAQ caches.
+The old `/admin-faq` route and duplicate sidebar item are removed.
+
+The app read-only FAQ uses a single medium heading and full-width booking-style
+layout. Each rounded accordion row has a plus/close control; answer padding is
+inside the animated panel to keep its 250 ms closing transition smooth.
+
 The read-only app view presents questions as rounded Selia accordion rows with
 circular plus/close indicators and inline expanded answers. It preserves the
 existing headings, public projection, and loading/error/empty states.
@@ -1349,7 +1360,7 @@ existing headings, public projection, and loading/error/empty states.
 - `faq.service.ts` — locale fallback/sorting and strict admin/public DTO mapping
 - `faq.handler.ts` and `faq.router.ts` — anonymous `publicContent.faq.list` and admin-only `adminFaq.list/create/update` RPC procedures
 - `packages/db/src/schema/faq.ts`, migration `0058_faq_entries.sql`, and migration `0059_faq_rich_text.sql` — localized legacy fields, rich JSONB documents, visibility, and optimistic version
-- `apps/web/src/components/admin/faq-page.tsx`, `faq-rich-text-editor.tsx`, and `/admin-faq` — admin-only Selia editor with optional Indonesian fields, numbering, and modified dates
+- `apps/web/src/components/admin/faq-page.tsx`, `faq-rich-text-editor.tsx`, and `/faq` — admin-only Selia editor with optional Indonesian fields and modified dates
 - `apps/web/src/components/admin/faq-read-only-page.tsx`, `/faq`, and `packages/ui/components/selia/accordion.tsx` — authenticated student/tutor/admin read-only FAQ view using the public DTO and Selia accordion
 
 English question and answer documents are required; Indonesian documents are optional and fall back independently to English. Rich documents support paragraphs, bold/italic text, safe links (`http:`, `https:`, `mailto:`, same-origin paths, and anchors), and ordered/unordered lists. Raw HTML is rejected. Migration 0059 backfills the rich JSONB columns while keeping the legacy question/answer columns for existing consumers. Public entries retain `{ id, question, answer, sortOrder }` and add locale-selected `questionRich` and `answerRich`; the marketing adapter accepts their absence from older APIs and falls back to legacy rendering. Public entries are alphabetized by the displayed localized question. Admin entries are alphabetized by English question and include `modifiedAt`. The landing projection includes active rows marked `showOnLanding`; create/update serialize selection changes with a transaction advisory lock and reject more than six active selections. Deactivating an entry clears its landing selection and hides it publicly while retaining it for editing. The marketing site fetches both surfaces server-side with no-store caching, requires the response `json` field, accepts omitted or array-valued `meta`, and validates rich documents and safe links; question links remain non-interactive inside button triggers, and FAQ JSON-LD continues to use the plain projection. Migrations 0058/0059 are applied to local `cogito-test`; 0059 is also applied to local development `cogito-app`. Shared/production migration remains a release operation.

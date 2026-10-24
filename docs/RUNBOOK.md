@@ -2117,7 +2117,7 @@ expected after a fresh mount.
 As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
 Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,
 Economy), Content & reviews (Competitions, Achievements, Knowledge access, FAQ,
-Manage FAQs), then Resources. Verify every link opens its existing route,
+FAQ), then Resources. Verify every link opens its existing route,
 selected links retain their active styling, and Bookings retains its action
 badge when there are actionable bookings. At desktop and mobile widths, scroll
 the sidebar to reach Resources and the account menu.
@@ -3565,7 +3565,12 @@ the test.
 
 ## FAQ content verification
 
-The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`; it retains the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents. Older consumers can ignore these additive fields. Entries are alphabetized by the question displayed for the requested locale. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/admin-faq`; the rich editor supports bold, italic, safe links, and ordered/unordered lists, with optional Indonesian fields hidden by default. Only active rows are public, and at most six active rows may be selected for the landing surface.
+Open `/faq` as an admin to manage content; `/admin-faq` no longer exists.
+Check All/Active/Inactive filters, add/edit, desktop split editor (1024px+),
+mobile drawer, and Discard/Keep editing before abandoning a changed draft.
+Verify a successful save refreshes the list and the student/tutor FAQ view.
+
+The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`; it retains the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents. Older consumers can ignore these additive fields. Entries are alphabetized by the question displayed for the requested locale. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/faq`; the rich editor supports bold, italic, safe links, and ordered/unordered lists, with optional Indonesian fields hidden by default. Only active rows are public, and at most six active rows may be selected for the landing surface.
 
 Run the focused FAQ checks from the repository root:
 

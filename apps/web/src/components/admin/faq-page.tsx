@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconDeviceFloppy, IconEdit, IconPlus } from "@tabler/icons-react";
+import {
+  IconDeviceFloppy,
+  IconEdit,
+  IconPlus,
+  IconX,
+} from "@tabler/icons-react";
 
 import type {
   AdminFaqDto,
@@ -14,7 +19,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -24,15 +28,39 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { Heading } from "@cogito-app/ui/components/selia/heading";
+import { useBlocker } from "@tanstack/react-router";
+import { FaqAnswer } from "./faq-read-only-page";
 import {
-  Item,
-  ItemAction,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@cogito-app/ui/components/selia/item";
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@cogito-app/ui/components/selia/accordion";
+import {
+  Drawer,
+  DrawerPopup,
+  DrawerTitle,
+  DrawerBody,
+  DrawerHeader,
+} from "@cogito-app/ui/components/selia/drawer";
+import {
+  Dialog,
+  DialogPopup,
+  DialogTitle,
+  DialogDescription,
+  DialogHeader,
+  DialogFooter,
+} from "@cogito-app/ui/components/selia/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectList,
+  SelectItem,
+} from "@cogito-app/ui/components/selia/select";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
@@ -129,6 +157,19 @@ function formatModifiedDate(value: string) {
 
 export function FaqPage() {
   const queryClient = useQueryClient();
+  const [filter, setFilter] = useState("all");
+  const [isDesktop, setIsDesktop] = useState(
+    () => window.matchMedia("(min-width: 1024px)").matches,
+  );
+  const [initialDraft, setInitialDraft] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const editButton = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const [editingEntry, setEditingEntry] = useState<FaqEntry | null>(null);
   const [draft, setDraft] = useState<FaqDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -139,6 +180,18 @@ export function FaqPage() {
     queryFn: () => client.adminFaq.list({}),
   });
   const entries = listQuery.data ?? [];
+  const isEditorOpen = draft !== null;
+  const isDirty = draft !== null && JSON.stringify(draft) !== initialDraft;
+  const blocker = useBlocker({
+    shouldBlockFn: () => isDirty || saveMutation.isPending,
+    enableBeforeUnload: isDirty,
+    withResolver: true,
+  });
+  const visibleEntries = entries.filter(
+    (entry) =>
+      filter === "all" ||
+      (filter === "active" ? entry.isActive : !entry.isActive),
+  );
   const otherLandingCount = entries.filter(
     (entry) =>
       entry.isActive && entry.showOnLanding && entry.id !== editingEntry?.id,
@@ -168,12 +221,16 @@ export function FaqPage() {
           })
         : client.adminFaq.create(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: FAQ_LIST_KEY });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: FAQ_LIST_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["publicContent", "faq"] }),
+      ]);
       toastManager.add({ title: "FAQ saved", type: "success" });
       setDraft(null);
       setEditingEntry(null);
       setFormError(null);
       setValidationError(null);
+      editButton.current?.focus();
     },
     onError: async (error) => {
       setFormError(getUserFacingError(error));
@@ -182,16 +239,41 @@ export function FaqPage() {
     },
   });
 
+  useEffect(() => {
+    if (isEditorOpen && isDesktop && initialDraft)
+      document
+        .querySelector<HTMLElement>('[data-faq-editor="faq-question-en-rich"]')
+        ?.focus();
+  }, [isEditorOpen, isDesktop, initialDraft]);
+
+  function requestAction(action: () => void) {
+    if (saveMutation.isPending) return;
+    if (isDirty) setPendingAction(() => action);
+    else action();
+  }
+
+  function closeEditor() {
+    requestAction(() => {
+      setDraft(null);
+      setEditingEntry(null);
+      editButton.current?.focus();
+    });
+  }
+
   function openNewEntry() {
     setEditingEntry(null);
-    setDraft(emptyDraft());
+    const next = emptyDraft();
+    setDraft(next);
+    setInitialDraft(JSON.stringify(next));
     setFormError(null);
     setValidationError(null);
   }
 
   function openEntry(entry: FaqEntry) {
     setEditingEntry(entry);
-    setDraft(draftFromEntry(entry));
+    const next = draftFromEntry(entry);
+    setDraft(next);
+    setInitialDraft(JSON.stringify(next));
     setFormError(null);
     setValidationError(null);
   }
@@ -244,267 +326,364 @@ export function FaqPage() {
     });
   }
 
-  return (
-    <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
+  const editorBody = draft ? (
+    <fieldset disabled={saveMutation.isPending} className="min-w-0">
       <Stack spacing="lg">
-        <Stack
-          direction="row"
-          spacing="md"
-          className="items-center justify-between"
-        >
+        <FaqRichTextEditor
+          id="faq-question-en-rich"
+          label="Question (English)"
+          description="Write the English question. Keep it under 500 characters."
+          value={draft.questionEnRich}
+          onChange={(questionEnRich) => updateDraft({ questionEnRich })}
+          error={
+            validationError?.field === "questionEnRich"
+              ? validationError.message
+              : undefined
+          }
+          invalid={validationError?.field === "questionEnRich"}
+        />
+        <FaqRichTextEditor
+          id="faq-answer-en-rich"
+          label="Answer (English)"
+          description="Add paragraphs or lists, and link text where useful."
+          value={draft.answerEnRich}
+          onChange={(answerEnRich) => updateDraft({ answerEnRich })}
+          error={
+            validationError?.field === "answerEnRich"
+              ? validationError.message
+              : undefined
+          }
+          invalid={validationError?.field === "answerEnRich"}
+        />
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-expanded={draft.showIndonesian}
+            aria-controls="faq-indonesian-fields"
+            onClick={() =>
+              updateDraft({ showIndonesian: !draft.showIndonesian })
+            }
+          >
+            {draft.showIndonesian
+              ? "Hide Indonesian fields"
+              : "Add Indonesian version"}
+          </Button>
+          <div id="faq-indonesian-fields" hidden={!draft.showIndonesian}>
+            {draft.showIndonesian ? (
+              <Stack spacing="lg" className="mt-6">
+                <FaqRichTextEditor
+                  id="faq-question-id-rich"
+                  label="Question (Indonesian)"
+                  description="Leave blank to use the English question."
+                  value={draft.questionIdRich}
+                  onChange={(questionIdRich) => updateDraft({ questionIdRich })}
+                />
+                <FaqRichTextEditor
+                  id="faq-answer-id-rich"
+                  label="Answer (Indonesian)"
+                  description="Leave blank to use the English answer."
+                  value={draft.answerIdRich}
+                  onChange={(answerIdRich) => updateDraft({ answerIdRich })}
+                />
+              </Stack>
+            ) : null}
+          </div>
+        </div>
+
+        <Stack direction="row" spacing="lg" className="flex-wrap items-start">
+          <Field>
+            <FieldLabel className="gap-2">
+              <Checkbox
+                checked={draft.isActive}
+                onCheckedChange={(checked) =>
+                  updateDraft({
+                    isActive: checked === true,
+                    ...(checked === true ? {} : { showOnLanding: false }),
+                  })
+                }
+              />
+              Active
+            </FieldLabel>
+            <FieldDescription>
+              Inactive entries are hidden from public FAQ pages.
+            </FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel className="gap-2">
+              <Checkbox
+                checked={draft.showOnLanding}
+                disabled={
+                  !draft.isActive ||
+                  (!draft.showOnLanding &&
+                    otherLandingCount >= MAX_LANDING_FAQS)
+                }
+                onCheckedChange={(checked) =>
+                  updateDraft({ showOnLanding: checked === true })
+                }
+              />
+              Show on landing page
+            </FieldLabel>
+            <FieldDescription>
+              {!draft.isActive
+                ? "Activate this FAQ before selecting it."
+                : otherLandingCount >= MAX_LANDING_FAQS && !draft.showOnLanding
+                  ? "Six active FAQs are already selected. Remove one first."
+                  : "Select up to six active FAQs for the landing section."}
+            </FieldDescription>
+          </Field>
+        </Stack>
+        {formError ? (
+          <p className="text-danger" role="alert">
+            {formError}
+          </p>
+        ) : null}
+      </Stack>
+    </fieldset>
+  ) : null;
+  const editorActions = draft ? (
+    <Stack direction="row" spacing="sm" className="justify-end">
+      <Button type="button" variant="plain" onClick={closeEditor}>
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={saveEntry}
+        disabled={saveMutation.isPending}
+        progress={saveMutation.isPending}
+      >
+        <IconDeviceFloppy aria-hidden="true" />
+        Save FAQ
+      </Button>
+    </Stack>
+  ) : null;
+  const title = editingEntry ? "Edit FAQ" : "Add FAQ";
+  return (
+    <main className="w-full min-w-0 max-w-full">
+      <Stack spacing="md">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Heading level={1}>FAQ</Heading>
-            <p className="mt-1 text-muted">
-              Write questions and answers in English. Add an Indonesian version
-              when needed, then choose up to six for the landing page.
+            <Heading level={1} size="md">
+              FAQ
+            </Heading>
+            <p className="text-muted">
+              Answers to common questions about Cogito Academy.
             </p>
           </div>
-          <Button type="button" onClick={openNewEntry}>
+          <Button
+            disabled={saveMutation.isPending}
+            onClick={(event) => {
+              editButton.current = event.currentTarget;
+              requestAction(openNewEntry);
+            }}
+          >
             <IconPlus aria-hidden="true" />
             Add FAQ
           </Button>
-        </Stack>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>FAQ entries</CardTitle>
-            <CardDescription>
-              Listed alphabetically by English question. The date on each row is
-              its last modified date.
-            </CardDescription>
-            <Badge
-              variant={landingCount === MAX_LANDING_FAQS ? "warning" : "info"}
-            >
-              Landing FAQs: {landingCount}/{MAX_LANDING_FAQS}
-            </Badge>
-          </CardHeader>
-          <CardBody>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Select
+            value={filter}
+            onValueChange={(value) =>
+              setFilter(typeof value === "string" ? value : "all")
+            }
+          >
+            <SelectTrigger aria-label="Filter FAQs" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                <SelectItem value="all">All FAQs</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          <Badge
+            variant={landingCount === MAX_LANDING_FAQS ? "warning" : "info"}
+          >
+            Landing FAQs: {landingCount}/{MAX_LANDING_FAQS}
+          </Badge>
+        </div>
+        <div
+          className={
+            draft && isDesktop
+              ? "grid min-w-0 grid-cols-2 items-start gap-6"
+              : "min-w-0"
+          }
+        >
+          <div className="min-w-0">
             {listQuery.isPending ? (
-              <p className="text-muted">Loading FAQ entries…</p>
+              <p className="text-muted">Loading FAQs…</p>
             ) : listQuery.isError ? (
-              <p className="text-danger">
+              <p role="alert" className="text-danger">
                 {getUserFacingError(listQuery.error)}
               </p>
-            ) : entries.length === 0 ? (
-              <p className="text-muted">
-                No FAQ entries yet. Add the first one.
-              </p>
+            ) : visibleEntries.length === 0 ? (
+              <p className="text-muted">No FAQs match this filter.</p>
             ) : (
-              <div>
-                <Stack>
-                  {entries.map((entry, index) => (
-                    <Item
-                      key={entry.id}
-                      variant="outline"
-                      direction="row"
-                      className="items-center"
-                    >
-                      <ItemMedia className="w-8 text-right text-sm text-muted">
-                        #{index + 1}
-                      </ItemMedia>
-                      <ItemContent className="min-w-0 flex-1">
-                        <ItemTitle className="max-w-full truncate">
-                          {entry.questionEn}
-                        </ItemTitle>
-                        <ItemDescription>
-                          Updated {formatModifiedDate(entry.modifiedAt)} ·
-                          Version {entry.version}
-                        </ItemDescription>
-                      </ItemContent>
-                      <ItemAction className="flex-wrap justify-end">
-                        <Badge
-                          variant={entry.isActive ? "success" : "secondary"}
-                        >
-                          {entry.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        {entry.isActive && entry.showOnLanding ? (
-                          <Badge variant="info">Landing</Badge>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => openEntry(entry)}
-                        >
-                          <IconEdit aria-hidden="true" />
-                          Edit
-                        </Button>
-                      </ItemAction>
-                    </Item>
-                  ))}
-                </Stack>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-
-        {draft ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>{editingEntry ? "Edit FAQ" : "Add FAQ"}</CardTitle>
-              <CardDescription>
-                Use bold, italic, links, and lists. English is required; blank
-                Indonesian fields use the English version.
-              </CardDescription>
-            </CardHeader>
-            <CardBody>
-              <div>
-                <Stack spacing="lg">
-                  <FaqRichTextEditor
-                    id="faq-question-en-rich"
-                    label="Question (English)"
-                    description="Write the English question. Keep it under 500 characters."
-                    value={draft.questionEnRich}
-                    onChange={(questionEnRich) =>
-                      updateDraft({ questionEnRich })
-                    }
-                    error={
-                      validationError?.field === "questionEnRich"
-                        ? validationError.message
-                        : undefined
-                    }
-                    invalid={validationError?.field === "questionEnRich"}
-                  />
-                  <FaqRichTextEditor
-                    id="faq-answer-en-rich"
-                    label="Answer (English)"
-                    description="Add paragraphs or lists, and link text where useful."
-                    value={draft.answerEnRich}
-                    onChange={(answerEnRich) => updateDraft({ answerEnRich })}
-                    error={
-                      validationError?.field === "answerEnRich"
-                        ? validationError.message
-                        : undefined
-                    }
-                    invalid={validationError?.field === "answerEnRich"}
-                  />
-                  <div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      aria-expanded={draft.showIndonesian}
-                      aria-controls="faq-indonesian-fields"
-                      onClick={() =>
-                        updateDraft({ showIndonesian: !draft.showIndonesian })
-                      }
-                    >
-                      {draft.showIndonesian
-                        ? "Hide Indonesian fields"
-                        : "Add Indonesian version"}
-                    </Button>
-                    <div
-                      id="faq-indonesian-fields"
-                      hidden={!draft.showIndonesian}
-                    >
-                      {draft.showIndonesian ? (
-                        <Stack spacing="lg" className="mt-6">
-                          <FaqRichTextEditor
-                            id="faq-question-id-rich"
-                            label="Question (Indonesian)"
-                            description="Leave blank to use the English question."
-                            value={draft.questionIdRich}
-                            onChange={(questionIdRich) =>
-                              updateDraft({ questionIdRich })
-                            }
-                          />
-                          <FaqRichTextEditor
-                            id="faq-answer-id-rich"
-                            label="Answer (Indonesian)"
-                            description="Leave blank to use the English answer."
-                            value={draft.answerIdRich}
-                            onChange={(answerIdRich) =>
-                              updateDraft({ answerIdRich })
-                            }
-                          />
-                        </Stack>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <Stack
-                    direction="row"
-                    spacing="lg"
-                    className="flex-wrap items-start"
+              <Accordion className="gap-3">
+                {visibleEntries.map((entry) => (
+                  <AccordionItem
+                    key={entry.id}
+                    value={entry.id}
+                    className={`group rounded-3xl border last:border-b bg-accent data-[open]:bg-card ${editingEntry?.id === entry.id && draft ? "border-primary" : "border-transparent data-[open]:border-card-border"}`}
                   >
-                    <Field>
-                      <FieldLabel className="gap-2">
-                        <Checkbox
-                          checked={draft.isActive}
-                          onCheckedChange={(checked) =>
-                            updateDraft({
-                              isActive: checked === true,
-                              ...(checked === true
-                                ? {}
-                                : { showOnLanding: false }),
-                            })
-                          }
-                        />
-                        Active
-                      </FieldLabel>
-                      <FieldDescription>
-                        Inactive entries are hidden from public FAQ pages.
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel className="gap-2">
-                        <Checkbox
-                          checked={draft.showOnLanding}
-                          disabled={
-                            !draft.isActive ||
-                            (!draft.showOnLanding &&
-                              otherLandingCount >= MAX_LANDING_FAQS)
-                          }
-                          onCheckedChange={(checked) =>
-                            updateDraft({ showOnLanding: checked === true })
-                          }
-                        />
-                        Show on landing page
-                      </FieldLabel>
-                      <FieldDescription>
-                        {!draft.isActive
-                          ? "Activate this FAQ before selecting it."
-                          : otherLandingCount >= MAX_LANDING_FAQS &&
-                              !draft.showOnLanding
-                            ? "Six active FAQs are already selected. Remove one first."
-                            : "Select up to six active FAQs for the landing section."}
-                      </FieldDescription>
-                    </Field>
-                  </Stack>
-                  {formError ? (
-                    <p className="text-danger" role="alert">
-                      {formError}
-                    </p>
-                  ) : null}
-                  <Stack direction="row" spacing="sm" className="justify-end">
-                    <Button
-                      type="button"
-                      variant="plain"
-                      onClick={() => {
-                        setDraft(null);
-                        setEditingEntry(null);
-                        setFormError(null);
-                        setValidationError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={saveEntry}
-                      disabled={saveMutation.isPending}
-                      progress={saveMutation.isPending}
-                    >
-                      <IconDeviceFloppy aria-hidden="true" />
-                      Save FAQ
-                    </Button>
-                  </Stack>
-                </Stack>
+                    <div className="relative">
+                      <AccordionHeader>
+                        <AccordionTrigger
+                          expandableIndicator={false}
+                          className="gap-4 rounded-3xl py-2 pl-5 pr-2"
+                        >
+                          <span className="min-w-0 flex-1 break-words py-2 pr-10">
+                            {entry.questionEn}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-card group-data-[open]:bg-accent"
+                          >
+                            <IconPlus className="size-4 transition-transform duration-250 group-data-[open]:rotate-45 motion-reduce:transition-none" />
+                          </span>
+                        </AccordionTrigger>
+                      </AccordionHeader>
+                      <Button
+                        className="absolute right-15 top-1/2 -translate-y-1/2"
+                        variant="plain"
+                        size="sm-icon"
+                        aria-label={`Edit ${entry.questionEn}`}
+                        disabled={saveMutation.isPending}
+                        onClick={(event) => {
+                          editButton.current = event.currentTarget;
+                          requestAction(() => openEntry(entry));
+                        }}
+                      >
+                        <IconEdit aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+                      <Badge variant={entry.isActive ? "success" : "secondary"}>
+                        {entry.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {entry.showOnLanding && entry.isActive ? (
+                        <Badge variant="info">Landing</Badge>
+                      ) : null}
+                      <span className="text-sm text-muted">
+                        Updated {formatModifiedDate(entry.modifiedAt)}
+                      </span>
+                    </div>
+                    <AccordionPanel className="transition-[height] duration-250 ease-in-out motion-reduce:transition-none">
+                      <div className="px-5 pb-3">
+                        <FaqAnswer blocks={entry.answerEn} />
+                      </div>
+                    </AccordionPanel>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </div>
+          {draft && isDesktop ? (
+            <Card
+              key={editingEntry?.id ?? "new"}
+              className="sticky top-4 flex max-h-[calc(100dvh-8rem)] min-w-0 flex-col"
+              role="region"
+              aria-label={title}
+            >
+              <CardHeader>
+                <CardTitle>{title}</CardTitle>
+                <Button
+                  variant="plain"
+                  size="sm-icon"
+                  aria-label="Close editor"
+                  disabled={saveMutation.isPending}
+                  onClick={closeEditor}
+                >
+                  <IconX aria-hidden="true" />
+                </Button>
+              </CardHeader>
+              <CardBody className="min-h-0 overflow-y-auto">
+                {editorBody}
+              </CardBody>
+              <div className="shrink-0 border-t border-card-border p-4">
+                {editorActions}
               </div>
-            </CardBody>
-          </Card>
-        ) : null}
+            </Card>
+          ) : null}
+        </div>
       </Stack>
+      <Drawer
+        open={!!draft && !isDesktop}
+        onOpenChange={(open) => {
+          if (!open) closeEditor();
+        }}
+        swipeDirection="right"
+      >
+        <DrawerPopup
+          className="z-[800] max-w-full motion-reduce:transition-none"
+          aria-describedby={undefined}
+        >
+          <DrawerHeader>
+            <DrawerTitle>{title}</DrawerTitle>
+            <Button
+              variant="plain"
+              size="sm-icon"
+              className="ml-auto"
+              aria-label="Close editor"
+              disabled={saveMutation.isPending}
+              onClick={closeEditor}
+            >
+              <IconX aria-hidden="true" />
+            </Button>
+          </DrawerHeader>
+          <DrawerBody key={editingEntry?.id ?? "new"}>{editorBody}</DrawerBody>
+          <div className="shrink-0 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {editorActions}
+          </div>
+        </DrawerPopup>
+      </Drawer>
+      <Dialog
+        open={!!pendingAction || blocker.status === "blocked"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingAction(null);
+            blocker.reset?.();
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <div>
+              <DialogTitle>Discard unsaved changes?</DialogTitle>
+              <DialogDescription>
+                Your changes will be lost if you continue.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="plain"
+              onClick={() => {
+                setPendingAction(null);
+                blocker.reset?.();
+              }}
+            >
+              Keep editing
+            </Button>
+            <Button
+              variant="danger"
+              disabled={saveMutation.isPending}
+              onClick={() => {
+                const action = pendingAction;
+                setPendingAction(null);
+                if (blocker.status === "blocked") blocker.proceed();
+                else action?.();
+              }}
+            >
+              Discard
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </main>
   );
 }

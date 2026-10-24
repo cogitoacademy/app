@@ -36,7 +36,6 @@ const routeTitles: Record<string, string> = {
   "/admin-classes": "Class studio",
   "/admin-competitions": "Competition Catalog",
   "/faq": "FAQ",
-  "/admin-faq": "Manage FAQs",
   "/admin-knowledge-bank": "Knowledge Bank Access",
   "/calendar": "Competition Calendar",
   "/knowledge-bank": "Knowledge Bank",

@@ -5,11 +5,15 @@ Updated 2026-10-19.
 
 ## Delivered in the app
 
+- FAQ management is consolidated at `/faq`; `/admin-faq` and the duplicate sidebar link are removed. Admins get All/Active/Inactive filters and add/edit controls. The existing rich editor opens alongside the list on desktop (1024px+) and in a modal drawer on mobile. Dirty drafts require Discard/Keep editing when closing/switching, with navigation/reload guards. Save retains version checks and refreshes admin/public caches; students/tutors keep the public read-only view.
+
+- The `/faq` question/answer section uses rounded, individually spaced accordion rows with circular plus/close controls and contrasting expanded answer surfaces. A single FAQ heading uses the booking page's medium heading size and full-width layout. Answer padding lives inside the animated panel so closing can reach zero height smoothly, with a 250 ms height transition and reduced-motion support. Live visual acceptance requires the local auth API on port 3001.
+
 - Migration `0058_faq_entries.sql` adds localized legacy fields, visibility, row version, and indexes. Migration `0059_faq_rich_text.sql` adds rich JSONB documents and backfills existing FAQ content while retaining the legacy columns.
-- Authenticated students, tutors, and admins can read the full active FAQ at `/faq` through the anonymous public projection and Selia accordion. The admin-only `/admin-faq` editor remains separate; the sidebar labels it “Manage FAQs” for admins and exposes the read-only FAQ link to every app role.
+- Authenticated students, tutors, and admins can read the full active FAQ at `/faq` through the anonymous public projection and Selia accordion. Admins manage entries on the same page; the sidebar exposes one FAQ link to every app role.
 - Anonymous `publicContent.faq.list` reads active entries at request time. The `landing` surface additionally filters `showOnLanding`; Indonesian question and answer independently fall back to English. Results are alphabetized by the displayed localized question, with the legacy `sortOrder` field retained as the display index.
 - Admin-only `adminFaq.list/create/update` reads all rows and supports compare-and-swap updates using `expectedVersion`. Deactivation retains the record and removes it from public results; there is no destructive delete endpoint. At most six active rows may be selected for the landing surface; writes serialize that check in a transaction.
-- `/admin-faq` is an English-chrome Selia admin page. English question and answer are mandatory; Indonesian fields are optional and hidden by default for new entries. The Tiptap editor supports bold, italic, safe links, and ordered/unordered lists. Rows are alphabetical, numbered, and show `modifiedAt`.
+- `/faq` is an English-chrome Selia admin page. English question and answer are mandatory; Indonesian fields are optional and hidden by default for new entries. The Tiptap editor supports bold, italic, safe links, and ordered/unordered lists. Rows are alphabetical and show `modifiedAt`.
 - Public responses retain the legacy plain-text `question`/`answer` fields and add locale-selected `questionRich`/`answerRich` documents. Admin flags/version stay private; API errors remain errors rather than being converted into empty results.
 
 ## Delivered in the marketing site
@@ -37,6 +41,14 @@ Updated 2026-10-19.
   FAQ JSON-LD continues to use the legacy plain-text projection.
 
 ## Verification
+
+2026-10-24 consolidated app UI: web typecheck, focused lint and formatting
+passed. Browser checks on the actual admin component with synthetic data and
+mocked RPC confirmed active/inactive visibility, edit without expanding the
+answer, mobile drawer, desktop split editor, draft preservation across resizing,
+dirty close/switch confirmation, Keep editing/Discard, and update submission
+with `expectedVersion` followed by list refresh and editor close. These checks
+do not establish real database persistence or server authorization acceptance.
 
 On 2026-10-19:
 

@@ -24,7 +24,6 @@ import { Route as AppAdminClassesRouteImport } from './routes/_app.admin-classes
 import { Route as AppAdminCompetitionsRouteImport } from './routes/_app.admin-competitions'
 import { Route as AppAdminContentRouteImport } from './routes/_app.admin-content'
 import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy'
-import { Route as AppAdminFaqRouteImport } from './routes/_app.admin-faq'
 import { Route as AppAdminKnowledgeBankRouteImport } from './routes/_app.admin-knowledge-bank'
 import { Route as AppAdminKolCommissionsRouteImport } from './routes/_app.admin-kol-commissions'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
@@ -126,11 +125,6 @@ const AppAdminContentRoute = AppAdminContentRouteImport.update({
 const AppAdminEconomyRoute = AppAdminEconomyRouteImport.update({
   id: '/admin-economy',
   path: '/admin-economy',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAdminFaqRoute = AppAdminFaqRouteImport.update({
-  id: '/admin-faq',
-  path: '/admin-faq',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminKnowledgeBankRoute = AppAdminKnowledgeBankRouteImport.update({
@@ -290,7 +284,6 @@ export interface FileRoutesByFullPath {
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-content': typeof AppAdminContentRoute
   '/admin-economy': typeof AppAdminEconomyRoute
-  '/admin-faq': typeof AppAdminFaqRoute
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -335,7 +328,6 @@ export interface FileRoutesByTo {
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-content': typeof AppAdminContentRoute
   '/admin-economy': typeof AppAdminEconomyRoute
-  '/admin-faq': typeof AppAdminFaqRoute
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -382,7 +374,6 @@ export interface FileRoutesById {
   '/_app/admin-competitions': typeof AppAdminCompetitionsRoute
   '/_app/admin-content': typeof AppAdminContentRoute
   '/_app/admin-economy': typeof AppAdminEconomyRoute
-  '/_app/admin-faq': typeof AppAdminFaqRoute
   '/_app/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/_app/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
@@ -429,7 +420,6 @@ export interface FileRouteTypes {
     | '/admin-competitions'
     | '/admin-content'
     | '/admin-economy'
-    | '/admin-faq'
     | '/admin-knowledge-bank'
     | '/admin-kol-commissions'
     | '/admin-operations'
@@ -474,7 +464,6 @@ export interface FileRouteTypes {
     | '/admin-competitions'
     | '/admin-content'
     | '/admin-economy'
-    | '/admin-faq'
     | '/admin-knowledge-bank'
     | '/admin-kol-commissions'
     | '/admin-operations'
@@ -520,7 +509,6 @@ export interface FileRouteTypes {
     | '/_app/admin-competitions'
     | '/_app/admin-content'
     | '/_app/admin-economy'
-    | '/_app/admin-faq'
     | '/_app/admin-knowledge-bank'
     | '/_app/admin-kol-commissions'
     | '/_app/admin-operations'
@@ -668,13 +656,6 @@ declare module '@tanstack/react-router' {
       path: '/admin-economy'
       fullPath: '/admin-economy'
       preLoaderRoute: typeof AppAdminEconomyRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/admin-faq': {
-      id: '/_app/admin-faq'
-      path: '/admin-faq'
-      fullPath: '/admin-faq'
-      preLoaderRoute: typeof AppAdminFaqRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-knowledge-bank': {
@@ -884,7 +865,6 @@ interface AppRouteChildren {
   AppAdminCompetitionsRoute: typeof AppAdminCompetitionsRoute
   AppAdminContentRoute: typeof AppAdminContentRoute
   AppAdminEconomyRoute: typeof AppAdminEconomyRoute
-  AppAdminFaqRoute: typeof AppAdminFaqRoute
   AppAdminKnowledgeBankRoute: typeof AppAdminKnowledgeBankRoute
   AppAdminKolCommissionsRoute: typeof AppAdminKolCommissionsRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
@@ -922,7 +902,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminCompetitionsRoute: AppAdminCompetitionsRoute,
   AppAdminContentRoute: AppAdminContentRoute,
   AppAdminEconomyRoute: AppAdminEconomyRoute,
-  AppAdminFaqRoute: AppAdminFaqRoute,
   AppAdminKnowledgeBankRoute: AppAdminKnowledgeBankRoute,
   AppAdminKolCommissionsRoute: AppAdminKolCommissionsRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,
