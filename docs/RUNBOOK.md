@@ -26,6 +26,41 @@ reuse without reopening choice. No such provider/DB acceptance ran here. Already
 created affected accounts are not repaired by this source fix; no backfill authorized.
 
 
+## Real dev class-to-PDF checkpoint (24 October 2026)
+
+On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
+HTTP/real PostgreSQL acceptance passed against explicitly validated loopback
+`6767/cogito-app`, using dedicated `journey-1792843607328` fixtures. Verified
+identities/password hashes and a published tutor profile were inserted directly;
+actual Better Auth password login issued sessions for admin/tutor/two students.
+Admin draft/publication, audited admin wallet correction (+100 Marks), student
+masterclass enrollment (20-Mark hold), assigned-tutor report and identical replay,
+student report visibility, and authenticated student/admin PDF download passed.
+Persistence shows one 20-Mark deduction, funded/spent allocation 20/20, report
+version 1, completed session, one Rp300,000 earned-fee event and final wallet
+80 total/available, zero held. No payout or provider settlement was executed.
+Student publication denied 403; student report submission denied 404; outsider
+report list excludes this session; cross-student/tutor PDF denied 403 and anonymous
+PDF denied 401. PDF private/no-store header, signature, all three feedback texts
+and one-page visual rendering passed. No business response was mocked.
+
+Controlled-time boundary: after future publication/enrollment, only the dedicated
+session timestamps were moved to now minus two/one hours. This is not a wall-clock
+session journey. No reset, seed command, migration, API restart, external send,
+payment/Meet call or existing-user balance modification was performed. Browser
+login initially hit 429, then succeeded after the limit window; preview snapshot
+attempts timed out. API acceptance is not full click-through browser acceptance.
+
+Class `87dcbb4c-255b-4626-aa2a-1684884c90b0`; session
+`354e79d8-e245-42b5-994e-183bff3d6856`; enrollment
+`6b5c6934-c01a-48f6-b87d-64b6f13556fb`. Retain fixture financial history for
+inspection; do not delete ledger, allocation, report or earned-fee records. Any
+future financial reversal must use an approved audited correction, never deletion.
+Local evidence/PDF/render remain ignored under this checkout's
+`tmp/dev-journey/`; private login/session files must never be committed or shared.
+Production, real provider delivery, full browser journey and client UAT remain gates.
+
+
 ## KB/calendar local dev activation (24 October 2026)
 
 Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
