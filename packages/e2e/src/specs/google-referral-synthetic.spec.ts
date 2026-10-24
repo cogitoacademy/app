@@ -65,7 +65,10 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
     await page.getByLabel("Referral code", { exact: true }).fill("INVALID");
     await page.getByLabel("Referral code", { exact: true }).press("Enter");
     await expect(
-      page.getByText("Invalid referral code", { exact: true }),
+      page.getByText("Invalid referral code", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Couldn't save referral choice", { exact: true }),
     ).toBeVisible();
     expect(pending).toBe(true);
     await expect(page).toHaveURL(/referral-choice/);

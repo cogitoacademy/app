@@ -15,6 +15,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { Route } from "@/routes/referral-choice";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -38,12 +39,16 @@ export function ReferralChoicePage() {
       await client.referral.saveGoogleChoice({ code: value });
       await navigate({ to: "/auth/callback", search });
     } catch (cause) {
-      setError(
-        getUserFacingError(
-          cause,
-          "We couldn't save your choice. Please try again.",
-        ),
+      const message = getUserFacingError(
+        cause,
+        "We couldn't save your choice. Please try again.",
       );
+      setError(message);
+      toastManager.add({
+        type: "error",
+        title: "Couldn't save referral choice",
+        description: message,
+      });
     } finally {
       setSaving(false);
     }

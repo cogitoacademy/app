@@ -1,5 +1,11 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Google referral error feedback (24 October 2026)
+
+Failed Google referral saves show a Selia error toast and retain the inline
+message/input. The existing synthetic browser workflow checks toast visibility.
+RPC and attribution rules remain unchanged.
+
 ## Google referral keyboard submission (24 October 2026)
 
 Referral code entry uses native form submission: Enter applies a nonblank code.
