@@ -13,6 +13,21 @@ when remote images are blocked. No data URI or attachment is required.
 Run `bun test ./packages/auth/src/verification-email.test.ts ./packages/api/src/tests/unit/reset-password-email.test.ts`.
 No provider send or real Gmail/Outlook rendering is part of these checks.
 
+## Admin referral usage verification (24 October 2026)
+
+No migration is needed. Restart the API after loading the new adminReferral
+listUsage procedure, then open `/admin-referrals` as admin. Filters are literal
+search and choice type; totals cover matching saved choices. KOL settlement
+payments remain on `/admin-kol-commissions`. Do not interpret pending/zero rewards
+as paid or decision commission as cash settlement.
+Focused unit checks: `bun test packages/api/src/tests/unit/referral-usage.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`.
+From packages/e2e: `bunx playwright test --config playwright.admin-referrals.config.ts`.
+This uses Edge, isolated Vite 3300, synthetic session/RPCs and no DB/provider
+setup. Three cases cover filters, paging/details, empty/error/mobile and student
+redirect. A separate read-only dev query verified the real Yopmail signup choice,
+15 welcome Marks, pending friend decision and literal wildcard search; no DB
+write/reset/import/migration is part of that readback.
+
 ## Auth form focus regression (24 October 2026)
 
 From `packages/e2e`, run

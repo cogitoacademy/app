@@ -9,6 +9,19 @@ transactional templates changed. Escaping, safe URL schemes, dynamic OTP/expiry,
 and banner fallback are covered by focused checks. Actual provider sends and
 inbox-client rendering remain unrun; production asset deployment is separate.
 
+## Admin referral usage checkpoint (24 October 2026)
+
+Admin usage page/procedure now list saved friend/KOL/no-code choices, filtered
+and paged with ledger-backed summary credits and per-choice reward evidence.
+Five focused tests / 18 assertions, three synthetic Edge browser cases, focused
+lint and four serial production typechecks pass. Read-only live dev verification
+matches the Yopmail signup attribution/15-Mark welcome credit; wildcard escaping
+returns no unintended matches. Live student session receives 403 from the new
+admin procedure after API restart. Synthetic browser checks are not real admin login
+or full PostgreSQL fixture/concurrency acceptance. No schema/provider/DB writes.
+Account email branding is a separate user-reviewed slice; current review asks
+for report banner, orange/blue palette and full Cogito Academy naming.
+
 ## Auth draft focus repair (24 October 2026)
 
 Signup and sign-in drafts now survive background session refetch on tab return.

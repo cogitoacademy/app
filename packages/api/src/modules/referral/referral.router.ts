@@ -8,6 +8,7 @@ import {
 import type { ReferralHandler } from "./referral.handler";
 import {
   exportKolMonthlyInput,
+  listReferralUsageInput,
   getKolSettlementInput,
   recordKolTransferInput,
   adjustKolCommissionInput,
@@ -43,6 +44,15 @@ export function createReferralRouter(handler: ReferralHandler) {
     },
 
     adminReferral: {
+      listUsage: adminProcedure
+        .route({
+          method: "POST",
+          path: "/admin/referral/usage",
+          tags: ["Admin", "Referral"],
+          summary: "Search saved referral usage and reward evidence",
+        })
+        .input(listReferralUsageInput)
+        .handler(handler.listUsage),
       exportKolMonthly: adminProcedure
         .route({
           method: "POST",

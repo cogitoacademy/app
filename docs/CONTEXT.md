@@ -10,6 +10,17 @@ the wrapper. The public asset is `/auth-email-header.png`; server senders derive
 its absolute URL from CORS_ORIGIN. Instructions/OTP/links remain live HTML with
 alt-text branding if images are blocked. No other notification templates changed.
 
+## Admin referral usage (24 October 2026)
+
+`/admin-referrals` and admin-only `adminReferral.listUsage` expose saved signup
+choices (friend, KOL and explicit no-code), searchable by code, user/referrer
+name/email or campaign. Paged rows include signup attribution, email verification,
+welcome terms/ledger credit, first chargeable friend-completion decision and
+KOL payment/refund/provider-time evidence. Filtered totals use actual linked
+ledger credits; the current wallet balance is not a referral earnings total.
+Repeatable-read read-only queries keep rows and totals on one snapshot. Unsaved
+Google choices and unused codes are outside this usage list. No schema change.
+
 ## Login draft retention (24 October 2026)
 
 The public LoginPage no longer replaces sign-in/signup forms with a session

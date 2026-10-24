@@ -10,6 +10,19 @@ HTTP(S). Full Cogito Academy naming is used throughout. User approved the second
 design with the orange rule beneath the banner removed. This shared shell covers
 OTP, welcome and password reset; unrelated notification emails are unchanged.
 
+## Referral usage read model (24 October 2026)
+
+`referral-usage.repo.ts` joins saved referral choices to current account identities,
+saved settings/terms, welcome ledger, unique friend reward decision and unique
+KOL commission decision. Row ordering is chosen-at/id descending, with bounded
+offset pagination. Filters and aggregate share a repeatable-read read-only
+transaction. Search escapes LIKE wildcards. Summary credits come from linked
+welcome/friend ledger amounts; missing ledger evidence must not be counted as
+credited. Pending completion/top-up, capped or zero friend rewards and KOL
+refund/time holds remain distinct UI states. Admin router + route guard protect
+identity/financial details; no public or student endpoint exposes this read model.
+Saved choices with kind none are included; unsaved pending choices are excluded.
+
 ## Public auth form lifetime (24 October 2026)
 
 `LoginPage` renders sign-in/signup independently of session pending state. A

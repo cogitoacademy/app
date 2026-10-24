@@ -9,6 +9,20 @@ Subjects now use the full Cogito Academy name. Server sender callbacks provide
 the absolute public header URL from CORS_ORIGIN. No endpoint, OTP expiry or
 authentication behavior changed; no new email send was performed for this update.
 
+## Admin referral usage (24 October 2026)
+
+`POST /rpc/adminReferral/listUsage` is admin-only. Body:
+`{"json":{"search":"","kind":"all","page":0,"limit":25}}`.
+Search is trimmed/literal (max 120); kind is all/friend/kol/none; page is zero-based
+0..100000 and limit 1..100 (default 25). Response uses the standard oRPC envelope
+and contains items, page, limit, summary `{signups,codesUsed,welcomeMarks,friendMarks}`.
+Summary covers all matching saved choices, not just this page. Marks totals use
+linked ledgers. Items include student/referrer identity, code/campaign, chosen-at
+WIB-rendered timestamp, settings/terms, welcome ledger, friend completion/decision/
+semester/cap/ledger and KOL decision/payment/commission/refund/time evidence.
+Commission is a decision amount, not cash paid; settlement remains in existing
+KOL reconciliation procedures. No mutation, export or unused-code inventory.
+
 ## Login focus refresh (24 October 2026)
 
 No API change: anonymous session reads still return null and background session

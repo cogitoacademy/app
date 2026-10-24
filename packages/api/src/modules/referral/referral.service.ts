@@ -1,4 +1,5 @@
 import { kolCsv } from "./kol-settlement.csv";
+import { createReferralUsageReader } from "./referral-usage.repo";
 import { calculateKolSettlement, kolMonthRange } from "./kol-settlement.policy";
 import {
   and,
@@ -1514,6 +1515,7 @@ export function createReferralService(deps: {
 
   return {
     applyEmailSignupChoice,
+    listUsage: createReferralUsageReader(deps.db),
     saveGoogleChoice,
     getMine,
     getSettings,

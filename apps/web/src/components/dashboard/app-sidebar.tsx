@@ -136,6 +136,7 @@ const adminNavGroups = [
     label: "Finance",
     items: [
       { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
+      { to: "/admin-referrals", label: "Referral usage", icon: IconUsers },
       {
         to: "/admin-kol-commissions",
         label: "KOL commissions",

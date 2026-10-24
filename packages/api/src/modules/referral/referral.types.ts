@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const listReferralUsageInput = z.object({
+  search: z.string().trim().max(120).default(""),
+  kind: z.enum(["all", "friend", "kol", "none"]).default("all"),
+  page: z.number().int().min(0).max(100_000).default(0),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+export type ListReferralUsageInput = z.infer<typeof listReferralUsageInput>;
+
 const referralCodeInput = z
   .string()
   .trim()

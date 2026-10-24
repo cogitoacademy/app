@@ -29,6 +29,11 @@ async function run<T>(operation: () => Promise<T>): Promise<T> {
 
 export function createReferralHandler(service: ReferralService) {
   return {
+    listUsage: ({
+      input,
+    }: {
+      input: Parameters<ReferralService["listUsage"]>[0];
+    }) => run(() => service.listUsage(input)),
     saveGoogleChoice: ({
       context,
       input,
