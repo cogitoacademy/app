@@ -1,5 +1,11 @@
 # Cogito API Reference
 
+## Login focus refresh (24 October 2026)
+
+No API change: anonymous session reads still return null and background session
+refresh remains enabled. The public login UI keeps its forms mounted while that
+request is pending, preserving local drafts across tab/window focus changes.
+
 ## Student report PDF presentation (24 October 2026)
 
 `POST /reports/student/pdf` retains its existing private access contract and 204

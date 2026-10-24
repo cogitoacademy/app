@@ -1,5 +1,16 @@
 # Cogito Runbook
 
+## Auth form focus regression (24 October 2026)
+
+From `packages/e2e`, run
+`bunx playwright test --config playwright.auth-form-focus.config.ts`.
+This uses installed Microsoft Edge and an isolated Vite on 3300, mocked
+anonymous session responses, and no DB/API/seed/provider setup. Two cases fill
+signup/sign-in, trigger visibilitychange, verify session refetches occurred,
+then assert drafts remain. The pre-fix failure was email becoming empty after
+the pending loader unmounted forms. The dev app receives the UI fix via Vite;
+no DB migration or API restart is required.
+
 ## Student report banner and layout QA (24 October 2026)
 
 The report banner source is

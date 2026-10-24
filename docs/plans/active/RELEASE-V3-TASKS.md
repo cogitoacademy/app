@@ -1,5 +1,14 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Auth draft focus repair (24 October 2026)
+
+Signup and sign-in drafts now survive background session refetch on tab return.
+The public LoginPage pending loader was removed; it previously unmounted forms
+when Better Auth refetched a null session. Two synthetic Edge cases fail before
+and pass after the fix; live dev repro retains node/value afterward. Focused
+lint passes. Session refresh, protected access and auth handoff are unchanged.
+This UI regression does not establish real Google OAuth completion acceptance.
+
 ## Student report presentation checkpoint (24 October 2026)
 
 - [x] Update student report PDF to the supplied reference layout and header:

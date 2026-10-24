@@ -1,5 +1,14 @@
 # Cogito Module Reference
 
+## Public auth form lifetime (24 October 2026)
+
+`LoginPage` renders sign-in/signup independently of session pending state. A
+null-session Better Auth background refetch must not unmount forms: their local
+name/email/password/referral/OTP state belongs to the active form. Deliberate
+form switching and navigation retain their existing behavior. Auth completion,
+session freshness and protected-route guards are unchanged; drafts are not
+persisted to storage.
+
 ## Student report PDF reference template (24 October 2026)
 
 `report-export.pdf.ts` embeds the supplied banner from

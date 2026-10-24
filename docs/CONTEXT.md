@@ -1,5 +1,15 @@
 # Cogito App — Codebase Context
 
+## Login draft retention (24 October 2026)
+
+The public LoginPage no longer replaces sign-in/signup forms with a session
+pending loader. Better Auth focus refetches set pending when the cached session
+is null; the old branch unmounted the forms and cleared local drafts on tab
+return. Session refresh and protected-route checks remain active elsewhere.
+Two synthetic Edge browser regressions reproduce the loss before the fix and
+pass afterward; the live dev visibilitychange repro also retains the same input
+node and value. No password persistence or auth/backend contract changes.
+
 ## Student report reference layout (24 October 2026)
 
 PDF export now follows the owner-supplied layout: supplied Cogito banner,
