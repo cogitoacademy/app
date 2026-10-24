@@ -1,5 +1,12 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Google referral keyboard submission (24 October 2026)
+
+Referral code entry uses native form submission: Enter applies a nonblank code.
+Blank or in-flight submission is ignored; no-code remains an explicit button.
+The existing Google referral synthetic workflow covers Enter and blank input.
+No RPC contract or referral business-rule change.
+
 ## AUTH02 Google first-registration correction — 24 October 2026
 
 Source fix and scoped isolated regressions complete: new Google callback role

@@ -1,5 +1,12 @@
 # Cogito API Reference
 
+## Google referral keyboard submission (24 October 2026)
+
+Referral code entry uses native form submission: Enter applies a nonblank code.
+Blank or in-flight submission is ignored; no-code remains an explicit button.
+The existing Google referral synthetic workflow covers Enter and blank input.
+No RPC contract or referral business-rule change.
+
 ## Google referral callback handoff (24 October 2026)
 
 No RPC contract change. `POST /rpc/referral/saveGoogleChoice` still receives

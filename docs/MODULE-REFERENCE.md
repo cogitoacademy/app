@@ -1,5 +1,12 @@
 # Cogito Module Reference
 
+## Google referral keyboard submission (24 October 2026)
+
+Referral code entry uses native form submission: Enter applies a nonblank code.
+Blank or in-flight submission is ignored; no-code remains an explicit button.
+The existing Google referral synthetic workflow covers Enter and blank input.
+No RPC contract or referral business-rule change.
+
 ## Google user-create default ordering (24 October 2026)
 
 Installed Better Auth 1.6.11 `db/internal-adapter.mjs` createOAuthUser calls

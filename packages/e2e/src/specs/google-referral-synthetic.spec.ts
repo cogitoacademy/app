@@ -60,8 +60,10 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
     await expect(
       page.getByLabel("Referral code", { exact: true }),
     ).toBeVisible();
+    await page.getByLabel("Referral code", { exact: true }).press("Enter");
+    expect(saved).toEqual([]);
     await page.getByLabel("Referral code", { exact: true }).fill("INVALID");
-    await page.getByRole("button", { name: "Apply code", exact: true }).click();
+    await page.getByLabel("Referral code", { exact: true }).press("Enter");
     await expect(
       page.getByText("Invalid referral code", { exact: true }),
     ).toBeVisible();
@@ -69,9 +71,7 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
     await expect(page).toHaveURL(/referral-choice/);
     if (code) {
       await page.getByLabel("Referral code", { exact: true }).fill(code);
-      await page
-        .getByRole("button", { name: "Apply code", exact: true })
-        .click();
+      await page.getByLabel("Referral code", { exact: true }).press("Enter");
     } else
       await page
         .getByRole("button", { name: "No referral code", exact: true })
