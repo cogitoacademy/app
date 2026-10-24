@@ -39,6 +39,15 @@ retained. Wrapped bullet lines align with the first text character and dense
 lists paginate without inline compaction. No request, eligibility, response type
 or summary contract changed.
 
+## KB/calendar preparation boundary (24 October 2026)
+
+The single-input KB/calendar decision introduces no new runtime endpoint yet.
+Existing `content.listCompetitions` and `content.listStudentResources` procedure
+keys and protected `/content/knowledge-bank/:resourceId/file` route remain.
+Future KB/calendar authoring uses one language-neutral title/description/location
+value, without locale input or required English. Migration tooling emits local
+dry-run JSON only; it is not an import API or an authorization change.
+
 ## Short FRIEND codes (24 October 2026)
 
 `POST /rpc/referral/getMine` retains its response shape. An existing code is returned

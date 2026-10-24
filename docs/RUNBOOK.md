@@ -53,6 +53,19 @@ The reference layout uses narrower feedback text; long reports can use more
 pages. Bullets have a hanging indent and remain separate even in dense lists.
 Empty eligible sets still return 204, without creating a blank PDF.
 
+## KB/calendar read-only preparation (24 October 2026)
+
+From the repository root, run
+`python -m unittest discover -s migration/sanity-content -p test_audit.py`, then
+`python migration/sanity-content/audit.py tmp/v3-content/20261024-123211/sanity-published.json --download-kb`.
+Python 3.12+ standard library is sufficient. The snapshot is ignored/local and
+published-only; drafts/history and durable off-machine backup are not covered.
+The tool writes audit and prepared manifests alongside the unchanged snapshot,
+verifies three PDF hashes/sizes, and makes no DB or source writes. Review the
+80 legacy text selections before import. KB/calendar now require one input per
+field in any language; English title absence is not an import failure. Runtime
+still reads Sanity; no migration, upload, cutover or production action ran.
+
 ## Short FRIEND allocation operations (24 October 2026)
 
 This source change needs no schema migration, reset, seed or code rotation.

@@ -1,5 +1,18 @@
 # Release v3 - technical specification
 
+## KB/calendar single-field content model (24 October 2026)
+
+Knowledge Bank and Competition Calendar use one language-neutral title,
+description and (calendar) location value per record. Required title is trimmed
+and nonempty regardless of natural language; optional prose may be null.
+No `En`/`Id` pairs or locale input are required. This is the scoped owner
+exception to the generic Content row and content-entry language rules below;
+FAQ, Activities, classes, tutor prose and competition taxonomy are unchanged.
+Migration preserves source IDs and all original locale values in its archive,
+selecting the legacy displayed value (nonempty English then first nonempty)
+without translation. The dry-run preparation tool and limitations are documented
+in `migration/sanity-content/README.md`; no runtime source switch has occurred.
+
 ## KOL settlement source contract (23 October 2026)
 
 The implemented procedure family is `adminReferral.getKolSettlement`,

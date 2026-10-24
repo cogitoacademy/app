@@ -1,5 +1,17 @@
 # Cogito release v3 - Product Requirements Document
 
+## KB/calendar single-input clarification (24 October 2026)
+
+Owner clarification overrides REQ-LANG-01/02 only for Knowledge Bank and
+Competition Calendar: each title, description and location has one input and
+one stored value, entered as available in any language. No English requirement,
+Indonesian counterpart, locale selector, translation or per-locale fallback is
+required for these two modules. App interface labels remain English. Preserve
+original document language and official names. Existing bilingual Sanity values
+remain in the migration archive; select the existing displayed value (nonempty
+English, otherwise first nonempty value) for the single-field import, without
+translation. Other modules retain their existing language requirements.
+
 ## KOL settlement implementation boundary (23 October 2026)
 
 REQ-KOL-02/03 source now includes decision-bound actual transfers, partial and

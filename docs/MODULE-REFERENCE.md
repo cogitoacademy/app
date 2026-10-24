@@ -45,6 +45,17 @@ bullet has a separate marker gutter and hanging indent; dense lists keep one
 item per bullet and paginate instead of compacting inline. Banner/footer repeat per page; multi-page exports
 include pagination. No changes to selection, ownership or chargeable entitlement.
 
+## KB/calendar single-input migration checkpoint (24 October 2026)
+
+KB/calendar authored text is language-neutral, one value per field, with no
+translation or bilingual-entry requirement. This is scoped to these modules.
+The existing Sanity content adapter remains active. The offline audit/preparation
+tool under `migration/sanity-content` preserves source IDs, timestamps, category
+references and raw locale evidence while selecting existing displayed text for
+single-value import. It verifies all three KB PDFs against source size/SHA-1 and
+records SHA-256. No database import/admin module/storage cutover is implemented.
+Retain wallet eligibility and server-side file authorization during that work.
+
 ## Short FRIEND allocation (24 October 2026)
 
 `referral.friend-code.ts` derives three letters from NFKD-normalized name ASCII

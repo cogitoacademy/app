@@ -44,6 +44,17 @@ the first text character. Dense bullets stay separate and paginate rather than
 flowing inline. The banner is embedded from bundled JSON to survive server
 bundling without a runtime asset path. Eligibility/endpoints/window are unchanged.
 
+## KB/calendar migration preparation (24 October 2026)
+
+Owner clarified one language-neutral input per KB/calendar text field; English
+is not required for entered content. Other modules' locale policies are unchanged.
+`migration/sanity-content/audit.py` verifies the published working snapshot and
+prepares single-value records without DB writes: 3 KB PDFs match source size/hash,
+63 competition ranges/references pass, and 80 differing legacy locale fields
+retain selection evidence. Six focused Python tests pass. Existing pages and
+content service still read Sanity; DB/admin/private-file migration and cutover
+remain open. Activities are deferred. See the migration README for exact scope.
+
 ## Short FRIEND code source checkpoint (24 October 2026)
 
 New codes allocated by student `referral.getMine` use exactly three ASCII uppercase

@@ -31,7 +31,7 @@ and pass after the fix; live dev repro retains node/value afterward. Focused
 lint passes. Session refresh, protected access and auth handoff are unchanged.
 This UI regression does not establish real Google OAuth completion acceptance.
 
-## Student report presentation checkpoint (24 October 2026)
+## Owner follow-up TODO (24 October 2026)
 
 - [x] Update student report PDF to the supplied reference layout and header:
   two-column inline metadata, left-aligned feedback labels, compact footer,
@@ -43,6 +43,38 @@ This UI regression does not establish real Google OAuth completion acceptance.
   extracted text blocks from all four sample PDFs stay within page boundaries.
   Owner follow-up: hanging bullet indent aligns continuation lines with text;
   dense items remain separate and paginate instead of flowing inline.
+
+- [x] KB/CC migration preparation: one language-neutral input per text field,
+  as clarified by owner; no required English or bilingual entry. Audit and
+  dry-run manifests prepared for 3 KB resources and 63 competitions. All three
+  PDFs verify against source size/hash; source refs and timestamp ranges pass.
+  Eighty differing legacy locale fields retain selection/archive evidence.
+  Six focused Python tests pass. See `migration/sanity-content/README.md`.
+- [ ] Integrate/review isolated KB/CC implementation `1b815799` (destination
+  tables, private files, versioned live-save admin CRUD and deterministic import).
+  Worker reports focused/synthetic checks passed; parent PostgreSQL, private
+  bucket, redirect/rollback and UAT gates remain. Migration 0075 is unapplied.
+  Current release runtime still reads Sanity. Activities remain deferred.
+
+- [ ] T10/T12 content migration: published Sanity snapshot extracted read-only
+  on 24 October from project `skfmwuke`, dataset `development`, into ignored
+  `tmp/v3-content/20261024-123211/`. Inventory: 63 competitions, 11 competition
+  categories, 3 student resources, 6 events, 10 tutors, 1 education level,
+  1 event scale, 2 locations, 4 file assets and 12 image assets. Raw document
+  IDs, references, rich text and locale fields are retained. This is a
+  published-only working snapshot, not a full draft/history backup. Next:
+  map KB/calendar fields and access rules to destination schema, reconcile
+  references/dates/locales and validate before any import or website cutover.
+
+- [x] Shorten newly generated friend referral codes to the six-character pattern
+  `XXX000`: three uppercase letters derived from the user's name or another
+  suitable identity attribute, followed by three digits (for example `AND482`).
+  Handle normalization, short/non-Latin names and collisions within the shared
+  referral-code namespace. Preserve existing codes, referral attribution and
+  shared links; confirm compatibility with KOL campaign codes. Owner requested;
+  source implementation is integrated at `57855d3`. Focused tests, lint and
+  serial root typechecks pass; PostgreSQL races and live auth/provider/browser
+  acceptance remain open.
 
 ## Short FRIEND code implementation checkpoint (24 October 2026)
 
