@@ -120,7 +120,7 @@ export function ReferralChoicePage() {
           </form>
           <Button
             type="button"
-            variant="plain"
+            variant="underline"
             onClick={() =>
               authClient.signOut({
                 fetchOptions: {
