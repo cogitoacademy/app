@@ -16,11 +16,13 @@ Google choice and existing-account reuse do not allocate codes. The surviving
 capacity risk is 1,000 slots per prefix and up to 1,000 contended insert attempts.
 No silent alternate-prefix or longer-code policy is introduced.
 
-Validation: 22 tests / 63 assertions pass across `referral.friend-code.test.ts`,
-`referral.friend-code-service.test.ts`, `referral.policy.test.ts` and server
-`signup-body.test.ts`; focused Oxlint and diff whitespace checks pass. Service
-wiring uses a scripted DB double, not PostgreSQL proof. Full typecheck, broad
-suites, PostgreSQL concurrency, real signup/provider and browser checks are unrun.
+Validation: 22 requested tests / 63 assertions pass across the four focused
+files; Bun also collected the same three signup-body cases from ignored
+`tmp/v3-checkpoint-check` (25 tests / 71 assertions total). Focused Oxlint and
+diff whitespace checks pass. Root `bun run check-types` passes all four tasks
+with Turbo `--concurrency=1` and TypeScript-Go `--checkers 1`. Service wiring
+uses a scripted DB double, not PostgreSQL proof. Broad suites, PostgreSQL races,
+live signup/provider and browser checks remain unrun.
 
 Integration must retain the parent's separate owner TODO and Sanity extraction
 checkpoint; this checkpoint does not close those notes or full T09 acceptance.
