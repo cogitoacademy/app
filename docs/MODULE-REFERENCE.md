@@ -2562,3 +2562,8 @@ pending; this worktree has not applied `0065`.
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
 
 The admin Invite Tutor form card opts out of CSS Grid cross-axis stretching. Keep it content-height so `CardFooter` remains flush with the card's rounded bottom boundary. The neighboring Invitations card follows the grid parent's stretched height as a flex column, and its body pushes `TablePagination` to the bottom whenever the table content is shorter than that space. These layout rules do not affect invitation service behavior.
+
+
+### KOL responsive polish checkpoint
+
+KOL settlement frontend (2026-10-25): KolSettlementPanel wraps long history identifiers and allows multiline transfer/adjustment/retry actions; AdminKolCommissionsPage allows the monthly export action to grow. All operation identity, retry locking, amount/date/reason submission and financial rules are unchanged. Synthetic render/wire coverage is not database accounting proof.

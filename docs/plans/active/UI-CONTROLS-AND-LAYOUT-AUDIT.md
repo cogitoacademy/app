@@ -165,3 +165,8 @@ left running; email/payments remain stubbed and Calendar disabled.
   (`GOMEMLIMIT=1GiB`, `GOMAXPROCS=2`); the initial web attempt exhausted Windows
   virtual memory. Focused lint and diff checks passed.
 - No DB, provider, persistence, or API behavior changes.
+
+
+### KOL responsive polish checkpoint
+
+2026-10-25 bounded checkpoint: KOL settlement history wrapping and multiline settlement/export/retry actions implemented; 13/13 synthetic Edge checks pass. Measured baseline clipping and reproduction command are in RUNBOOK. This does not complete the wider V3 responsive audit: economy, payout, class/report, native 200% zoom, RTL and assistive-technology acceptance remain open. Parent owns cross-checkout docs backlog reconciliation.

@@ -3314,3 +3314,7 @@ series-child 24-hour boundaries, due-at-end and same-millisecond reschedule
 rejection passed 3 tests / 32 expectations on guarded loopback 127.0.0.1:6769/cogito-test, with test-only timestamp fixture corrections and no migration, reset, or seed. The current
 focused unit suite
 passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached).
+
+### KOL responsive polish checkpoint
+
+Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long unbroken history references overflowed the card (1743px content at 288/358/736/1119px card widths) and were clipped by the existing app scroller. Settlement cards now wrap identifiers; settlement/export buttons grow with labels and retry actions wrap. Synthetic Edge checks pass 13/13; see RUNBOOK. No backend, accounting or authorization changes. Economy, payout, class/report, native 200% zoom, RTL and screen-reader acceptance remain unverified.

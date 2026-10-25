@@ -92,7 +92,7 @@ export function KolSettlementPanel({
     mutation.mutate(next);
   }
   return (
-    <Card>
+    <Card className="[overflow-wrap:anywhere]">
       <CardHeader>
         <CardTitle>Settlement · {label}</CardTitle>
       </CardHeader>
@@ -149,14 +149,16 @@ export function KolSettlementPanel({
           </div>
         ) : null}
         {command ? (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
+              className="h-auto min-h-9.5 max-w-full py-2"
               disabled={mutation.isPending}
               onClick={() => mutation.mutate(command)}
             >
               Retry same operation
             </Button>
             <Button
+              className="h-auto min-h-9.5 max-w-full py-2"
               variant="plain"
               disabled={mutation.isPending}
               onClick={async () => {
@@ -202,7 +204,11 @@ export function KolSettlementPanel({
               disabled={locked}
             />
           </Field>
-          <Button type="submit" disabled={locked}>
+          <Button
+            className="h-auto min-h-9.5 max-w-full py-2"
+            type="submit"
+            disabled={locked}
+          >
             Record external transfer
           </Button>
         </form>
@@ -242,6 +248,7 @@ export function KolSettlementPanel({
             an adjustment with a new reasoned entry.
           </Text>
           <Button
+            className="h-auto min-h-9.5 max-w-full py-2"
             type="submit"
             disabled={
               locked ||

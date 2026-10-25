@@ -2524,3 +2524,8 @@ The 2026-09-08 Invite Tutor card height and Invitations pagination alignment cor
 Role sidebar sections collapse independently in local mounted UI state. No RPC
 input/output, HTTP path, access rule, or persistence contract changes; the
 existing `booking/listMine` action-count query remains unchanged.
+
+
+### KOL responsive polish checkpoint
+
+KOL responsive checkpoint (2026-10-25): frontend layout only; no endpoint, input, response, envelope or error-contract change. Existing synthetic settlement wire tests still pass. This is not live API or authorization evidence.
