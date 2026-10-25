@@ -170,3 +170,12 @@ left running; email/payments remain stubbed and Calendar disabled.
 ### KOL responsive polish checkpoint
 
 2026-10-25 bounded checkpoint: KOL settlement history wrapping and multiline settlement/export/retry actions implemented; 13/13 synthetic Edge checks pass. Measured baseline clipping and reproduction command are in RUNBOOK. This does not complete the wider V3 responsive audit: economy, payout, class/report, native 200% zoom, RTL and assistive-technology acceptance remain open. Parent owns cross-checkout docs backlog reconciliation.
+
+
+### Economy and tutor payout responsive slice (25 October 2026)
+
+Bounded implementation complete: V3 amount controls have a 14rem minimum width within local table scrollers. Baseline 834f525f reproduced ten-digit IDR clipping at 320/390px (100.6px required versus 92px available); after repair 128px is available. No measured payout production issue required a change. Shared-card audit fixes are retained.
+
+Dedicated synthetic Edge checks pass 8/8 across 320/390/768/1440 CSS px, covering economy read/edit, payout prepared-transfer, unpaid-preview and void/reconciliation drawers, numeric widths, contained tables, button content height and keyboard reachability. Mock-only ports 3356/3357, cache, command and artifact paths are in RUNBOOK. No financial write is activated and live economy/payout specs are not run.
+
+Remaining: native 200% zoom (unverified), RTL and assistive-technology audit, live auth/persistence and financial workflow acceptance, plus other responsive slices. This checkpoint does not mark the overall V3 UI audit complete.

@@ -3318,3 +3318,8 @@ passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 task
 ### KOL responsive polish checkpoint
 
 Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long unbroken history references overflowed the card (1743px content at 288/358/736/1119px card widths) and were clipped by the existing app scroller. Settlement cards now wrap identifiers; settlement/export buttons grow with labels and retry actions wrap. Synthetic Edge checks pass 13/13; see RUNBOOK. No backend, accounting or authorization changes. Economy, payout, class/report, native 200% zoom, RTL and screen-reader acceptance remain unverified.
+
+
+### Economy/payout responsive checkpoint (25 October 2026)
+
+The bounded frontend slice gives V3 economy amount controls a 14rem minimum width so ten-digit IDR values remain readable inside locally scrolling tables. Shared Card/NumberField styles and financial/auth/RPC behavior are unchanged. Dedicated mocked Edge coverage inspects economy read/edit and tutor payout prepared, unpaid-preview and void/reconciliation drawers at 320/390/768/1440 CSS px. This is synthetic layout evidence, not payout persistence or release acceptance; native 200% zoom remains unverified. See RUNBOOK and the active UI audit plan.

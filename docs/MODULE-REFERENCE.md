@@ -2567,3 +2567,8 @@ The admin Invite Tutor form card opts out of CSS Grid cross-axis stretching. Kee
 ### KOL responsive polish checkpoint
 
 KOL settlement frontend (2026-10-25): KolSettlementPanel wraps long history identifiers and allows multiline transfer/adjustment/retry actions; AdminKolCommissionsPage allows the monthly export action to grow. All operation identity, retry locking, amount/date/reason submission and financial rules are unchanged. Synthetic render/wire coverage is not database accounting proof.
+
+
+### Economy/payout frontend layout (25 October 2026)
+
+`V3EconomySettings.AmountInput` retains Selia numeric behavior and applies a 14rem minimum control width; package and competition tables retain local horizontal scrolling. Tutor payout rendering required no production change in this bounded slice. The synthetic harness covers prepared-transfer, unpaid-preview and reconciliation drawers and rejects write requests; tax conversion, immutable snapshots, payout identities and services remain unchanged.

@@ -76,6 +76,7 @@ function AmountInput({
 }) {
   return (
     <SeliaNumberField
+      className="min-w-56"
       inputProps={{ "aria-label": label }}
       allowOutOfRange
       format={{ useGrouping: false }}

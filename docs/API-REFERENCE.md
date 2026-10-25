@@ -2529,3 +2529,8 @@ existing `booking/listMine` action-count query remains unchanged.
 ### KOL responsive polish checkpoint
 
 KOL responsive checkpoint (2026-10-25): frontend layout only; no endpoint, input, response, envelope or error-contract change. Existing synthetic settlement wire tests still pass. This is not live API or authorization evidence.
+
+
+### Economy/payout responsive verification (25 October 2026)
+
+No procedure, input, response, authorization or submit/retry identity changes. `playwright.finance-layout.config.ts` uses synthetic session/RPC responses on mock origin 3357, with no API process. Its layout checks do not verify API validation, accounting or replay behavior.
