@@ -1,5 +1,25 @@
 # Cogito App — Codebase Context
 
+## V3 bounded regression checkpoint (25 October 2026)
+
+Source `be14c454` passed 58 tests / 160 assertions across 13 explicitly named
+files: auth hooks and installed Google callback with memory adapter, session
+response refresh, friend-code policy/service doubles, referral policy/cursor/usage,
+KOL settlement policy/CSV, and report access/window/history/PDF layout. Installed
+Bun was 1.4.0-canary.1, not the pinned 1.3.14 CI runtime.
+
+The isolated Google referral Edge workflow passed 3/3 in 43.0 seconds: friend,
+legacy KOL and no-code, each including blank Enter, invalid-code toast, reload,
+stale cached-session handling and destination resume. All API traffic is mocked;
+PostHog fetch warnings occurred. This does not establish real Google consent,
+Redis/PostgreSQL integration, provider delivery or production readiness.
+
+No DB mutation, migration, reset, seed, parent API restart or production action
+was performed for this checkpoint. Historical real-DB evidence retains its own
+source/environment scope. Run commands are in RUNBOOK. Backlog T09/T12 rows now
+reflect their later integration/local-dev checkpoints; T13 remains in progress.
+
+
 ## Referral session cache correction (24 October 2026)
 
 Live dev submits returned 200 and persisted pending=false, but Better Auth Redis
@@ -2777,7 +2797,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF remains open. Legacy on-demand reminders are implemented in the 23 October continuation; focused unit tests pass 10 / 44 after SQL timestamp precision fixes; guarded SQL cursor and period/write regressions passed 3 tests / 32 expectations at 127.0.0.1:6769/cogito-test on source 14790f8c plus test-only timestamp fixture corrections. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached); no migration, reset, or seed ran. Browser acceptance and actual email delivery remain unverified. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 ordinary rescheduling, Q14/Q15, OPS01 and final release gates remain open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
