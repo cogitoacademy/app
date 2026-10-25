@@ -4376,3 +4376,20 @@ node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2
 Unset overrides to retain Chromium and ports 3306/3307. The optional browser channel uses an already installed browser; no browser install is needed for Edge. Vite cache is separated by web port, reuseExistingServer remains false, and all API requests are intercepted. No API/DB/provider/seed starts. 13/13 checks passed on Edge: seven existing settlement wire/render cases, five reflow widths (320/390/720/768/1440), and a 320px keyboard retry/review case. A 185-character bank reference measured 1743px scroll width before; after, panel scroll/client widths match at 288/358/688/736/1119px respectively. Original retry review button: 38px height versus 49px scroll height; after: 56/56px, keyboard Tab/Enter reaches and activates review. Screenshots are local test-results artifacts, with baseline viewport captures retained in tmp/responsive-before. The 720px case is only a reflow proxy for 1440px at 200%, not native browser zoom proof. Native zoom, RTL, screen reader, real persistence/provider/auth, and other V3 screens remain unverified. No release-readiness claim.
 
 Validation also passed scoped oxlint/oxfmt and the serial repository check-types command (four tasks: e2e/web executed, ui/server cache hits). The first typecheck caught two new fixture/log typing errors, corrected before the passing run. Layout guidance: https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md (content handling and flex minimum sizing).
+
+
+### Isolated economy/payout layout checks (25 October 2026)
+
+Run from the checkout root with existing dependencies and installed Microsoft Edge:
+
+```powershell
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.finance-layout.config.ts
+```
+
+This dedicated config reuses the classes-layout Vite configuration, owns web port 3356 and cache `tmp/finance-layout-vite-cache-3356`, and uses mock origin 3357 without an API listener. No global setup, live sign-in, database, seed, migration, provider or parent 3000/3001 restart is used. Browser requests outside 3356/3357 are aborted and unexpected write procedures fail the check. Do not substitute `economy-roles.spec.ts` or `tutor-payout-tax.spec.ts`: they require live auth/DB workflows.
+
+Baseline on 834f525f: 2 failed / 6 passed after settling drawer animations and excluding intended local table scrolling. At 320/390px, V3 package price `2000000000` required 100.6px of text width but had 92px. The 14rem minimum raises available width to 128px at both widths. The green run passes 8/8 Edge tests: four economy and four payout cases, each payout case traversing prepared, unpaid-preview and void/reconciliation drawers. Component scroll/client bounds, button content height, numeric text width, local table scrolling and keyboard action reachability are checked; hidden document overflow alone is not the assertion.
+
+Payout table scroll/client widths are 1500/288, 1500/358, 1500/736 and 1500/1119 at 320/390/768/1440px; these are contained horizontal scrollers. At 320px, economy package and competition tables scroll at 578/288 and 602/288, preserving readable inputs rather than shrinking them. Screenshots are written to `test-results/finance-layout/` in the checkout root (read-only/edit economy, payout page, drawers and focused actions); traces on failure are under `packages/e2e/test-results/finance-layout/`.
+
+Web and E2E TypeScript use serial TS-Go `--checkers 1` with `GOMEMLIMIT=1GiB` and `GOMAXPROCS=2`. Focused lint and formatting checks cover only changed code. Native 200% browser zoom is unverified; viewport sizing, CSS zoom and deviceScaleFactor are not substitutes. RTL, screen-reader/contrast audit, live persistence/authorization, financial acceptance and broader release checks remain parent gates. No separate confirmation modal exists on these routes; the checks exercise the existing payout drawer actions without activating financial writes.
