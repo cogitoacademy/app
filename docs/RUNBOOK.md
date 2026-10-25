@@ -1,5 +1,46 @@
 # Cogito Runbook
 
+## Bounded V3 auth/referral/report regression (25 October 2026)
+
+Source `be14c454`: 58 tests / 160 assertions, plus 3 mocked Edge browser cases
+(43.0 seconds). Bun 1.4.0-canary.1 is local evidence, not pinned CI acceptance.
+Run from the repository root; explicit `./` file paths avoid accidental test
+substring discovery under ignored `tmp/`. The env file satisfies import-time
+configuration; the selected checks use pure functions, doubles or a memory
+adapter, not PostgreSQL acceptance. Do not broaden to integration/reset suites
+without their target-specific preflight.
+
+```powershell
+$regressionFiles = @(
+  './packages/auth/src/index.test.ts'
+  './packages/auth/src/google-callback.test.ts'
+  './apps/server/src/routes/session-response.test.ts'
+  './packages/api/src/tests/unit/referral.friend-code.test.ts'
+  './packages/api/src/tests/unit/referral.friend-code-service.test.ts'
+  './packages/api/src/tests/unit/referral.policy.test.ts'
+  './packages/api/src/tests/unit/referral.pagination.test.ts'
+  './packages/api/src/tests/unit/referral-usage.test.ts'
+  './packages/api/src/tests/unit/kol-settlement.test.ts'
+  './packages/api/src/tests/unit/report-export.access.test.ts'
+  './packages/api/src/tests/unit/report-export.window.test.ts'
+  './packages/api/src/tests/unit/report-export.service.test.ts'
+  './packages/api/src/tests/unit/report-export.pdf.test.ts'
+)
+bun test --timeout 30000 --env-file ./apps/server/.env.test @regressionFiles
+Push-Location packages/e2e
+try {
+  bunx playwright test --config playwright.google-referral-synthetic.config.ts
+} finally {
+  Pop-Location
+}
+```
+
+The browser config owns Vite 3320, mocks API origin 3321, uses installed Edge
+and starts no API/DB/global seed. Keep these ports free; it refuses server reuse.
+PostHog fetch warnings occurred while all three cases passed. Real Google OAuth,
+Redis/PostgreSQL, provider, restore and client UAT gates remain separate.
+
+
 ## Referral session cache correction (24 October 2026)
 
 Live dev submits returned 200 and persisted pending=false, but Better Auth Redis
