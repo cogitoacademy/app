@@ -2572,3 +2572,8 @@ KOL settlement frontend (2026-10-25): KolSettlementPanel wraps long history iden
 ### Economy/payout frontend layout (25 October 2026)
 
 `V3EconomySettings.AmountInput` retains Selia numeric behavior and applies a 14rem minimum control width; package and competition tables retain local horizontal scrolling. Tutor payout rendering required no production change in this bounded slice. The synthetic harness covers prepared-transfer, unpaid-preview and reconciliation drawers and rejects write requests; tax conversion, immutable snapshots, payout identities and services remain unchanged.
+
+
+### KB/calendar page composition (25 October 2026)
+
+The canonical Knowledge Bank/calendar route components select the existing read-only view for non-admin sessions. Admin sessions wrap that view in `ContentPage` with a fixed `resource` or `event` kind and a local View/Manage switch. Resource and event editors reuse the existing field parsing, private upload, expectedVersion/reason, conflict and delete paths. Manage queries are deferred until requested; leaving an open draft for View asks before discarding, and switching is disabled during writes. Successful saves/deletes invalidate the corresponding public reader cache. The old combined sidebar item is removed; its route is a compatibility redirect. No change to Marks eligibility, file access or server-side permissions.

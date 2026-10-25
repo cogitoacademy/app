@@ -41,7 +41,6 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
-import { useRole } from "@/hooks/use-role";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
@@ -65,8 +64,6 @@ export function KnowledgeBankPage() {
   );
   const [isDesktop, setIsDesktop] = useState(false);
   const resources = useQuery(orpc.content.listStudentResources.queryOptions());
-  const { role, isLoading: isRoleLoading } = useRole();
-  const isAdmin = !isRoleLoading && role === "admin";
 
   const resourceItems = resources.data?.items;
   const items = useMemo(
@@ -164,17 +161,6 @@ export function KnowledgeBankPage() {
               preparation.
             </Text>
           </div>
-          {isAdmin ? (
-            <Button
-              variant="secondary"
-              render={
-                <Link to="/admin-content" aria-label="Manage KB & calendar" />
-              }
-              nativeButton={false}
-            >
-              Manage KB & calendar
-            </Button>
-          ) : null}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">

@@ -151,7 +151,7 @@ or summary contract changed.
 
 Admin-only procedure keys below use `/rpc/adminContent/<key>` and the standard
 `{"json": input}` envelope. Authoring defaults disabled; disabled requests fail
-before touching new tables/storage. `/admin-content` is the app editor.
+before touching new tables/storage. The app editors live at `/knowledge-bank` and `/calendar`; `/admin-content` redirects admins to `/knowledge-bank`.
 
 | Key | Input | Result |
 | --- | --- | --- |
@@ -2534,3 +2534,8 @@ KOL responsive checkpoint (2026-10-25): frontend layout only; no endpoint, input
 ### Economy/payout responsive verification (25 October 2026)
 
 No procedure, input, response, authorization or submit/retry identity changes. `playwright.finance-layout.config.ts` uses synthetic session/RPC responses on mock origin 3357, with no API process. Its layout checks do not verify API validation, accounting or replay behavior.
+
+
+### Canonical KB/calendar editor pages (25 October 2026)
+
+Existing `adminContent.list/categories/create/update/remove/uploadPdf` contracts, version checks, reason requirements and server-side admin authorization are unchanged. `/knowledge-bank` and `/calendar` expose their corresponding editor only to admin sessions; student/tutor readers do not request adminContent procedures. `/admin-content` redirects admins to `/knowledge-bank`, and other roles to `/dashboard`. Reader caches for `content.listStudentResources` and `content.listCompetitions` are invalidated after their corresponding save/delete.

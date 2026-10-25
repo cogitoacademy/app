@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -21,7 +21,7 @@ import {
   type ContentEntry,
   type ContentKind,
 } from "@cogito-app/api/modules/content-admin/content-admin.types";
-import { client } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 
 type Row = {
@@ -49,8 +49,17 @@ const defaults = (): Draft => ({
   socialMediaLink: "",
   sortOrder: "0",
 });
-export function ContentPage() {
-  const [kind, setKind] = useState<ContentKind>("resource");
+export function ContentPage({
+  kind,
+  preview,
+}: {
+  kind: ContentKind;
+  preview: ReactNode;
+}) {
+  const queryClient = useQueryClient();
+  const [previewing, setPreviewing] = useState(true);
+  const pageTitle =
+    kind === "resource" ? "Knowledge Bank" : "Competition calendar";
   const [editing, setEditing] = useState<Row | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [active, setActive] = useState(true);
@@ -61,11 +70,13 @@ export function ContentPage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const entries = useQuery({
+    enabled: !previewing,
     queryKey: ["adminContent", kind],
     queryFn: () => client.adminContent.list({ kind }),
     retry: false,
   });
   const categories = useQuery({
+    enabled: !previewing && kind === "event",
     queryKey: ["adminContent", "categories"],
     queryFn: () => client.adminContent.categories(),
     retry: false,
@@ -141,6 +152,12 @@ export function ContentPage() {
       setEditing(null);
       setMessage("Changes saved live.");
       await entries.refetch();
+      await queryClient.invalidateQueries({
+        queryKey:
+          kind === "resource"
+            ? orpc.content.listStudentResources.key()
+            : orpc.content.listCompetitions.key(),
+      });
     } catch (e) {
       setError(
         e instanceof Error && e.name === "ZodError"
@@ -191,6 +208,12 @@ export function ContentPage() {
       setDraft(null);
       setEditing(null);
       await entries.refetch();
+      await queryClient.invalidateQueries({
+        queryKey:
+          kind === "resource"
+            ? orpc.content.listStudentResources.key()
+            : orpc.content.listCompetitions.key(),
+      });
       setMessage("Entry deleted.");
     } catch (e) {
       setError(getUserFacingError(e));
@@ -223,39 +246,47 @@ export function ContentPage() {
       )}
     </Field>
   );
-  return (
-    <Stack direction="column" spacing="lg">
-      <div>
-        <Heading>Knowledge Bank & competition calendar</Heading>
-        <Text className="text-muted">
-          Save content in its original language. Changes appear live after
-          saving.
-        </Text>
-      </div>
-      <Stack>
-        <Button
-          variant={kind === "resource" ? "primary" : "secondary"}
-          disabled={busy}
-          onClick={() => {
-            setKind("resource");
-            setDraft(null);
-            setError("");
-          }}
-        >
-          Knowledge Bank
-        </Button>
-        <Button
-          variant={kind === "event" ? "primary" : "secondary"}
-          disabled={busy}
-          onClick={() => {
-            setKind("event");
-            setDraft(null);
-            setError("");
-          }}
-        >
-          Competition calendar
-        </Button>
+  if (previewing)
+    return (
+      <Stack direction="column" spacing="lg" className="min-w-0">
+        <div className="flex justify-end">
+          <Button variant="secondary" onClick={() => setPreviewing(false)}>
+            {kind === "resource" ? "Manage resources" : "Manage calendar"}
+          </Button>
+        </div>
+        {preview}
       </Stack>
+    );
+  return (
+    <Stack direction="column" spacing="lg" className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Heading>{pageTitle}</Heading>
+          <Text className="text-muted">
+            Save content in its original language. Changes appear live after
+            saving.
+          </Text>
+        </div>
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            if (
+              draft &&
+              !window.confirm(
+                "Discard this unsaved draft and return to the page?",
+              )
+            )
+              return;
+            setDraft(null);
+            setError("");
+            setMessage("");
+            setPreviewing(true);
+          }}
+        >
+          {kind === "resource" ? "View resources" : "View calendar"}
+        </Button>
+      </div>
       {entries.isError ? (
         <Card>
           <CardBody>
@@ -313,7 +344,7 @@ export function ContentPage() {
                     key={row.id}
                     variant="secondary"
                     disabled={busy}
-                    className="h-auto justify-start whitespace-normal text-left"
+                    className="h-auto min-h-10 justify-start whitespace-normal text-left"
                     onClick={() => open(row)}
                   >
                     {row.title} · {row.isActive ? "Active" : "Archived"} · v

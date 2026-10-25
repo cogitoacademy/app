@@ -181,7 +181,7 @@ bundling without a runtime asset path. Eligibility/endpoints/window are unchange
 
 Additive `0075_kb_calendar_content` defines KB files/resources and calendar
 records/category links. It is applied to guarded TEST only; dev/prod remain unapplied. Admin
-`/admin-content` uses single-value text fields, private PDF upload, reasoned
+The editors in `/knowledge-bank` and `/calendar` use single-value text fields, private PDF upload, reasoned
 live-save CRUD and version conflicts. Imported records retain source IDs and
 can be archived, not hard-deleted. Calendar uses catalog parent identities and
 palettes, inclusive WIB dates and agenda identity `(event ID, displayed date)`.
@@ -3323,3 +3323,8 @@ Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long un
 ### Economy/payout responsive checkpoint (25 October 2026)
 
 The bounded frontend slice gives V3 economy amount controls a 14rem minimum width so ten-digit IDR values remain readable inside locally scrolling tables. Shared Card/NumberField styles and financial/auth/RPC behavior are unchanged. Dedicated mocked Edge coverage inspects economy read/edit and tutor payout prepared, unpaid-preview and void/reconciliation drawers at 320/390/768/1440 CSS px. This is synthetic layout evidence, not payout persistence or release acceptance; native 200% zoom remains unverified. See RUNBOOK and the active UI audit plan.
+
+
+### Canonical KB/calendar management (25 October 2026)
+
+Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar` (events), with View/Manage controls on each page. The duplicate KB & calendar sidebar destination is removed; `/admin-content` remains an admin-only compatibility redirect to Knowledge Bank. Student/tutor readers and server-side access gates are retained. Editor queries run only in Manage mode, and save/delete invalidates the corresponding reader query. This UI consolidation requires no migration or API/provider change.

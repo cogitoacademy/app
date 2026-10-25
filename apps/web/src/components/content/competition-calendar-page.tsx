@@ -1,5 +1,4 @@
 "use client";
-import { Link } from "@tanstack/react-router";
 
 import { wibCalendarDate } from "./calendar-utils";
 import { isValid } from "date-fns";
@@ -14,7 +13,6 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import Loader from "@/components/loader";
-import { useRole } from "@/hooks/use-role";
 import { orpc } from "@/utils/orpc";
 
 import {
@@ -24,8 +22,6 @@ import {
 
 export function CompetitionCalendarPage() {
   const competitions = useQuery(orpc.content.listCompetitions.queryOptions());
-  const { role, isLoading: isRoleLoading } = useRole();
-  const isAdmin = !isRoleLoading && role === "admin";
   const events = useMemo<CalendarCompetition[]>(
     () =>
       (competitions.data ?? []).flatMap((competition) => {
@@ -86,17 +82,6 @@ export function CompetitionCalendarPage() {
             place.
           </Text>
         </div>
-        {isAdmin ? (
-          <Button
-            variant="secondary"
-            render={
-              <Link to="/admin-content" aria-label="Manage KB & calendar" />
-            }
-            nativeButton={false}
-          >
-            Manage KB & calendar
-          </Button>
-        ) : null}
       </div>
       {events.length > 0 ? (
         <CompetitionCalendar events={events} />

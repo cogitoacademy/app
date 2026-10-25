@@ -251,7 +251,7 @@ must not be pushed to GitHub. Tooling tests contain synthetic content only.
    Partial failure retains successful records and possible private orphans. Rerun
    identical inputs after fixing the failure; reconcile changed/edited rows manually.
    Alternatively enable authoring after migration and manually upload/create in
-   `/admin-content`; explicitly reconcile old IDs/links before switching if manual
+   `/knowledge-bank` or `/calendar`; explicitly reconcile old IDs/links before switching if manual
    creation replaces imported source IDs. Do not combine manual copies and import
    without resolving identity conflicts.
 7. Reconcile counts, stable IDs, categories, prose selections, links, file bytes/
@@ -4393,3 +4393,19 @@ Baseline on 834f525f: 2 failed / 6 passed after settling drawer animations and e
 Payout table scroll/client widths are 1500/288, 1500/358, 1500/736 and 1500/1119 at 320/390/768/1440px; these are contained horizontal scrollers. At 320px, economy package and competition tables scroll at 578/288 and 602/288, preserving readable inputs rather than shrinking them. Screenshots are written to `test-results/finance-layout/` in the checkout root (read-only/edit economy, payout page, drawers and focused actions); traces on failure are under `packages/e2e/test-results/finance-layout/`.
 
 Web and E2E TypeScript use serial TS-Go `--checkers 1` with `GOMEMLIMIT=1GiB` and `GOMAXPROCS=2`. Focused lint and formatting checks cover only changed code. Native 200% browser zoom is unverified; viewport sizing, CSS zoom and deviceScaleFactor are not substitutes. RTL, screen-reader/contrast audit, live persistence/authorization, financial acceptance and broader release checks remain parent gates. No separate confirmation modal exists on these routes; the checks exercise the existing payout drawer actions without activating financial writes.
+
+
+### KB/calendar management on canonical pages (25 October 2026)
+
+Use `/knowledge-bank` → Manage resources for PDF resources, or `/calendar` → Manage calendar for events. View resources/calendar returns to the original reader UI; an open draft requires discard confirmation. The former `/admin-content` URL redirects admins to Knowledge Bank. Non-admin roles retain their existing reader/access rules.
+
+Synthetic verification with installed Edge:
+
+```powershell
+$env:KB_BROWSER_CHANNEL='msedge'
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kb-calendar-synthetic.config.ts
+```
+
+This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vite cache, with no API process, DB/global setup, provider or live auth. It checks versioned KB save/conflict retention, calendar timestamps/catalog IDs, calendar agenda behavior, student/tutor reader isolation, legacy redirects, and both editors at 320/390/768/1440px including View/discard confirmation. Screenshots are under `packages/e2e/test-results/kb-calendar-synthetic/`. Mocked writes prove UI/wire behavior only; live persistence, PDF storage, authorization, native zoom, screen-reader and production acceptance remain separate gates.
+
+Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
