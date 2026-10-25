@@ -135,6 +135,7 @@ export function AdminKolCommissionsPage() {
             sum summary rows only.
           </Text>
           <Button
+            className="h-auto min-h-9.5 max-w-full py-2"
             disabled={!month || exporter.isPending}
             onClick={() => exporter.mutate()}
           >

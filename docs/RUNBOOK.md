@@ -4319,3 +4319,19 @@ On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly 
 ## T07 development migration acceptance (21 October)
 
 Integrated report workspace and settlement through `d508467b` into local `f/release-v3`. Applied `0067_class-session-reports.sql` to verified loopback development `cogito-app:6767` with the normal Drizzle runner, without reset or seed. Readback: journal id 88, timestamp `1792572957418`, SHA-256 `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. The session-owned API was restarted; `/health` reports database/Redis/scheduler healthy and anonymous `/rpc/classes/listSessionReports` returns 401. `/class-reports` on web port 3000 returns 200. Authenticated browser acceptance remains the isolated test result, not a development seed or production-provider test.
+
+
+### KOL responsive polish checkpoint
+
+KOL settlement responsive checkpoint (2026-10-25): use the existing database-free synthetic workflow with isolated ports:
+
+```powershell
+$env:KOL_WEB_PORT='3346'
+$env:KOL_API_PORT='3347'
+$env:KOL_BROWSER_CHANNEL='msedge'
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-settlement-synthetic.config.ts
+```
+
+Unset overrides to retain Chromium and ports 3306/3307. The optional browser channel uses an already installed browser; no browser install is needed for Edge. Vite cache is separated by web port, reuseExistingServer remains false, and all API requests are intercepted. No API/DB/provider/seed starts. 13/13 checks passed on Edge: seven existing settlement wire/render cases, five reflow widths (320/390/720/768/1440), and a 320px keyboard retry/review case. A 185-character bank reference measured 1743px scroll width before; after, panel scroll/client widths match at 288/358/688/736/1119px respectively. Original retry review button: 38px height versus 49px scroll height; after: 56/56px, keyboard Tab/Enter reaches and activates review. Screenshots are local test-results artifacts, with baseline viewport captures retained in tmp/responsive-before. The 720px case is only a reflow proxy for 1440px at 200%, not native browser zoom proof. Native zoom, RTL, screen reader, real persistence/provider/auth, and other V3 screens remain unverified. No release-readiness claim.
+
+Validation also passed scoped oxlint/oxfmt and the serial repository check-types command (four tasks: e2e/web executed, ui/server cache hits). The first typecheck caught two new fixture/log typing errors, corrected before the passing run. Layout guidance: https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md (content handling and flex minimum sizing).

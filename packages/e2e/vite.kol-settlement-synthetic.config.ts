@@ -4,6 +4,6 @@ export default {
   ...config,
   cacheDir: path.resolve(
     import.meta.dirname,
-    "../../tmp/kol-settlement-synthetic-vite-cache",
+    `../../tmp/kol-settlement-synthetic-vite-cache-${process.env.WEB_PORT ?? "3306"}`,
   ),
 };

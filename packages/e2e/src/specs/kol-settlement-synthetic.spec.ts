@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+const apiOrigin = `http://localhost:${process.env.KOL_API_PORT ?? "3307"}`;
 // Synthetic wire/render checks do not prove DB accounting, replay or authorization.
 const decision = {
   id: "decision-1",
@@ -50,7 +51,7 @@ async function mockApp(page: Page, role = "admin") {
     errors: [] as string[],
   };
   page.on("pageerror", (error) => state.errors.push(error.message));
-  await page.route("http://localhost:3307/**", async (route) => {
+  await page.route(`${apiOrigin}/**`, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     state.calls.push(pathname);
     if (pathname === "/api/auth/get-session")
@@ -281,4 +282,108 @@ test("non-admin redirects before settlement RPC or controls", async ({
     [],
   );
   expect(state.errors).toEqual([]);
+});
+
+for (const width of [320, 390, 720, 768, 1440]) {
+  test(`settlement reflows at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const state = await mockApp(page);
+    state.data.entries[0]!.reference = "BANK-" + "X".repeat(180);
+    await open(page);
+    const panel = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: "Settlement · Synthetic KOL" });
+    await panel.scrollIntoViewIfNeeded();
+    const measurements = await panel.evaluate((element) => ({
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      pageWidth: document.documentElement.clientWidth,
+      pageScrollWidth: document.documentElement.scrollWidth,
+    }));
+    console.log(JSON.stringify({ viewportWidth: width, ...measurements }));
+    await page.screenshot({
+      path: testInfo.outputPath(`settlement-${width}.png`),
+      fullPage: true,
+    });
+    expect(measurements.scrollWidth).toBeLessThanOrEqual(
+      measurements.width + 1,
+    );
+    expect(measurements.pageScrollWidth).toBeLessThanOrEqual(
+      measurements.pageWidth + 1,
+    );
+    // Scrolling changes shared page state; these checks must run sequentially.
+    /* eslint-disable no-await-in-loop */
+    for (const name of [
+      "Export monthly reconciliation CSV",
+      "Record external transfer",
+      "Record commission adjustment",
+    ]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await button.scrollIntoViewIfNeeded();
+      await expect(button).toBeVisible();
+      const bounds = await button.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
+    /* eslint-enable no-await-in-loop */
+    expect(state.errors).toEqual([]);
+  });
+}
+
+test("settlement retry actions wrap and remain keyboard reachable at 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 600 });
+  await mockApp(page);
+  await page.route("**/rpc/adminReferral/recordKolTransfer", (route) =>
+    route.fulfill({
+      status: 400,
+      json: {
+        json: {
+          defined: false,
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Synthetic ambiguous failure",
+        },
+      },
+    }),
+  );
+  await open(page);
+  await page
+    .getByLabel("Actual transfer amount (IDR)", { exact: true })
+    .fill("6000");
+  await page
+    .getByLabel("Actual payment date (WIB)", { exact: true })
+    .fill("2026-10-24");
+  await page.getByLabel("Transfer reference", { exact: true }).fill("BANK-NEW");
+  await page
+    .getByRole("button", { name: "Record external transfer", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Synthetic ambiguous failure",
+  );
+  const retry = page.getByRole("button", {
+    name: "Retry same operation",
+    exact: true,
+  });
+  const review = page.getByRole("button", {
+    name: "Review history and start new record",
+    exact: true,
+  });
+  await retry.focus();
+  await page.keyboard.press("Tab");
+  await expect(review).toBeFocused();
+  const bounds = await review.boundingBox();
+  const size = await review.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  console.log(JSON.stringify({ retryReview: bounds, ...size }));
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  expect(size.scrollHeight).toBeLessThanOrEqual(size.clientHeight);
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByLabel("Transfer reference", { exact: true }),
+  ).toBeEnabled();
 });
