@@ -9,15 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectPopup,
-  SelectList,
-  SelectItem,
-} from "@cogito-app/ui/components/selia/select";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -60,7 +51,7 @@ export function KolCampaignsSection() {
       onSuccess: () => {
         setDraft({ ...emptyCampaignDraft });
         setErrors({});
-        toastManager.add({ title: "Campaign created", type: "success" });
+        toastManager.add({ title: "KOL campaign created", type: "success" });
         void queryClient.invalidateQueries({
           queryKey: orpc.adminReferral.listKolCampaigns.key(),
         });
@@ -71,15 +62,13 @@ export function KolCampaignsSection() {
   return (
     <Card className="min-w-0 [overflow-wrap:anywhere]">
       <CardHeader>
-        <CardTitle level={2}>Referral campaigns</CardTitle>
+        <CardTitle level={2}>KOL campaigns</CardTitle>
       </CardHeader>
       <CardBody className="space-y-5">
         <Text className="text-muted">
-          Create a KOL partnership or a Cogito Academy promotion for new
-          registrations. Academy promotions credit welcome Marks without
-          commission. Saved campaign terms cannot be edited. Student friend
-          codes are separate and available to verified students on their My
-          referrals page.
+          Choose a KOL code for new registrations only. Saved campaign terms
+          cannot be edited. Student friend codes are separate and available to
+          verified students on their My referrals page.
         </Text>
         <Button
           type="button"
@@ -88,7 +77,7 @@ export function KolCampaignsSection() {
           aria-controls="kol-campaign-form"
           onClick={() => setOpen(!open)}
         >
-          {open ? "Hide creation form" : "Create campaign"}
+          {open ? "Hide creation form" : "Create KOL campaign"}
         </Button>
         <form
           id="kol-campaign-form"
@@ -109,52 +98,15 @@ export function KolCampaignsSection() {
           }}
         >
           <fieldset disabled={create.isPending} className="min-w-0 space-y-4">
-            <legend className="sr-only">Create campaign</legend>
+            <legend className="sr-only">Create KOL campaign</legend>
             <Text className="text-sm text-muted">
               All fields are required except activation, which defaults to now.
               Use 4–32 letters or digits for the code; it is saved uppercase.
-              KOL partnerships require commission. Academy promotions have no
-              commission.
+              Set a flat commission, a percentage, or both above zero.
             </Text>
-            <Field>
-              <FieldLabel>Campaign source</FieldLabel>
-              <Select
-                value={draft.purpose}
-                onValueChange={(purpose) => {
-                  if (purpose === "kol" || purpose === "promotion") {
-                    setDraft({
-                      ...draft,
-                      purpose,
-                      flatAmountIdr: "0",
-                      percent: "0",
-                    });
-                    setErrors({});
-                  }
-                }}
-              >
-                <SelectTrigger aria-label="Campaign source">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="kol">KOL partnership</SelectItem>
-                    <SelectItem value="promotion">
-                      Cogito Academy promotion
-                    </SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
             <div className="grid gap-4 lg:grid-cols-2">
-              {(Object.keys(labels) as Array<keyof typeof labels>)
-                .filter(
-                  (key) =>
-                    draft.purpose === "kol" ||
-                    (key !== "flatAmountIdr" &&
-                      key !== "percent" &&
-                      key !== "attributionWindowDays"),
-                )
-                .map((key) => (
+              {(Object.keys(labels) as Array<keyof CampaignDraft>).map(
+                (key) => (
                   <Field key={key} invalid={!!errors[key]}>
                     <FieldLabel htmlFor={`kol-${key}`}>
                       {labels[key]}
@@ -212,7 +164,8 @@ export function KolCampaignsSection() {
                       </Text>
                     ) : null}
                   </Field>
-                ))}
+                ),
+              )}
             </div>
             {Object.keys(errors).length ? (
               <Text role="alert">Check the highlighted campaign fields.</Text>
@@ -222,7 +175,9 @@ export function KolCampaignsSection() {
               disabled={create.isPending}
               progress={create.isPending}
             >
-              {create.isPending ? "Creating campaign…" : "Save campaign"}
+              {create.isPending
+                ? "Creating KOL campaign…"
+                : "Save KOL campaign"}
             </Button>
           </fieldset>
           {create.isError ? (
@@ -242,32 +197,27 @@ export function KolCampaignsSection() {
             Refresh campaigns
           </Button>
           {query.isPending ? (
-            <Text role="status">Loading referral campaigns…</Text>
+            <Text role="status">Loading KOL campaigns…</Text>
           ) : query.isError ? (
             <div className="space-y-3">
-              <Text role="alert">We couldn't load referral campaigns.</Text>
+              <Text role="alert">We couldn't load KOL campaigns.</Text>
               <Button variant="secondary" onClick={() => void query.refetch()}>
                 Retry campaigns
               </Button>
             </div>
           ) : !query.data?.length ? (
             <Text>
-              No referral campaigns yet. Create a campaign to share a
-              registration code.
+              No KOL campaigns yet. Create a campaign to share a registration
+              code.
             </Text>
           ) : (
-            <ul className="space-y-4" aria-label="Saved Referral campaigns">
+            <ul className="space-y-4" aria-label="Saved KOL campaigns">
               {query.data.map((campaign) => (
                 <li
                   key={campaign.id}
                   className="space-y-2 rounded border border-border p-4"
                 >
                   <h3 className="font-semibold">
-                    <Badge variant="secondary">
-                      {campaign.purpose === "promotion"
-                        ? "Cogito Academy"
-                        : "KOL"}
-                    </Badge>{" "}
                     {campaign.name} ·{" "}
                     <span className="font-mono">{campaign.code}</span>
                   </h3>
@@ -281,9 +231,7 @@ export function KolCampaignsSection() {
                       ],
                       [
                         "Commission",
-                        campaign.purpose === "promotion"
-                          ? "No commission"
-                          : `Rp${campaign.flatAmountIdr.toLocaleString("id-ID")} + ${campaign.percentBps / 100}%`,
+                        `Rp${campaign.flatAmountIdr.toLocaleString("id-ID")} + ${campaign.percentBps / 100}%`,
                       ],
                     ].map(([label, value]) => (
                       <div key={label}>

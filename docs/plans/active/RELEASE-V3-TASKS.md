@@ -1465,7 +1465,3 @@ Ready to start after normal implementation review: default price golden tables, 
 ## Documentation and evidence per PR
 
 Update affected `docs/CONTEXT.md`, `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/RUNBOOK.md`, and this active plan with actual behavior/status. Do not publish proposed RPCs as implemented reference. API docs must use actual slash-separated oRPC keys and JSON envelopes. For each task record implementation PR/commit, requirement/case IDs passed, exact test command/environment, migration effects and unresolved material dependency. No credentials, NIK/NPWP or real student report data in evidence artifacts.
-
-### Referral campaign sources (2026-10-26)
-
-Referral usage / Academy promotions: implementation complete; 17 focused unit tests, web typecheck and lint passed. Synthetic Edge checks cover admin flows, promotion submission and 320/390/768/1440px layout. API project typecheck remains failing on repository-wide diagnostics. Explicit campaign purpose, zero-commission promotion validation, source badges/filter and migration 0076 authored. Migration application, real signup/payment acceptance and production activation remain pending.

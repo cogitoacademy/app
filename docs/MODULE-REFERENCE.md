@@ -2587,9 +2587,3 @@ KOL settlement frontend (2026-10-25): KolSettlementPanel wraps long history iden
 ### KB/calendar page composition (25 October 2026)
 
 The canonical Knowledge Bank/calendar route components select the existing read-only view for non-admin sessions. Admin sessions wrap that view in `ContentPage` with a fixed `resource` or `event` kind and a local View/Manage switch. Resource and event editors reuse the existing field parsing, private upload, expectedVersion/reason, conflict and delete paths. Manage queries are deferred until requested; leaving an open draft for View asks before discarding, and switching is disabled during writes. Successful saves/deletes invalidate the corresponding public reader cache. The old combined sidebar item is removed; its route is a compatibility redirect. No change to Marks eligibility, file access or server-side permissions.
-
-### Referral campaign sources (2026-10-26)
-
-Academy promotions reuse campaign activation/expiry, signup exclusivity and welcome-credit snapshots. They have zero commission and skip KOL first-purchase decision creation using saved zero terms; they do not generate settlement obligations. purpose is immutable; existing campaigns remain KOL. No new wallet event keys.
-
-Selia CardBody edge padding follows direct-child position: a first-child table removes top padding, and a last-child table removes bottom padding. Pagination retains its normal inset and table separation.

@@ -8,7 +8,6 @@ import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -50,9 +49,7 @@ function date(value: string | Date | null) {
 export function AdminReferralsPage() {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
-  const [kind, setKind] = useState<
-    "all" | "friend" | "kol" | "promotion" | "none"
-  >("all");
+  const [kind, setKind] = useState<"all" | "friend" | "kol" | "none">("all");
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const query = useQuery(
@@ -63,16 +60,12 @@ export function AdminReferralsPage() {
   const data = query.data;
   const selected = data?.items.find((row) => row.id === selectedId);
   return (
-    <Stack
-      direction="column"
-      spacing="lg"
-      className="min-w-0 w-full flex-nowrap"
-    >
+    <Stack direction="column" spacing="lg">
       <div>
         <Heading level={1}>Referral usage</Heading>
         <Text className="mt-2 text-muted">
           Follow each signup choice through welcome credit, first paid
-          completion, KOL commission, or Academy promotion.
+          completion, or KOL commission.
         </Text>
       </div>
       <KolCampaignsSection />
@@ -100,7 +93,6 @@ export function AdminReferralsPage() {
               value === "all" ||
               value === "friend" ||
               value === "kol" ||
-              value === "promotion" ||
               value === "none"
             ) {
               setKind(value);
@@ -116,8 +108,7 @@ export function AdminReferralsPage() {
             <SelectList>
               <SelectItem value="all">All choices</SelectItem>
               <SelectItem value="friend">Friend</SelectItem>
-              <SelectItem value="kol">KOL partnership</SelectItem>
-              <SelectItem value="promotion">Academy promotion</SelectItem>
+              <SelectItem value="kol">KOL</SelectItem>
               <SelectItem value="none">No code</SelectItem>
             </SelectList>
           </SelectPopup>
@@ -166,129 +157,100 @@ export function AdminReferralsPage() {
             They do not count unsaved or pending signups.
           </Text>
           {data.items.length ? (
-            <Card className="min-w-0">
-              <CardHeader>
-                <CardTitle level={2}>Signup history</CardTitle>
-                <CardDescription>
-                  {data.items.length} shown · {data.summary.signups} matching
-                  choices
-                </CardDescription>
-              </CardHeader>
-              <TableContainer>
-                <Table className="min-w-[760px]">
-                  <TableHeader>
-                    <TableRow>
-                      {[
-                        "Referral source",
-                        "Student",
-                        "Welcome credit",
-                        "Outcome",
-                        "Details",
-                      ].map((label) => (
-                        <TableHead key={label}>{label}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.items.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="max-w-64 [overflow-wrap:anywhere]">
-                          <Stack direction="column" spacing="sm">
-                            <div>
-                              <Badge
-                                variant={
-                                  row.campaignPurpose === "promotion"
-                                    ? "info"
-                                    : "secondary"
-                                }
-                              >
-                                {row.campaignPurpose === "promotion"
-                                  ? "Academy promotion"
-                                  : row.kind === "kol"
-                                    ? "KOL partnership"
-                                    : row.kind === "friend"
-                                      ? "Friend"
-                                      : "No code"}
-                              </Badge>
-                              <span className="mt-2 block font-mono font-semibold">
-                                {row.code ?? "No code"}
-                              </span>
-                            </div>
-                            <Text>
-                              {row.referrerName ?? row.campaignName ?? "—"}
-                              {row.campaignPurpose === "promotion" ? (
-                                <span className="block text-sm text-muted">
-                                  Cogito Academy
-                                </span>
-                              ) : null}
-                            </Text>
-                            {row.referrerEmail ? (
-                              <Text className="text-sm text-muted">
-                                {row.referrerEmail}
-                              </Text>
-                            ) : null}
-                          </Stack>
-                        </TableCell>
-                        <TableCell className="max-w-64 [overflow-wrap:anywhere]">
-                          <Text className="font-medium">{row.studentName}</Text>
-                          <Text className="text-sm text-muted">
-                            {row.studentEmail}
-                          </Text>
-                          <Text className="text-sm text-muted">
-                            {row.emailVerified
-                              ? "Email verified"
-                              : "Email unverified"}
-                          </Text>
-                          <Text className="mt-2 text-xs text-dimmed">
-                            {date(row.decidedAt)}
-                          </Text>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap font-medium tabular-nums">
-                          {row.welcomeCreditedMarks ?? 0} Marks
-                        </TableCell>
-                        <TableCell>
-                          <Text>{referralUsageStatus(row)}</Text>
-                          {row.kind === "friend" && row.friendDecisionId ? (
-                            <Text className="text-sm text-muted">
-                              {row.friendCreditedMarks ?? 0} /{" "}
-                              {row.friendRewardMarksSnapshot ?? 0} Marks
-                            </Text>
-                          ) : null}
-                          {row.kind === "kol" && row.kolDecisionId ? (
-                            <Text className="text-sm text-muted">
-                              {new Intl.NumberFormat("id-ID", {
-                                style: "currency",
-                                currency: "IDR",
-                                maximumFractionDigits: 0,
-                              }).format(row.commissionIdr ?? 0)}{" "}
-                              decision · settlement separate
-                            </Text>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="plain"
-                            size="sm"
-                            aria-expanded={selectedId === row.id}
-                            onClick={() =>
-                              setSelectedId(
-                                selectedId === row.id ? null : row.id,
-                              )
-                            }
-                          >
-                            View details
-                            <span className="sr-only">
-                              {" "}
-                              for {row.studentName}
-                            </span>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+            <TableContainer>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {[
+                      "Code / owner",
+                      "Student",
+                      "Chosen at",
+                      "Welcome",
+                      "Outcome",
+                      "Details",
+                    ].map((label) => (
+                      <TableHead key={label}>{label}</TableHead>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Card>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.items.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <Stack direction="column" spacing="sm">
+                          <div>
+                            <Badge variant="secondary">{row.kind}</Badge>{" "}
+                            <span className="font-mono">
+                              {row.code ?? "No code"}
+                            </span>
+                          </div>
+                          <Text>
+                            {row.referrerName ?? row.campaignName ?? "—"}
+                          </Text>
+                          {row.referrerEmail ? (
+                            <Text className="text-sm text-muted">
+                              {row.referrerEmail}
+                            </Text>
+                          ) : null}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Text>{row.studentName}</Text>
+                        <Text className="text-sm text-muted">
+                          {row.studentEmail}
+                        </Text>
+                        <Text className="text-sm text-muted">
+                          {row.emailVerified
+                            ? "Email verified"
+                            : "Email unverified"}
+                        </Text>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {date(row.decidedAt)}
+                      </TableCell>
+                      <TableCell>
+                        {row.welcomeCreditedMarks ?? 0} Marks
+                      </TableCell>
+                      <TableCell>
+                        <Text>{referralUsageStatus(row)}</Text>
+                        {row.kind === "friend" && row.friendDecisionId ? (
+                          <Text className="text-sm text-muted">
+                            {row.friendCreditedMarks ?? 0} /{" "}
+                            {row.friendRewardMarksSnapshot ?? 0} Marks
+                          </Text>
+                        ) : null}
+                        {row.kind === "kol" && row.kolDecisionId ? (
+                          <Text className="text-sm text-muted">
+                            {new Intl.NumberFormat("id-ID", {
+                              style: "currency",
+                              currency: "IDR",
+                              maximumFractionDigits: 0,
+                            }).format(row.commissionIdr ?? 0)}{" "}
+                            decision · settlement separate
+                          </Text>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="plain"
+                          size="sm"
+                          aria-expanded={selectedId === row.id}
+                          onClick={() =>
+                            setSelectedId(selectedId === row.id ? null : row.id)
+                          }
+                        >
+                          View details
+                          <span className="sr-only">
+                            {" "}
+                            for {row.studentName}
+                          </span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           ) : (
             <Card>
               <CardBody>
@@ -372,8 +334,7 @@ export function AdminReferralsPage() {
                     </div>
                   ))}
                 </dl>
-                {selected.kind === "kol" &&
-                selected.campaignPurpose !== "promotion" ? (
+                {selected.kind === "kol" ? (
                   <Button
                     className="mt-5"
                     variant="secondary"

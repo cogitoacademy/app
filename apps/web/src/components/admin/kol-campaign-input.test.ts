@@ -47,12 +47,3 @@ test("blank activation is omitted and expiry must be later than now", () => {
       ?.flatAmountIdr,
   ).toBe(25000);
 });
-
-test("Academy promotions accept zero commission and reject commission terms", () => {
-  const promotion = { ...draft, purpose: "promotion" as const, percent: "0" };
-  expect(parseCampaignDraft(promotion).input?.purpose).toBe("promotion");
-  expect(parseCampaignDraft({ ...promotion, percent: "1" }).input).toBeNull();
-  expect(
-    parseCampaignDraft({ ...promotion, flatAmountIdr: "100" }).input,
-  ).toBeNull();
-});

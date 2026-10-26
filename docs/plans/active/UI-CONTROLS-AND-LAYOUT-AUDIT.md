@@ -197,5 +197,3 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
-
-CardBody table-edge padding follow-up: first-child tables remove top padding even when pagination follows; last-child tables remove bottom padding. Existing table-to-pagination spacing is retained. Source formatting and UI typecheck are the validation scope; browser visual acceptance remains open.

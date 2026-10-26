@@ -25,14 +25,7 @@ export function createReferralUsageReader(db: DbType) {
         const filter = and(
           input.kind === "all"
             ? undefined
-            : input.kind === "promotion"
-              ? eq(referralCampaign.purpose, "promotion")
-              : input.kind === "kol"
-                ? and(
-                    eq(referralChoice.kind, "kol"),
-                    eq(referralCampaign.purpose, "kol"),
-                  )
-                : eq(referralChoice.kind, input.kind),
+            : eq(referralChoice.kind, input.kind),
           input.search
             ? or(
                 ilike(referralChoice.codeSnapshot, pattern),
@@ -58,7 +51,6 @@ export function createReferralUsageReader(db: DbType) {
             referrerName: referrer.name,
             referrerEmail: referrer.email,
             campaignName: referralCampaign.name,
-            campaignPurpose: referralCampaign.purpose,
             settingsVersion: referralChoice.settingsVersion,
             welcomeMarksSnapshot: referralChoice.welcomeMarksSnapshot,
             welcomeCreditedMarks: ledgerEntry.amount,
