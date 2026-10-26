@@ -188,3 +188,5 @@ Implemented admin View/Manage within `/knowledge-bank` and `/calendar` using the
 Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/3317: version/conflict behavior, timestamps/catalog IDs, agenda dates, student/tutor reader isolation, redirect, and both editor forms at 320/390/768/1440px. No live DB/storage/provider workflow is run. This does not complete the broader UI or release audit; native zoom, assistive technology and real persistence/authorization remain open.
 
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
+
+Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.

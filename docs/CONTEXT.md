@@ -185,7 +185,8 @@ bundling without a runtime asset path. Eligibility/endpoints/window are unchange
 ## KB/calendar source implementation (24 October 2026)
 
 Additive `0075_kb_calendar_content` defines KB files/resources and calendar
-records/category links. It is applied to guarded TEST only; dev/prod remain unapplied. Admin
+records/category links. See the dated integration and local dev activation
+checkpoints above for migration evidence; production rollout remains separate.
 The editors in `/knowledge-bank` and `/calendar` use single-value text fields, private PDF upload, reasoned
 live-save CRUD and version conflicts. Imported records retain source IDs and
 can be archived, not hard-deleted. Calendar uses catalog parent identities and

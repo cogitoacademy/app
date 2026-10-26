@@ -4418,3 +4418,5 @@ node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2
 This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vite cache, with no API process, DB/global setup, provider or live auth. It checks versioned KB save/conflict retention, calendar timestamps/catalog IDs, calendar agenda behavior, student/tutor reader isolation, legacy redirects, and both editors at 320/390/768/1440px including View/discard confirmation. Screenshots are under `packages/e2e/test-results/kb-calendar-synthetic/`. Mocked writes prove UI/wire behavior only; live persistence, PDF storage, authorization, native zoom, screen-reader and production acceptance remain separate gates.
 
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
+
+Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
