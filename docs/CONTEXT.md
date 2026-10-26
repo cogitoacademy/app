@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+## KB/calendar live acceptance (26 October 2026)
+
+Installed Edge passed the real API/DB journey in `kb-calendar-live.spec.ts`: 1/1 test (7.0s; 44.7s total). KB browser save survives reload; a concurrent API edit makes the browser save conflict while preserving its draft. Calendar create/update/readback and stale-version HTTP 409 pass. Anonymous session is explicitly empty: private file returns 401, public uploads path returns 404. Admin, eligible student and tutor receive the exact synthetic PDF bytes with `private, no-store`; student/tutor admin list/remove return 403. PostgreSQL integration separately passes 3 tests/8 assertions for concurrent saves, audit rollback and reference protection.
+
+Use `node node_modules/@playwright/test/cli.js test --config playwright.kb-calendar-live.config.ts --retries=0` from `packages/e2e`, with the existing guarded T05 environment: NODE_ENV=test, DATABASE_URL at loopback 6769/cogito-test, REDIS_URL at loopback 6381, SERVER_URL/BETTER_AUTH_URL/VITE_SERVER_URL at localhost:3201, WEB_URL/CORS_ORIGIN at localhost:3200, PORT=3201, WEB_PORT=3200, and T05_ENROLLMENT_TEST_{DB,REDIS,SERVER,WEB}_PORT=6769/6381/3201/3200. ENV_FILE resolves the local test env; reset flags must be absent. The dedicated config selects database sources/authoring only for its test servers, private local storage under ignored E2E test-results, disabled scheduler/Meet/email delivery and stub payments. Default browser channel is msedge; override E2E_BROWSER_CHANNEL for an installed channel.
+
+No reset, migration, dev/prod activation or production storage operation. Resource/event fixtures are removed; seed accounts/audits and immutable synthetic PDF registrations/files remain in the isolated test environment. E2E TypeScript passes; sequential-request lint warnings remain. The PDF is a signature-only synthetic transport fixture, not PDF rendering evidence. Ineligible-student/grant expiry, production private R2 denial, full calendar browser editing/WIB agenda, native zoom/accessibility, rollback and client UAT remain open.
+
 ## Competition types workspace redesign (26 October 2026)
 
 `/admin-competitions` is now a grouped directory rather than a persistent tree/editor split. Parent competitions show their specializations, status and Add type action; search retains parent context and input focus during refetch, with a status filter and recoverable empty state. A Selia drawer opens only for create/edit. Optional descriptions, parent colors and specialization movement use disclosures. Unsaved edits require discard confirmation when closing or changing entries; successful save restores normal close behavior. Draft palette previews reflect current inputs.
