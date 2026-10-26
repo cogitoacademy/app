@@ -140,6 +140,31 @@ test("admin can archive, restore, and move an unused specialization", async ({
     childId = child.id;
     expect(child.isActive).toBe(true);
 
+    const studentApi = await request.newContext({
+      baseURL: process.env.SERVER_URL ?? "http://localhost:3101",
+      storageState: ".auth/student.json",
+    });
+    try {
+      for (const [procedure, input] of [
+        ["listCompetitionCatalog", { includeArchived: true }],
+        [
+          "archiveCompetitionCatalogEntry",
+          {
+            id: child.id,
+            expectedVersion: child.version,
+            reason: "Student authorization denial coverage",
+          },
+        ],
+      ] as const) {
+        const denied = await studentApi.post(`/rpc/admin/${procedure}`, {
+          data: { json: input },
+        });
+        expect(denied.status()).toBe(403);
+      }
+    } finally {
+      await studentApi.dispose();
+    }
+
     await page.goto("/admin-competitions");
     await expect(
       page.getByRole("heading", { name: "Competition types", exact: true }),
@@ -170,6 +195,13 @@ test("admin can archive, restore, and move an unused specialization", async ({
       .getByRole("button", { name: "Archive", exact: true })
       .click();
     await expect(page.getByText("Catalog entry archived")).toBeVisible();
+    expect(
+      (
+        await adminRpc<CatalogEntry>(adminApi, "getCompetitionCatalogEntry", {
+          id: child.id,
+        })
+      ).isActive,
+    ).toBe(false);
 
     await page.getByRole("button", { name: "Restore", exact: true }).click();
     const restoreDialog = page.getByRole("dialog", {
@@ -186,12 +218,21 @@ test("admin can archive, restore, and move an unused specialization", async ({
       .getByRole("button", { name: "Restore", exact: true })
       .click();
     await expect(page.getByText("Catalog entry restored")).toBeVisible();
+    expect(
+      (
+        await adminRpc<CatalogEntry>(adminApi, "getCompetitionCatalogEntry", {
+          id: child.id,
+        })
+      ).isActive,
+    ).toBe(true);
 
     await page.getByLabel("Close catalog editor").click();
     await search.fill("");
     await page.getByRole("button", { name: new RegExp(childSlug) }).click();
     await page.getByText("Move specialization", { exact: true }).click();
-    await page.getByLabel("Destination").click();
+    await page
+      .getByRole("combobox", { name: "Destination", exact: true })
+      .click();
     await page
       .getByRole("option", { name: destination.name, exact: true })
       .click();
@@ -200,6 +241,13 @@ test("admin can archive, restore, and move an unused specialization", async ({
       .fill("Verify moving an unused specialization in the browser");
     await page.getByRole("button", { name: "Move", exact: true }).click();
     await expect(page.getByText("Specialization moved")).toBeVisible();
+    expect(
+      (
+        await adminRpc<CatalogEntry>(adminApi, "getCompetitionCatalogEntry", {
+          id: child.id,
+        })
+      ).parentId,
+    ).toBe(destination.id);
 
     const movedRow = page.getByRole("button", { name: new RegExp(childSlug) });
     await page.getByLabel("Close catalog editor").click();

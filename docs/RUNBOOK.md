@@ -1,5 +1,11 @@
 # Cogito Runbook
 
+## Competition catalog live acceptance (26 October 2026)
+
+Release head `63967826` plus the focused spec update passes 1/1 installed-Edge browser journey (11.5s test; 44.1s total) against real PostgreSQL `127.0.0.1:6769/cogito-test`, Redis `6381`, API `3201` and web `3200`. It covers admin archive/restore/move, API readback of persisted active/parent state, inherited destination palette, and HTTP 403 for student catalog list/archive requests. The previous Destination locator matched unrelated action labels; it now targets the exact combobox. Fixture catalog rows were deleted, with zero `e2e-catalog-%` rows remaining. E2E TypeScript passes; focused lint has no errors and one sequential-await warning.
+
+No reset or migration ran. Setup creates fresh student fixtures and refreshes shared test seed records; the first attempt also processed existing isolated scheduler jobs with email/payment stubs and Meet disabled. The successful rerun disabled the scheduler. Dev/production targets were not used. Historical-reference protection, concurrency/races, tutor/anonymous denial, other consumers, native zoom and assistive-technology acceptance remain separate; the reset-based API suite was not rerun.
+
 ## Isolated competition types UI verification (26 October 2026)
 
 From repository root, run `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.competition-types-synthetic.config.ts`. This dedicated workflow uses installed Edge, web 3376, mocked API/session origin 3377, a separate Vite cache, one worker, no API server/global setup/seed/database/provider. Navigation waits for DOM content with a 60-second test budget for the cold Vite module graph. It does not stop or replace live dev 3000/3001.

@@ -4,7 +4,7 @@
 
 `/admin-competitions` is now a grouped directory rather than a persistent tree/editor split. Parent competitions show their specializations, status and Add type action; search retains parent context and input focus during refetch, with a status filter and recoverable empty state. A Selia drawer opens only for create/edit. Optional descriptions, parent colors and specialization movement use disclosures. Unsaved edits require discard confirmation when closing or changing entries; successful save restores normal close behavior. Draft palette previews reflect current inputs.
 
-Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The previous live catalog browser spec is adapted to named lifecycle dialogs and the new drawer/disclosure navigation; it is not run against a real database in this slice.
+Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The live catalog browser spec now passes 1/1 installed-Edge journey against isolated PostgreSQL 6769/Redis 6381, covering archive/restore/move persistence readback, inherited colors, and student HTTP 403 for admin list/archive. Test fixtures are cleaned up; no reset/migration or dev/production access. Historical-reference/concurrency and broader consumer acceptance remain open; see RUNBOOK for the 26 October checkpoint.
 
 
 ## Admin KOL campaign UI (26 October 2026)

@@ -1,5 +1,11 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Competition catalog live acceptance (26 October 2026)
+
+Release head `63967826` plus the focused spec update passes 1/1 installed-Edge browser journey (11.5s test; 44.1s total) against real PostgreSQL `127.0.0.1:6769/cogito-test`, Redis `6381`, API `3201` and web `3200`. It covers admin archive/restore/move, API readback of persisted active/parent state, inherited destination palette, and HTTP 403 for student catalog list/archive requests. The previous Destination locator matched unrelated action labels; it now targets the exact combobox. Fixture catalog rows were deleted, with zero `e2e-catalog-%` rows remaining. E2E TypeScript passes; focused lint has no errors and one sequential-await warning.
+
+No reset or migration ran. Setup creates fresh student fixtures and refreshes shared test seed records; the first attempt also processed existing isolated scheduler jobs with email/payment stubs and Meet disabled. The successful rerun disabled the scheduler. Dev/production targets were not used. Historical-reference protection, concurrency/races, tutor/anonymous denial, other consumers, native zoom and assistive-technology acceptance remain separate; the reset-based API suite was not rerun.
+
 ## Admin KOL campaign UI slice (26 October 2026)
 
 Implemented for parent review: existing `/admin-referrals` now exposes user-chosen registration-only KOL campaign creation/list via existing APIs, immutable terms, WIB dates, exact percentage-to-bps validation, retained fields on failure, no create retries, success toast/invalidation, explicit list loading/empty/error/retry. No new route/sidebar, random-code policy, friend impersonation/rotation, backend/security/financial change, or migration. Parent review/integration and real authenticated UAT/persistence remain gates; synthetic checks do not close production/provider/DB acceptance.
