@@ -63,3 +63,13 @@ test("surfaces KOL refund and provider-time holds", () => {
     }),
   ).toBe("Partial refund review");
 });
+
+test("Academy promotions never display a pending commission", () => {
+  expect(
+    referralUsageStatus({
+      ...pending,
+      kind: "kol",
+      campaignPurpose: "promotion",
+    }),
+  ).toBe("Academy promotion · no commission");
+});

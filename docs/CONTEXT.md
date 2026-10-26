@@ -3334,3 +3334,7 @@ The bounded frontend slice gives V3 economy amount controls a 14rem minimum widt
 ### Canonical KB/calendar management (25 October 2026)
 
 Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar` (events), with View/Manage controls on each page. The duplicate KB & calendar sidebar destination is removed; `/admin-content` remains an admin-only compatibility redirect to Knowledge Bank. Student/tutor readers and server-side access gates are retained. Editor queries run only in Manage mode, and save/delete invalidates the corresponding reader query. This UI consolidation requires no migration or API/provider change.
+
+### Referral campaign sources (2026-10-26)
+
+Referral campaigns now distinguish KOL partnerships from Cogito Academy promotions using immutable referral_campaign.purpose (default kol for existing campaigns). Admin usage shows source badges and a promotion filter. Migration 0076 is authored, not applied; live DB acceptance remains pending; synthetic Edge browser checks cover admin flows, zero-commission promotion submission and responsive widths 320-1440px.

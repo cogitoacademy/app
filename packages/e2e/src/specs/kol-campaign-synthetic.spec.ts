@@ -164,7 +164,7 @@ async function setup(page: Page) {
 }
 async function fill(page: Page) {
   await page
-    .getByRole("button", { name: "Create KOL campaign", exact: true })
+    .getByRole("button", { name: "Create campaign", exact: true })
     .click();
   await page.getByLabel("Campaign name", { exact: true }).fill("Demo KOL");
   await page.getByLabel("Referral code", { exact: true }).fill("demo2026");
@@ -182,18 +182,19 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
 }) => {
   const state = await setup(page);
   await expect(
-    page.getByText("No KOL campaigns yet.", { exact: false }),
+    page.getByText("No referral campaigns yet.", { exact: false }),
   ).toBeVisible();
   await fill(page);
-  await page.getByRole("button", { name: "Save KOL campaign" }).click();
+  await page.getByRole("button", { name: "Save campaign" }).click();
   await expect(
-    page.getByRole("button", { name: "Creating KOL campaign…" }),
+    page.getByRole("button", { name: "Creating campaign…" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("heading", { name: "Demo KOL · DEMO2026" }),
+    page.getByRole("heading", { name: "KOL Demo KOL · DEMO2026" }),
   ).toBeVisible();
   expect(state.payloads).toHaveLength(1);
   expect(state.payloads[0].json).toEqual({
+    purpose: "kol",
     name: "Demo KOL",
     code: "DEMO2026",
     activationAt: campaign.activationAt,
@@ -214,7 +215,7 @@ for (const failure of ["conflict", "network"] as const)
     const state = await setup(page);
     state[failure]();
     await fill(page);
-    await page.getByRole("button", { name: "Save KOL campaign" }).click();
+    await page.getByRole("button", { name: "Save campaign" }).click();
     await expect(page.getByText(/Your entries are preserved/)).toBeVisible();
     await expect(page.getByLabel("Referral code", { exact: true })).toHaveValue(
       "demo2026",
@@ -230,18 +231,20 @@ test("validation focuses first error and list failure recovers explicitly", asyn
 }) => {
   const state = await setup(page);
   await page
-    .getByRole("button", { name: "Create KOL campaign", exact: true })
+    .getByRole("button", { name: "Create campaign", exact: true })
     .click();
-  await page.getByRole("button", { name: "Save KOL campaign" }).click();
+  await page.getByRole("button", { name: "Save campaign" }).click();
   await expect(page.getByLabel("Campaign name", { exact: true })).toBeFocused();
   expect(state.payloads).toHaveLength(0);
   state.failList();
   await page.getByRole("button", { name: "Refresh campaigns" }).click();
-  await expect(page.getByText("We couldn't load KOL campaigns.")).toBeVisible();
+  await expect(
+    page.getByText("We couldn't load referral campaigns."),
+  ).toBeVisible();
   state.recover();
   await page.getByRole("button", { name: "Retry campaigns" }).click();
   await expect(
-    page.getByText("No KOL campaigns yet.", { exact: false }),
+    page.getByText("No referral campaigns yet.", { exact: false }),
   ).toBeVisible();
 });
 for (const width of [320, 390, 768, 1440])
@@ -249,10 +252,10 @@ for (const width of [320, 390, 768, 1440])
     await page.setViewportSize({ width, height: 960 });
     await setup(page);
     await fill(page);
-    await page.getByRole("button", { name: "Save KOL campaign" }).click();
+    await page.getByRole("button", { name: "Save campaign" }).click();
     await expect(page.getByText("Saved terms · immutable")).toBeVisible();
     const panel = page
-      .getByRole("heading", { name: "KOL campaigns", exact: true })
+      .getByRole("heading", { name: "Referral campaigns", exact: true })
       .locator('xpath=ancestor::*[@data-slot="card"]');
     expect(
       await panel.evaluate((element) => {
@@ -283,3 +286,34 @@ for (const width of [320, 390, 768, 1440])
       fullPage: true,
     });
   });
+
+test("Academy promotion hides commission fields and submits zero commission", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await page
+    .getByRole("button", { name: "Create campaign", exact: true })
+    .click();
+  await page.getByRole("combobox", { name: "Campaign source" }).click();
+  await page.getByRole("option", { name: "Cogito Academy promotion" }).click();
+  await expect(
+    page.getByLabel("Flat commission (IDR)", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Commission (%)", { exact: true })).toHaveCount(
+    0,
+  );
+  await page
+    .getByLabel("Campaign name", { exact: true })
+    .fill("Academy open day");
+  await page.getByLabel("Referral code", { exact: true }).fill("academy2026");
+  await fillDateTimeInput(page, "kol-expiresAt", new Date(2030, 1, 1, 10, 30));
+  await page
+    .getByRole("button", { name: "Save campaign", exact: true })
+    .click();
+  await expect.poll(() => state.payloads.length).toBe(1);
+  expect(state.payloads[0].json).toMatchObject({
+    purpose: "promotion",
+    flatAmountIdr: 0,
+    percentBps: 0,
+  });
+});

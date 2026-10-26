@@ -1,5 +1,6 @@
 type Evidence = {
   kind: string;
+  campaignPurpose?: string | null;
   friendDecisionId: string | null;
   friendCreditedMarks: number | null;
   friendRewardMarksSnapshot: number | null;
@@ -11,6 +12,8 @@ type Evidence = {
 };
 
 export function referralUsageStatus(row: Evidence): string {
+  if (row.campaignPurpose === "promotion")
+    return "Academy promotion · no commission";
   if (row.kind === "none") return "No code selected";
   if (row.kind === "friend") {
     if (!row.friendDecisionId) return "Awaiting paid completion";
