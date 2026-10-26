@@ -1,5 +1,10 @@
 # Cogito App — Codebase Context
 
+## Admin KOL campaign UI (26 October 2026)
+
+`/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.
+
+
 ## V3 bounded regression checkpoint (25 October 2026)
 
 Source `be14c454` passed 58 tests / 160 assertions across 13 explicitly named

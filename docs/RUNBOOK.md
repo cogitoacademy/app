@@ -1,5 +1,14 @@
 # Cogito Runbook
 
+## Isolated admin KOL campaign verification (26 October 2026)
+
+Run `bun test apps/web/src/components/admin/kol-campaign-input.test.ts apps/web/src/components/admin/tax-rate-input.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`, then `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`. Set `$env:KOL_BROWSER_CHANNEL='msedge'` to use installed Edge; no browser download is needed. The dedicated Vite server uses 3366, mocked API origin 3367, a separate cache, one worker, no reuse/global setup/seed/API server. All auth/session/RPC responses are intercepted; this does not prove real persistence, authorization, OAuth, provider, production, or DB behavior. Do not restart servers or create real campaigns as part of this workflow. In a real uncertain create result, refresh campaigns before deciding to submit again; requests have no idempotency key.
+
+
+Admin workflow: open Finance > Referral usage > Create KOL campaign. Enter the campaign name and chosen code, expiry/optional activation in WIB, attribution days and flat IDR and/or percentage commission, then Save KOL campaign. Review the immutable saved terms below. This does not create a student friend code. No real campaign was created during verification.
+
+Validation: 3 parser tests / 18 assertions passed; 11 installed-Edge synthetic cases passed (including the 3 existing usage cases). Four responsive cases were rerun with component scroll/client and button-height checks. Native 200% zoom, screen readers and real DB/auth/provider acceptance remain unverified.
+
 ## Bounded V3 auth/referral/report regression (25 October 2026)
 
 Source `be14c454`: 58 tests / 160 assertions, plus 3 mocked Edge browser cases
