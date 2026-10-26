@@ -179,3 +179,14 @@ Bounded implementation complete: V3 amount controls have a 14rem minimum width w
 Dedicated synthetic Edge checks pass 8/8 across 320/390/768/1440 CSS px, covering economy read/edit, payout prepared-transfer, unpaid-preview and void/reconciliation drawers, numeric widths, contained tables, button content height and keyboard reachability. Mock-only ports 3356/3357, cache, command and artifact paths are in RUNBOOK. No financial write is activated and live economy/payout specs are not run.
 
 Remaining: native 200% zoom (unverified), RTL and assistive-technology audit, live auth/persistence and financial workflow acceptance, plus other responsive slices. This checkpoint does not mark the overall V3 UI audit complete.
+
+
+### Canonical KB/calendar pages (25 October 2026)
+
+Implemented admin View/Manage within `/knowledge-bank` and `/calendar` using the existing single-kind editor. Removed the duplicate KB & calendar sidebar item; retained `/admin-content` as a role-checked compatibility redirect. Reader layouts and API access gates are retained; reader caches invalidate after save/delete, and open drafts require confirmation before switching to View.
+
+Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/3317: version/conflict behavior, timestamps/catalog IDs, agenda dates, student/tutor reader isolation, redirect, and both editor forms at 320/390/768/1440px. No live DB/storage/provider workflow is run. This does not complete the broader UI or release audit; native zoom, assistive technology and real persistence/authorization remain open.
+
+Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
+
+Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.

@@ -160,7 +160,6 @@ const adminNavGroups = [
         icon: IconShieldCheck,
       },
       { to: "/faq", label: "FAQ", icon: IconHelp },
-      { to: "/admin-content", label: "KB & calendar", icon: IconHelp },
     ],
   },
 ] as const;

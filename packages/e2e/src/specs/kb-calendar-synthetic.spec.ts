@@ -15,9 +15,11 @@ async function mockApp(page: Page, role = "admin") {
   const saves: any[] = [],
     errors: string[] = [];
   let stale = false;
+  const calls: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route("http://localhost:3317/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    calls.push(path);
     if (path === "/api/auth/get-session")
       return route.fulfill({
         json: {
@@ -42,6 +44,19 @@ async function mockApp(page: Page, role = "admin") {
         new URL(route.request().url()).searchParams.get("data") ?? "{}",
       );
     let result: unknown = [];
+    if (path === "/rpc/content/listStudentResources")
+      result = {
+        items: [resource],
+        access: { eligible: true, threshold: 35, balance: 200 },
+      };
+    if (path === "/rpc/booking/listMine")
+      result = {
+        items: [],
+        nextCursor: null,
+        counts: { action: 0, upcoming: 0, recurring: 0, history: 0, all: 0 },
+      };
+    if (path === "/rpc/wallet/get")
+      result = { totalBalance: 200, heldBalance: 0, availableBalance: 200 };
     if (path === "/rpc/adminContent/list")
       result = body.json.kind === "resource" ? [resource] : [];
     if (path === "/rpc/adminContent/categories")
@@ -71,6 +86,7 @@ async function mockApp(page: Page, role = "admin") {
   return {
     saves,
     errors,
+    calls,
     stale: () => {
       stale = true;
     },
@@ -80,7 +96,15 @@ test("KB single-field save carries version; conflict retains draft", async ({
   page,
 }, testInfo) => {
   const state = await mockApp(page);
-  await page.goto("/admin-content");
+  await page.goto("/knowledge-bank");
+  await page
+    .getByRole("button", { name: "Manage resources", exact: true })
+    .click();
+  expect(
+    await page
+      .getByRole("button", { name: /Panduan sintetis/ })
+      .evaluate((el) => el.getBoundingClientRect().height),
+  ).toBeGreaterThanOrEqual(40);
   await page.getByRole("button", { name: /Panduan sintetis/ }).click();
   await expect(
     page.getByText("One value per field, in any language."),
@@ -131,9 +155,9 @@ test("calendar save carries explicit WIB timestamps and catalog ID", async ({
   page,
 }) => {
   const state = await mockApp(page);
-  await page.goto("/admin-content");
+  await page.goto("/calendar");
   await page
-    .getByRole("button", { name: "Competition calendar", exact: true })
+    .getByRole("button", { name: "Manage calendar", exact: true })
     .click();
   await page.getByRole("button", { name: "Create entry", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("Lomba sintetis");
@@ -213,3 +237,103 @@ test("agenda preserves two distinct IDs on each inclusive WIB date and deduplica
     page.getByText("Sunday, 25 October 2026 · WIB", { exact: true }),
   ).toHaveCount(2);
 });
+
+for (const role of ["student", "tutor"]) {
+  test(`${role} reads canonical pages without admin management queries`, async ({
+    page,
+  }) => {
+    const state = await mockApp(page, role);
+    await page.goto("/knowledge-bank");
+    await expect(
+      page.getByRole("heading", {
+        name: "Learn from curated resources",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Manage resources", exact: true }),
+    ).toHaveCount(0);
+    await page.goto("/calendar");
+    await expect(
+      page.getByRole("heading", {
+        name: "Your Gateway to the World Stage",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Manage calendar", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      state.calls.filter((path) => path.startsWith("/rpc/adminContent/")),
+    ).toEqual([]);
+    expect(state.errors).toEqual([]);
+  });
+}
+
+test("legacy editor redirects admin to canonical Knowledge Bank", async ({
+  page,
+}) => {
+  await mockApp(page);
+  await page.goto("/admin-content");
+  await expect(page).toHaveURL(/\/knowledge-bank$/);
+  await expect(
+    page.getByRole("button", { name: "Manage resources", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "KB & calendar", exact: true }),
+  ).toHaveCount(0);
+});
+
+for (const width of [320, 390, 768, 1440]) {
+  test(`canonical editors fit at ${width}px and retain view toggle`, async ({
+    page,
+  }, testInfo) => {
+    const state = await mockApp(page);
+    await page.setViewportSize({ width, height: 900 });
+    /* eslint-disable no-await-in-loop -- Exercise each route sequentially in the same page. */
+    for (const [path, manage, view] of [
+      ["/knowledge-bank", "Manage resources", "View resources"],
+      ["/calendar", "Manage calendar", "View calendar"],
+    ]) {
+      await page.goto(path!);
+      await page.getByRole("button", { name: manage!, exact: true }).click();
+      await page
+        .getByRole("button", { name: "Create entry", exact: true })
+        .click();
+      await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
+      const issues = await page
+        .locator(
+          'main [data-slot="card"], main [data-slot="field"], main button',
+        )
+        .evaluateAll((elements) =>
+          elements
+            .filter((el) => {
+              if (!el.getClientRects().length) return false;
+              const r = el.getBoundingClientRect();
+              return (
+                r.right > innerWidth + 1 ||
+                r.left < -1 ||
+                el.scrollWidth > el.clientWidth + 1 ||
+                el.scrollHeight > el.clientHeight + 1
+              );
+            })
+            .map((el) => el.textContent?.slice(0, 50)),
+        );
+      expect(issues).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath(`${path!.slice(1)}-${width}.png`),
+        fullPage: true,
+      });
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await page.getByRole("button", { name: view!, exact: true }).click();
+      await expect(page.getByLabel("Title", { exact: true })).toBeVisible();
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.getByRole("button", { name: view!, exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: manage!, exact: true }),
+      ).toBeVisible();
+    }
+    /* eslint-enable no-await-in-loop */
+    expect(state.errors).toEqual([]);
+  });
+}
