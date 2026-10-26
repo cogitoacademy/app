@@ -4429,7 +4429,3 @@ This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vi
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
-
-### Referral campaign sources (2026-10-26)
-
-Apply generated migration 0076_referral_campaign_purpose before deploying referral-purpose API/UI, then restart API. No new env vars. Migration adds purpose default kol and updates campaign terms constraint; it has not been run by this change. Verify Academy signup welcome credit and absence of KOL decisions against the intended guarded database before release.

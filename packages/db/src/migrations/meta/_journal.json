@@ -533,13 +533,6 @@
       "when": 1792822161322,
       "tag": "0075_kb_calendar_content",
       "breakpoints": true
-    },
-    {
-      "idx": 76,
-      "version": "7",
-      "when": 1792993328984,
-      "tag": "0076_referral_campaign_purpose",
-      "breakpoints": true
     }
   ]
 }

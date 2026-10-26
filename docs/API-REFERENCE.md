@@ -2549,7 +2549,3 @@ No procedure, input, response, authorization or submit/retry identity changes. `
 ### Canonical KB/calendar editor pages (25 October 2026)
 
 Existing `adminContent.list/categories/create/update/remove/uploadPdf` contracts, version checks, reason requirements and server-side admin authorization are unchanged. `/knowledge-bank` and `/calendar` expose their corresponding editor only to admin sessions; student/tutor readers do not request adminContent procedures. `/admin-content` redirects admins to `/knowledge-bank`, and other roles to `/dashboard`. Reader caches for `content.listStudentResources` and `content.listCompetitions` are invalidated after their corresponding save/delete.
-
-### Referral campaign sources (2026-10-26)
-
-POST /rpc/adminReferral/createKolCampaign accepts purpose: kol | promotion (default kol). KOL requires positive flatAmountIdr or percentBps; promotion requires both zero. The legacy procedure name is retained. listKolCampaigns returns purpose; listUsage accepts kind=promotion, returns campaignPurpose, and kind=kol excludes promotions. RPC bodies use {"json": <input>}.

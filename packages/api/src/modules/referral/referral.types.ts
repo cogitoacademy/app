@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const listReferralUsageInput = z.object({
   search: z.string().trim().max(120).default(""),
-  kind: z.enum(["all", "friend", "kol", "promotion", "none"]).default("all"),
+  kind: z.enum(["all", "friend", "kol", "none"]).default("all"),
   page: z.number().int().min(0).max(100_000).default(0),
   limit: z.number().int().min(1).max(100).default(25),
 });
@@ -30,7 +30,6 @@ export const updateReferralSettingsInput = z.object({
 
 export const createKolCampaignInput = z
   .object({
-    purpose: z.enum(["kol", "promotion"]).default("kol"),
     name: z.string().trim().min(1).max(100),
     code: referralCodeInput,
     expiresAt: z.coerce.date(),
@@ -46,17 +45,10 @@ export const createKolCampaignInput = z
       path: ["expiresAt"],
     },
   )
-  .refine(
-    (input) =>
-      input.purpose === "promotion"
-        ? input.flatAmountIdr === 0 && input.percentBps === 0
-        : input.flatAmountIdr > 0 || input.percentBps > 0,
-    {
-      message:
-        "KOL campaigns require commission; Academy promotions must have zero commission.",
-      path: ["flatAmountIdr"],
-    },
-  );
+  .refine((input) => input.flatAmountIdr > 0 || input.percentBps > 0, {
+    message: "Set a flat commission, a percentage, or both.",
+    path: ["flatAmountIdr"],
+  });
 
 export const listKolCommissionsInput = z.object({
   limit: z.number().int().min(1).max(100).default(50),
@@ -66,10 +58,7 @@ export const listKolCommissionsInput = z.object({
 export type SaveGoogleChoiceInput = typeof saveGoogleChoiceInput._output;
 export type UpdateReferralSettingsInput =
   typeof updateReferralSettingsInput._output;
-export type CreateKolCampaignInput = Omit<
-  typeof createKolCampaignInput._output,
-  "purpose"
-> & { purpose?: "kol" | "promotion" };
+export type CreateKolCampaignInput = typeof createKolCampaignInput._output;
 export type ListKolCommissionsInput = typeof listKolCommissionsInput._output;
 
 const settlementBase = {

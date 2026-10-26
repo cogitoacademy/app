@@ -1,3 +1,0 @@
-ALTER TABLE "referral_campaign" DROP CONSTRAINT "referral_campaign_terms_valid";--> statement-breakpoint
-ALTER TABLE "referral_campaign" ADD COLUMN "purpose" text DEFAULT 'kol' NOT NULL;--> statement-breakpoint
-ALTER TABLE "referral_campaign" ADD CONSTRAINT "referral_campaign_terms_valid" CHECK ("referral_campaign"."flat_amount_idr" >= 0 AND "referral_campaign"."percent_bps" BETWEEN 0 AND 10000 AND (("referral_campaign"."purpose" = 'kol' AND ("referral_campaign"."flat_amount_idr" > 0 OR "referral_campaign"."percent_bps" > 0)) OR ("referral_campaign"."purpose" = 'promotion' AND "referral_campaign"."flat_amount_idr" = 0 AND "referral_campaign"."percent_bps" = 0)));

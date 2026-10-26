@@ -19,10 +19,6 @@ export const referralCampaign = pgTable(
   {
     id: uuidPrimaryKey,
     name: text("name").notNull(),
-    purpose: text("purpose")
-      .$type<"kol" | "promotion">()
-      .notNull()
-      .default("kol"),
     activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     attributionWindowDays: integer("attribution_window_days").notNull(),
@@ -46,7 +42,7 @@ export const referralCampaign = pgTable(
     ),
     check(
       "referral_campaign_terms_valid",
-      sql`${table.flatAmountIdr} >= 0 AND ${table.percentBps} BETWEEN 0 AND 10000 AND ((${table.purpose} = 'kol' AND (${table.flatAmountIdr} > 0 OR ${table.percentBps} > 0)) OR (${table.purpose} = 'promotion' AND ${table.flatAmountIdr} = 0 AND ${table.percentBps} = 0))`,
+      sql`${table.flatAmountIdr} >= 0 AND ${table.percentBps} BETWEEN 0 AND 10000 AND (${table.flatAmountIdr} > 0 OR ${table.percentBps} > 0)`,
     ),
     index("referral_campaign_expiry_idx").on(
       table.activationAt,
