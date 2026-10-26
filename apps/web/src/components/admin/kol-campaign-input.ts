@@ -2,6 +2,7 @@ import { createKolCampaignInput } from "@cogito-app/api/modules/referral/referra
 import { percentToBasisPoints } from "./tax-rate-input";
 
 export const emptyCampaignDraft = {
+  purpose: "kol" as "kol" | "promotion",
   name: "",
   code: "",
   activationAt: "",
@@ -22,6 +23,7 @@ export function parseCampaignDraft(draft: CampaignDraft, now = new Date()) {
     errors.percent = "Enter a percentage with at most 2 decimal places.";
   }
   const parsed = createKolCampaignInput.safeParse({
+    purpose: draft.purpose,
     name: draft.name,
     code: draft.code,
     activationAt: draft.activationAt

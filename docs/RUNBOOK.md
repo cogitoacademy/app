@@ -1,5 +1,14 @@
 # Cogito Runbook
 
+## Isolated competition types UI verification (26 October 2026)
+
+From repository root, run `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.competition-types-synthetic.config.ts`. This dedicated workflow uses installed Edge, web 3376, mocked API/session origin 3377, a separate Vite cache, one worker, no API server/global setup/seed/database/provider. Navigation waits for DOM content with a 60-second test budget for the cold Vite module graph. It does not stop or replace live dev 3000/3001.
+
+The synthetic catalog fixture exercises directory search/status, child parent context, version conflict/retry and dirty close, create/lifecycle impact guards, parent color validation/live preview, movement payloads, four responsive widths and non-admin redirect. Screenshots remain ignored in `packages/e2e/test-results/competition-types-synthetic/`. The live `competition-catalog.spec.ts` has updated locators but remains unrun; persistence, server authorization, native zoom and assistive-technology acceptance are separate gates. No real catalog writes or migration are performed by this workflow.
+
+
+Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
+
 ## Isolated admin KOL campaign verification (26 October 2026)
 
 Run `bun test apps/web/src/components/admin/kol-campaign-input.test.ts apps/web/src/components/admin/tax-rate-input.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`, then `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`. Set `$env:KOL_BROWSER_CHANNEL='msedge'` to use installed Edge; no browser download is needed. The dedicated Vite server uses 3366, mocked API origin 3367, a separate cache, one worker, no reuse/global setup/seed/API server. All auth/session/RPC responses are intercepted; this does not prove real persistence, authorization, OAuth, provider, production, or DB behavior. Do not restart servers or create real campaigns as part of this workflow. In a real uncertain create result, refresh campaigns before deciding to submit again; requests have no idempotency key.
@@ -4420,3 +4429,7 @@ This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vi
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+### Referral campaign sources (2026-10-26)
+
+Apply generated migration 0076_referral_campaign_purpose before deploying referral-purpose API/UI, then restart API. No new env vars. Migration adds purpose default kol and updates campaign terms constraint; it has not been run by this change. Verify Academy signup welcome credit and absence of KOL decisions against the intended guarded database before release.

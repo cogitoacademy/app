@@ -538,6 +538,7 @@ export function createReferralService(deps: {
           .insert(referralCampaign)
           .values({
             name: input.name,
+            purpose: input.purpose ?? "kol",
             activationAt: activatedAt,
             expiresAt: input.expiresAt,
             attributionWindowDays: input.attributionWindowDays,
@@ -591,6 +592,7 @@ export function createReferralService(deps: {
       .select({
         id: referralCampaign.id,
         name: referralCampaign.name,
+        purpose: referralCampaign.purpose,
         code: referralCode.code,
         activationAt: referralCampaign.activationAt,
         expiresAt: referralCampaign.expiresAt,
@@ -646,7 +648,9 @@ export function createReferralService(deps: {
       !choice ||
       choice.kind !== "kol" ||
       !choice.campaignId ||
-      !choice.kolAttributionExpiresAt
+      !choice.kolAttributionExpiresAt ||
+      (choice.kolFlatAmountIdrSnapshot === 0 &&
+        choice.kolPercentBpsSnapshot === 0)
     ) {
       return null;
     }

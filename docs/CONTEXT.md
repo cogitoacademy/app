@@ -1,5 +1,12 @@
 # Cogito App — Codebase Context
 
+## Competition types workspace redesign (26 October 2026)
+
+`/admin-competitions` is now a grouped directory rather than a persistent tree/editor split. Parent competitions show their specializations, status and Add type action; search retains parent context and input focus during refetch, with a status filter and recoverable empty state. A Selia drawer opens only for create/edit. Optional descriptions, parent colors and specialization movement use disclosures. Unsaved edits require discard confirmation when closing or changing entries; successful save restores normal close behavior. Draft palette previews reflect current inputs.
+
+Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The previous live catalog browser spec is adapted to named lifecycle dialogs and the new drawer/disclosure navigation; it is not run against a real database in this slice.
+
+
 ## Admin KOL campaign UI (26 October 2026)
 
 `/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.
@@ -3334,3 +3341,9 @@ The bounded frontend slice gives V3 economy amount controls a 14rem minimum widt
 ### Canonical KB/calendar management (25 October 2026)
 
 Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar` (events), with View/Manage controls on each page. The duplicate KB & calendar sidebar destination is removed; `/admin-content` remains an admin-only compatibility redirect to Knowledge Bank. Student/tutor readers and server-side access gates are retained. Editor queries run only in Manage mode, and save/delete invalidates the corresponding reader query. This UI consolidation requires no migration or API/provider change.
+
+### Referral campaign sources (2026-10-26)
+
+Referral campaigns now distinguish KOL partnerships from Cogito Academy promotions using immutable referral_campaign.purpose (default kol for existing campaigns). Admin usage shows source badges and a promotion filter. Migration 0076 is authored, not applied; live DB acceptance remains pending; synthetic Edge browser checks cover admin flows, zero-commission promotion submission and responsive widths 320-1440px.
+
+CardBody removes top padding when its first direct child is a table and bottom padding when its last direct child is a table. Table + pagination layouts start flush beneath the header while retaining table-to-pagination spacing and pagination bottom padding.

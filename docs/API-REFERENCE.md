@@ -1,5 +1,10 @@
 # Cogito API Reference
 
+## Competition types presentation (26 October 2026)
+
+No catalog API contract or server authorization changes. The new directory/drawer UI still uses `admin.listCompetitionCatalog`, `getCompetitionCatalogEntry`, `createCompetitionParent`, `createCompetitionSpecialization`, `updateCompetitionCatalogEntry`, `moveCompetitionSpecialization`, impact preview, archive/restore and delete. Search sends the existing includeArchived/query input; status filtering is client-side. Updates/moves/lifecycle actions preserve expectedVersion and reason. No new endpoint or migration.
+
+
 ## Admin KOL campaign frontend (26 October 2026)
 
 The existing `adminReferral.createKolCampaign` and `adminReferral.listKolCampaigns` are exposed on `/admin-referrals`. RPC paths are `/rpc/adminReferral/createKolCampaign` and `/rpc/adminReferral/listKolCampaigns`, with the existing `{ "json": input }` envelope. No API contract changed. Creation uses name (1–100), code (4–32 alphanumeric, normalized uppercase), optional activation (server defaults now), expiry after activation, attribution window (1–365, default 90), flat IDR (0–100,000,000) and percentBps (0–10,000); at least one commission component must be positive. UI percentage accepts at most two decimal places and converts to integer bps; date/time inputs represent WIB (+07:00). Creation has no automatic retry because it has no idempotency key.
@@ -2544,3 +2549,7 @@ No procedure, input, response, authorization or submit/retry identity changes. `
 ### Canonical KB/calendar editor pages (25 October 2026)
 
 Existing `adminContent.list/categories/create/update/remove/uploadPdf` contracts, version checks, reason requirements and server-side admin authorization are unchanged. `/knowledge-bank` and `/calendar` expose their corresponding editor only to admin sessions; student/tutor readers do not request adminContent procedures. `/admin-content` redirects admins to `/knowledge-bank`, and other roles to `/dashboard`. Reader caches for `content.listStudentResources` and `content.listCompetitions` are invalidated after their corresponding save/delete.
+
+### Referral campaign sources (2026-10-26)
+
+POST /rpc/adminReferral/createKolCampaign accepts purpose: kol | promotion (default kol). KOL requires positive flatAmountIdr or percentBps; promotion requires both zero. The legacy procedure name is retained. listKolCampaigns returns purpose; listUsage accepts kind=promotion, returns campaignPurpose, and kind=kol excludes promotions. RPC bodies use {"json": <input>}.

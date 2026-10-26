@@ -1,5 +1,12 @@
 # UI controls and Card/Table audit (22 October 2026)
 
+## Competition types redesign (26 October 2026)
+
+Replaced the dense tree/permanent editor with a grouped competition directory and on-demand Selia drawer. Search/status, visible specializations, parent color identity, optional descriptions/colors/movement and dirty-close confirmation make the catalog manageable without changing backend contracts. All existing audit/version/impact/lifecycle controls remain. Dedicated synthetic Edge workflow covers the changed UI; current validation results are recorded in the PR and RUNBOOK. This does not close live DB, native zoom or assistive-technology gates.
+
+
+Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
+
 ## Classes UI follow-up (22 October 2026)
 
 - Completed: one compact catalog card per class, local search/type filters,
@@ -190,3 +197,5 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+CardBody table-edge padding follow-up: first-child tables remove top padding even when pagination follows; last-child tables remove bottom padding. Existing table-to-pagination spacing is retained. Source formatting and UI typecheck are the validation scope; browser visual acceptance remains open.
