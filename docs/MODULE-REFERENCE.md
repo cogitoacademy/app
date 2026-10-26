@@ -1,5 +1,10 @@
 # Cogito Module Reference
 
+## Admin KOL campaign presentation (26 October 2026)
+
+`KolCampaignsSection` composes Selia fields/cards on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
+
+
 ## Referral session cache correction (24 October 2026)
 
 Live dev submits returned 200 and persisted pending=false, but Better Auth Redis

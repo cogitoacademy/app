@@ -1,5 +1,10 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Admin KOL campaign UI slice (26 October 2026)
+
+Implemented for parent review: existing `/admin-referrals` now exposes user-chosen registration-only KOL campaign creation/list via existing APIs, immutable terms, WIB dates, exact percentage-to-bps validation, retained fields on failure, no create retries, success toast/invalidation, explicit list loading/empty/error/retry. No new route/sidebar, random-code policy, friend impersonation/rotation, backend/security/financial change, or migration. Parent review/integration and real authenticated UAT/persistence remain gates; synthetic checks do not close production/provider/DB acceptance.
+
+
 ## V3 bounded regression checkpoint (25 October 2026)
 
 Source `be14c454` passed 58 tests / 160 assertions across 13 explicitly named

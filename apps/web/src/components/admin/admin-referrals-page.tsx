@@ -33,6 +33,7 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
+import { KolCampaignsSection } from "./kol-campaigns-section";
 import { referralUsageStatus } from "./referral-usage-status";
 
 function date(value: string | Date | null) {
@@ -67,6 +68,7 @@ export function AdminReferralsPage() {
           completion, or KOL commission.
         </Text>
       </div>
+      <KolCampaignsSection />
       <form
         className="flex flex-wrap gap-3"
         onSubmit={(event) => {
