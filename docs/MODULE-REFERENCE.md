@@ -2586,3 +2586,5 @@ The canonical Knowledge Bank/calendar route components select the existing read-
 ### Referral campaign sources (2026-10-26)
 
 Academy promotions reuse campaign activation/expiry, signup exclusivity and welcome-credit snapshots. They have zero commission and skip KOL first-purchase decision creation using saved zero terms; they do not generate settlement obligations. purpose is immutable; existing campaigns remain KOL. No new wallet event keys.
+
+Selia CardBody edge padding follows direct-child position: a first-child table removes top padding, and a last-child table removes bottom padding. Pagination retains its normal inset and table separation.

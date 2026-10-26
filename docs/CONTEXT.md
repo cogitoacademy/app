@@ -3338,3 +3338,5 @@ Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar
 ### Referral campaign sources (2026-10-26)
 
 Referral campaigns now distinguish KOL partnerships from Cogito Academy promotions using immutable referral_campaign.purpose (default kol for existing campaigns). Admin usage shows source badges and a promotion filter. Migration 0076 is authored, not applied; live DB acceptance remains pending; synthetic Edge browser checks cover admin flows, zero-commission promotion submission and responsive widths 320-1440px.
+
+CardBody removes top padding when its first direct child is a table and bottom padding when its last direct child is a table. Table + pagination layouts start flush beneath the header while retaining table-to-pagination spacing and pagination bottom padding.

@@ -140,7 +140,7 @@ export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card-body"
       className={cn(
         "min-w-0 p-6 **:data-[slot=item]:px-6",
-        "has-[>[data-slot=table-container]:only-child]:py-0",
+        "has-[>[data-slot=table-container]:first-child]:pt-0 has-[>[data-slot=table-container]:last-child]:pb-0",
         "*:data-[slot=table-container]:-mx-6 *:data-[slot=table-container]:w-[calc(100%+3rem)]",
         "*:data-[slot=table-container]:my-6 *:data-[slot=table-container]:first:mt-0 *:data-[slot=table-container]:last:mb-0",
         className,
