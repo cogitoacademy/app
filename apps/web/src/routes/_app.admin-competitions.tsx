@@ -5,7 +5,7 @@ import { CompetitionCatalogPage } from "@/components/admin/competition-catalog-p
 
 export const Route = createFileRoute("/_app/admin-competitions")({
   head: () => ({
-    meta: [{ title: "Competition catalog · Cogito Academy" }],
+    meta: [{ title: "Competition types · Cogito Academy" }],
   }),
   component: CompetitionCatalogPage,
   beforeLoad: ({ context }) => {

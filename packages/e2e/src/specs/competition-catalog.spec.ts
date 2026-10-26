@@ -142,7 +142,7 @@ test("admin can archive, restore, and move an unused specialization", async ({
 
     await page.goto("/admin-competitions");
     await expect(
-      page.getByRole("heading", { name: "Competition catalog", exact: true }),
+      page.getByRole("heading", { name: "Competition types", exact: true }),
     ).toBeVisible();
     const search = page.getByLabel("Search competition catalog");
     await search.fill(childSlug);
@@ -151,8 +151,12 @@ test("admin can archive, restore, and move an unused specialization", async ({
       page.getByRole("heading", { name: child.name, exact: true }),
     ).toBeVisible();
 
+    await page.getByText("Availability and deletion", { exact: true }).click();
     await page.getByRole("button", { name: "Archive", exact: true }).click();
-    const archiveDialog = page.getByRole("dialog");
+    const archiveDialog = page.getByRole("dialog", {
+      name: "Archive catalog entry",
+      exact: true,
+    });
     await expect(archiveDialog.getByText("Impact preview")).toBeVisible();
     await expect(
       archiveDialog.getByText("0 specializations · 0 references", {
@@ -168,7 +172,10 @@ test("admin can archive, restore, and move an unused specialization", async ({
     await expect(page.getByText("Catalog entry archived")).toBeVisible();
 
     await page.getByRole("button", { name: "Restore", exact: true }).click();
-    const restoreDialog = page.getByRole("dialog");
+    const restoreDialog = page.getByRole("dialog", {
+      name: "Restore catalog entry",
+      exact: true,
+    });
     await expect(
       restoreDialog.getByText(/Restoring makes this entry available/),
     ).toBeVisible();
@@ -180,8 +187,10 @@ test("admin can archive, restore, and move an unused specialization", async ({
       .click();
     await expect(page.getByText("Catalog entry restored")).toBeVisible();
 
+    await page.getByLabel("Close catalog editor").click();
     await search.fill("");
     await page.getByRole("button", { name: new RegExp(childSlug) }).click();
+    await page.getByText("Move specialization", { exact: true }).click();
     await page.getByLabel("Destination").click();
     await page
       .getByRole("option", { name: destination.name, exact: true })
@@ -193,12 +202,17 @@ test("admin can archive, restore, and move an unused specialization", async ({
     await expect(page.getByText("Specialization moved")).toBeVisible();
 
     const movedRow = page.getByRole("button", { name: new RegExp(childSlug) });
-    const destinationGroup = movedRow.locator("xpath=..");
+    await page.getByLabel("Close catalog editor").click();
+    const destinationGroup = movedRow.locator(
+      'xpath=ancestor::*[@data-slot="card"]',
+    );
     await expect(
       destinationGroup.getByRole("button", {
-        name: new RegExp(destinationSlug),
+        name: `Edit competition ${destination.name}`,
+        exact: true,
       }),
     ).toBeVisible();
+    await movedRow.click();
     await expect(
       page.getByText(`Background: ${destination.lightBackgroundColor}`, {
         exact: true,

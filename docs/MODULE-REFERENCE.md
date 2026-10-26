@@ -1,5 +1,10 @@
 # Cogito Module Reference
 
+## Competition catalog UI composition (26 October 2026)
+
+`CompetitionCatalogPage` groups the server's flat catalog into parent cards with child edit rows, including parent context for child-only search matches. `keepPreviousData` keeps the search field mounted while query keys change. Create/edit uses a Selia drawer with guarded dirty closing; descriptions/colors/movement are progressively disclosed. Palette validation, reason requirements, version-conflict retention and reference-gated lifecycle mutation handlers are retained. Parent palette previews read the current draft. No accounting or catalog eligibility policy changes.
+
+
 ## Admin KOL campaign presentation (26 October 2026)
 
 `KolCampaignsSection` composes Selia fields/cards on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.

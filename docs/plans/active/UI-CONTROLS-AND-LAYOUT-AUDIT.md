@@ -1,5 +1,12 @@
 # UI controls and Card/Table audit (22 October 2026)
 
+## Competition types redesign (26 October 2026)
+
+Replaced the dense tree/permanent editor with a grouped competition directory and on-demand Selia drawer. Search/status, visible specializations, parent color identity, optional descriptions/colors/movement and dirty-close confirmation make the catalog manageable without changing backend contracts. All existing audit/version/impact/lifecycle controls remain. Dedicated synthetic Edge workflow covers the changed UI; current validation results are recorded in the PR and RUNBOOK. This does not close live DB, native zoom or assistive-technology gates.
+
+
+Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
+
 ## Classes UI follow-up (22 October 2026)
 
 - Completed: one compact catalog card per class, local search/type filters,

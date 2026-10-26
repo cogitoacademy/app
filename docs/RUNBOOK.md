@@ -1,5 +1,14 @@
 # Cogito Runbook
 
+## Isolated competition types UI verification (26 October 2026)
+
+From repository root, run `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.competition-types-synthetic.config.ts`. This dedicated workflow uses installed Edge, web 3376, mocked API/session origin 3377, a separate Vite cache, one worker, no API server/global setup/seed/database/provider. Navigation waits for DOM content with a 60-second test budget for the cold Vite module graph. It does not stop or replace live dev 3000/3001.
+
+The synthetic catalog fixture exercises directory search/status, child parent context, version conflict/retry and dirty close, create/lifecycle impact guards, parent color validation/live preview, movement payloads, four responsive widths and non-admin redirect. Screenshots remain ignored in `packages/e2e/test-results/competition-types-synthetic/`. The live `competition-catalog.spec.ts` has updated locators but remains unrun; persistence, server authorization, native zoom and assistive-technology acceptance are separate gates. No real catalog writes or migration are performed by this workflow.
+
+
+Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
+
 ## Isolated admin KOL campaign verification (26 October 2026)
 
 Run `bun test apps/web/src/components/admin/kol-campaign-input.test.ts apps/web/src/components/admin/tax-rate-input.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`, then `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`. Set `$env:KOL_BROWSER_CHANNEL='msedge'` to use installed Edge; no browser download is needed. The dedicated Vite server uses 3366, mocked API origin 3367, a separate cache, one worker, no reuse/global setup/seed/API server. All auth/session/RPC responses are intercepted; this does not prove real persistence, authorization, OAuth, provider, production, or DB behavior. Do not restart servers or create real campaigns as part of this workflow. In a real uncertain create result, refresh campaigns before deciding to submit again; requests have no idempotency key.

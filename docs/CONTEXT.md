@@ -1,5 +1,12 @@
 # Cogito App — Codebase Context
 
+## Competition types workspace redesign (26 October 2026)
+
+`/admin-competitions` is now a grouped directory rather than a persistent tree/editor split. Parent competitions show their specializations, status and Add type action; search retains parent context and input focus during refetch, with a status filter and recoverable empty state. A Selia drawer opens only for create/edit. Optional descriptions, parent colors and specialization movement use disclosures. Unsaved edits require discard confirmation when closing or changing entries; successful save restores normal close behavior. Draft palette previews reflect current inputs.
+
+Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The previous live catalog browser spec is adapted to named lifecycle dialogs and the new drawer/disclosure navigation; it is not run against a real database in this slice.
+
+
 ## Admin KOL campaign UI (26 October 2026)
 
 `/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.

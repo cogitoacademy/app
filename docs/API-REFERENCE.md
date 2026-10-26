@@ -1,5 +1,10 @@
 # Cogito API Reference
 
+## Competition types presentation (26 October 2026)
+
+No catalog API contract or server authorization changes. The new directory/drawer UI still uses `admin.listCompetitionCatalog`, `getCompetitionCatalogEntry`, `createCompetitionParent`, `createCompetitionSpecialization`, `updateCompetitionCatalogEntry`, `moveCompetitionSpecialization`, impact preview, archive/restore and delete. Search sends the existing includeArchived/query input; status filtering is client-side. Updates/moves/lifecycle actions preserve expectedVersion and reason. No new endpoint or migration.
+
+
 ## Admin KOL campaign frontend (26 October 2026)
 
 The existing `adminReferral.createKolCampaign` and `adminReferral.listKolCampaigns` are exposed on `/admin-referrals`. RPC paths are `/rpc/adminReferral/createKolCampaign` and `/rpc/adminReferral/listKolCampaigns`, with the existing `{ "json": input }` envelope. No API contract changed. Creation uses name (1–100), code (4–32 alphanumeric, normalized uppercase), optional activation (server defaults now), expiry after activation, attribution window (1–365, default 90), flat IDR (0–100,000,000) and percentBps (0–10,000); at least one commission component must be positive. UI percentage accepts at most two decimal places and converts to integer bps; date/time inputs represent WIB (+07:00). Creation has no automatic retry because it has no idempotency key.
