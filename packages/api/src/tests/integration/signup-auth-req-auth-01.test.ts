@@ -50,7 +50,7 @@ function wireTestMail() {
 async function sendCode(email: string, signupAttemptId = randomUUID()) {
   const result = await sendPreAccountSignupOtp({ email, signupAttemptId });
   if (!result.ok) throw new Error(`OTP send failed: ${result.error}`);
-  const sent = sentOtps.at(-1);
+  const sent = sentOtps.findLast((message) => message.email === email);
   if (!sent) throw new Error("No OTP was captured by the test mail port.");
   return { signupAttemptId: result.signupAttemptId, otp: sent.otp };
 }

@@ -166,7 +166,8 @@ async function createPublishedCohort(
     reason: "Create a dedicated enrollment browser-test fixture",
     minimumEnrollment: options.minimumEnrollment ?? 1,
     minimumCheckAt:
-      options.minimumCheckAt ?? new Date(Date.UTC(2044, 0, 1)).toISOString(),
+      options.minimumCheckAt ??
+      new Date(firstStart.getTime() - 86_400_000).toISOString(),
     fullRateMarks: 20,
     halfRateMarks: 22,
     singleRateMarks: 25,
@@ -290,7 +291,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
 
     await page.goto(`/classes/${fullClass.id}`);
     await expect(
-      page.getByRole("heading", { name: "Your class enrollment" }),
+      page.getByRole("heading", { name: "Enrollment & payment" }),
     ).toBeVisible();
     await expect(
       page.getByText(/Total:.*80 across 4 upcoming sessions\./),

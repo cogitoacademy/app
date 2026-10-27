@@ -13,7 +13,8 @@ export const STUDENT_PASSWORD =
   process.env.SEED_STUDENT_PASSWORD ?? "Student123!";
 export const FRIEND_EMAIL = "cogito.argya@yopmail.com";
 export const FRIEND_NAME = "Argya by Cogito";
-export const TUTOR_EMAIL = "cogito.diego@yopmail.com";
+export const TUTOR_EMAIL =
+  process.env.E2E_TUTOR_EMAIL ?? "cogito.diego@yopmail.com";
 export const TUTOR_NAME = "Diego by Cogito";
 export const TUTOR_PASSWORD = process.env.SEED_TUTOR_PASSWORD ?? "Tutor123!";
 export const ADMIN_EMAIL = "admin@cogitoacademy.id";

@@ -520,6 +520,8 @@ describe("PaymentService", () => {
             transaction_id: "txn_mc04",
             order_id: intent.paymentId,
             fraud_status: "accept",
+            gross_amount: "312500.00",
+            currency: "IDR",
           }),
         ),
       ) as never;

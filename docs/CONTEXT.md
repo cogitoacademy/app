@@ -1,5 +1,11 @@
 # Cogito App — Codebase Context
 
+## V3 local regression continuation (28 October 2026)
+
+Local acceptance now has a repeatable guarded browser runner, `packages/e2e/playwright.v3-acceptance.config.ts`. T05 creates a fresh tutor as well as fresh students, keeping prior bookings/history intact and preventing shared availability collisions. Stale OTP/payment/refund/legacy-entitlement test fixtures, class navigation/date assumptions and unordered report-revision assertions are corrected; domain services are unchanged by this slice. CI keeps seven reset-free UUID-fixture suites out of the resettable coverage partition and explicitly enables guarded KB/calendar DB tests.
+
+Verified locally: 13 real-RPC Edge journeys; 203 DB cases across 34 independently reset scratch schemas; 87 cases in the combined non-reset CI fixture partition; 2,695 unit/auth/env/DB-module cases plus 12 separate DB-backed role/verification cases; 3 FAQ/public-tutor DB cases. Four workspace typechecks, web/server builds and lint baseline pass. A PostgreSQL 17 test-DB dump restores with matching row counts/content digests across 21 critical tables. This is DB-only local proof, with no production cutover or provider acceptance. See RUNBOOK for commands, runtime limits and remaining release gates. Tests ran in the shared checkout with the unrelated Activities DTO overlay present; that overlay is excluded from the acceptance commit.
+
 ## KB/calendar live acceptance (26 October 2026)
 
 Installed Edge passed the real API/DB journey in `kb-calendar-live.spec.ts`: 1/1 test (7.0s; 44.7s total). KB browser save survives reload; a concurrent API edit makes the browser save conflict while preserving its draft. Calendar create/update/readback and stale-version HTTP 409 pass. Anonymous session is explicitly empty: private file returns 401, public uploads path returns 404. Admin, eligible student and tutor receive the exact synthetic PDF bytes with `private, no-store`; student/tutor admin list/remove return 403. PostgreSQL integration separately passes 3 tests/8 assertions for concurrent saves, audit rollback and reference protection.

@@ -1,5 +1,11 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Local acceptance continuation (28 October 2026)
+
+Completed local regression slice: 13/13 real-RPC browser journeys, 203/203 DB tests on fresh per-suite scratch schemas, 87/87 combined reset-free CI fixture cases, 2,695 unit/auth/env/DB-module tests, 12 separate DB-backed role/verification tests and 3 FAQ/public-tutor DB tests. Typechecks (4 tasks), builds (2 tasks), lint baseline and a DB-only restore comparison across 21 tables pass. The browser runner now owns a fresh tutor per T05 run; test fixtures and CI partitioning are repaired without changing domain behavior. RUNBOOK records the exact scope and evidence.
+
+This does not check off the overall release gates below. Pinned Linux/hosted CI and the unchanged 100% merged-coverage gate, real OAuth/Meet/payment and private R2 acceptance, production backup/storage restore/cutover, native zoom/assistive-technology acceptance, Q04/Q14/Q15/OPS01 and content/brand/client UAT decisions remain open. Existing unrelated Activities work is preserved separately, and the final integrated head still requires CI/UAT.
+
 ## KB/calendar live acceptance (26 October 2026)
 
 Installed Edge passed the real API/DB journey in `kb-calendar-live.spec.ts`: 1/1 test (7.0s; 44.7s total). KB browser save survives reload; a concurrent API edit makes the browser save conflict while preserving its draft. Calendar create/update/readback and stale-version HTTP 409 pass. Anonymous session is explicitly empty: private file returns 401, public uploads path returns 404. Admin, eligible student and tutor receive the exact synthetic PDF bytes with `private, no-store`; student/tutor admin list/remove return 403. PostgreSQL integration separately passes 3 tests/8 assertions for concurrent saves, audit rollback and reference protection.

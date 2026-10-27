@@ -107,6 +107,14 @@ async function globalSetup() {
     process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
       ? createRunScopedStudentEmail(randomUUID())
       : DEFAULT_STUDENT_EMAIL;
+  const runScopedTutorEmail =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
+      ? `cogito.e2e.tutor.${randomUUID()}@yopmail.com`
+      : TUTOR_EMAIL;
+  if (process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769") {
+    process.env.E2E_TUTOR_EMAIL = runScopedTutorEmail;
+    process.env.SEED_REVIEW_TUTOR_EMAIL = runScopedTutorEmail;
+  }
   const runScopedClassStudentEmail =
     process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
       ? createRunScopedStudentEmail(randomUUID())
@@ -241,7 +249,7 @@ async function globalSetup() {
   ) {
     await saveRoleStorageState(
       "tutor",
-      TUTOR_EMAIL,
+      runScopedTutorEmail,
       testSeedEnv.SEED_TUTOR_PASSWORD,
       e2eEnvironment.serverUrl,
       authDir,

@@ -3229,7 +3229,8 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
     const revisions = await db
       .select()
       .from(academyClassSessionReportRevision)
-      .where(eq(academyClassSessionReportRevision.reportId, report.id));
+      .where(eq(academyClassSessionReportRevision.reportId, report.id))
+      .orderBy(academyClassSessionReportRevision.version);
     expect(revisions).toHaveLength(2);
     expect(revisions[1]).toMatchObject({
       actorId: adminId,

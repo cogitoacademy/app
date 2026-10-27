@@ -351,6 +351,7 @@ test("admin publishes both class modes; students see only the published DTO", as
     expect(afterStaleSave.descriptionEn).toContain("External reviewer update");
 
     await adminPage.reload();
+    await adminPage.getByRole("tab", { name: "Drafts & editor" }).click();
     await adminPage.getByRole("button", { name: `Edit ${title}` }).click();
     await adminPage
       .getByLabel("Reason for this change")
@@ -380,9 +381,9 @@ test("admin publishes both class modes; students see only the published DTO", as
     expect(publishedRecord.sessions[1]?.meeting).toBeNull();
 
     await page.reload();
-    const publicClassLink = page
-      .getByRole("heading", { level: 3, name: title })
-      .locator("xpath=..");
+    const publicClassLink = page.getByRole("link").filter({
+      has: page.getByRole("heading", { name: title, exact: true }),
+    });
     await expect(publicClassLink).toBeVisible();
     await publicClassLink.click();
     await expect(page).toHaveURL(new RegExp(`/classes/${draft.id}$`));
@@ -393,9 +394,11 @@ test("admin publishes both class modes; students see only the published DTO", as
     await expect(page.getByText("Online fixture session")).toBeVisible();
     await expect(page.getByText("In-person fixture session")).toBeVisible();
     await expect(
-      page.getByText(/Enrollment will open when registration is ready/),
+      page.getByRole("heading", { name: "Enrollment & payment" }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /enroll/i })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Reserve and confirm Marks" }),
+    ).toBeVisible();
 
     const publicRecord = await rpc<Record<string, unknown>>(
       studentApi,

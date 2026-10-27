@@ -216,6 +216,7 @@ describe("completion feedback input", () => {
     ).toEqual([
       "booking.solo-1.deduct",
       "booking.solo-1.no_show.student-1.solo",
+      "booking.solo-1.no_show.student-1",
     ]);
     expect(
       completionFeedbackEntitlementEventKeys({

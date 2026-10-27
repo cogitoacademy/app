@@ -33,9 +33,10 @@ describe("stub payment provider", () => {
     const body = JSON.stringify({ status: "PAID", providerReference: "ref_1" });
     const signature = createHmac("sha256", secret).update(body).digest("hex");
 
-    await expect(provider.verifyWebhook(body, signature)).resolves.toEqual(
-      JSON.parse(body),
-    );
+    await expect(provider.verifyWebhook(body, signature)).resolves.toEqual({
+      ...JSON.parse(body),
+      providerSuccessAt: null,
+    });
     await expect(provider.verifyWebhook(body, "00".repeat(32))).rejects.toThrow(
       "Invalid webhook signature",
     );

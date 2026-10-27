@@ -336,6 +336,10 @@ jobs:
               --path-ignore-patterns '**/booking-admin-reports.test.ts' \
               --path-ignore-patterns '**/class-enrollment.test.ts' \
               --path-ignore-patterns '**/report-export.test.ts' \
+              --path-ignore-patterns '**/booking.report-reminders.test.ts' \
+              --path-ignore-patterns '**/referral-completion.test.ts' \
+              --path-ignore-patterns '**/referral-kol-commission.test.ts' \
+              --path-ignore-patterns '**/kb-calendar.test.ts' \
               --path-ignore-patterns '**/booking-payout-g16.test.ts' \
               packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
           resettable_status=$?
@@ -343,10 +347,14 @@ jobs:
 
           fixture_lcov_status=0
           reset_coverage_profile || fixture_lcov_status=1
-          bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+          KB_DB_TEST_WINDOW=confirmed bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
             packages/api/src/tests/integration/booking-admin-reports.test.ts \
             packages/api/src/tests/integration/class-enrollment.test.ts \
-            packages/api/src/tests/integration/report-export.test.ts
+            packages/api/src/tests/integration/report-export.test.ts \
+            packages/api/src/tests/integration/booking.report-reminders.test.ts \
+            packages/api/src/tests/integration/referral-completion.test.ts \
+            packages/api/src/tests/integration/referral-kol-commission.test.ts \
+            packages/api/src/tests/integration/kb-calendar.test.ts
           fixture_status=$?
           capture_coverage_profile coverage/api-fixtures/lcov.info || fixture_lcov_status=1
 
