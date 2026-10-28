@@ -8,7 +8,12 @@ import { createContentAdminService } from "../../modules/content-admin/content-a
 import { createContentAdminHandler } from "../../modules/content-admin/content-admin.handler";
 import { createContentAdminRouter } from "../../modules/content-admin/content-admin.router";
 import type { ContentAdminRepo } from "../../modules/content-admin/content-admin.repo";
-import { ContentConflictError } from "../../modules/content-admin/content-admin.errors";
+import {
+  ContentConflictError,
+  ContentInvalidError,
+  mapContentAdminError,
+} from "../../modules/content-admin/content-admin.errors";
+import { DomainError } from "../../lib/domain-errors";
 import {
   resourceFields,
   eventFields,
@@ -42,6 +47,9 @@ const event = {
   isActive: true,
   sortOrder: 0,
 };
+class OtherContentError extends DomainError {
+  readonly domain = "content-admin";
+}
 const storage = () => ({
   put: mock(async () => {}),
   read: mock(async () => new Uint8Array()),
@@ -54,6 +62,24 @@ function service(overrides: Partial<ContentAdminRepo> = {}, enabled = true) {
   });
 }
 describe("content admin boundaries", () => {
+  test("maps content domain errors to conflict, bad request, and internal error", () => {
+    expect(mapContentAdminError(new ContentConflictError())).toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("changed or was removed"),
+    });
+    expect(
+      mapContentAdminError(new ContentInvalidError("Invalid entry")),
+    ).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Invalid entry",
+    });
+    expect(
+      mapContentAdminError(new OtherContentError("UNKNOWN", "Unexpected")),
+    ).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unexpected",
+    });
+  });
   test("single text value accepts any language and rejects locale pairs", () => {
     expect(resourceFields.parse(resource).title).toBe("Panduan");
     expect(
