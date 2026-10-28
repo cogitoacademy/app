@@ -7,9 +7,10 @@ and confirm cancellation of its first session. The enrollment and both unpaid
 installments must become `cancelled`; both allocations must be `released` with
 zero funded, spent and released Marks, and no wallet hold/ledger entry. A full
 checkout with remaining first-installment sessions stays `checkout_pending`
-with its unpaid obligation resized. The regression failed on `c60c1054`; the
-first-installment-specific fix uses the existing schema and awaits hosted DB
-confirmation. Run the guarded `class-enrollment.test.ts` coverage partition.
+with its unpaid obligation resized. The regression failed on `c60c1054`; both
+full/half cases pass after the first-installment-specific fix in hosted run
+`40694971836` on `489786b4`. The fix uses the existing schema. Run the guarded
+`class-enrollment.test.ts` coverage partition.
 
 ## Counter-based coverage and PR #332 security checks (28 October 2026)
 

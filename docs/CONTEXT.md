@@ -8,9 +8,9 @@ second-installment reservations were counted as payable checkout seats. Session
 cancellation now checks the first installment specifically; when none of its
 seats remain, it cancels the pending enrollment/unpaid installments and releases
 the remaining unfunded reservations without wallet changes. The PostgreSQL
-regression failed on `c60c1054`; hosted confirmation of the fix is pending.
-The latest completed all-test-pass checkpoint, run `40692857910` on `78112b66`,
-reports overall lines 97.04%, functions 99.34% and branches 88.23%; the unchanged
+regression failed on `c60c1054` and passes for both full and half plans after
+the fix. The latest completed all-test-pass checkpoint, run `40694971836` on
+`489786b4`, reports overall lines 97.32%, functions 99.78% and branches 88.58%; the unchanged
 100% gate remains open.
 
 Real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Follow-up tests exercise both repeat scheduler payloads and student resource input validation. The test support directory is excluded from the production source inventory so `test-setup.ts` is not counted as app code. This remains bounded unit evidence, not full financial/provider acceptance.

@@ -6,9 +6,9 @@ IN PROGRESS: the new unfunded half-plan session-cancellation regression exposed
 a stranded pending checkout on `c60c1054`. Cancellation now requires a remaining
 first-installment reservation to retain checkout state; otherwise it cancels the
 unpaid enrollment/installments and releases the other unfunded seats. Hosted DB
-confirmation remains pending. The last completed all-test-pass checkpoint is
-`78112b66` / run `40692857910`: overall lines 97.04%, functions 99.34%, branches
-88.23%. The strict 100% gate remains open.
+confirmation passes for full and half plans. The last completed all-test-pass
+checkpoint is `489786b4` / run `40694971836`: overall lines 97.32%, functions
+99.78%, branches 88.58%. The strict 100% gate remains open.
 
 Hosted CI follow-up: the first counter run produced complete function identities (both unresolved-identity lists empty), but one private-PDF test failed because storage.test.ts permanently replaced the S3 SDK module. The SDK and presigner are now spied and restored after each storage test; replaying the old test before private KB reproduces the failure, while the repaired pair passes. New real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Focused pinned-Bun instrumentation passes 89 tests / 374 assertions; referral and class-enrollment handlers reach 100% functions and branches in that focused run, and public storage reaches 100% functions/branches. This is bounded unit evidence, not full financial/provider acceptance. The overall 100% CI gate remains IN PROGRESS until the remaining genuine gaps and hosted rerun pass.
 

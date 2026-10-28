@@ -38,6 +38,7 @@ import {
   TutorPayoutPreviewStaleError,
   TutorPayoutTaxProfileIncompleteError,
   BookingV3CompetitionUnavailableError,
+  BookingV3PricingRevisionUnavailableError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -7333,6 +7334,115 @@ describe("BookingService", () => {
       });
     });
 
+    test.each([
+      "release",
+      "missing-wallet",
+      "missing-revision",
+      "revision-mismatch",
+      "missing-rate",
+      "missing-calculator",
+    ] as const)(
+      "V3 series repricing preserves hold and revision safety: %s",
+      async (scenario) => {
+        const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+        if (scenario !== "missing-rate") {
+          config.competitionRates["competition-policy-debate"] = {
+            soloMarks: 41,
+            soloFeeIdr: 123000,
+          };
+        }
+        const booking = makeBooking({
+          type: "series",
+          currentState: "awaiting_participant_confirmation",
+          targetGroupSize: 3,
+          confirmedHeadcount: 2,
+          holdAmount: 118,
+          priceSnapshot: {
+            engine: "v3",
+            v3Revision: 7,
+            competition: "competition-policy-debate",
+            modality: "online",
+            headcount: 3,
+            perStudentMarks: 22,
+            collectedMarks: 66,
+            tutorHonorariumIdr: 183000,
+          },
+        });
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () => booking),
+            findParticipant: mock(async () =>
+              makeParticipant({
+                role: "invitee",
+                userId: "student2",
+                confirmationState: "pending",
+              }),
+            ),
+            findPendingInvitees: mock(async () => []),
+            findConfirmedParticipants: mock(async () => [
+              makeParticipant({ id: "p1", userId: "student1", heldAmount: 54 }),
+              makeParticipant({ id: "p3", userId: "student3", heldAmount: 64 }),
+            ]),
+            findTutorProfile: mock(async () => makeTutorProfile()),
+            listSessionsBySeriesId: mock(async () => [
+              { id: "s1", currentState: "scheduled" },
+              { id: "s2", currentState: "scheduled" },
+              { id: "s3", currentState: "completed" },
+            ]),
+          },
+          wallet: {
+            getByUserId: mock(async () =>
+              scenario === "missing-wallet"
+                ? null
+                : { id: "wallet3", availableBalance: 0 },
+            ),
+          },
+          pricing: {
+            getV3ConfigByVersion: mock(async (version: number) =>
+              scenario === "missing-revision"
+                ? null
+                : {
+                    version:
+                      scenario === "revision-mismatch" ? version + 1 : version,
+                    values: config,
+                  },
+            ),
+            calculateV3SessionPrice:
+              scenario === "missing-calculator"
+                ? undefined
+                : mock((input: any, values: any) =>
+                    calculateV3SessionPrice(input, values),
+                  ),
+          },
+        });
+        const pending = service.declineInvite("student2", "b1", "Busy");
+        if (scenario === "release") {
+          await pending;
+          expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+          expect(wallet.release).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ walletId: "wallet3", amount: 10 }),
+          );
+          expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+            expect.anything(),
+            "b1",
+            expect.objectContaining({ holdAmount: 108 }),
+          );
+        } else {
+          await expect(pending).rejects.toBeInstanceOf(
+            scenario === "missing-wallet"
+              ? BookingNotFoundError
+              : scenario === "missing-rate"
+                ? BookingV3CompetitionUnavailableError
+                : BookingV3PricingRevisionUnavailableError,
+          );
+          expect(wallet.release).not.toHaveBeenCalled();
+          expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+        }
+        expect(wallet.hold).not.toHaveBeenCalled();
+      },
+    );
+
     test("reprices a partial V3 group series from its pinned revision before reconfirmation", async () => {
       const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
       config.competitionRates["competition-policy-debate"] = {
@@ -10142,6 +10252,166 @@ describe("cancelOfflineBooking (M6)", () => {
 
     expect(wallet.release).not.toHaveBeenCalled();
     expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking ownership and locked-record guards", () => {
+  test("report history is admin-only and requires an existing booking", async () => {
+    const { service } = createService();
+    await expect(
+      service.listCompletionFeedbackHistory("b1", "student1", "student"),
+    ).rejects.toBeInstanceOf(BookingNotOwnedError);
+    await expect(
+      service.listCompletionFeedbackHistory("b1", "admin1", "admin"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+  });
+
+  test.each(["completion", "no-show"] as const)(
+    "%s rechecks tutor ownership after acquiring the booking lock",
+    async (operation) => {
+      await Promise.all(
+        ["missing", "reassigned"].map(async (scenario) => {
+          const original = makeBooking({
+            type: "series",
+            currentState: "scheduled",
+          });
+          const records = [
+            original,
+            scenario === "missing"
+              ? null
+              : { ...original, tutorId: "other-tutor" },
+          ];
+          const { service, wallet } = createService({
+            repo: { findBookingById: mock(async () => records.shift()) },
+          });
+          const pending =
+            operation === "completion"
+              ? service.completeSession(
+                  "b1",
+                  "tutor1",
+                  "session1",
+                  TEST_COMPLETION_FEEDBACK,
+                )
+              : service.markParticipantNoShow(
+                  "b1",
+                  "tutor1",
+                  "student1",
+                  "session1",
+                );
+          await expect(pending).rejects.toBeInstanceOf(
+            scenario === "missing"
+              ? BookingNotFoundError
+              : BookingNotOwnedError,
+          );
+          expect(wallet.deduct).not.toHaveBeenCalled();
+        }),
+      );
+    },
+  );
+
+  test("completion rejects an invalid request key before opening a transaction", async () => {
+    const { service, db } = createService();
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        "invalid",
+      ),
+    ).rejects.toThrow("valid request key");
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  test.each(["missing-id", "missing-session", "other-booking"] as const)(
+    "series no-show rejects an invalid session: %s",
+    async (scenario) => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking({ type: "series" })),
+          findSessionById: mock(async () =>
+            scenario === "other-booking"
+              ? { id: "session1", seriesBookingId: "other-booking" }
+              : null,
+          ),
+        },
+      });
+      await expect(
+        service.markParticipantNoShow(
+          "b1",
+          "tutor1",
+          "student1",
+          scenario === "missing-id" ? undefined : "session1",
+        ),
+      ).rejects.toBeInstanceOf(BookingSessionNotFoundError);
+      expect(repo.findParticipant).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["missing-booking", "missing-session", "other-booking"] as const)(
+    "session cancellation validates its locked records: %s",
+    async (scenario) => {
+      const discovered = { id: "session1", seriesBookingId: "b1" };
+      const sessions = [
+        discovered,
+        scenario === "other-booking"
+          ? { ...discovered, seriesBookingId: "other-booking" }
+          : null,
+      ];
+      const { service, repo, wallet } = createService({
+        repo: {
+          findSessionById: mock(async () => sessions.shift()),
+          findBookingById: mock(async () =>
+            scenario === "missing-booking"
+              ? null
+              : makeBooking({ type: "series" }),
+          ),
+        },
+      });
+      await expect(
+        service.cancelSession("student1", "session1"),
+      ).rejects.toBeInstanceOf(
+        scenario === "missing-booking"
+          ? BookingNotFoundError
+          : BookingSessionNotFoundError,
+      );
+      expect(repo.cancelSession).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+    },
+  );
+
+  test("an invitee cannot reschedule the group and a missing invite cannot be withdrawn", async () => {
+    const invitee = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "group", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () =>
+          makeParticipant({ userId: "invitee1", role: "invitee" }),
+        ),
+      },
+    });
+    await expect(
+      invitee.service.proposeReschedule(
+        "invitee1",
+        "b1",
+        new Date(Date.now() + 86400000),
+        new Date(Date.now() + 90000000),
+      ),
+    ).rejects.toBeInstanceOf(BookingNotOwnedError);
+    const missing = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            type: "group",
+            currentState: "awaiting_participant_confirmation",
+          }),
+        ),
+      },
+    });
+    await expect(
+      missing.service.withdrawInvite("student1", "b1", "invitee1"),
+    ).rejects.toBeInstanceOf(BookingParticipantNotFoundError);
   });
 });
 
