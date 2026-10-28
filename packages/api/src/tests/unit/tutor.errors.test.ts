@@ -9,6 +9,7 @@ import {
   TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   InvalidDateRangeError,
+  TutorPayoutFinanceUnavailableError,
   mapTutorError,
 } from "../../modules/tutor/tutor.errors";
 
@@ -20,6 +21,14 @@ class TestDomainError extends DomainError {
 }
 
 describe("tutor.errors", () => {
+  it("maps unavailable payout finance to an internal API error", () => {
+    const error = new TutorPayoutFinanceUnavailableError();
+    expect(error.code).toBe("TUTOR_PAYOUT_FINANCE_UNAVAILABLE");
+    expect(mapTutorError(error)).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+    });
+  });
   describe("TutorProfileNotFoundError", () => {
     it("should be instance of DomainError", () => {
       const err = new TutorProfileNotFoundError("tp_1");

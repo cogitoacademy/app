@@ -13,7 +13,7 @@ import {
 
 function makeQueryChain(resolvedValue: any) {
   const chain: any = {};
-  const methods = ["from", "where", "limit", "offset", "orderBy"];
+  const methods = ["from", "innerJoin", "where", "limit", "offset", "orderBy"];
   const promise = Promise.resolve(resolvedValue);
 
   for (const method of methods) {
@@ -290,6 +290,32 @@ describe("updatePaymentStatus", () => {
 });
 
 describe("createPaymentRepo", () => {
+  test("package-code lookup uses the provided connection and handles a missing attempt", async () => {
+    const row = { id: "payment-1", userId: "u1", provider: "midtrans" };
+    const defaultConn = makeSelectConn([row]);
+    const repo = createPaymentRepo(defaultConn as any);
+    expect(
+      await repo.findLatestPaymentByUserAndPackageCode(
+        "u1",
+        "starter",
+        "midtrans",
+      ),
+    ).toEqual(row);
+    expect(defaultConn.chain.innerJoin).toHaveBeenCalledTimes(1);
+    expect(defaultConn.chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(defaultConn.chain.limit).toHaveBeenCalledWith(1);
+    const tx = makeSelectConn([]);
+    expect(
+      await repo.findLatestPaymentByUserAndPackageCode(
+        "u1",
+        "starter",
+        "midtrans",
+        tx as any,
+      ),
+    ).toBeNull();
+    expect(tx.select).toHaveBeenCalledTimes(1);
+    expect(defaultConn.select).toHaveBeenCalledTimes(1);
+  });
   test("returns object with all repo methods", () => {
     const db: any = {};
     const repo = createPaymentRepo(db);

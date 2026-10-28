@@ -64,6 +64,51 @@ function makeBookingRepo() {
 }
 
 describe("createBookingRepo", () => {
+  test.each([
+    { subject: null, active: false },
+    { subject: { isActive: false }, active: false },
+    { subject: { isActive: true, parentId: null }, active: false },
+    {
+      subject: { isActive: true, parentId: "parent", parent: null },
+      active: false,
+    },
+    {
+      subject: {
+        isActive: true,
+        parentId: "parent",
+        parent: { isActive: false },
+      },
+      active: false,
+    },
+    {
+      subject: {
+        isActive: true,
+        parentId: "parent",
+        parent: { isActive: true, parentId: "grandparent" },
+      },
+      active: false,
+    },
+    {
+      subject: {
+        isActive: true,
+        parentId: "parent",
+        parent: { isActive: true, parentId: null },
+      },
+      active: true,
+    },
+  ])(
+    "distinguishes assigned catalog subjects from selectable specializations: %s",
+    async ({ subject, active }) => {
+      const repo = createBookingRepo({} as any);
+      const findFirst = mock(async () => ({ subjects: [{ subject }] }));
+      expect(
+        await repo.getTutorSubjectAssignmentState(
+          { query: { tutorProfile: { findFirst } } } as any,
+          "tutor1",
+        ),
+      ).toEqual({ hasAssignments: true, hasActiveAssignments: active });
+    },
+  );
   test("resolves active tutor subject topics and rejects inactive relations", async () => {
     const repo = createBookingRepo({} as any);
     const active = {

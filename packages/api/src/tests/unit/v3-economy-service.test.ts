@@ -15,6 +15,26 @@ import type { EconomyRepo } from "../../modules/economy/economy.repo";
 import type { Context } from "../../context";
 
 describe("V3 economy draft service", () => {
+  test("historical revisions are parsed and unavailable versions stay unavailable", async () => {
+    const db = {} as DbType;
+    const tx = {} as DbOrTx;
+    const getV3RevisionByVersion = mock(async (): Promise<unknown> => null)
+      .mockResolvedValueOnce({ version: 7, values: DEFAULT_V3_ECONOMY_CONFIG })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ version: 8, values: { invalid: true } });
+    const service = createEconomyService({
+      db,
+      repo: { getV3RevisionByVersion } as unknown as EconomyRepo,
+    });
+    expect(await service.getV3ConfigByVersion(7)).toEqual({
+      version: 7,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+    });
+    expect(getV3RevisionByVersion).toHaveBeenLastCalledWith(db, 7);
+    await expect(service.getV3ConfigByVersion(99, tx)).resolves.toBeNull();
+    expect(getV3RevisionByVersion).toHaveBeenLastCalledWith(tx, 99);
+    await expect(service.getV3ConfigByVersion(8)).rejects.toThrow();
+  });
   test("empty storage returns defaults as revision zero without writing", async () => {
     const repo = { getLatestV3Revision: mock(async () => null) };
     const service = createEconomyService({
