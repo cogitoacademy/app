@@ -62,6 +62,10 @@ The same pattern was observed in `content-admin.handler.ts`: the main partition 
 
 ## Release evidence and next gate
 
+### Current PR #332 run (28 October 2026)
+
+Hosted run 40671516167 on `d7f70efb` completes all three API coverage partitions and the separate server unit suite, then fails the unchanged 100% thresholds at API lines 9931/10515 (94.4%), overall lines 10270/10877 (94.4%), functions 2672/2766 (96.6%) and branches 7431/8757 (84.9%). The collector artifacts contain complete partitions and function identities; this is a genuine remaining-coverage result, not a failed collection. Focused FAQ rich-text and payment-handler tests bring each of those source files to 100% lines/functions/branches under the counter preload, but the merged gate remains open. Build, lint, type-check and CodeQL pass on this head; E2E is excluded from the requested gate.
+
 The local Linux run from `ae6b258b` plus the focused Redis/content/storage/referral test changes passes 3,116 resettable cases (8,464 assertions), 88 reset-free fixture cases (774 assertions), 11 payout cases (105 assertions), and 156 server cases (409 assertions). The T05-only server case is separately proven on its guarded target: 1 case / 7 assertions, with rollback. All four typecheck tasks and the lint baseline pass. Web/server build passes with real Node 24.22.1, Bun 1.3.14, serial Turbo, a 3 GiB Node heap and a 5 GiB container limit; one build task is cached. Initial Bun-node-fallback and undersized-heap build attempts failed and are not counted as passes.
 
 The merged report still fails: API lines 39,109/44,655 (87.6%), overall lines 40,489/46,096 (87.8%), function lower bounds 3,195/3,370 (94.8%), and 45 sources with unidentified uncovered functions. The branch reporter emitted 0/0; this is not proof of branch coverage. Gate thresholds and strict LCOV validation remain unchanged.
