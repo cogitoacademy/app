@@ -910,6 +910,49 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     });
   });
 
+  test.each([0, 1])(
+    "a new checkout releases an expired seat reservation for student %s",
+    async (studentIndex) => {
+      const fixture = await createFixture({
+        sessions: 2,
+        capacity: 1,
+        studentCount: 2,
+        balance: 0,
+      });
+      const previous = await makeEnrollment(fixture, 0, "full");
+      expect(previous.state).toBe("checkout_pending");
+      fixture.setNow(new Date(BASE_TIME.getTime() + 16 * 60_000));
+      const next = await makeEnrollment(fixture, studentIndex, "full");
+      expect(next.state).toBe("checkout_pending");
+      expect(next.id).not.toBe(previous.id);
+      const records = await enrollmentRows(fixture);
+      expect(records.find((row) => row.id === previous.id)?.state).toBe(
+        "expired",
+      );
+      const allocations = await allocationRows(fixture);
+      expect(
+        allocations.filter((row) => row.enrollmentId === previous.id),
+      ).toHaveLength(2);
+      expect(
+        allocations
+          .filter((row) => row.enrollmentId === previous.id)
+          .every(
+            (row) =>
+              row.state === "released" &&
+              row.fundedMarks === 0 &&
+              row.spentMarks === 0 &&
+              row.releasedMarks === 0,
+          ),
+      ).toBe(true);
+      expect(
+        allocations
+          .filter((row) => row.enrollmentId === next.id)
+          .every((row) => row.state === "checkout_reserved"),
+      ).toBe(true);
+      expect(await ledgerHolds(fixture)).toHaveLength(0);
+    },
+  );
+
   test("full/half/single snapshots survive rate edits and repeated installment pay", async () => {
     const full = await createFixture({ sessions: 16, balance: 500 });
     const createdFull = await makeEnrollment(full, 0, "full");

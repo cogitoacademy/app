@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
+import { createAcademyClassHandler } from "../../modules/academy-class/academy-class.handler";
+import type { Context } from "../../context";
 import {
   AcademyClassNotFoundError,
   AcademyClassStateConflictError,
@@ -78,6 +80,98 @@ function fixture(
 }
 
 describe("academy class service reads and meeting recovery", () => {
+  test("admin handlers expose reads and map a missing meeting-retry target", async () => {
+    const f = fixture([[]], [published], [[published]]);
+    const handler = createAcademyClassHandler(f.service);
+    expect(
+      await handler.listAcademyClasses({ input: { state: "published" } }),
+    ).toEqual([published]);
+    expect(
+      await handler.getAcademyClass({ input: { id: published.id } }),
+    ).toEqual(published);
+    await expect(
+      handler.retryAcademyClassMeetings({
+        context: { session: { user: { id: "admin1" } } } as unknown as Context,
+        input: { id: "missing", reason: "Retry setup" },
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+  test.each([
+    "fee",
+    "no-sessions",
+    "masterclass-count",
+    "curriculum",
+    "minimum-date",
+    "minimum-capacity",
+  ] as const)(
+    "publication rejects invalid persisted class data: %s",
+    async (scenario) => {
+      const session = {
+        id: "session-1",
+        startAt: new Date("2040-01-01T00:00:00Z"),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+        curriculumEn: "Problem solving",
+        capacity: 4,
+        tutorId: "tutor-1",
+        mode: "online",
+        tutorFeeIdr: 400000,
+      };
+      const record = {
+        ...published,
+        state: "draft",
+        version: 1,
+        minimumCheckAt: new Date("2039-12-01T00:00:00Z"),
+        minimumEnrollment: 1,
+        sessions: [session],
+      };
+      const patches = {
+        fee: { tutorFeeIdr: 399999 },
+        "no-sessions": { sessions: [] },
+        "masterclass-count": {
+          kind: "masterclass",
+          tutorFeeIdr: 300000,
+          sessions: [session, { ...session, id: "session-2" }],
+        },
+        curriculum: { sessions: [{ ...session, curriculumEn: "  " }] },
+        "minimum-date": { minimumCheckAt: session.startAt },
+        "minimum-capacity": { minimumEnrollment: 5 },
+      };
+      const f = fixture(
+        [[{ id: published.id }]],
+        [{ ...record, ...patches[scenario] }],
+      );
+      await expect(
+        f.service.publish("admin-1", {
+          id: published.id,
+          expectedVersion: 1,
+          reason: "Publish class",
+        }),
+      ).rejects.toMatchObject({ code: "ACADEMY_CLASS_INVALID_OPERATION" });
+      expect(f.updates).toEqual([]);
+      expect(f.audit.record).not.toHaveBeenCalled();
+    },
+  );
+
+  test("read and publication fail when the class disappears", async () => {
+    await expect(
+      fixture([], [null]).service.get("missing"),
+    ).rejects.toBeInstanceOf(AcademyClassNotFoundError);
+    await expect(
+      fixture([[]]).service.publish("admin-1", {
+        id: "missing",
+        expectedVersion: 1,
+        reason: "Publish class",
+      }),
+    ).rejects.toBeInstanceOf(AcademyClassNotFoundError);
+    await expect(
+      fixture([[{ id: "missing" }]], [null]).service.publish("admin-1", {
+        id: "missing",
+        expectedVersion: 1,
+        reason: "Publish class",
+      }),
+    ).rejects.toBeInstanceOf(AcademyClassNotFoundError);
+  });
+
   test("admin listing retains details while the published catalog merges and sorts public records", async () => {
     const postponed = {
       ...published,

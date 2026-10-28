@@ -359,5 +359,13 @@ describe("FAQ content", () => {
     await expect(studentClient.adminFaq.list({})).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+    const adminClient = createRouterClient(
+      createFaqRouter(createFaqHandler(service)),
+      { context: context("admin") },
+    );
+    expect(await adminClient.adminFaq.list({})).toEqual([]);
+    expect(
+      await adminClient.adminFaq.create(createFaqInput.parse(validInput())),
+    ).toMatchObject({ id: "faq-1", questionEn: "How do I join?" });
   });
 });

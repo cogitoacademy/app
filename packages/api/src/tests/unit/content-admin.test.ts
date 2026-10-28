@@ -232,9 +232,11 @@ describe("content admin boundaries", () => {
     await expect(
       s.uploadPdf({ fileName: "x.pdf", base64: btoa("not a PDF") }),
     ).rejects.toThrow("PDF");
-    const result = await s.uploadPdf({
-      fileName: "x.pdf",
-      base64: btoa("%PDF-test"),
+    const result = await createContentAdminHandler(s).uploadPdf({
+      input: {
+        fileName: "x.pdf",
+        base64: btoa("%PDF-test"),
+      },
     });
     expect(Object.keys(result).toSorted()).toEqual([
       "bytes",

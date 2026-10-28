@@ -51,6 +51,32 @@ function makeWalletPort() {
 }
 
 describe("AdminHandler", () => {
+  test("tax endpoints forward the admin identity and preserve the service result", async () => {
+    const config = { version: 1 };
+    const service = {
+      getTutorTaxConfig: mock(async () => config),
+      setTutorTaxRateOverride: mock(async () => ({
+        tutorId: "t1",
+        taxRateOverrideBps: null,
+      })),
+    };
+    const handler = createAdminHandler(service as any);
+    const context = { session: { user: { id: "admin1" } } } as any;
+    expect(await handler.getTutorTaxConfig({ context })).toBe(config);
+    const input = {
+      tutorId: "t1",
+      rateBps: null,
+      reason: "Clear verified override",
+    };
+    expect(await handler.setTutorTaxRateOverride({ context, input })).toEqual({
+      tutorId: "t1",
+      taxRateOverrideBps: null,
+    });
+    expect(service.setTutorTaxRateOverride).toHaveBeenCalledWith(
+      "admin1",
+      input,
+    );
+  });
   test("delegates dashboard analytics to the admin service", async () => {
     const service = {
       getDashboardAnalytics: mock(async (input: unknown) => ({ input })),
