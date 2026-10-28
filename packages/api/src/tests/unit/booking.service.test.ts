@@ -2667,6 +2667,146 @@ describe("BookingService", () => {
   });
 
   describe("submitAdminCompletionReport", () => {
+    test.each([
+      {
+        patch: { deliveryConfirmed: false },
+        message: "Confirm that the session was delivered",
+      },
+      { patch: { reason: "  " }, message: "audit reason" },
+      { patch: { reason: "😀".repeat(601) }, message: "audit reason" },
+      { patch: { requestKey: "not-a-uuid" }, message: "valid request key" },
+      {
+        patch: { expectedVersion: 0 },
+        message: "expected report version is invalid",
+      },
+      {
+        patch: { expectedVersion: 1.5 },
+        message: "expected report version is invalid",
+      },
+    ])(
+      "rejects invalid admin report metadata: %s",
+      async ({ patch, message }) => {
+        const { service, db, wallet } = createService();
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...patch,
+          }),
+        ).rejects.toThrow(message);
+        expect(db.transaction).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each([
+      "single-with-session",
+      "series-missing-session",
+      "series-wrong-session",
+    ] as const)(
+      "rejects invalid admin report session references: %s",
+      async (scenario) => {
+        const { service, wallet, repo } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                type: scenario === "single-with-session" ? "solo" : "series",
+                currentState: "completed",
+              }),
+            ),
+            findSessionById: mock(async () => ({
+              id: "session1",
+              seriesBookingId: "other-booking",
+            })),
+          },
+        });
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...(scenario === "series-missing-session"
+              ? {}
+              : { sessionId: "session1" }),
+          }),
+        ).rejects.toBeInstanceOf(
+          scenario === "single-with-session"
+            ? BookingNotEditableError
+            : scenario === "series-missing-session"
+              ? BookingSessionRequiredError
+              : BookingSessionNotFoundError,
+        );
+        expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each([
+      "missing-report",
+      "not-delivered",
+      "not-ended",
+      "cancelled-single",
+      "cancelled-series",
+    ] as const)(
+      "rejects an admin report inconsistent with delivery state: %s",
+      async (scenario) => {
+        const isSeries = scenario === "cancelled-series";
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                type: isSeries ? "series" : "solo",
+                currentState: scenario.startsWith("cancelled")
+                  ? "cancelled"
+                  : "scheduled",
+                scheduledEndAt: new Date(
+                  Date.now() + (scenario === "not-ended" ? 60000 : -60000),
+                ),
+              }),
+            ),
+            findSessionById: mock(async () => ({
+              id: "session1",
+              seriesBookingId: "b1",
+              currentState: "cancelled",
+              scheduledEndAt: new Date(Date.now() - 60000),
+            })),
+            findCompletionFeedback: mock(async () =>
+              scenario === "not-delivered"
+                ? { id: "report1", version: 1 }
+                : null,
+            ),
+          },
+        });
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...(isSeries ? { sessionId: "session1" } : {}),
+            ...(["missing-report", "not-delivered"].includes(scenario)
+              ? { expectedVersion: 1 }
+              : {}),
+          }),
+        ).rejects.toBeInstanceOf(
+          scenario === "missing-report"
+            ? BookingCompletionReportConflictError
+            : BookingNotEditableError,
+        );
+        expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
     for (const bookingType of ["solo", "group", "series"] as const) {
       test(`records a report for an already-completed ${bookingType} without settling again`, async () => {
         const bookingId = `legacy-${bookingType}`;
@@ -10002,6 +10142,122 @@ describe("cancelOfflineBooking (M6)", () => {
 
     expect(wallet.release).not.toHaveBeenCalled();
     expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+  });
+});
+
+describe("Tutor payout safety guards", () => {
+  test("a payout preview requires a tutor profile and a unique non-empty session selection", async () => {
+    const missing = createService();
+    await expect(
+      missing.service.previewTutorPayout("tutor1", ["fee1"]),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+    await expect(
+      missing.service.getTutorPayoutFinance("tutor1"),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+    const { service } = createService({
+      repo: { findTutorProfile: mock(async () => ({})) },
+    });
+    await expect(
+      service.previewTutorPayout("tutor1", []),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+    await expect(
+      service.previewTutorPayout("tutor1", ["fee1", "fee1"]),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  });
+
+  test.each(["identical", "different-tutor", "different-preview"] as const)(
+    "payout preparation handles an operation replay: %s",
+    async (scenario) => {
+      const prior = {
+        id: "payout1",
+        tutorId: scenario === "different-tutor" ? "other-tutor" : "tutor1",
+        previewVersion: scenario === "different-preview" ? "v2" : "v1",
+        status: "prepared",
+        sourceKeys: null,
+      };
+      const { service, repo } = createService({
+        repo: { findTutorPayoutByIdempotencyKey: mock(async () => prior) },
+      });
+      const pending = service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        previewVersion: "v1",
+        operationId: "operation1",
+        sourceKeys: ["fee1"],
+      });
+      if (scenario === "identical")
+        await expect(pending).resolves.toMatchObject({
+          id: "payout1",
+          status: "prepared",
+          sourceKeys: [],
+        });
+      else
+        await expect(pending).rejects.toBeInstanceOf(
+          TutorPayoutPreviewStaleError,
+        );
+      expect(repo.findTutorProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["invalid-date", "void-payout"] as const)(
+    "transfer recording rejects %s before writing",
+    async (scenario) => {
+      const { service } = createService({
+        repo: {
+          findTutorPayoutById: mock(async () => ({
+            id: "payout1",
+            tutorId: "tutor1",
+            status: scenario === "void-payout" ? "void" : "prepared",
+          })),
+        },
+      });
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", {
+          payoutId: "payout1",
+          previewVersion: "v1",
+          actualAmountIdr: 10000,
+          paidAt:
+            scenario === "invalid-date"
+              ? new Date("invalid")
+              : new Date("2026-10-28T00:00:00Z"),
+        }),
+      ).rejects.toThrow(
+        scenario === "invalid-date"
+          ? "Transfer date must be valid"
+          : "Only a prepared payout",
+      );
+    },
+  );
+
+  test("a void payout cannot be voided again or reconciled without an outstanding transfer", async () => {
+    const { service, audit } = createService({
+      repo: {
+        findTutorPayoutById: mock(async () => ({
+          id: "payout1",
+          tutorId: "tutor1",
+          status: "void",
+          reconciliationStatus: "resolved",
+        })),
+      },
+    });
+    await expect(
+      service.voidTutorPayout("admin1", {
+        payoutId: "payout1",
+        reason: "Void duplicate",
+      }),
+    ).rejects.toThrow("already void");
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", {
+        payoutId: "payout1",
+        reason: "Resolved transfer",
+      }),
+    ).rejects.toThrow("no outstanding transfer reconciliation");
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", {
+        payoutId: "payout1",
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Resolution reason is required");
+    expect(audit.record).not.toHaveBeenCalled();
   });
 });
 

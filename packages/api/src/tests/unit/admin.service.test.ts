@@ -294,6 +294,26 @@ describe("Admin Service", () => {
         payout: {} as any,
       };
       const missing = createAdminService(base);
+      const save = {
+        expectedVersion: 0,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+        reason: "Update policy",
+      };
+      await expect(missing.getEconomySettings()).rejects.toThrow(
+        "Economy service is not configured",
+      );
+      await expect(
+        missing.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Economy service is not configured");
+      await expect(
+        missing.updateEconomySettings("admin1", {
+          expectedVersion: 0,
+          onlineCogitoBaseIdr: 50000,
+          onlineCogitoIncrementIdr: 20000,
+          offlineCogitoBaseIdr: 90000,
+          offlineCogitoIncrementIdr: 40000,
+        }),
+      ).rejects.toThrow("Economy service is not configured");
       await expect(missing.getV3EconomySettings()).rejects.toThrow(
         "Economy service is not configured",
       );
@@ -307,6 +327,9 @@ describe("Admin Service", () => {
       await expect(service.getV3EconomySettings()).rejects.toThrow(
         "Competition catalog service is not configured",
       );
+      await expect(
+        service.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Competition catalog service is not configured");
       expect(() =>
         service.previewV3EconomySettings({
           values: DEFAULT_V3_ECONOMY_CONFIG,
@@ -829,6 +852,20 @@ describe("Admin Service", () => {
       });
       return { service, adminRepo, auditPort, tx };
     }
+
+    test("a concurrent role change fails before recording an audit event", async () => {
+      const { service, auditPort } = makeSetRoleService({
+        updateRoleWithExpected: mock(async () => []),
+      });
+      await expect(
+        service.setRole("admin1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        }),
+      ).rejects.toMatchObject({ code: "OPTIMISTIC_LOCK" });
+      expect(auditPort.record).not.toHaveBeenCalled();
+    });
 
     test("locks admin rows and validates the count inside the transaction (H6)", async () => {
       const { service, adminRepo } = makeSetRoleService();
