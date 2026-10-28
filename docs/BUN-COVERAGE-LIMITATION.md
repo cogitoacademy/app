@@ -1,5 +1,9 @@
 # Bun 1.3.14 partitioned coverage limitation
 
+## CI collector replacement (PR #332)
+
+The native Bun issue below remains reproducible. CI now collects source-bound Istanbul counters through an explicit Bun preload and merges those before generating LCOV, instead of trying to reconstruct missing native function identities. The original strict LCOV validator and 100% gates remain. Fixed source inventory includes unloaded/mocked modules at zero and all previously measured API/auth/DB/env sources; real branch counters are retained. Collector regressions prove complementary partitions reach 100%, while missing execution, stale profiles and invalid counters fail closed. See RUNBOOK for commands and reset safety. Full pinned-Linux CI and any genuine remaining coverage gaps still require validation; the native percentages below are historical evidence, not the new collector result.
+
 Observed on Linux, 28 October 2026, with Bun 1.3.14 (`0d9b296a`). This is a coverage-reporting blocker, not a waiver of the unchanged 100% release gate.
 
 ## Reproduction

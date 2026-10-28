@@ -1,5 +1,13 @@
 # Cogito Module Reference
 
+## Coverage collection module (PR #332, 28 October 2026)
+
+`.github/scripts/coverage-sources.ts` builds the fixed source inventory for API, auth, DB and env; test files, declaration files and declarative DB schema files are excluded. This retains every source in the prior merged report and includes previously unloaded source files. `coverage-instrument.ts` injects Istanbul counters only into test processes started with its explicit preload; query-suffixed module imports share source identities, and test cleanup runs before the counters flush. Unloaded or mocked modules keep their zero baseline.
+
+`coverage-runner.ts` runs the existing resettable, reset-free fixture and payout partitions serially. Inputs are NODE_ENV=test, exact loopback DATABASE_URL=6769/cogito-test, PAYOUT_DATABASE_URL=6770/cogito-test-payout and COVERAGE_DB_RESET_WINDOW=confirmed, with ambient reset overrides absent. Only resettable/payout children receive matching reset flags; the fixture child receives KB_DB_TEST_WINDOW=confirmed. Failed partitions remain failures even if a report can be generated.
+
+`coverage-report.ts` verifies source hashes, complete source/function/statement/branch identities and nonnegative integer counters before merging. It emits named LCOV functions using declaration positions, preserves real branch counters, and delegates final LCOV validation to `merge-lcov.ts`. Missing/stale/malformed data cannot reuse a previous successful report. `coverage-comment.ts` continues to enforce 100% API lines, overall lines, functions and branches. No service endpoint, domain event or financial rule is changed by these CI modules.
+
 ## Competition catalog UI composition (26 October 2026)
 
 `CompetitionCatalogPage` groups the server's flat catalog into parent cards with child edit rows, including parent context for child-only search matches. `keepPreviousData` keeps the search field mounted while query keys change. Create/edit uses a Selia drawer with guarded dirty closing; descriptions/colors/movement are progressively disclosed. Palette validation, reason requirements, version-conflict retention and reference-gated lifecycle mutation handlers are retained. Parent palette previews read the current draft. No accounting or catalog eligibility policy changes.

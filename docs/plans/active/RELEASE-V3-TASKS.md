@@ -1,5 +1,11 @@
 # Release v3 - SDD execution and acceptance plan
 
+## PR #332 CI gate repair (28 October 2026)
+
+Implemented for hosted validation: exact OAuth token URL matching in the two CodeQL-flagged Google Meet mocks, and an Istanbul counter collector replacing unstable native Bun LCOV collection. Source inventory/hashes, stable function identities, real branches, unloaded-module zeros and strict fail-closed reporting are covered by regression tests. The existing three DB partitions and 100% gate thresholds remain; an explicit confirmed window protects local full-run resets. Local collector regressions, script/workspace type checks and bounded instrumented application units pass.
+
+Status remains IN PROGRESS until CodeQL and the full pinned-Linux coverage workflow pass on the integrated PR head. New precise coverage may expose genuine untested branches/functions previously hidden by native reporting; these remain blockers rather than being excluded or assigned covered counters. Provider/production/client gates are unchanged. See ../../../.github/scripts/coverage-counters.test.ts and ../../BUN-COVERAGE-LIMITATION.md.
+
 ## Linux acceptance and coverage blocker (28 October 2026)
 
 Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 assertions, 88 reset-free fixture tests / 774 assertions, 11 payout tests / 105 assertions, and 156 server tests / 409 assertions. A separate guarded T05 rollback test passes 1 / 7. Four typecheck tasks, lint baseline and both build tasks pass; build uses real Node 24.22.1 and bounded memory, with one cached task. The Redis helper test now respects REDIS_URL; new tests cover private PDF storage failures/validation, admin content actor/version/redaction, and real PostgreSQL referral usage pagination/filter totals/literal wildcard search. Unrelated local Activities/client work remains outside this scope.

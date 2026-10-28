@@ -1,5 +1,11 @@
 # Cogito App — Codebase Context
 
+## PR #332 coverage and CodeQL follow-up (28 October 2026)
+
+CI coverage now uses Istanbul source counters through a Bun preload instead of merging Bun's unstable native line/function summaries. The fixed API/auth/DB/env source inventory keeps unloaded/mocked modules at zero, hashes source content, merges stable function/branch identities, then runs the existing strict LCOV validator and unchanged 100% gates. The three database partitions and their reset boundaries remain separate; the runner additionally requires a confirmed reset window. The local application runtime does not load this instrumentation.
+
+Two CodeQL findings in Google Meet test mocks are addressed by exact OAuth token endpoint matching. Local collector/gate regression tests, targeted script type checking and workspace typechecks pass; instrumented application units pass on Windows canary. Pinned Windows DB/auth timeouts and interrupted Docker setup attempts are not passes. Full pinned-Linux CI and remaining genuine coverage are pending on PR #332. See RUNBOOK and BUN-COVERAGE-LIMITATION.md.
+
 ## Linux acceptance and coverage blocker (28 October 2026)
 
 Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 assertions, 88 reset-free fixture tests / 774 assertions, 11 payout tests / 105 assertions, and 156 server tests / 409 assertions. A separate guarded T05 rollback test passes 1 / 7. Four typecheck tasks, lint baseline and both build tasks pass; build uses real Node 24.22.1 and bounded memory, with one cached task. The Redis helper test now respects REDIS_URL; new tests cover private PDF storage failures/validation, admin content actor/version/redaction, and real PostgreSQL referral usage pagination/filter totals/literal wildcard search. Unrelated local Activities/client work remains outside this scope.

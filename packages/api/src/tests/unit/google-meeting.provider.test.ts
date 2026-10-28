@@ -2162,7 +2162,7 @@ describe("createGoogleMeetingProvider academy class events", () => {
         url,
         body: typeof init?.body === "string" ? init.body : undefined,
       });
-      if (url.includes("oauth2.googleapis.com"))
+      if (url === "https://oauth2.googleapis.com/token")
         return new Response(
           JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
           { status: 200 },
@@ -2267,7 +2267,7 @@ describe("durable class event deletion", () => {
     ) => {
       const url = String(input);
       calls.push(`${init?.method} ${url}`);
-      if (url.includes("oauth2.googleapis.com"))
+      if (url === "https://oauth2.googleapis.com/token")
         return new Response(
           JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
           { status: 200 },

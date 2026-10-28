@@ -267,7 +267,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-install-
       - run: bun install --frozen-lockfile
       - name: Test LCOV merger
-        run: bun test ./.github/scripts/merge-lcov.test.ts
+        run: bun test ./.github/scripts/merge-lcov.test.ts ./.github/scripts/coverage-counters.test.ts
       - name: Create env file for drizzle
         run: |
           echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
@@ -291,98 +291,11 @@ jobs:
           ENV_FILE: ../../apps/server/.env.test-payout
       - name: Test with coverage
         id: coverage
-        run: |
-          set +e
-          # Individual partitions cover only part of the API; the merged LCOV gate enforces 100% below.
-          coverage_config="$(mktemp .coverage-collection-bunfig.XXXXXX.toml)" || exit 1
-          trap 'rm -f "$coverage_config"' EXIT
-          if ! sed '/^coverageThreshold[[:space:]]*=/d' bunfig.toml > "$coverage_config"; then
-            echo "::error::Could not create the partitioned coverage Bun config"
-            exit 1
-          fi
-          mkdir -p coverage/api-resettable coverage/api-fixtures coverage/api-payout
-
-          reset_coverage_profile() {
-            rm -f coverage/lcov.info
-            if [ -e coverage/lcov.info ]; then
-              echo "::error::Could not clear the previous Bun LCOV profile at coverage/lcov.info"
-              return 1
-            fi
-          }
-
-          capture_coverage_profile() {
-            local destination="$1"
-            if [ ! -s coverage/lcov.info ]; then
-              echo "::error::Bun did not emit a non-empty LCOV profile at coverage/lcov.info"
-              return 1
-            fi
-            if ! grep -q '^SF:' coverage/lcov.info; then
-              echo "::error::Bun emitted no LCOV source records at coverage/lcov.info"
-              return 1
-            fi
-            if ! cp coverage/lcov.info "$destination"; then
-              echo "::error::Could not snapshot Bun LCOV profile to $destination"
-              return 1
-            fi
-            printf 'Captured Bun LCOV profile: %s (%s bytes)\n' "$destination" "$(wc -c < "$destination")"
-          }
-
-          resettable_lcov_status=0
-          reset_coverage_profile || resettable_lcov_status=1
-
-          TEST_DATABASE_ALLOW_RESET=true \
-          TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
-            bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
-              --path-ignore-patterns '**/booking-admin-reports.test.ts' \
-              --path-ignore-patterns '**/class-enrollment.test.ts' \
-              --path-ignore-patterns '**/report-export.test.ts' \
-              --path-ignore-patterns '**/booking.report-reminders.test.ts' \
-              --path-ignore-patterns '**/referral-completion.test.ts' \
-              --path-ignore-patterns '**/referral-kol-commission.test.ts' \
-              --path-ignore-patterns '**/kb-calendar.test.ts' \
-              --path-ignore-patterns '**/booking-payout-g16.test.ts' \
-              packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
-          resettable_status=$?
-          capture_coverage_profile coverage/api-resettable/lcov.info || resettable_lcov_status=1
-
-          fixture_lcov_status=0
-          reset_coverage_profile || fixture_lcov_status=1
-          KB_DB_TEST_WINDOW=confirmed bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
-            packages/api/src/tests/integration/booking-admin-reports.test.ts \
-            packages/api/src/tests/integration/class-enrollment.test.ts \
-            packages/api/src/tests/integration/report-export.test.ts \
-            packages/api/src/tests/integration/booking.report-reminders.test.ts \
-            packages/api/src/tests/integration/referral-completion.test.ts \
-            packages/api/src/tests/integration/referral-kol-commission.test.ts \
-            packages/api/src/tests/integration/kb-calendar.test.ts
-          fixture_status=$?
-          capture_coverage_profile coverage/api-fixtures/lcov.info || fixture_lcov_status=1
-
-          payout_lcov_status=0
-          reset_coverage_profile || payout_lcov_status=1
-          DATABASE_URL="$PAYOUT_DATABASE_URL" \
-          TEST_DATABASE_ALLOW_RESET=true \
-          TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
-            bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
-              packages/api/src/tests/integration/booking-payout-g16.test.ts
-          payout_status=$?
-          capture_coverage_profile coverage/api-payout/lcov.info || payout_lcov_status=1
-
-          bun .github/scripts/merge-lcov.ts \
-            coverage/api-resettable/lcov.info \
-            coverage/api-fixtures/lcov.info \
-            coverage/api-payout/lcov.info
-          merge_status=$?
-
-          if [ "$resettable_status" -ne 0 ] || [ "$resettable_lcov_status" -ne 0 ] || \
-            [ "$fixture_status" -ne 0 ] || [ "$fixture_lcov_status" -ne 0 ] || \
-            [ "$payout_status" -ne 0 ] || [ "$payout_lcov_status" -ne 0 ] || \
-            [ "$merge_status" -ne 0 ]; then
-            exit 1
-          fi
+        run: bun .github/scripts/coverage-runner.ts --collect-only
         continue-on-error: true
         env:
           PAYOUT_DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
+          COVERAGE_DB_RESET_WINDOW: confirmed
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
         run: bun test --timeout 30000 apps/server/src/
       - name: Post coverage comment + enforce gate
@@ -409,9 +322,11 @@ jobs:
         with:
           name: api-coverage-profiles-${{ github.run_id }}
           path: |
-            coverage/api-resettable/lcov.info
-            coverage/api-fixtures/lcov.info
-            coverage/api-payout/lcov.info
+            coverage/api-resettable/counters.json
+            coverage/api-fixtures/counters.json
+            coverage/api-payout/counters.json
+            coverage/counters.merged.json
+            coverage/lcov.info
             coverage/lcov.merged.info
             coverage/lcov.function-identity.json
           if-no-files-found: warn
