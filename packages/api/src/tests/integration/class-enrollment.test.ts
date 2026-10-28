@@ -2240,7 +2240,7 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
     ownedRoomIds.add(managedRoom.id);
     await db
       .update(academyClassSession)
-      .set({ roomId: managedRoom.id })
+      .set({ mode: "offline", roomId: managedRoom.id })
       .where(
         inArray(academyClassSession.id, [
           ...roomTarget.sessionIds,
