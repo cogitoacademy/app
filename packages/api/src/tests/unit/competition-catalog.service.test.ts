@@ -5,6 +5,7 @@ import {
   CompetitionCatalogInUseError,
   CompetitionCatalogStateConflictError,
   CompetitionCatalogVersionConflictError,
+  CompetitionCatalogSlugConflictError,
 } from "../../modules/competition-catalog/competition-catalog.errors";
 import {
   competitionPaletteInput,
@@ -101,6 +102,215 @@ function setup(
 }
 
 describe("competition catalog service", () => {
+  test("rejects a specialization nested below another specialization", async () => {
+    const { service, repo } = setup({
+      getCompetitionCatalogEntry: mock(async () => child),
+    });
+    await expect(
+      service.createSpecialization("admin-1", {
+        parentId: child.id,
+        slug: "nested-specialization",
+        name: "Nested",
+        sortOrder: 10,
+        reason: "Create nested entry",
+      }),
+    ).rejects.toBeInstanceOf(CompetitionCatalogInvalidOperationError);
+    expect(repo.insertCompetitionSpecialization).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "competition",
+    "same-parent",
+    "nested-parent",
+    "missing-rate",
+  ] as const)("rejects a specialization move with %s", async (scenario) => {
+    const before = scenario === "competition" ? parent : child;
+    const destination = { ...parent, id: "parent-2", slug: "unconfigured" };
+    const { service, repo } = setup({
+      getCompetitionCatalogEntry: mock(async (_tx: unknown, id: string) =>
+        id === before.id
+          ? before
+          : scenario === "nested-parent"
+            ? child
+            : destination,
+      ),
+    });
+    await expect(
+      service.moveSpecialization("admin-1", {
+        id: before.id,
+        parentId: scenario === "same-parent" ? parent.id : destination.id,
+        expectedVersion: 1,
+        reason: "Move specialization",
+      }),
+    ).rejects.toBeInstanceOf(
+      scenario === "missing-rate"
+        ? CompetitionCatalogStateConflictError
+        : CompetitionCatalogInvalidOperationError,
+    );
+    expect(repo.moveCompetitionSpecialization).not.toHaveBeenCalled();
+  });
+
+  test.each([true, false])(
+    "rejects setting an entry to its existing active state %s",
+    async (isActive) => {
+      const { service, repo } = setup({
+        getCompetitionCatalogEntry: mock(async () => ({ ...parent, isActive })),
+      });
+      const input = {
+        id: parent.id,
+        expectedVersion: 1,
+        reason: "Change active status",
+      };
+      await expect(
+        isActive
+          ? service.restore("admin-1", input)
+          : service.archive("admin-1", input),
+      ).rejects.toBeInstanceOf(CompetitionCatalogStateConflictError);
+      expect(repo.setCompetitionCatalogEntryActive).not.toHaveBeenCalled();
+    },
+  );
+
+  test("cannot restore a specialization under an archived competition", async () => {
+    const { service, repo } = setup({
+      getCompetitionCatalogEntry: mock(async (_tx: unknown, id: string) => ({
+        ...(id === child.id ? child : parent),
+        isActive: false,
+      })),
+    });
+    await expect(
+      service.restore("admin-1", {
+        id: child.id,
+        expectedVersion: 1,
+        reason: "Restore specialization",
+      }),
+    ).rejects.toBeInstanceOf(CompetitionCatalogStateConflictError);
+    expect(repo.setCompetitionCatalogEntryActive).not.toHaveBeenCalled();
+  });
+
+  test("refuses to delete a competition that still owns specializations", async () => {
+    const { service, repo } = setup({
+      countCompetitionCatalogChildren: mock(async () => 1),
+    });
+    await expect(
+      service.remove("admin-1", {
+        id: parent.id,
+        expectedVersion: 1,
+        reason: "Remove competition",
+      }),
+    ).rejects.toBeInstanceOf(CompetitionCatalogInUseError);
+    expect(repo.deleteCompetitionCatalogEntry).not.toHaveBeenCalled();
+  });
+
+  test("rejects a persisted competition with an incomplete palette", async () => {
+    const { service } = setup({
+      getCompetitionCatalogEntry: mock(async () => ({
+        ...parent,
+        lightTextColor: null,
+      })),
+    });
+    await expect(service.get({ id: parent.id })).rejects.toThrow(
+      "missing its color palette",
+    );
+  });
+
+  test("public catalog lists only selectable entries", async () => {
+    const { service } = setup({
+      listCompetitionCatalog: mock(async () => [
+        parent,
+        { ...parent, id: "archived", isActive: false },
+      ]),
+    });
+    expect(await service.list({ includeArchived: false })).toMatchObject([
+      { id: parent.id, selectable: true },
+    ]);
+    expect(await service.list({ includeArchived: true })).toHaveLength(2);
+  });
+
+  test.each(["parent", "specialization"] as const)(
+    "%s creation maps nested unique violations and preserves other errors",
+    async (kind) => {
+      const duplicate = new Error("Query failed", {
+        cause: { cause: { code: "23505" } },
+      });
+      const unexpected = new Error("Database unavailable");
+      const make = (error: unknown) =>
+        setup({
+          [kind === "parent"
+            ? "insertCompetitionParent"
+            : "insertCompetitionSpecialization"]: mock(async () => {
+            throw error;
+          }),
+        });
+      const invoke = (service: ReturnType<typeof setup>["service"]) =>
+        kind === "parent"
+          ? service.createParent("admin-1", {
+              slug: parent.slug,
+              name: parent.name,
+              lightTextColor: parent.lightTextColor,
+              lightBackgroundColor: parent.lightBackgroundColor,
+              darkTextColor: parent.darkTextColor,
+              darkBackgroundColor: parent.darkBackgroundColor,
+              sortOrder: 10,
+              reason: "Create a catalog entry",
+            })
+          : service.createSpecialization("admin-1", {
+              parentId: parent.id,
+              slug: child.slug,
+              name: child.name,
+              sortOrder: 10,
+              reason: "Create a catalog entry",
+            });
+      const conflict = make(duplicate);
+      await expect(invoke(conflict.service)).rejects.toBeInstanceOf(
+        CompetitionCatalogSlugConflictError,
+      );
+      expect(conflict.audit.record).not.toHaveBeenCalled();
+      await expect(invoke(make(unexpected).service)).rejects.toBe(unexpected);
+      await expect(invoke(make("Database disconnected").service)).rejects.toBe(
+        "Database disconnected",
+      );
+    },
+  );
+
+  test.each(["update", "move", "archive", "remove"] as const)(
+    "%s detects a lost versioned write before auditing",
+    async (operation) => {
+      const before = operation === "move" ? child : parent;
+      const destination = { ...parent, id: "parent-2" };
+      const rows =
+        operation === "move"
+          ? [before, destination, { ...before, version: 2 }]
+          : [before, { ...before, version: 2 }];
+      const { service, audit } = setup({
+        getCompetitionCatalogEntry: mock(async () => rows.shift()),
+        updateCompetitionCatalogEntry: mock(async () => null),
+        moveCompetitionSpecialization: mock(async () => null),
+        setCompetitionCatalogEntryActive: mock(async () => null),
+        deleteCompetitionCatalogEntry: mock(async () => null),
+      });
+      const input = {
+        id: before.id,
+        expectedVersion: 1,
+        reason: "Change catalog entry",
+      };
+      const pending =
+        operation === "update"
+          ? service.update("admin-1", { ...input, name: "Changed" })
+          : operation === "move"
+            ? service.moveSpecialization("admin-1", {
+                ...input,
+                parentId: destination.id,
+              })
+            : operation === "archive"
+              ? service.archive("admin-1", input)
+              : service.remove("admin-1", input);
+      await expect(pending).rejects.toBeInstanceOf(
+        CompetitionCatalogVersionConflictError,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+    },
+  );
+
   test("lists every parent and marks dynamic entries ready only with saved rates", async () => {
     const dynamicParent = {
       ...parent,
