@@ -12,6 +12,8 @@ import {
   academyClassSession,
   academyClassSessionReport,
   academyClassSessionReportRevision,
+  economyV3Revision,
+  economyV3TopUpQuote,
   ledgerEntry,
   notification,
   notificationDispatch,
@@ -89,6 +91,7 @@ const ownedClassIds = new Set<string>();
 const ownedPayoutIds = new Set<string>();
 const ownedUserIds = new Set<string>();
 const ownedReminderEventKeys = new Set<string>();
+const ownedEconomyRevisionVersions = new Set<number>();
 
 type Fixture = {
   classId: string;
@@ -471,6 +474,46 @@ async function makeEnrollment(
   });
 }
 
+async function persistTopUpQuoteFixture(input: {
+  id: string;
+  userId: string;
+  requestKey: string;
+  marks: number;
+}) {
+  const version =
+    Number.parseInt(input.id.replaceAll("-", "").slice(0, 7), 16) + 1;
+  const [createdRevision] = await db
+    .insert(economyV3Revision)
+    .values({
+      version,
+      values: {},
+      reason: "Class enrollment top-up test fixture",
+      createdBy: input.userId,
+    })
+    .onConflictDoNothing()
+    .returning({ version: economyV3Revision.version });
+  if (createdRevision) ownedEconomyRevisionVersions.add(version);
+
+  await db
+    .insert(economyV3TopUpQuote)
+    .values({
+      id: input.id,
+      userId: input.userId,
+      requestKey: input.requestKey,
+      revision: version,
+      requestedMarks: input.marks,
+      termsSnapshot: {
+        packages: [],
+        exactSurchargeIdr: 0,
+        customAmountIdr: 1,
+        exactPackageCode: null,
+        recommendation: null,
+      },
+      expiresAt: new Date(BASE_TIME.getTime() + DAY_MS),
+    })
+    .onConflictDoNothing();
+}
+
 async function createCreatedMeetingFixture(fixture: Fixture) {
   const sessionId = fixture.sessionIds[0];
   if (!sessionId)
@@ -644,6 +687,13 @@ afterAll(async () => {
   if (userIds.length > 0) {
     await db.delete(walletTable).where(inArray(walletTable.userId, userIds));
     await db.delete(user).where(inArray(user.id, userIds));
+  }
+  if (ownedEconomyRevisionVersions.size > 0) {
+    await db
+      .delete(economyV3Revision)
+      .where(
+        inArray(economyV3Revision.version, [...ownedEconomyRevisionVersions]),
+      );
   }
 });
 
@@ -873,6 +923,13 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
         createTopUpQuote: async (_studentId, input) => {
           quoteCalls += 1;
           if (quoteCalls === 1) throw new Error("temporary payment outage");
+          await persistTopUpQuoteFixture({
+            id: nextQuoteId,
+            userId: _studentId,
+            requestKey:
+              nextQuoteId === quoteId ? input.requestKey : crypto.randomUUID(),
+            marks: input.marks,
+          });
           return {
             quoteId: nextQuoteId,
             revision: 2,
@@ -989,15 +1046,23 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       sessions: 16,
       balance: 176,
       paymentPort: {
-        createTopUpQuote: async (_studentId, input) => ({
-          quoteId,
-          revision: 1,
-          marks: input.marks,
-          customAmountIdr: 176_000,
-          exactPackage: null,
-          recommendedPackage: null,
-          expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
-        }),
+        createTopUpQuote: async (_studentId, input) => {
+          await persistTopUpQuoteFixture({
+            id: quoteId,
+            userId: _studentId,
+            requestKey: input.requestKey,
+            marks: input.marks,
+          });
+          return {
+            quoteId,
+            revision: 1,
+            marks: input.marks,
+            customAmountIdr: 176_000,
+            exactPackage: null,
+            recommendedPackage: null,
+            expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
+          };
+        },
         createPurchaseFromTopUpQuote: async () => {
           throw new Error("Purchase is not part of this quote test");
         },
