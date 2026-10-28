@@ -17,6 +17,8 @@ export function coverageSources(root = process.cwd()) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
         if (
+          entry.name !== "tests" &&
+          entry.name !== "__tests__" &&
           relative(root, path).replaceAll("\\", "/") !==
             "packages/db/src/schema" &&
           entry.name !== "node_modules"

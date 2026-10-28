@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "bun:test";
+import { coverageSources } from "./coverage-sources";
 
 const preload = resolve(import.meta.dir, "coverage-instrument.ts");
 const reporter = resolve(import.meta.dir, "coverage-report.ts");
@@ -20,6 +21,34 @@ export function handlers() {
 }
 export function cleanup() { return "done"; }
 `;
+test("coverage inventory omits test support files but retains production source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coverage-inventory-"));
+  try {
+    await Promise.all(
+      ["api", "auth", "db", "env"].map((name) =>
+        mkdir(join(root, "packages", name, "src"), { recursive: true }),
+      ),
+    );
+    await mkdir(join(root, "packages/api/src/tests"), { recursive: true });
+    await writeFile(
+      join(root, "packages/api/src/handler.ts"),
+      "export const handler = () => true;",
+    );
+    await writeFile(
+      join(root, "packages/api/src/tests/test-setup.ts"),
+      "export const setup = () => true;",
+    );
+
+    const files = Object.keys(coverageSources(root).coverage);
+    expect(files).toContain(join(root, "packages/api/src/handler.ts"));
+    expect(files).not.toContain(
+      join(root, "packages/api/src/tests/test-setup.ts"),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function workspace(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), "counter-coverage-"));
   try {
