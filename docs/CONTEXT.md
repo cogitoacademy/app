@@ -3360,3 +3360,7 @@ The bounded frontend slice gives V3 economy amount controls a 14rem minimum widt
 ### Canonical KB/calendar management (25 October 2026)
 
 Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar` (events), with View/Manage controls on each page. The duplicate KB & calendar sidebar destination is removed; `/admin-content` remains an admin-only compatibility redirect to Knowledge Bank. Student/tutor readers and server-side access gates are retained. Editor queries run only in Manage mode, and save/delete invalidates the corresponding reader query. This UI consolidation requires no migration or API/provider change.
+
+### PR #332 coverage continuation (28 October 2026)
+
+The latest hosted run (`40669425091`, head `dd0b80ce`) passes build, lint, type-check, all coverage resettable tests, and server unit tests. The coverage runner stops in the API fixture partition at the class-enrollment top-up retry assertion (`packages/api/src/tests/integration/class-enrollment.test.ts:989`); quote/revision FK fixture persistence is now valid. That matcher assertion is being corrected before another hosted run. The focused V3 top-up unit suite passes 22 tests / 64 assertions locally. The 100% merged coverage gate and CodeQL remain unverified; E2E is not required for this follow-up.

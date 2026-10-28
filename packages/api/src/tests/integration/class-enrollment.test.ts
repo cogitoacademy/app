@@ -978,8 +978,9 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     ).rejects.toThrow("temporary payment outage");
     const quote = await fixture.service.createTopUpQuote(studentId, input);
     const retryQuote = await fixture.service.createTopUpQuote(studentId, input);
+    expect(typeof quote.attemptId).toBe("string");
+    expect(quote.attemptId.length).toBeGreaterThan(0);
     expect(quote).toMatchObject({
-      attemptId: expect.any(String),
       requestKey,
       quoteId,
       requestedMarks: 25,
