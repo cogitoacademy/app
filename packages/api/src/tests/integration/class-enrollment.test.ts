@@ -849,7 +849,11 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       "already has an active enrollment",
     );
 
-    const activeHalf = await createFixture({ sessions: 2, balance: 500 });
+    const activeHalf = await createFixture({
+      sessions: 2,
+      balance: 500,
+      startsInDays: [200, 201],
+    });
     await makeEnrollment(activeHalf, 0, "half");
     await expect(makeEnrollment(activeHalf, 0, "half")).rejects.toThrow(
       "half-plan enrollment already owns",

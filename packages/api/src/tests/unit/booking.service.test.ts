@@ -10005,6 +10005,199 @@ describe("cancelOfflineBooking (M6)", () => {
   });
 });
 
+describe("Tutor payout tax configuration", () => {
+  test("reads the configured rates and the default configuration", async () => {
+    const { service, repo } = createService();
+    expect(await service.getTutorTaxConfig()).toMatchObject({
+      id: "default",
+      version: 0,
+    });
+    const configured = {
+      version: 3,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+    };
+    repo.findTutorTaxConfig.mockResolvedValue(configured);
+    expect(await service.getTutorTaxConfig()).toEqual({
+      id: "default",
+      ...configured,
+    });
+  });
+
+  test("rejects invalid rates and empty audit reasons before starting a transaction", async () => {
+    const { service, db } = createService();
+    await Promise.all(
+      [-1, 10001, 1.5, Number.NaN].map(async (rate) => {
+        await expect(
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "tutor1",
+            rateBps: rate,
+            reason: "Update tax profile",
+          }),
+        ).rejects.toThrow("whole basis points");
+        await expect(
+          service.updateTutorTaxConfig("admin1", {
+            expectedVersion: 0,
+            nikNpwpRateBps: rate,
+            nikOnlyRateBps: 0,
+            missingRateBps: 0,
+            reason: "Update tax policy",
+          }),
+        ).rejects.toThrow("whole basis points");
+      }),
+    );
+    await expect(
+      service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: null,
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Override reason is required");
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  test("sets and clears a tutor override with an audit record", async () => {
+    await Promise.all(
+      [0, 10000, null].map(async (rateBps) => {
+        const { service, db, audit } = createService({
+          repo: {
+            findTutorProfile: mock(async () => ({
+              version: 2,
+              taxRateOverrideBps: 500,
+            })),
+          },
+        });
+        const returning = mock(async () => [{ taxRateOverrideBps: rateBps }]);
+        const set = mock(() => ({ where: () => ({ returning }) }));
+        const tx = { execute: mock(async () => {}), update: () => ({ set }) };
+        db.transaction.mockImplementation(async (fn: any) => fn(tx));
+        await expect(
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "tutor1",
+            rateBps,
+            reason: "  Verified tax profile  ",
+          }),
+        ).resolves.toEqual({ tutorId: "tutor1", taxRateOverrideBps: rateBps });
+        expect(set).toHaveBeenCalledWith(
+          expect.objectContaining({ taxRateOverrideBps: rateBps, version: 3 }),
+        );
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: "tutor_tax_rate_override_updated",
+            beforeState: { taxRateOverrideBps: 500 },
+            afterState: { taxRateOverrideBps: rateBps },
+            details: { reason: "Verified tax profile" },
+          }),
+        );
+      }),
+    );
+  });
+
+  test("rejects missing or concurrently changed tutor profiles", async () => {
+    const missing = createService();
+    await expect(
+      missing.service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: 100,
+        reason: "Verified tax profile",
+      }),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+
+    const changed = createService({
+      repo: { findTutorProfile: mock(async () => ({ version: 2 })) },
+    });
+    const tx = {
+      execute: mock(async () => {}),
+      update: () => ({
+        set: () => ({ where: () => ({ returning: async () => [] }) }),
+      }),
+    };
+    changed.db.transaction.mockImplementation(async (fn: any) => fn(tx));
+    await expect(
+      changed.service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: 100,
+        reason: "Verified tax profile",
+      }),
+    ).rejects.toThrow("Tutor profile changed");
+    expect(changed.audit.record).not.toHaveBeenCalled();
+  });
+
+  test("updates an existing tax policy and audits its new version", async () => {
+    const before = {
+      version: 1,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+    };
+    const after = { ...before, version: 2, missingRateBps: 400 };
+    const findTutorTaxConfig = mock(async () => before)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+    const { service, db, audit } = createService({
+      repo: { findTutorTaxConfig },
+    });
+    const set = mock(() => ({
+      where: () => ({ returning: async () => [{ id: "default" }] }),
+    }));
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({
+        execute: mock(async () => {}),
+        update: () => ({ set }),
+      }),
+    );
+    await expect(
+      service.updateTutorTaxConfig("admin1", {
+        expectedVersion: 1,
+        nikNpwpRateBps: 100,
+        nikOnlyRateBps: 200,
+        missingRateBps: 400,
+        reason: "  Updated policy  ",
+      }),
+    ).resolves.toEqual({ id: "default", ...after });
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 2, missingRateBps: 400 }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "tutor_tax_config_updated",
+        details: { reason: "Updated policy" },
+        beforeState: { id: "default", ...before },
+        afterState: { id: "default", ...after },
+      }),
+    );
+  });
+
+  test("rejects stale tax policy versions and a lost update", async () => {
+    const { service, db, audit } = createService({
+      repo: { findTutorTaxConfig: mock(async () => ({ version: 2 })) },
+    });
+    const input = {
+      expectedVersion: 1,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+      reason: "Updated policy",
+    };
+    await expect(
+      service.updateTutorTaxConfig("admin1", input),
+    ).rejects.toMatchObject({ code: "TUTOR_TAX_CONFIG_CONFLICT" });
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({
+        execute: mock(async () => {}),
+        update: () => ({
+          set: () => ({ where: () => ({ returning: async () => [] }) }),
+        }),
+      }),
+    );
+    await expect(
+      service.updateTutorTaxConfig("admin1", { ...input, expectedVersion: 2 }),
+    ).rejects.toMatchObject({ code: "TUTOR_TAX_CONFIG_CONFLICT" });
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+});
+
 describe("BookingService coverage paths", () => {
   test("listForTutor applies its default page when options are omitted", async () => {
     const listBookingsByTutor = mock(async () => []);
