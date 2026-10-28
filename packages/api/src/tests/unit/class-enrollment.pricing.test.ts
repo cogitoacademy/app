@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { quoteClassEnrollment } from "../../modules/class-enrollment/enrollment.pricing";
+import {
+  InvalidEnrollmentQuoteError,
+  quoteClassEnrollment,
+} from "../../modules/class-enrollment/enrollment.pricing";
 
 const now = new Date("2026-10-21T00:00:00.000Z");
 const rates = {
@@ -146,5 +149,152 @@ describe("class enrollment pricing [REQ-ENROLL-01/04]", () => {
     );
     expect(quote.firstRateMarks).toBe(30);
     expect(quote.secondRateMarks).toBe(30);
+  });
+
+  test("rejects a class with no upcoming scheduled sessions", () => {
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "cohort",
+        plan: "full",
+        rates,
+        sessions: [
+          ...sessions(1).map((session) => ({
+            ...session,
+            startAt: now,
+          })),
+          { ...sessions(1)[0]!, id: "cancelled", state: "cancelled" },
+        ],
+        now,
+      }),
+    ).toThrow(InvalidEnrollmentQuoteError);
+  });
+
+  test("requires the matching plan and exactly one session for a masterclass", () => {
+    const upcoming = sessions(2);
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "masterclass",
+        plan: "full",
+        rates,
+        sessions: upcoming.slice(0, 1),
+        now,
+      }),
+    ).toThrow("Choose the masterclass plan");
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "masterclass",
+        plan: "masterclass",
+        rates,
+        sessions: upcoming,
+        now,
+      }),
+    ).toThrow("exactly one upcoming");
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "masterclass",
+        plan: "masterclass",
+        sessionId: "other-session",
+        rates,
+        sessions: upcoming.slice(0, 1),
+        now,
+      }),
+    ).toThrow("does not belong to this masterclass");
+  });
+
+  test("rejects invalid rates for each enrollment plan", () => {
+    const cases = [
+      {
+        kind: "masterclass",
+        plan: "masterclass",
+        rates: { ...rates, masterclassRateMarks: null },
+        sessions: sessions(1),
+      },
+      {
+        kind: "cohort",
+        plan: "full",
+        rates: { ...rates, cohortFullRateMarks: 0 },
+        sessions: sessions(2),
+      },
+      {
+        kind: "cohort",
+        plan: "half",
+        rates: { ...rates, cohortHalfRateMarks: Number.MAX_SAFE_INTEGER + 1 },
+        sessions: sessions(2),
+      },
+      {
+        kind: "cohort",
+        plan: "single",
+        sessionId: "session-1",
+        rates: { ...rates, cohortSingleRateMarks: 1.5 },
+        sessions: sessions(2),
+      },
+    ] as const;
+
+    for (const input of cases) {
+      expect(() =>
+        quoteClassEnrollment({
+          ...input,
+          now,
+        }),
+      ).toThrow("no valid");
+    }
+  });
+
+  test("rejects invalid cohort plans and unavailable single-session choices", () => {
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "cohort",
+        plan: "masterclass",
+        rates,
+        sessions: sessions(1),
+        now,
+      }),
+    ).toThrow("cannot use the masterclass plan");
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "cohort",
+        plan: "single",
+        rates,
+        sessions: sessions(1),
+        now,
+      }),
+    ).toThrow("Choose one upcoming session");
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "cohort",
+        plan: "single",
+        sessionId: "missing",
+        rates,
+        sessions: sessions(1),
+        now,
+      }),
+    ).toThrow("no longer available");
+    expect(() =>
+      quoteClassEnrollment({
+        kind: "cohort",
+        plan: "full",
+        sessionId: "session-1",
+        rates,
+        sessions: sessions(1),
+        now,
+      }),
+    ).toThrow("Choose full or half");
+  });
+
+  test("sorts tied sessions by sequence and then id", () => {
+    const startAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const quote = quoteClassEnrollment({
+      kind: "cohort",
+      plan: "full",
+      rates,
+      sessions: [
+        { id: "z", sequenceNumber: 2, startAt, state: "scheduled" },
+        { id: "b", sequenceNumber: 1, startAt, state: "scheduled" },
+        { id: "a", sequenceNumber: 1, startAt, state: "scheduled" },
+      ],
+      now,
+    });
+
+    expect(quote.selectedSessionIds).toEqual(["a", "b", "z"]);
   });
 });

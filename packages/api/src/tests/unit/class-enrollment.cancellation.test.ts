@@ -147,3 +147,43 @@ test("released/past/completed seats never return Marks; schedule changes invalid
       .quoteVersion,
   );
 });
+
+test("session cancellation filters other seats and skips fully spent allocations", () => {
+  const fullySpent = {
+    ...allocation("spent", 20),
+    spentMarks: 20,
+  };
+  const quote = quoteEnrollmentCancellation(
+    "e",
+    [allocation("selected", 20), allocation("other", 20), fullySpent],
+    [session("selected"), session("other"), session("spent")],
+    now,
+    "selected",
+  );
+
+  expect(quote.allocations.map((item) => item.allocationId)).toEqual([
+    "selected",
+  ]);
+  expect(quote.returnMarks).toBe(16);
+});
+
+test("rejects a withdrawal whose funded Marks total exceeds the safe range", () => {
+  const maxSafeMarks = Number.MAX_SAFE_INTEGER;
+  const first = {
+    ...allocation("first", maxSafeMarks),
+    fundedMarks: maxSafeMarks,
+  };
+  const second = {
+    ...allocation("second", maxSafeMarks),
+    fundedMarks: maxSafeMarks,
+  };
+
+  expect(() =>
+    quoteEnrollmentCancellation(
+      "e",
+      [first, second],
+      [session("first", 48), session("second", 48)],
+      now,
+    ),
+  ).toThrow("Cancellation Marks exceed the supported range");
+});
