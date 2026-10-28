@@ -47,8 +47,16 @@ function fixture(
 ) {
   const updates: unknown[] = [];
   const db = {
+    execute: async () => undefined,
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(db),
     query: {
+      subjectCategory: {
+        findFirst: async () => ({
+          id: "competition1",
+          parentId: null,
+          isActive: true,
+        }),
+      },
       academyClass: {
         findFirst: async () => records.shift(),
         findMany: async () => lists.shift() ?? [],
@@ -80,6 +88,294 @@ function fixture(
 }
 
 describe("academy class service reads and meeting recovery", () => {
+  test.each([
+    "missing",
+    "published",
+    "version",
+    "duplicate-session",
+    "foreign-session",
+    "lost-update",
+    "deleted-update",
+  ] as const)("draft editing detects %s", async (scenario) => {
+    const session = {
+      id: "session1",
+      tutorId: "tutor1",
+      capacity: 4,
+      mode: "online",
+      roomId: null,
+      startAt: new Date("2040-01-01T00:00:00Z"),
+      endAt: new Date("2040-01-01T01:00:00Z"),
+      curriculumEn: "Problem solving",
+    };
+    const before = {
+      ...published,
+      state: scenario === "published" ? "published" : "draft",
+      version: scenario === "version" ? 2 : 1,
+    };
+    const second = {
+      ...session,
+      startAt: new Date("2040-01-02T00:00:00Z"),
+      endAt: new Date("2040-01-02T01:00:00Z"),
+    };
+    const f = fixture(
+      [
+        [
+          {
+            userId: "tutor1",
+            role: "tutor",
+            onboardingStatus: "published",
+            modality: "both",
+            onlineMaxClassSize: 5,
+          },
+        ],
+        scenario === "foreign-session" ? [] : [session],
+      ],
+      [
+        scenario === "missing" ? null : before,
+        scenario === "deleted-update" ? null : { ...before, version: 2 },
+      ],
+    );
+    await expect(
+      f.service.saveDraft("admin1", {
+        id: published.id,
+        expectedVersion: 1,
+        kind: "cohort",
+        competitionId: "competition1",
+        minimumCheckAt: new Date("2039-12-01T00:00:00Z"),
+        minimumEnrollment: 1,
+        sessions:
+          scenario === "duplicate-session" ? [session, second] : [session],
+        reason: "Update reviewed draft",
+      } as Parameters<typeof f.service.saveDraft>[1]),
+    ).rejects.toMatchObject({
+      code:
+        scenario === "missing" || scenario === "deleted-update"
+          ? "ACADEMY_CLASS_NOT_FOUND"
+          : scenario === "published"
+            ? "ACADEMY_CLASS_STATE_CONFLICT"
+            : scenario === "version" || scenario === "lost-update"
+              ? "ACADEMY_CLASS_VERSION_CONFLICT"
+              : "ACADEMY_CLASS_INVALID_OPERATION",
+    });
+    expect(f.audit.record).not.toHaveBeenCalled();
+    expect(f.updates).toHaveLength(scenario.endsWith("update") ? 1 : 0);
+  });
+
+  test.each([
+    "minimum-date",
+    "minimum-capacity",
+    "curriculum",
+    "overlap",
+    "missing-profile",
+    "wrong-role",
+    "unpublished-profile",
+    "mode",
+    "tutor-capacity",
+    "missing-room",
+    "room-capacity",
+    "new-session-id",
+  ] as const)("draft validation rejects %s before writes", async (scenario) => {
+    const inPerson =
+      scenario === "missing-room" || scenario === "room-capacity";
+    const session = {
+      id: scenario === "new-session-id" ? "existing-session" : undefined,
+      startAt: new Date("2040-01-01T00:00:00Z"),
+      endAt: new Date("2040-01-01T01:00:00Z"),
+      curriculumEn: scenario === "curriculum" ? " " : "Problem solving",
+      capacity: 4,
+      tutorId: "tutor1",
+      mode: inPerson ? "in_person" : "online",
+      roomId: inPerson ? "room1" : null,
+    };
+    const profile = {
+      userId: "tutor1",
+      role: scenario === "wrong-role" ? "student" : "tutor",
+      onboardingStatus:
+        scenario === "unpublished-profile" ? "draft" : "published",
+      modality: scenario === "mode" ? "offline" : "both",
+      onlineMaxClassSize: scenario === "tutor-capacity" ? 3 : 5,
+      offlineMaxClassSize: 5,
+    };
+    const selects: unknown[][] = [
+      scenario === "missing-profile" ? [] : [profile],
+    ];
+    if (inPerson)
+      selects.push(
+        scenario === "missing-room" ? [] : [{ id: "room1", capacity: 3 }],
+      );
+    const f = fixture(selects);
+    const messages = {
+      "minimum-date":
+        "The minimum-enrollment check must be before the first session",
+      "minimum-capacity":
+        "Minimum enrollment cannot exceed any session capacity",
+      curriculum: "Cohort sessions require an English curriculum description",
+      overlap: "Sessions in one class cannot overlap",
+      "missing-profile": "Assign a published tutor profile to every session",
+      "wrong-role": "Assign a published tutor profile to every session",
+      "unpublished-profile":
+        "Assign a published tutor profile to every session",
+      mode: "The assigned tutor does not support this session mode",
+      "tutor-capacity":
+        "Session capacity exceeds the tutor's maximum class size",
+      "missing-room": "Select an active room for every in-person session",
+      "room-capacity": "Session capacity exceeds the selected room's capacity",
+      "new-session-id":
+        "New class sessions cannot include existing session IDs",
+    };
+    await expect(
+      f.service.saveDraft("admin1", {
+        kind: "cohort",
+        competitionId: "competition1",
+        titleEn: "Class",
+        minimumCheckAt:
+          scenario === "minimum-date"
+            ? session.startAt
+            : new Date("2039-12-01T00:00:00Z"),
+        minimumEnrollment: scenario === "minimum-capacity" ? 5 : 1,
+        sessions:
+          scenario === "overlap" ? [session, { ...session }] : [session],
+        reason: "Save reviewed draft",
+      } as Parameters<typeof f.service.saveDraft>[1]),
+    ).rejects.toMatchObject({
+      code: "ACADEMY_CLASS_INVALID_OPERATION",
+      message: messages[scenario],
+    });
+    expect(f.updates).toEqual([]);
+    expect(f.audit.record).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "missing-profile",
+    "wrong-role",
+    "unpublished-profile",
+    "unsupported-mode",
+    "tutor-capacity",
+    "fee-mismatch",
+    "past-session",
+    "online-room",
+    "missing-room",
+    "room-capacity",
+    "overlapping-sessions",
+    "room-booking-overlap",
+    "room-class-overlap",
+    "tutor-booking-overlap",
+    "tutor-class-overlap",
+  ] as const)(
+    "publication validates locked reference data: %s",
+    async (scenario) => {
+      const inPerson =
+        scenario === "missing-room" || scenario.startsWith("room-");
+      const session = {
+        id: "session1",
+        tutorId: "tutor1",
+        classId: published.id,
+        startAt: new Date(
+          scenario === "past-session"
+            ? "2020-01-01T00:00:00Z"
+            : "2040-01-01T00:00:00Z",
+        ),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+        curriculumEn: "Problem solving",
+        capacity: 4,
+        mode: inPerson ? "in_person" : "online",
+        roomId: inPerson || scenario === "online-room" ? "room1" : null,
+        tutorFeeIdr: scenario === "fee-mismatch" ? 300000 : 400000,
+      };
+      const profile = {
+        userId: "tutor1",
+        role: scenario === "wrong-role" ? "student" : "tutor",
+        onboardingStatus:
+          scenario === "unpublished-profile" ? "draft" : "published",
+        modality: scenario === "unsupported-mode" ? "offline" : "both",
+        onlineMaxClassSize: scenario === "tutor-capacity" ? 3 : 5,
+        offlineMaxClassSize: 5,
+      };
+      const selects: unknown[][] = [
+        [{ id: published.id }],
+        [{ id: "competition1", parentId: null }],
+        [{ id: "competition1" }],
+        scenario === "missing-profile" ? [] : [profile],
+      ];
+      if (inPerson)
+        selects.push(
+          scenario === "missing-room"
+            ? []
+            : [{ id: "room1", capacity: scenario === "room-capacity" ? 3 : 5 }],
+        );
+      if (
+        scenario === "room-booking-overlap" ||
+        scenario === "room-class-overlap"
+      )
+        selects.push(
+          scenario === "room-booking-overlap" ? [{ id: "booking1" }] : [],
+          scenario === "room-class-overlap" ? [{ id: "session2" }] : [],
+        );
+      if (
+        scenario === "tutor-booking-overlap" ||
+        scenario === "tutor-class-overlap"
+      )
+        selects.push(
+          scenario === "tutor-booking-overlap" ? [{ id: "booking1" }] : [],
+          scenario === "tutor-class-overlap" ? [{ id: "session2" }] : [],
+        );
+      const f = fixture(selects, [
+        {
+          ...published,
+          state: "draft",
+          version: 1,
+          minimumCheckAt: new Date(session.startAt.getTime() - 86400000),
+          minimumEnrollment: 1,
+          sessions:
+            scenario === "overlapping-sessions"
+              ? [session, { ...session, id: "session2" }]
+              : [session],
+        },
+      ]);
+      await expect(
+        f.service.publish("admin1", {
+          id: published.id,
+          expectedVersion: 1,
+          reason: "Publish reviewed class",
+        }),
+      ).rejects.toMatchObject({
+        code: "ACADEMY_CLASS_INVALID_OPERATION",
+        message: {
+          "missing-profile":
+            "Assign a published tutor profile to every session before publishing",
+          "wrong-role":
+            "Assign a published tutor profile to every session before publishing",
+          "unpublished-profile":
+            "Assign a published tutor profile to every session before publishing",
+          "unsupported-mode":
+            "The assigned tutor no longer supports this session mode",
+          "tutor-capacity":
+            "Session capacity exceeds the tutor's maximum class size",
+          "fee-mismatch":
+            "Every session must use the class's approved flat tutor fee",
+          "past-session":
+            "Sessions must start in the future when the class is published",
+          "online-room": "Online sessions cannot be assigned an in-person room",
+          "missing-room":
+            "Select an active managed room for every in-person session",
+          "room-capacity":
+            "Session capacity exceeds the selected room's capacity",
+          "overlapping-sessions": "Sessions in one class cannot overlap",
+          "room-booking-overlap":
+            "The selected managed room is already booked for this session",
+          "room-class-overlap":
+            "The selected managed room is already booked for this session",
+          "tutor-booking-overlap":
+            "The assigned tutor is already scheduled during this session",
+          "tutor-class-overlap":
+            "The assigned tutor is already scheduled during this session",
+        }[scenario],
+      });
+      expect(f.updates).toEqual([]);
+      expect(f.audit.record).not.toHaveBeenCalled();
+    },
+  );
+
   test("admin handlers expose reads and map a missing meeting-retry target", async () => {
     const f = fixture([[]], [published], [[published]]);
     const handler = createAcademyClassHandler(f.service);
