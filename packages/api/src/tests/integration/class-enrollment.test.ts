@@ -1342,6 +1342,35 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     ).toEqual([rejoinedSessionId]);
   });
 
+  test("scheduled jobs default a due second installment against its locked session", async () => {
+    const fixture = await createFixture({
+      sessions: 4,
+      balance: 500,
+      startsInDays: [1, 2, 3, 4],
+    });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const [installment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    expect(installment?.dueSessionId).toBe(fixture.sessionIds[2]);
+
+    fixture.setNow(fixture.startAt[2]!);
+    await expect(fixture.service.processDueJobs()).resolves.toMatchObject({
+      defaultedInstallments: 1,
+    });
+    const [updatedInstallment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(eq(academyClassEnrollmentInstallment.id, installment!.id));
+    expect(updatedInstallment?.state).toBe("defaulted");
+  });
+
   test("missed reminders catch up once, while a late join never gets historical notices", async () => {
     const missedJob = await createFixture({ sessions: 2, balance: 500 });
     const missedEnrollment = await makeEnrollment(missedJob, 0, "half");
@@ -2193,8 +2222,16 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
 
 describe("T06 class lifecycle minimum, postponement and session cancellation", () => {
   test("minimum postponement rejects managed room and tutor schedule overlaps", async () => {
-    const roomTarget = await createFixture({ sessions: 2, balance: 0 });
-    const roomConflict = await createFixture({ sessions: 1, balance: 0 });
+    const roomTarget = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [1, 4],
+    });
+    const roomConflict = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [8, 11],
+    });
     const [managedRoom] = await db
       .insert(room)
       .values({ name: "Minimum test room", location: "Jakarta", capacity: 6 })
@@ -2229,8 +2266,16 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
       }),
     ).rejects.toThrow("managed-room reservation");
 
-    const tutorTarget = await createFixture({ sessions: 2, balance: 0 });
-    const tutorConflict = await createFixture({ sessions: 1, balance: 0 });
+    const tutorTarget = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [1, 4],
+    });
+    const tutorConflict = await createFixture({
+      sessions: 1,
+      balance: 0,
+      startsInDays: [8],
+    });
     await db
       .update(academyClassSession)
       .set({ tutorId: tutorTarget.tutorId })
