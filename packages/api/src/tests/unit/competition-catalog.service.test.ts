@@ -102,6 +102,110 @@ function setup(
 }
 
 describe("competition catalog service", () => {
+  test("palette resolution supports blank references, slug fallback and missing parent data", async () => {
+    const { service, repo } = setup({
+      getCompetitionCatalogEntriesByReferences: mock(async () => [
+        parent,
+        child,
+      ]),
+      listCompetitionCatalog: mock(async () => [child]),
+    });
+    const palette = {
+      lightTextColor: parent.lightTextColor,
+      lightBackgroundColor: parent.lightBackgroundColor,
+      darkTextColor: parent.darkTextColor,
+      darkBackgroundColor: parent.darkBackgroundColor,
+    };
+    expect(
+      await service.resolveCompetitionPalettes([
+        {},
+        { id: "missing" },
+        { slug: ` ${parent.slug} ` },
+        { id: child.id },
+        { id: parent.id },
+        { id: "missing", slug: parent.slug },
+      ]),
+    ).toEqual([null, null, palette, null, palette, palette]);
+    expect(await service.resolveCompetitionPalette({})).toBeNull();
+    expect(await service.list({ includeArchived: true })).toMatchObject([
+      { id: child.id, selectable: false, parentColors: null },
+    ]);
+    expect(repo.getCompetitionCatalogEntriesByReferences).toHaveBeenCalledWith(
+      expect.anything(),
+      { ids: [], slugs: [] },
+    );
+  });
+
+  test("missing catalog entries cannot be read or updated", async () => {
+    const { service } = setup({
+      getCompetitionCatalogEntry: mock(async () => null),
+    });
+    await expect(service.get({ id: "missing" })).rejects.toMatchObject({
+      code: "COMPETITION_CATALOG_ENTRY_NOT_FOUND",
+    });
+    await expect(
+      service.update("admin-1", {
+        id: "missing",
+        expectedVersion: 1,
+        name: "Changed",
+        reason: "Rename entry",
+      }),
+    ).rejects.toMatchObject({ code: "COMPETITION_CATALOG_ENTRY_NOT_FOUND" });
+  });
+
+  test("child updates hydrate the palette from the parent", async () => {
+    const { service, repo } = setup({
+      getCompetitionCatalogEntry: mock(async (_tx: unknown, id: string) =>
+        id === child.id ? child : parent,
+      ),
+      updateCompetitionCatalogEntry: mock(async () => ({
+        ...child,
+        version: 2,
+      })),
+    });
+    expect(
+      await service.update("admin-1", {
+        id: child.id,
+        expectedVersion: 1,
+        name: "Changed",
+        reason: "Rename specialization",
+      }),
+    ).toMatchObject({
+      parentColors: { lightTextColor: parent.lightTextColor },
+    });
+    expect(repo.getCompetitionCatalogEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      parent.id,
+    );
+  });
+
+  test("moves a legacy specialization even when its previous parent was not hydrated", async () => {
+    const destination = { ...parent, id: "parent-2" };
+    const { service, audit } = setup({
+      getCompetitionCatalogEntry: mock(async (_tx: unknown, id: string) =>
+        id === child.id ? child : destination,
+      ),
+      moveCompetitionSpecialization: mock(async () => ({
+        ...child,
+        parentId: destination.id,
+        version: 2,
+      })),
+    });
+    expect(
+      await service.moveSpecialization("admin-1", {
+        id: child.id,
+        parentId: destination.id,
+        expectedVersion: 1,
+        reason: "Move unused specialization",
+      }),
+    ).toMatchObject({ parentId: destination.id, version: 2 });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ previousParentColors: null }),
+      }),
+    );
+  });
+
   test("rejects a specialization nested below another specialization", async () => {
     const { service, repo } = setup({
       getCompetitionCatalogEntry: mock(async () => child),
