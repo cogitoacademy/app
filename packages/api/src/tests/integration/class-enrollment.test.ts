@@ -8,6 +8,7 @@ import {
   academyClassEnrollment,
   academyClassEnrollmentAllocation,
   academyClassEnrollmentInstallment,
+  academyClassEnrollmentTopUpAttempt,
   academyClassSession,
   academyClassSessionReport,
   academyClassSessionReportRevision,
@@ -102,23 +103,30 @@ type Fixture = {
   service: ReturnType<typeof createClassEnrollmentService>;
 };
 
+type EnrollmentPaymentPort = Parameters<
+  typeof createClassEnrollmentService
+>[0]["payment"];
+
 function makeService(
   now: () => Date,
   notifications: Array<Record<string, unknown>>,
   walletPort: typeof services.wallet = services.wallet,
   notificationWrite?: (input: Record<string, unknown>) => Promise<void>,
+  paymentPort?: EnrollmentPaymentPort,
 ) {
   return createClassEnrollmentService({
     db,
     wallet: walletPort,
-    payment: {
-      createTopUpQuote: async () => {
-        throw new Error("Provider-backed top-up is outside this DB fixture");
-      },
-      createPurchaseFromTopUpQuote: async () => {
-        throw new Error("Provider-backed top-up is outside this DB fixture");
-      },
-    } as never,
+    payment:
+      paymentPort ??
+      ({
+        createTopUpQuote: async () => {
+          throw new Error("Provider-backed top-up is outside this DB fixture");
+        },
+        createPurchaseFromTopUpQuote: async () => {
+          throw new Error("Provider-backed top-up is outside this DB fixture");
+        },
+      } as never),
     notification: {
       write: async (input: Record<string, unknown>) => {
         notifications.push(input);
@@ -269,6 +277,7 @@ async function createFixture(options: {
   startsInDays?: number[];
   walletPort?: typeof services.wallet;
   notificationWrite?: (input: Record<string, unknown>) => Promise<void>;
+  paymentPort?: EnrollmentPaymentPort;
 }): Promise<Fixture> {
   const now = { value: new Date(BASE_TIME) };
   const getNow = () => new Date(now.value);
@@ -388,6 +397,7 @@ async function createFixture(options: {
       notifications,
       options.walletPort,
       options.notificationWrite,
+      options.paymentPort,
     ),
   };
 }
@@ -847,6 +857,280 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       fundedMarks: 25,
       state: "funded",
     });
+  });
+
+  test("class checkout top-up retries persist one quote and one payment choice", async () => {
+    const quoteId = crypto.randomUUID();
+    const paymentId = crypto.randomUUID();
+    let nextQuoteId = quoteId;
+    let nextPaymentId = paymentId;
+    let quoteCalls = 0;
+    let purchaseCalls = 0;
+    const fixture = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort: {
+        createTopUpQuote: async (_studentId, input) => {
+          quoteCalls += 1;
+          if (quoteCalls === 1) throw new Error("temporary payment outage");
+          return {
+            quoteId: nextQuoteId,
+            revision: 2,
+            marks: input.marks,
+            customAmountIdr: 25_000,
+            exactPackage: null,
+            recommendedPackage: null,
+            expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
+          };
+        },
+        createPurchaseFromTopUpQuote: async (
+          _studentId,
+          _walletId,
+          receivedQuoteId,
+          choice,
+        ) => {
+          purchaseCalls += 1;
+          expect(receivedQuoteId).toBe(quoteId);
+          expect(choice).toBe("custom");
+          return {
+            paymentId: nextPaymentId,
+            checkoutUrl: "https://payments.example.test/checkout",
+            status: "PENDING",
+            recoveryRequired: false,
+          };
+        },
+      },
+    });
+    const studentId = fixture.studentIds[0]!;
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const requestKey = crypto.randomUUID();
+    const input = {
+      enrollmentId: enrollment.id,
+      ordinal: 1 as const,
+      requestKey,
+    };
+
+    await expect(
+      fixture.service.createTopUpQuote(studentId, input),
+    ).rejects.toThrow("temporary payment outage");
+    const quote = await fixture.service.createTopUpQuote(studentId, input);
+    const retryQuote = await fixture.service.createTopUpQuote(studentId, input);
+    expect(quote).toMatchObject({
+      attemptId: expect.any(String),
+      requestKey,
+      quoteId,
+      requestedMarks: 25,
+      revision: 2,
+      choice: null,
+    });
+    expect(retryQuote.attemptId).toBe(quote.attemptId);
+    expect(quoteCalls).toBe(3);
+    nextQuoteId = crypto.randomUUID();
+    await expect(
+      fixture.service.createTopUpQuote(studentId, input),
+    ).rejects.toThrow("already belongs to another quote");
+    nextQuoteId = quoteId;
+
+    const purchaseInput = {
+      attemptId: quote.attemptId,
+      choice: "custom" as const,
+    };
+    const purchase = await fixture.service.purchaseTopUp(
+      studentId,
+      purchaseInput,
+    );
+    const retryPurchase = await fixture.service.purchaseTopUp(
+      studentId,
+      purchaseInput,
+    );
+    expect(purchase).toEqual({
+      attemptId: quote.attemptId,
+      paymentId,
+      checkoutUrl: "https://payments.example.test/checkout",
+      status: "PENDING",
+      recoveryRequired: false,
+    });
+    expect(retryPurchase).toEqual(purchase);
+    expect(purchaseCalls).toBe(2);
+    nextPaymentId = crypto.randomUUID();
+    await expect(
+      fixture.service.purchaseTopUp(studentId, purchaseInput),
+    ).rejects.toThrow("already belongs to another payment");
+    nextPaymentId = paymentId;
+    await expect(
+      fixture.service.purchaseTopUp(studentId, {
+        attemptId: quote.attemptId,
+        choice: "package",
+      }),
+    ).rejects.toThrow("cannot change its selected quote option");
+
+    const [attempt] = await db
+      .select()
+      .from(academyClassEnrollmentTopUpAttempt)
+      .where(eq(academyClassEnrollmentTopUpAttempt.id, quote.attemptId));
+    expect(attempt).toMatchObject({
+      requestKey,
+      requestedMarks: 25,
+      choice: "custom",
+      quoteId,
+      paymentId,
+    });
+  });
+
+  test("second-installment top-up requires a future scheduled due session", async () => {
+    const quoteId = crypto.randomUUID();
+    const fixture = await createFixture({
+      sessions: 16,
+      balance: 176,
+      paymentPort: {
+        createTopUpQuote: async (_studentId, input) => ({
+          quoteId,
+          revision: 1,
+          marks: input.marks,
+          customAmountIdr: 176_000,
+          exactPackage: null,
+          recommendedPackage: null,
+          expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
+        }),
+        createPurchaseFromTopUpQuote: async () => {
+          throw new Error("Purchase is not part of this quote test");
+        },
+      },
+    });
+    const studentId = fixture.studentIds[0]!;
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const input = {
+      enrollmentId: enrollment.id,
+      ordinal: 2 as const,
+      requestKey: crypto.randomUUID(),
+    };
+
+    const quote = await fixture.service.createTopUpQuote(studentId, input);
+    expect(quote).toMatchObject({ requestedMarks: 176, quoteId });
+
+    const secondInstallment = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    const dueSessionId = secondInstallment[0]?.dueSessionId;
+    if (!dueSessionId)
+      throw new Error("Fixture did not assign the due session");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueSessionId: null })
+      .where(
+        eq(academyClassEnrollmentInstallment.id, secondInstallment[0]!.id),
+      );
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("no scheduled due session");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueSessionId })
+      .where(
+        eq(academyClassEnrollmentInstallment.id, secondInstallment[0]!.id),
+      );
+
+    const [dueSession] = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, dueSessionId));
+    if (!dueSession) throw new Error("Fixture due session was not found");
+    await db
+      .update(academyClassSession)
+      .set({ state: "cancelled" })
+      .where(eq(academyClassSession.id, dueSessionId));
+
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("session is no longer scheduled");
+    await db
+      .update(academyClassSession)
+      .set({ state: "scheduled" })
+      .where(eq(academyClassSession.id, dueSessionId));
+    fixture.setNow(dueSession.startAt);
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("installment deadline has passed");
+  });
+
+  test("top-up quotes reject expired checkouts and wallets already funded", async () => {
+    let providerCalls = 0;
+    const paymentPort: EnrollmentPaymentPort = {
+      createTopUpQuote: async () => {
+        providerCalls += 1;
+        throw new Error("Payment provider must not be called");
+      },
+      createPurchaseFromTopUpQuote: async () => {
+        throw new Error("Purchase is not part of this quote test");
+      },
+    };
+
+    const funded = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort,
+    });
+    const fundedEnrollment = await makeEnrollment(
+      funded,
+      0,
+      "single",
+      crypto.randomUUID(),
+      funded.sessionIds[0],
+    );
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 25, availableBalance: 25 })
+      .where(eq(walletTable.id, funded.walletIds[0]!));
+    await expect(
+      funded.service.createTopUpQuote(funded.studentIds[0]!, {
+        enrollmentId: fundedEnrollment.id,
+        ordinal: 1,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("wallet now has enough Marks");
+
+    const expired = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort,
+    });
+    const expiredEnrollment = await makeEnrollment(
+      expired,
+      0,
+      "single",
+      crypto.randomUUID(),
+      expired.sessionIds[0],
+    );
+    expired.setNow(new Date(BASE_TIME.getTime() + 16 * 60_000));
+    await expect(
+      expired.service.createTopUpQuote(expired.studentIds[0]!, {
+        enrollmentId: expiredEnrollment.id,
+        ordinal: 1,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("checkout has expired");
+    expect(providerCalls).toBe(0);
   });
 
   test("insufficient Marks expires to zero-residual released seats and allows a fresh quote", async () => {
