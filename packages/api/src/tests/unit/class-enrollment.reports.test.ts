@@ -1,5 +1,34 @@
 import { expect, test } from "bun:test";
 import { classSessionSettlementAmounts } from "../../modules/class-enrollment/class-enrollment.reports";
+import { submitClassSessionReportInput } from "../../modules/class-enrollment/class-enrollment.types";
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
+
+test("admin report reasons enforce Unicode character bounds after trimming", () => {
+  const input = {
+    classId: crypto.randomUUID(),
+    sessionId: crypto.randomUUID(),
+    requestKey: crypto.randomUUID(),
+    expectedVersion: 0,
+    deliveryConfirmed: true,
+    feedback: TEST_COMPLETION_FEEDBACK,
+  };
+  expect(
+    submitClassSessionReportInput.safeParse({ ...input, adminReason: " ab " })
+      .success,
+  ).toBe(false);
+  expect(
+    submitClassSessionReportInput.safeParse({
+      ...input,
+      adminReason: "😀".repeat(501),
+    }).success,
+  ).toBe(false);
+  expect(
+    submitClassSessionReportInput.parse({
+      ...input,
+      adminReason: ` ${"😀".repeat(500)} `,
+    }).adminReason,
+  ).toBe("😀".repeat(500));
+});
 
 function allocation(
   id: string,

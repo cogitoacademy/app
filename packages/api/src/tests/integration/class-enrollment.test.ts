@@ -1427,6 +1427,40 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     ).toEqual([rejoinedSessionId]);
   });
 
+  test("second installment payment refreshes a stale cached deadline from the scheduled session", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 500 });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueAt: BASE_TIME })
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    await expect(
+      fixture.service.paySecondInstallment(
+        fixture.studentIds[0]!,
+        enrollment.id,
+      ),
+    ).resolves.toMatchObject({ outcome: "funded" });
+    const [installment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    expect(installment).toMatchObject({
+      state: "funded",
+      dueAt: fixture.startAt[1],
+    });
+    expect(await ledgerHolds(fixture)).toHaveLength(2);
+  });
+
   test("scheduled jobs default a due second installment against its locked session", async () => {
     const fixture = await createFixture({
       sessions: 4,
@@ -2749,6 +2783,67 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
         ),
     ).toHaveLength(1);
   });
+
+  test.each(["full", "half"] as const)(
+    "session cancellation reconciles an unfunded %s checkout",
+    async (plan) => {
+      const fixture = await createFixture({
+        sessions: plan === "full" ? 3 : 2,
+        balance: 0,
+      });
+      const enrollment = await makeEnrollment(fixture, 0, plan);
+      const input = {
+        classId: fixture.classId,
+        sessionId: fixture.sessionIds[0]!,
+        expectedClassVersion: 1,
+        expectedSessionVersion: 1,
+        reason: "Cancel the unfunded session",
+      };
+      const quote = await fixture.service.previewAdminSessionCancellation(
+        fixture.tutorId,
+        input,
+      );
+      await fixture.service.confirmAdminSessionCancellation(fixture.tutorId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      });
+      const [updated] = await enrollmentRows(fixture);
+      const allocations = await allocationRows(fixture);
+      const installments = await db
+        .select()
+        .from(academyClassEnrollmentInstallment)
+        .where(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+        );
+      if (plan === "full") {
+        expect(updated?.state).toBe("checkout_pending");
+        expect(
+          allocations.filter((row) => row.state === "checkout_reserved"),
+        ).toHaveLength(2);
+        expect(installments[0]).toMatchObject({
+          state: "checkout_pending",
+          sessionCount: 2,
+          amountMarks: 40,
+        });
+      } else {
+        expect(updated?.state).toBe("cancelled");
+        expect(allocations.every((row) => row.state === "released")).toBe(true);
+        expect(installments.every((row) => row.state === "cancelled")).toBe(
+          true,
+        );
+      }
+      expect(
+        allocations.every(
+          (row) =>
+            row.fundedMarks === 0 &&
+            row.spentMarks === 0 &&
+            row.releasedMarks === 0,
+        ),
+      ).toBe(true);
+      expect(await ledgerHolds(fixture)).toHaveLength(0);
+    },
+  );
 
   test("half payment wins the session lock and stale cancellation re-previews once", async () => {
     let gateEnabled = false;

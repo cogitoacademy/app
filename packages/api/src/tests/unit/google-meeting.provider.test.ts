@@ -1737,21 +1737,21 @@ describe("createGoogleMeetingProvider academy class events", () => {
     const localInsert = mock(() => ({
       values: mock(() => ({ returning: mock(async () => []) })),
     }));
-    const provider = createGoogleMeetingProvider(config, {
+    const provider = createGoogleMeetingProviderWithFallback(config, {
       insert: localInsert,
     } as any);
     const sessionId = "class-session-retry";
     const startAt = new Date("2035-02-01T10:00:00.000Z");
     const endAt = new Date("2035-02-01T11:00:00.000Z");
 
-    const first = await provider.createAcademyClassEvent(
+    const first = await provider.createAcademyClassEvent!(
       sessionId,
       startAt,
       endAt,
       { email: "tutor@example.com", name: "Test Tutor" },
       { title: "Cogito class retry" },
     );
-    const retry = await provider.createAcademyClassEvent(
+    const retry = await provider.createAcademyClassEvent!(
       sessionId,
       startAt,
       endAt,
