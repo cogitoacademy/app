@@ -1,26 +1,34 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const mockSend = () => Promise.resolve({});
-const mockPutObjectCommand = class {
-  constructor(public input: unknown) {}
-};
+import { S3Client } from "@aws-sdk/client-s3";
+import * as presigner from "@aws-sdk/s3-request-presigner";
 
-mock.module("@aws-sdk/client-s3", () => ({
-  PutObjectCommand: mockPutObjectCommand,
-  S3Client: class {
-    send = mockSend;
-  },
-}));
-
-mock.module("@aws-sdk/s3-request-presigner", () => ({
-  getSignedUrl: async (
-    _client: unknown,
-    command: { input?: { Key?: string } },
-  ) => `https://signed.example/${command.input?.Key ?? "upload"}`,
-}));
+let restoreSdk = () => {};
+beforeEach(() => {
+  const send = spyOn(S3Client.prototype, "send").mockResolvedValue({} as never);
+  const sign = spyOn(presigner, "getSignedUrl").mockImplementation(
+    async (_client, command) => {
+      const input = command.input as { Key?: string };
+      return `https://signed.example/${input.Key ?? "upload"}`;
+    },
+  );
+  restoreSdk = () => {
+    send.mockRestore();
+    sign.mockRestore();
+  };
+});
+afterEach(() => restoreSdk());
 
 import {
   InvalidStorageKeyError,
@@ -65,6 +73,12 @@ describe("createLocalStorage", () => {
     expect(s.resolvePublicUrl("user-1/uuid-note.pdf")).toBe(
       "/uploads/user-1/uuid-note.pdf",
     );
+  });
+
+  test("omitting a public URL uses the authenticated local upload route", () => {
+    expect(
+      createLocalStorage({ dir }).resolvePublicUrl("user-1/uuid-note.pdf"),
+    ).toBe("/uploads/user-1/uuid-note.pdf");
   });
 
   test("rejects traversal and absolute keys on every method", async () => {
@@ -128,6 +142,25 @@ describe("createR2Storage", () => {
     expect(method).toBe("PUT");
     expect(url).toBe("https://signed.example/user-1/uuid-avatar.png");
     expect(fields).toEqual({});
+    expect(presigner.getSignedUrl).toHaveBeenLastCalledWith(
+      expect.any(S3Client),
+      expect.objectContaining({
+        input: expect.objectContaining({ ContentLength: 128 }),
+      }),
+      { expiresIn: 300 },
+    );
+    await s.getSignedUploadUrl("user-1/uuid-avatar.png", "image/png");
+    expect(presigner.getSignedUrl).toHaveBeenLastCalledWith(
+      expect.any(S3Client),
+      expect.objectContaining({
+        input: {
+          Bucket: "bucket",
+          Key: "user-1/uuid-avatar.png",
+          ContentType: "image/png",
+        },
+      }),
+      { expiresIn: 300 },
+    );
   });
 
   test("resolvePublicUrl prefixes when publicUrl is set and returns key otherwise", () => {
