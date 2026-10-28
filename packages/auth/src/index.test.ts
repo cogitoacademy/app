@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test, mock, spyOn } from "bun:test";
+import * as betterAuthModule from "better-auth";
+import { createHmac } from "node:crypto";
+import { db } from "@cogito-app/db";
 
 import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "@cogito-app/env/admin";
 import { env } from "@cogito-app/env/server";
@@ -42,7 +45,159 @@ afterEach(() => {
   setSignupReferralChoiceWriter(null);
 });
 
+const acceptedSignupBody = JSON.stringify({ user: { id: "new-student" } });
+
 describe("auth email hooks", () => {
+  test.each([
+    {
+      name: "non-JSON provider failure",
+      body: "Upstream unavailable",
+      providerStatus: 502,
+      status: 502,
+      error: "Unable to create account.",
+    },
+    {
+      name: "provider message",
+      body: JSON.stringify({ message: "Signup rejected" }),
+      providerStatus: 400,
+      status: 400,
+      error: "Signup rejected",
+    },
+    {
+      name: "non-string provider message",
+      body: JSON.stringify({ message: {} }),
+      providerStatus: 400,
+      status: 400,
+      error: "Unable to create account.",
+    },
+    {
+      name: "student-only referral",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: {
+        code: "REFERRAL_STUDENT_ONLY",
+        message: "Students only",
+      },
+      status: 403,
+      error: "Students only",
+    },
+    {
+      name: "referral without message",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: { code: "REFERRAL_INVALID" },
+      status: 400,
+      error: "Referral choice could not be saved.",
+    },
+    {
+      name: "invalid referral",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: {
+        code: "INVALID_REFERRAL_CODE",
+        message: "Invalid referral",
+      },
+      status: 400,
+      error: "Invalid referral",
+    },
+    {
+      name: "self referral",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: { code: "SELF_REFERRAL", message: "Self referral" },
+      status: 400,
+      error: "Self referral",
+    },
+    {
+      name: "unexpected transaction error",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: new Error("Private diagnostic"),
+      status: 500,
+      error:
+        "We couldn't complete signup. Your code is still available to retry.",
+    },
+    {
+      name: "non-object transaction error",
+      body: acceptedSignupBody,
+      providerStatus: 200,
+      referralError: "Private diagnostic",
+      status: 500,
+      error:
+        "We couldn't complete signup. Your code is still available to retry.",
+    },
+  ])("signup failures preserve the OTP proof: %s", async (scenario) => {
+    const email = "failure@example.com";
+    const signupAttemptId = crypto.randomUUID();
+    const otp = "123456";
+    const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+      .update(`${email}\0${otp}`)
+      .digest("hex");
+    const results = [
+      [],
+      [
+        {
+          id: "proof-id",
+          value: `${digest}:0:${signupAttemptId}`,
+          expiresAt: new Date(Date.now() + 300000),
+        },
+      ],
+      [],
+    ];
+    const remove = mock(() => ({ where: async () => undefined }));
+    const tx = {
+      execute: async () => undefined,
+      select: () => {
+        const query = {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: async () => results.shift() ?? [],
+        };
+        return query;
+      },
+      delete: remove,
+    };
+    const transaction = spyOn(db, "transaction").mockImplementation((async (
+      fn: (conn: unknown) => Promise<unknown>,
+    ) => fn(tx)) as any);
+    const factory = spyOn(betterAuthModule, "betterAuth").mockImplementation(
+      (() => ({
+        api: {
+          signUpEmail: async () =>
+            new Response(scenario.body, { status: scenario.providerStatus }),
+        },
+      })) as any,
+    );
+    const referralWriter = mock(async () => {
+      if ("referralError" in scenario) throw scenario.referralError;
+    });
+    setSignupReferralChoiceWriter(referralWriter);
+    try {
+      await expect(
+        completePreAccountSignup({
+          email,
+          password: "ValidPassword123!",
+          name: "Student",
+          otp,
+          signupAttemptId,
+          headers: new Headers(),
+        }),
+      ).resolves.toMatchObject({
+        ok: false,
+        status: scenario.status,
+        error: scenario.error,
+      });
+      if ("referralError" in scenario)
+        expect(referralWriter).toHaveBeenCalledTimes(1);
+      else expect(referralWriter).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+      expect(results).toEqual([]);
+    } finally {
+      factory.mockRestore();
+      transaction.mockRestore();
+    }
+  });
   test("pre-account signup rejects malformed requests and unavailable adapters before database access", async () => {
     const signupAttemptId = crypto.randomUUID();
     await expect(
