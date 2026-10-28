@@ -3,8 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   academyClass,
-  academyClassMeeting,
-  academyClassSession,
   auditLog,
   notification,
   room,
@@ -22,6 +20,7 @@ import {
 } from "../helpers/test-client";
 import { lockRoomForBooking, lockTutorForBooking } from "../../lib/locks";
 import { lockCompetitionCatalog } from "../../modules/competition-catalog/catalog-lock";
+import { createAcademyClassRepo } from "../../modules/academy-class/academy-class.repo";
 
 function deferred() {
   let resolve!: () => void;
@@ -438,14 +437,10 @@ describe("academy class drafts and published reads", () => {
     expect(published.sessions.map((session) => session.tutorFeeIdr)).toEqual([
       400_000, 400_000,
     ]);
-    const meetingRows = await db
-      .select({ meeting: academyClassMeeting, session: academyClassSession })
-      .from(academyClassMeeting)
-      .innerJoin(
-        academyClassSession,
-        eq(academyClassMeeting.sessionId, academyClassSession.id),
-      )
-      .where(eq(academyClassSession.classId, draft.id));
+    const meetingRows = await createAcademyClassRepo().listMeetingsForClass(
+      db,
+      draft.id,
+    );
     expect(meetingRows).toHaveLength(1);
     expect(meetingRows[0]?.meeting.status).toBe("created");
 

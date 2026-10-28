@@ -593,5 +593,16 @@ describe("student report export eligibility PostgreSQL [REQ-REPORT-04/Q06]", () 
     expect(includedMarkers).not.toContain("excluded-class-released");
     expect(includedMarkers).not.toContain("excluded-class-unfunded");
     expect(includedMarkers).not.toContain("excluded-class-nonowner");
+    const requestedAt = Date.now();
+    const currentSummary = await createReportExportService({ db }).getSummary(
+      targetStudentId,
+    );
+    expect(currentSummary?.generatedAt.getTime()).toBeGreaterThanOrEqual(
+      requestedAt,
+    );
+    expect(currentSummary?.generatedAt.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
+    expect(currentSummary?.timezone).toBe("Asia/Jakarta");
   });
 });

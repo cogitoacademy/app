@@ -12,6 +12,9 @@ import {
   setSignupWelcomeEmailSender,
   setVerificationEmailSender,
   resolveGoogleSocialProviders,
+  sendPreAccountSignupOtp,
+  completePreAccountSignup,
+  getPreAccountSignupOtpForTest,
 } from "./index";
 
 const user = {
@@ -40,6 +43,69 @@ afterEach(() => {
 });
 
 describe("auth email hooks", () => {
+  test("pre-account signup rejects malformed requests and unavailable adapters before database access", async () => {
+    const signupAttemptId = crypto.randomUUID();
+    await expect(
+      sendPreAccountSignupOtp({ email: "invalid", signupAttemptId }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(
+      sendPreAccountSignupOtp({
+        email: "student@example.com",
+        signupAttemptId: "invalid",
+      }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    setPreAccountSignupEmailSender(null);
+    await expect(
+      sendPreAccountSignupOtp({
+        email: "student@example.com",
+        signupAttemptId,
+      }),
+    ).resolves.toMatchObject({ ok: false, status: 502 });
+    const input = {
+      email: "student@example.com",
+      password: "ValidPassword123!",
+      name: "Student",
+      otp: "123456",
+      signupAttemptId,
+      headers: new Headers(),
+    };
+    await expect(
+      completePreAccountSignup({ ...input, email: "invalid" }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(
+      completePreAccountSignup({ ...input, signupAttemptId: "invalid" }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(
+      completePreAccountSignup({ ...input, password: "weak" }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(
+      completePreAccountSignup({ ...input, otp: "123" }),
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 400,
+      error: "Enter the six-digit code.",
+    });
+    setSignupReferralChoiceWriter(null);
+    await expect(completePreAccountSignup(input)).resolves.toMatchObject({
+      ok: false,
+      status: 503,
+    });
+  });
+
+  test("the OTP fixture reader is unavailable outside test mode", async () => {
+    const originalNodeEnv = env.NODE_ENV;
+    try {
+      (env as { NODE_ENV: string }).NODE_ENV = "production";
+      await expect(
+        getPreAccountSignupOtpForTest("student@example.com"),
+      ).resolves.toBeNull();
+    } finally {
+      (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
+    }
+    await expect(
+      getPreAccountSignupOtpForTest("not-captured@example.com"),
+    ).resolves.toBeNull();
+  });
   test("production signup stores the configured operator role on insert", async () => {
     const originalNodeEnv = env.NODE_ENV;
     try {
