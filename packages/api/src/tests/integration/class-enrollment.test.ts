@@ -833,9 +833,9 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
   test("an enrollment cannot bypass a pending checkout or switch active plans", async () => {
     const pending = await createFixture({ sessions: 1, balance: 0 });
     await makeEnrollment(pending, 0, "single");
-    await expect(
-      makeEnrollment(pending, 0, "single"),
-    ).rejects.toThrow("existing 15-minute class checkout");
+    await expect(makeEnrollment(pending, 0, "single")).rejects.toThrow(
+      "existing 15-minute class checkout",
+    );
 
     const activeFull = await createFixture({ sessions: 2, balance: 500 });
     await makeEnrollment(activeFull, 0, "full");
