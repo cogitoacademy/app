@@ -83,6 +83,133 @@ function fixture(overrides: Record<string, unknown> = {}) {
 
 describe("class enrollment locked request replay", () => {
   test.each([
+    "deleted-under-lock",
+    "different-plan",
+    "different-session",
+    "expired",
+    "missing-summary",
+  ] as const)("an existing request handles %s under lock", async (scenario) => {
+    const existing = {
+      ...enrollment,
+      checkoutExpiresAt:
+        scenario === "expired"
+          ? new Date(now.getTime() - 1)
+          : enrollment.checkoutExpiresAt,
+    };
+    let reads = 0;
+    const releaseCheckout = mock(async () => undefined);
+    const f = fixture({
+      findEnrollmentByRequestKey: mock(async () =>
+        ++reads > 1 && scenario === "deleted-under-lock" ? null : existing,
+      ),
+      findAllocations: mock(async () => [
+        { sessionId: scenario === "different-session" ? "other" : session.id },
+      ]),
+      findStudentClassRecords: mock(async () => ({
+        enrollments: scenario === "missing-summary" ? [] : [existing],
+        installments: [],
+        allocations: [],
+      })),
+      releaseCheckout,
+    });
+    try {
+      const result = f.service.createEnrollment("student1", {
+        classId: "class1",
+        plan: scenario === "different-plan" ? "full" : "single",
+        sessionId: session.id,
+        requestKey: crypto.randomUUID(),
+      });
+      if (scenario === "expired") {
+        await expect(result).resolves.toMatchObject({
+          outcome: "already_exists",
+        });
+        expect(releaseCheckout).toHaveBeenCalledTimes(1);
+      } else {
+        await expect(result).rejects.toMatchObject({
+          code: scenario.startsWith("different")
+            ? "CLASS_ENROLLMENT_CONFLICT"
+            : "CLASS_ENROLLMENT_NOT_FOUND",
+        });
+        expect(releaseCheckout).not.toHaveBeenCalled();
+      }
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
+
+  test.each(["missing", "draft", "unsupported-kind"] as const)(
+    "new enrollment rejects an unavailable class: %s",
+    async (scenario) => {
+      const f = fixture({
+        getClassForEnrollment: mock(async () =>
+          scenario === "missing"
+            ? null
+            : {
+                ...classRecord,
+                state: scenario === "draft" ? "draft" : "published",
+                kind: scenario === "unsupported-kind" ? "private" : "cohort",
+              },
+        ),
+      });
+      try {
+        await expect(
+          f.service.createEnrollment("student1", {
+            classId: "class1",
+            plan: "single",
+            sessionId: session.id,
+            requestKey: crypto.randomUUID(),
+          }),
+        ).rejects.toMatchObject({
+          code:
+            scenario === "unsupported-kind"
+              ? "CLASS_ENROLLMENT_INVALID_OPERATION"
+              : "CLASS_ENROLLMENT_NOT_FOUND",
+        });
+        expect(f.repo.lockSessions).not.toHaveBeenCalled();
+        expect(f.wallet.hold).not.toHaveBeenCalled();
+      } finally {
+        f.restore();
+      }
+    },
+  );
+
+  test.each(["cancelled", "completed", "draft"] as const)(
+    "non-enrolling %s classes expose only existing student history",
+    async (state) => {
+      for (const owned of [true, false]) {
+        const f = fixture({
+          getClassForEnrollment: mock(async () => ({ ...classRecord, state })),
+          findStudentClassRecords: mock(async () => ({
+            enrollments: owned ? [enrollment] : [],
+            installments: [],
+            allocations: [],
+          })),
+        });
+        try {
+          const result = f.service.getMyClassEnrollments("student1", "class1");
+          if (owned)
+            await expect(result).resolves.toMatchObject({
+              classState: state,
+              eligibleSessions: [],
+              enrollments: [{ id: enrollment.id }],
+            });
+          else
+            await expect(result).rejects.toMatchObject({
+              code: "CLASS_ENROLLMENT_NOT_FOUND",
+            });
+          expect(
+            f.repo.expireStaleCheckoutForStudentClass,
+          ).not.toHaveBeenCalled();
+          expect(f.repo.listAvailableSessions).not.toHaveBeenCalled();
+        } finally {
+          f.restore();
+        }
+      }
+    },
+  );
+
+  test.each([
     "pending",
     "active",
     "missing-wallet",
