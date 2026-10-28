@@ -374,6 +374,24 @@ guardedTest(
         sha256: "a".repeat(64),
       }),
     ).rejects.toThrow("Private file identity conflict");
+    await expect(
+      repo.registerFile({
+        id: fileId,
+        storageKey: `${prefix}.pdf`,
+        fileName: "synthetic.pdf",
+        bytes: 11,
+        sha256: "a".repeat(64),
+      }),
+    ).rejects.toThrow("Private file identity conflict");
+    await expect(
+      repo.registerFile({
+        id: fileId,
+        storageKey: `${prefix}.pdf`,
+        fileName: "synthetic.pdf",
+        bytes: 10,
+        sha256: "b".repeat(64),
+      }),
+    ).rejects.toThrow("Private file identity conflict");
 
     await expect(
       repo.save(

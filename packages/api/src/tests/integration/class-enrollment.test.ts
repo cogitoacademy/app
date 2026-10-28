@@ -2425,6 +2425,47 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
     ).toBeInstanceOf(Date);
   });
 
+  test("minimum confirmation rejects stale quotes and conflicting request-key replays", async () => {
+    const fixture = await createFixture({ sessions: 0, balance: 0 });
+    const adminId = await createReportAdmin();
+    const input = {
+      classId: fixture.classId,
+      expectedClassVersion: 1,
+      decision: "continue" as const,
+      reason: "Continue with a reviewed minimum quote",
+      replacementStarts: [],
+    };
+    const stalePreview =
+      await fixture.service.previewAdminMinimumDecision(input);
+    const staleConfirmation = {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: stalePreview.quoteVersion,
+    };
+    await db
+      .update(academyClass)
+      .set({ minimumEnrollment: 2 })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.confirmAdminMinimumDecision(adminId, staleConfirmation),
+    ).rejects.toThrow("Enrollment, payments, reports, or the schedule changed");
+
+    const freshPreview =
+      await fixture.service.previewAdminMinimumDecision(input);
+    const confirmation = {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: freshPreview.quoteVersion,
+    };
+    await fixture.service.confirmAdminMinimumDecision(adminId, confirmation);
+    await expect(
+      fixture.service.confirmAdminMinimumDecision(adminId, {
+        ...confirmation,
+        expectedClassVersion: 2,
+      }),
+    ).rejects.toThrow("request key was already used");
+  });
+
   test("individual cancellation rejects a stale funding quote and replays one return", async () => {
     const fixture = await createFixture({ sessions: 1, balance: 0 });
     const enrollment = await makeEnrollment(

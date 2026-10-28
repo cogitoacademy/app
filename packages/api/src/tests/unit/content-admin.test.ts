@@ -7,7 +7,11 @@ import type { Context } from "../../context";
 import { createContentAdminService } from "../../modules/content-admin/content-admin.service";
 import { createContentAdminHandler } from "../../modules/content-admin/content-admin.handler";
 import { createContentAdminRouter } from "../../modules/content-admin/content-admin.router";
-import type { ContentAdminRepo } from "../../modules/content-admin/content-admin.repo";
+import {
+  createContentAdminRepo,
+  type ContentAdminRepo,
+} from "../../modules/content-admin/content-admin.repo";
+import type { DbType } from "../../lib/db";
 import {
   ContentConflictError,
   ContentInvalidError,
@@ -60,6 +64,17 @@ function service(overrides: Partial<ContentAdminRepo> = {}, enabled = true) {
     storage,
     enabled: () => enabled,
   });
+}
+function fakeQueryBuilder(result: unknown[]) {
+  const query: any = Promise.resolve(result);
+  Object.assign(query, {
+    from: () => query,
+    where: () => query,
+    for: async () => result,
+    set: () => query,
+    returning: async () => result,
+  });
+  return query;
 }
 describe("content admin boundaries", () => {
   test("maps content domain errors to conflict, bad request, and internal error", () => {
@@ -134,6 +149,37 @@ describe("content admin boundaries", () => {
       id: "id",
       expectedVersion: 4,
     });
+  });
+  test("resource update detects a concurrent missing row after the version check", async () => {
+    const before = {
+      id: "resource-1",
+      ...resource,
+      version: 1,
+      sourceId: null,
+      sourceHash: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const selectResults: unknown[][] = [[before], [{ id: resource.fileId }]];
+    const tx = {
+      execute: async () => undefined,
+      select: () => fakeQueryBuilder(selectResults.shift() ?? []),
+      update: () => fakeQueryBuilder([]),
+    };
+    const db = {
+      transaction: (run: (transaction: typeof tx) => Promise<unknown>) =>
+        run(tx),
+    } as unknown as DbType;
+    const repo = createContentAdminRepo(db, { record: async () => {} });
+
+    await expect(
+      repo.save(
+        { kind: "resource", values: resource },
+        "admin",
+        "Concurrent delete",
+        { id: before.id, expectedVersion: before.version },
+      ),
+    ).rejects.toBeInstanceOf(ContentConflictError);
   });
   test("every admin procedure rejects anonymous, student and tutor before service", async () => {
     const list = mock(async () => []);
