@@ -2187,6 +2187,142 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
 });
 
 describe("T06 class lifecycle minimum, postponement and session cancellation", () => {
+  test("minimum decision quotes reject stale checks and invalid postponement schedules", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 0 });
+    await expect(
+      fixture.service.getAdminMinimumCheck(`${fixture.classId}-missing`),
+    ).rejects.toThrow();
+    await db
+      .update(academyClass)
+      .set({
+        kind: "masterclass",
+        minimumEnrollment: null,
+        minimumCheckAt: null,
+        cohortFullRateMarks: null,
+        cohortHalfRateMarks: null,
+        cohortSingleRateMarks: null,
+        masterclassRateMarks: 40,
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.getAdminMinimumCheck(fixture.classId),
+    ).rejects.toThrow("Minimum enrollment checks apply to cohort classes only");
+    await db
+      .update(academyClass)
+      .set({
+        kind: "cohort",
+        minimumEnrollment: 1,
+        minimumCheckAt: new Date(BASE_TIME.getTime() - DAY_MS),
+        cohortFullRateMarks: 20,
+        cohortHalfRateMarks: 22,
+        cohortSingleRateMarks: 25,
+        masterclassRateMarks: null,
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    const continueInput = {
+      classId: fixture.classId,
+      expectedClassVersion: 1,
+      decision: "continue" as const,
+      reason: "Continue after minimum check",
+      replacementStarts: [],
+    };
+
+    await db
+      .update(academyClass)
+      .set({ minimumCheckAt: new Date(BASE_TIME.getTime() + DAY_MS) })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("not due yet");
+    await db
+      .update(academyClass)
+      .set({
+        minimumCheckAt: new Date(BASE_TIME.getTime() - DAY_MS),
+        state: "draft",
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("Only a published cohort");
+    await db
+      .update(academyClass)
+      .set({ state: "published" })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...continueInput,
+        expectedClassVersion: 2,
+      }),
+    ).rejects.toThrow("class changed");
+    await db
+      .update(academyClass)
+      .set({ minimumCheckResolvedAt: BASE_TIME })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("already been resolved");
+    await db
+      .update(academyClass)
+      .set({ minimumCheckResolvedAt: null })
+      .where(eq(academyClass.id, fixture.classId));
+
+    const postponeInput = {
+      ...continueInput,
+      decision: "postpone" as const,
+      replacementStarts: fixture.sessionIds.map((sessionId, index) => ({
+        sessionId,
+        expectedSessionVersion: 1,
+        startAt: new Date(BASE_TIME.getTime() + (5 + index * 2) * DAY_MS),
+      })),
+    };
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: [],
+      }),
+    ).rejects.toThrow("every scheduled session");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: [
+          postponeInput.replacementStarts[0]!,
+          postponeInput.replacementStarts[0]!,
+        ],
+      }),
+    ).rejects.toThrow("each currently scheduled session exactly once");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: postponeInput.replacementStarts.map((row, index) =>
+          index === 0 ? { ...row, expectedSessionVersion: 2 } : row,
+        ),
+      }),
+    ).rejects.toThrow("A session changed");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: postponeInput.replacementStarts.map((row) => ({
+          ...row,
+          startAt: postponeInput.replacementStarts[0]!.startAt,
+        })),
+      }),
+    ).rejects.toThrow("cannot overlap or change their order");
+    await db
+      .update(academyClassSession)
+      .set({ state: "completed" })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(postponeInput),
+    ).rejects.toThrow("delivered sessions cannot be postponed");
+    await db
+      .update(academyClassSession)
+      .set({ state: "scheduled", startAt: BASE_TIME })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(postponeInput),
+    ).rejects.toThrow("ongoing or past scheduled session");
+  });
+
   test("minimum checks count only active paid full/half students and continue is audited", async () => {
     const fixture = await createFixture({
       sessions: 4,

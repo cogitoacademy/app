@@ -264,7 +264,7 @@ guardedTest(
     expect((await repo.events()).map((row) => row.id)).toContain(eventId);
     expect(
       (await repo.eventCategories()).map(
-        (row) => row.calendar_event_category.eventId,
+        (row) => row.calendarEventCategory.eventId,
       ),
     ).toContain(eventId);
     expect((await repo.categories()).map((category) => category.id)).toContain(
@@ -281,8 +281,10 @@ guardedTest(
   "event categories reject invalid selections and retain archived links",
   async () => {
     const archivedId = `${prefix}-archived-category`;
+    const inactiveId = `${prefix}-inactive-category`;
     const childId = `${prefix}-child-category`;
     await createCategory(archivedId);
+    await createCategory(inactiveId, { active: false });
     await createCategory(childId, { parentCategoryId: parentId });
     const eventId = `${prefix}-category-event`;
     ids.push(eventId);
@@ -317,7 +319,7 @@ guardedTest(
       repo.save(entry([childId]), actorId, "Child category"),
     ).rejects.toThrow("Choose existing active parent competitions");
     await expect(
-      repo.save(entry([archivedId]), actorId, "Archived category"),
+      repo.save(entry([inactiveId]), actorId, "Archived category"),
     ).rejects.toThrow("Choose existing active parent competitions");
 
     const created = await repo.save(
