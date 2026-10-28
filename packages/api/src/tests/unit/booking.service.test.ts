@@ -7542,6 +7542,36 @@ describe("BookingService", () => {
       });
     });
 
+    test("legacy group without a saved price snapshot falls back to the new per-student price", async () => {
+      const booking = makeGroupBooking({ priceSnapshot: null });
+      const proposer = makeParticipant({ heldAmount: 28 });
+      const remaining = [
+        makeRemainingParticipant("p2", "student2", 28),
+        makeRemainingParticipant("p3", "student3", 28),
+        makeRemainingParticipant("p4", "student4", 28),
+      ];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => proposer),
+          findConfirmedParticipants: mock(async () => remaining),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "3": 35 } }),
+          ),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        84,
+      );
+      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+    });
+
     test("M8: unfunded reprice after withdrawal expires the group instead of rolling back the withdrawal", async () => {
       const booking = makeGroupBooking();
       const proposer = makeParticipant({ heldAmount: 112 });
@@ -9976,6 +10006,23 @@ describe("cancelOfflineBooking (M6)", () => {
 });
 
 describe("BookingService coverage paths", () => {
+  test("listForTutor applies its default page when options are omitted", async () => {
+    const listBookingsByTutor = mock(async () => []);
+    const { service } = createService({
+      repo: { listBookingsByTutor },
+    });
+
+    await expect(service.listForTutor("tutor1")).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(listBookingsByTutor).toHaveBeenCalledWith("tutor1", {
+      states: undefined,
+      limit: expect.any(Number),
+      cursor: undefined,
+    });
+  });
+
   test("listForTutor applies the page limit and returns a composite cursor", async () => {
     const rows = [
       { id: "b1", scheduledStartAt: new Date("2026-08-24T10:00:00.000Z") },

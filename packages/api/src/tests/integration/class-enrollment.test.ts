@@ -18,6 +18,7 @@ import {
   notification,
   notificationDispatch,
   paymentRecord,
+  room,
   subjectCategory,
   tutorInvite,
   tutorPayout,
@@ -96,6 +97,7 @@ const ownedReminderEventKeys = new Set<string>();
 const ownedEconomyRevisionVersions = new Set<number>();
 const ownedTopUpQuoteIds = new Set<string>();
 const ownedPaymentIds = new Set<string>();
+const ownedRoomIds = new Set<string>();
 
 type Fixture = {
   classId: string;
@@ -689,6 +691,8 @@ afterAll(async () => {
       .where(inArray(academyClassEnrollment.classId, classIds));
     await db.delete(academyClass).where(inArray(academyClass.id, classIds));
   }
+  if (ownedRoomIds.size > 0)
+    await db.delete(room).where(inArray(room.id, [...ownedRoomIds]));
   if (ownedPaymentIds.size > 0) {
     await db
       .delete(paymentRecord)
@@ -2188,6 +2192,63 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
 });
 
 describe("T06 class lifecycle minimum, postponement and session cancellation", () => {
+  test("minimum postponement rejects managed room and tutor schedule overlaps", async () => {
+    const roomTarget = await createFixture({ sessions: 2, balance: 0 });
+    const roomConflict = await createFixture({ sessions: 1, balance: 0 });
+    const [managedRoom] = await db
+      .insert(room)
+      .values({ name: "Minimum test room", location: "Jakarta", capacity: 6 })
+      .returning({ id: room.id });
+    if (!managedRoom) throw new Error("Room fixture was not created");
+    ownedRoomIds.add(managedRoom.id);
+    await db
+      .update(academyClassSession)
+      .set({ roomId: managedRoom.id })
+      .where(
+        inArray(academyClassSession.id, [
+          ...roomTarget.sessionIds,
+          ...roomConflict.sessionIds,
+        ]),
+      );
+    const replacementStarts = (fixture: Fixture, first: Date) =>
+      fixture.sessionIds.map((sessionId, index) => ({
+        sessionId,
+        expectedSessionVersion: 1,
+        startAt: new Date(first.getTime() + index * 3 * DAY_MS),
+      }));
+    await expect(
+      roomTarget.service.previewAdminMinimumDecision({
+        classId: roomTarget.classId,
+        expectedClassVersion: 1,
+        decision: "postpone",
+        reason: "Avoid a managed room conflict",
+        replacementStarts: replacementStarts(
+          roomTarget,
+          roomConflict.startAt[0]!,
+        ),
+      }),
+    ).rejects.toThrow("managed-room reservation");
+
+    const tutorTarget = await createFixture({ sessions: 2, balance: 0 });
+    const tutorConflict = await createFixture({ sessions: 1, balance: 0 });
+    await db
+      .update(academyClassSession)
+      .set({ tutorId: tutorTarget.tutorId })
+      .where(eq(academyClassSession.id, tutorConflict.sessionIds[0]!));
+    await expect(
+      tutorTarget.service.previewAdminMinimumDecision({
+        classId: tutorTarget.classId,
+        expectedClassVersion: 1,
+        decision: "postpone",
+        reason: "Avoid a tutor schedule conflict",
+        replacementStarts: replacementStarts(
+          tutorTarget,
+          tutorConflict.startAt[0]!,
+        ),
+      }),
+    ).rejects.toThrow("another tutor session");
+  });
+
   test("minimum decision quotes reject stale checks and invalid postponement schedules", async () => {
     const fixture = await createFixture({ sessions: 2, balance: 0 });
     await expect(
