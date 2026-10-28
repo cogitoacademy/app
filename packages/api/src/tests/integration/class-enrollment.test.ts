@@ -17,6 +17,7 @@ import {
   ledgerEntry,
   notification,
   notificationDispatch,
+  paymentRecord,
   subjectCategory,
   tutorInvite,
   tutorPayout,
@@ -92,6 +93,8 @@ const ownedPayoutIds = new Set<string>();
 const ownedUserIds = new Set<string>();
 const ownedReminderEventKeys = new Set<string>();
 const ownedEconomyRevisionVersions = new Set<number>();
+const ownedTopUpQuoteIds = new Set<string>();
+const ownedPaymentIds = new Set<string>();
 
 type Fixture = {
   classId: string;
@@ -512,6 +515,7 @@ async function persistTopUpQuoteFixture(input: {
       expiresAt: new Date(BASE_TIME.getTime() + DAY_MS),
     })
     .onConflictDoNothing();
+  ownedTopUpQuoteIds.add(input.id);
 }
 
 async function createCreatedMeetingFixture(fixture: Fixture) {
@@ -683,6 +687,16 @@ afterAll(async () => {
       .delete(academyClassEnrollment)
       .where(inArray(academyClassEnrollment.classId, classIds));
     await db.delete(academyClass).where(inArray(academyClass.id, classIds));
+  }
+  if (ownedPaymentIds.size > 0) {
+    await db
+      .delete(paymentRecord)
+      .where(inArray(paymentRecord.id, [...ownedPaymentIds]));
+  }
+  if (ownedTopUpQuoteIds.size > 0) {
+    await db
+      .delete(economyV3TopUpQuote)
+      .where(inArray(economyV3TopUpQuote.id, [...ownedTopUpQuoteIds]));
   }
   if (userIds.length > 0) {
     await db.delete(walletTable).where(inArray(walletTable.userId, userIds));
@@ -949,6 +963,23 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
           purchaseCalls += 1;
           expect(receivedQuoteId).toBe(quoteId);
           expect(choice).toBe("custom");
+          if (nextPaymentId === paymentId) {
+            await db
+              .insert(paymentRecord)
+              .values({
+                id: paymentId,
+                userId: _studentId,
+                walletId: _walletId,
+                quoteId,
+                quoteChoice: choice,
+                provider: "stub",
+                providerReference: `class-enrollment-topup-${paymentId}`,
+                amountIdr: 25_000,
+                marks: 25,
+              })
+              .onConflictDoNothing();
+            ownedPaymentIds.add(paymentId);
+          }
           return {
             paymentId: nextPaymentId,
             checkoutUrl: "https://payments.example.test/checkout",
