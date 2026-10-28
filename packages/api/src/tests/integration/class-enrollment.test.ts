@@ -32,6 +32,7 @@ import { services } from "../../services";
 import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
 import type { MeetingPort } from "../../modules/meeting/meeting.types";
 import { createClassEnrollmentService } from "../../modules/class-enrollment/class-enrollment.service";
+import { createClassMinimumLifecycle } from "../../modules/class-enrollment/class-enrollment.minimum";
 import {
   classReportReminderEventKey,
   createClassReportReminderProcessor,
@@ -2219,6 +2220,12 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
         masterclassRateMarks: null,
       })
       .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      createClassMinimumLifecycle({
+        db,
+        notification: { write: async () => {} } as never,
+      }).getMinimumCheck(fixture.classId),
+    ).resolves.toMatchObject({ classId: fixture.classId });
     const continueInput = {
       classId: fixture.classId,
       expectedClassVersion: 1,

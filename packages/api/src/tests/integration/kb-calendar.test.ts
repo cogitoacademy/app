@@ -263,10 +263,16 @@ guardedTest(
     );
     expect((await repo.events()).map((row) => row.id)).toContain(eventId);
     expect(
-      (await repo.eventCategories()).map(
-        (row) => row.calendarEventCategory.eventId,
+      (await repo.eventCategories()).some((row) =>
+        Object.values(row).some(
+          (joined) =>
+            joined !== null &&
+            typeof joined === "object" &&
+            "eventId" in joined &&
+            joined.eventId === eventId,
+        ),
       ),
-    ).toContain(eventId);
+    ).toBe(true);
     expect((await repo.categories()).map((category) => category.id)).toContain(
       parentId,
     );
