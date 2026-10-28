@@ -514,7 +514,10 @@ quotes `feeMarks: 0`, exact `returnMarks`, released allocation IDs and the
 class/session versions. Confirmation cancels only one future scheduled session,
 returns only that session's unspent funded Marks and updates/cancels its unpaid
 installment obligation. The enrollment's original price/session snapshot stays
-unchanged. Ongoing, completed, reported, past and otherwise held delivery seats
+unchanged. If cancellation removes the last reserved first-installment session
+of a pending checkout, confirmation also cancels that enrollment and its unpaid
+installments and releases its remaining unfunded reservations. Second-installment
+reservations alone do not keep a checkout pending. Ongoing, completed, reported, past and otherwise held delivery seats
 are not cancellable or released by this procedure. Student and assigned tutor
 notification outboxes commit with the audit and financial rows; the durable
 meeting worker retries calendar deletion.

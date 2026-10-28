@@ -2,6 +2,17 @@
 
 ## PR #332 coverage and CodeQL follow-up (28 October 2026)
 
+Coverage regressions exposed a pending half-plan cancellation bug: cancelling
+the last session in its first installment left the checkout pending because
+second-installment reservations were counted as payable checkout seats. Session
+cancellation now checks the first installment specifically; when none of its
+seats remain, it cancels the pending enrollment/unpaid installments and releases
+the remaining unfunded reservations without wallet changes. The PostgreSQL
+regression failed on `c60c1054`; hosted confirmation of the fix is pending.
+The latest completed all-test-pass checkpoint, run `40692857910` on `78112b66`,
+reports overall lines 97.04%, functions 99.34% and branches 88.23%; the unchanged
+100% gate remains open.
+
 Real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Follow-up tests exercise both repeat scheduler payloads and student resource input validation. The test support directory is excluded from the production source inventory so `test-setup.ts` is not counted as app code. This remains bounded unit evidence, not full financial/provider acceptance.
 
 CI coverage uses Istanbul source counters through a Bun preload instead of merging Bun's unstable native line/function summaries. The API/auth/DB/env source inventory keeps unloaded/mocked production modules at zero, excludes tests and test support, hashes source content, merges stable function/branch identities, then runs the existing strict LCOV validator and unchanged 100% gates. The three database partitions and their reset boundaries remain separate; the runner additionally requires a confirmed reset window. The local application runtime does not load this instrumentation. Hosted run 40662816367 on c54fc6d4 still fails the unchanged gate: merged API/overall lines are 93.0%, functions 95.6%, and branches 83.1%; no thresholds or source filters were weakened. The 781ef99b batch adds service, scheduler, pricing, error-map, palette, payout, and URL-schema cases; 207 focused tests / 492 assertions pass on Windows Bun canary. Run 40667837202 on df96f51d passed build/lint/typecheck but `api-fixtures` failed because the new class-enrollment top-up test returned quote IDs absent from the FK-backed quote table; the coverage gate was skipped. The fixture now persists test-owned quote/revision rows and cleans up its revision; the 100% gate still needs a complete hosted rerun.

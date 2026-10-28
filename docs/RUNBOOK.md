@@ -1,5 +1,16 @@
 # Cogito Runbook
 
+## Pending checkout cancellation regression (28 October 2026)
+
+Acceptance case: create an unfunded two-session half-plan checkout, then preview
+and confirm cancellation of its first session. The enrollment and both unpaid
+installments must become `cancelled`; both allocations must be `released` with
+zero funded, spent and released Marks, and no wallet hold/ledger entry. A full
+checkout with remaining first-installment sessions stays `checkout_pending`
+with its unpaid obligation resized. The regression failed on `c60c1054`; the
+first-installment-specific fix uses the existing schema and awaits hosted DB
+confirmation. Run the guarded `class-enrollment.test.ts` coverage partition.
+
 ## Counter-based coverage and PR #332 security checks (28 October 2026)
 
 Hosted CI follow-up: the first counter run produced complete function identities (both unresolved-identity lists empty), but one private-PDF test failed because storage.test.ts permanently replaced the S3 SDK module. The SDK and presigner are now spied and restored after each storage test; replaying the old test before private KB reproduces the failure, while the repaired pair passes. New real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Focused pinned-Bun instrumentation passes 89 tests / 374 assertions; referral and class-enrollment handlers reach 100% functions and branches in that focused run, and public storage reaches 100% functions/branches. This is bounded unit evidence, not full financial/provider acceptance. Run 40671516167 on `d7f70efb` passes all three API coverage partitions, server unit tests, build, lint and type-check. Its genuine merged coverage is API lines 9931/10515 (94.4%), overall lines 10270/10877 (94.4%), functions 2672/2766 (96.6%), and branches 7431/8757 (84.9%); the 100% gate remains open. The new focused FAQ rich-text and payment-handler tests pass 10 tests / 45 assertions; using the repository counter preload, each target file reaches 100% lines, functions and branches in that focused run. CodeQL and both `Analyze` checks pass on `d7f70efb`. E2E is outside this follow-up.

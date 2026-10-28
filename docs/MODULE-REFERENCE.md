@@ -625,10 +625,14 @@ and confirmation lock the class, target session, affected enrollments,
 installments, allocations and wallets, and require the exact class/session
 versions, audited reason, stable request UUID and SHA-256 quote. Only one future
 scheduled session is cancelled. The transaction returns unspent funded Marks for
-allocations on that session and releases only its reserved seat; other session
+allocations on that session and releases its reserved seat. Other funded session
 allocations and original enrollment prices/session count do not move. Affected
 unpaid installments are reduced to remaining reserved sessions, with the next
 due session/date updated, or cancelled when no reserved sessions remain.
+For a pending checkout, only remaining first-installment reservations keep it
+payable. If none remain, cancellation cancels the enrollment and all unpaid
+installments and releases the other unfunded reservations without wallet or
+ledger changes; second-installment reservations cannot keep it pending.
 Ongoing, past, completed or reported sessions cannot be cancelled. Past delivery
 holds, reports and earned tutor fees remain intact. Audit, student/tutor
 notification outboxes and durable calendar cleanup use existing services.
