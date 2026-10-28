@@ -43,7 +43,8 @@ describe("webhook traceId persistence (T1)", () => {
   test("idempotency record round-trips the active traceId", async () => {
     const realClaim = webhookIdempotency.claim;
     const realMarkProcessed = webhookIdempotency.markProcessed;
-    webhookIdempotency.claim = mock(async (_key: string) => true);
+    const claimMock = mock(async (_key: string) => true);
+    webhookIdempotency.claim = claimMock;
     const markProcessedMock = mock(
       async (_key: string, _result: unknown) => {},
     );
@@ -57,7 +58,8 @@ describe("webhook traceId persistence (T1)", () => {
       expect(res.status).toBe(200);
       expect(markProcessedMock).toHaveBeenCalledTimes(1);
       const firstCall = markProcessedMock.mock.calls[0]!;
-      expect(firstCall[0]).toBe("stub:evt_trace_roundtrip:PAID");
+      expect(firstCall[0]).toMatch(/^payment-webhook:[a-f0-9]{64}$/);
+      expect(claimMock).toHaveBeenCalledWith(firstCall[0], 120);
       expect(firstCall[1]).toMatchObject({
         ok: true,
         traceId: "req_hook",

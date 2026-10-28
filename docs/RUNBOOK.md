@@ -1,5 +1,10 @@
 # Cogito Runbook
 
+## Server acceptance follow-up (28 October 2026)
+
+Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
+
+
 ## V3 regression and restore checkpoint (28 October 2026)
 
 This slice repairs acceptance infrastructure and stale tests, not domain services. The OTP capture helper selects the code for its email under concurrent sends. Payment reconciliation fixtures include authoritative amount/currency; payment-module unit tests mock the authenticated status GET and reject unexpected URLs. Refund mocks follow cumulative upsert; stub success-time and legacy solo no-show entitlement expectations match existing contracts. Report-revision assertions order by version rather than physical row order. Class tests follow the current tabs, card links, enrollment copy and dates relative to their own sessions.

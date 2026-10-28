@@ -1,5 +1,10 @@
 # Cogito App — Codebase Context
 
+## Server acceptance follow-up (28 October 2026)
+
+Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
+
+
 ## V3 local regression continuation (28 October 2026)
 
 Local acceptance now has a repeatable guarded browser runner, `packages/e2e/playwright.v3-acceptance.config.ts`. T05 creates a fresh tutor as well as fresh students, keeping prior bookings/history intact and preventing shared availability collisions. Stale OTP/payment/refund/legacy-entitlement test fixtures, class navigation/date assumptions and unordered report-revision assertions are corrected; domain services are unchanged by this slice. CI keeps seven reset-free UUID-fixture suites out of the resettable coverage partition and explicitly enables guarded KB/calendar DB tests.

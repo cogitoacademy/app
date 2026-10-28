@@ -1,5 +1,10 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Server acceptance follow-up (28 October 2026)
+
+Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
+
+
 ## Local acceptance continuation (28 October 2026)
 
 Completed local regression slice: 13/13 real-RPC browser journeys, 203/203 DB tests on fresh per-suite scratch schemas, 87/87 combined reset-free CI fixture cases, 2,695 unit/auth/env/DB-module tests, 12 separate DB-backed role/verification tests and 3 FAQ/public-tutor DB tests. Typechecks (4 tasks), builds (2 tasks), lint baseline and a DB-only restore comparison across 21 tables pass. The browser runner now owns a fresh tutor per T05 run; test fixtures and CI partitioning are repaired without changing domain behavior. RUNBOOK records the exact scope and evidence.
