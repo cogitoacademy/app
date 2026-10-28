@@ -396,7 +396,7 @@ describe("Redis client helpers", () => {
     const fallback = fresh.createRedisFallback();
     expect(fallback).toBeInstanceOf(fresh.InMemoryRedis);
 
-    const connected = fresh.initRedis("redis://localhost:6379");
+    const connected = fresh.initRedis(process.env.REDIS_URL ?? "");
     await expect(connected.ping()).resolves.toBe("PONG");
     await connected.quit();
     expect(fresh.getRedisClient()).toBe(connected);

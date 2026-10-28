@@ -132,6 +132,72 @@ afterAll(async () => {
 });
 
 describe("referral completion concurrency and current roles", () => {
+  test("usage pagination keeps full filtered totals and searches wildcard characters literally", async () => {
+    const referrer = await student();
+    const marker = `Usage ${crypto.randomUUID()} %_`;
+    await db.update(user).set({ name: marker }).where(eq(user.id, referrer));
+    const first = await attribution(referrer);
+    const second = await attribution(referrer);
+    const decoyReferrer = await student();
+    await db
+      .update(user)
+      .set({ name: marker.replace("%_", "zz") })
+      .where(eq(user.id, decoyReferrer));
+    const decoyStudent = await attribution(decoyReferrer);
+    await settlementTransaction(db, (tx) =>
+      referral.recordEligibleFirstCompletion(tx, completion(first)),
+    );
+    const input = {
+      search: marker,
+      kind: "friend" as const,
+      page: 0,
+      limit: 1,
+    };
+    const page = await referral.listUsage(input);
+    expect(page.items).toHaveLength(1);
+    expect(page.summary).toEqual({
+      signups: 2,
+      codesUsed: 1,
+      welcomeMarks: 30,
+      friendMarks: 15,
+    });
+    expect(page.items[0]).toMatchObject({
+      kind: "friend",
+      referrerId: referrer,
+      referrerName: marker,
+      welcomeCreditedMarks: 15,
+    });
+    const next = await referral.listUsage({ ...input, page: 1 });
+    expect(next.items).toHaveLength(1);
+    expect(next.items[0]?.id).not.toBe(page.items[0]?.id);
+    expect(next.summary).toEqual(page.summary);
+    expect(
+      [page.items[0]?.studentId, next.items[0]?.studentId].toSorted(),
+    ).toEqual([first, second].toSorted());
+    const empty = await referral.listUsage({ ...input, page: 2 });
+    expect(empty.items).toEqual([]);
+    expect(empty.summary).toEqual(page.summary);
+    const mismatch = await referral.listUsage({ ...input, kind: "kol" });
+    expect(mismatch.items).toEqual([]);
+    expect(mismatch.summary).toEqual({
+      signups: 0,
+      codesUsed: 0,
+      welcomeMarks: 0,
+      friendMarks: 0,
+    });
+    const allKinds = await referral.listUsage({
+      ...input,
+      kind: "all",
+      limit: 25,
+    });
+    expect(allKinds.items).toHaveLength(2);
+    const literalMismatch = await referral.listUsage({
+      ...input,
+      search: marker.replace("%_", "zz"),
+    });
+    expect(literalMismatch.items).toHaveLength(1);
+    expect(literalMismatch.items[0]?.studentId).toBe(decoyStudent);
+  });
   test("saved signup terms survive settings changes and no code grants no welcome", async () => {
     const referrer = await student();
     const oldSignup = await attribution(referrer);

@@ -171,6 +171,92 @@ describe("content admin boundaries", () => {
     ]);
     expect(put).toHaveBeenCalledTimes(1);
   });
+  test("admin mutations retain actor and version, while lists redact import hashes", async () => {
+    const row = {
+      id: "resource",
+      ...resource,
+      version: 2,
+      sourceHash: "private-import-hash",
+    };
+    const save = mock(async () => row);
+    const remove = mock(async () => ({ removed: true }));
+    const router = createContentAdminRouter(
+      createContentAdminHandler(
+        service({
+          list: async () => [row] as any,
+          categories: async () =>
+            [
+              {
+                id: "category",
+                name: "Competition",
+                isActive: true,
+                parentId: null,
+                sourceHash: "private",
+              },
+            ] as any,
+          save,
+          remove,
+        }),
+      ),
+    );
+    const client = createRouterClient(router, {
+      context: {
+        session: { user: { id: "operator", role: "admin" } },
+      } as Context,
+    });
+    const rows = await client.list({ kind: "resource" });
+    expect(rows[0]).not.toHaveProperty("sourceHash");
+    expect(await client.categories()).toEqual([
+      { id: "category", name: "Competition", isActive: true, parentId: null },
+    ]);
+    const entry = { kind: "resource" as const, values: resource };
+    await client.create({ entry, reason: "Create guide" });
+    expect(save).toHaveBeenCalledWith(entry, "operator", "Create guide");
+    await client.update({
+      entry,
+      id: row.id,
+      expectedVersion: 2,
+      reason: "Correct guide",
+    });
+    expect(save).toHaveBeenLastCalledWith(
+      entry,
+      "operator",
+      "Correct guide",
+      expect.objectContaining({ id: row.id, expectedVersion: 2 }),
+    );
+    await client.remove({
+      kind: "resource",
+      id: row.id,
+      expectedVersion: 2,
+      reason: "Withdraw guide",
+    });
+    expect(remove).toHaveBeenCalledWith(
+      "resource",
+      row.id,
+      2,
+      "operator",
+      "Withdraw guide",
+    );
+  });
+  test("invalid encoding and failed storage never register a downloadable file", async () => {
+    const put = mock(async () => {
+      throw new Error("storage unavailable");
+    });
+    const registerFile = mock(async (v: any) => v);
+    const s = createContentAdminService({
+      repo: { registerFile } as unknown as ContentAdminRepo,
+      storage: () => ({ put, read: async () => new Uint8Array() }),
+      enabled: () => true,
+    });
+    await expect(
+      s.uploadPdf({ fileName: "x.pdf", base64: "JVBERi10ZXN0=" }),
+    ).rejects.toThrow("encoding");
+    expect(put).not.toHaveBeenCalled();
+    await expect(
+      s.uploadPdf({ fileName: "x.pdf", base64: btoa("%PDF-test") }),
+    ).rejects.toThrow("storage unavailable");
+    expect(registerFile).not.toHaveBeenCalled();
+  });
 });
 describe("private local PDF storage", () => {
   test("rejects public paths and shared public bucket", () => {
