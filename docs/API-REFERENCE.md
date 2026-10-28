@@ -4,11 +4,9 @@
 
 No catalog API contract or server authorization changes. The new directory/drawer UI still uses `admin.listCompetitionCatalog`, `getCompetitionCatalogEntry`, `createCompetitionParent`, `createCompetitionSpecialization`, `updateCompetitionCatalogEntry`, `moveCompetitionSpecialization`, impact preview, archive/restore and delete. Search sends the existing includeArchived/query input; status filtering is client-side. Updates/moves/lifecycle actions preserve expectedVersion and reason. No new endpoint or migration.
 
-
 ## Admin KOL campaign frontend (26 October 2026)
 
 The existing `adminReferral.createKolCampaign` and `adminReferral.listKolCampaigns` are exposed on `/admin-referrals`. RPC paths are `/rpc/adminReferral/createKolCampaign` and `/rpc/adminReferral/listKolCampaigns`, with the existing `{ "json": input }` envelope. No API contract changed. Creation uses name (1–100), code (4–32 alphanumeric, normalized uppercase), optional activation (server defaults now), expiry after activation, attribution window (1–365, default 90), flat IDR (0–100,000,000) and percentBps (0–10,000); at least one commission component must be positive. UI percentage accepts at most two decimal places and converts to integer bps; date/time inputs represent WIB (+07:00). Creation has no automatic retry because it has no idempotency key.
-
 
 ## Referral session cache correction (24 October 2026)
 
@@ -41,7 +39,6 @@ it transactionally. Browser `/auth/callback?redirect=/faq` routes a pending new
 Google student through `/referral-choice?redirect=/faq`, then resumes the validated
 local destination. Guards use `/api/auth/get-session?disableCookieCache=true`.
 Synthetic browser responses validate wiring only, not server transaction behavior.
-
 
 ## Real dev class-to-PDF checkpoint (24 October 2026)
 
@@ -76,7 +73,6 @@ future financial reversal must use an approved audited correction, never deletio
 Local evidence/PDF/render remain ignored under this checkout's
 `tmp/dev-journey/`; private login/session files must never be committed or shared.
 Production, real provider delivery, full browser journey and client UAT remain gates.
-
 
 ## KB/calendar local dev activation (24 October 2026)
 
@@ -163,14 +159,14 @@ Admin-only procedure keys below use `/rpc/adminContent/<key>` and the standard
 `{"json": input}` envelope. Authoring defaults disabled; disabled requests fail
 before touching new tables/storage. The app editors live at `/knowledge-bank` and `/calendar`; `/admin-content` redirects admins to `/knowledge-bank`.
 
-| Key | Input | Result |
-| --- | --- | --- |
-| `list` | `kind: resource/event` | Admin records including ID, source identity, version, active/order and editable values; no storage key/URL or source hash |
-| `categories` | none | Catalog ID/name/parent/active for category choices |
-| `create` | `entry: {kind, values}`, `reason` (3..600 chars) | ID/version, immediately live |
-| `update` | create input + `id`, `expectedVersion` positive integer | ID/new version; stale/missing => CONFLICT, reload/review |
-| `remove` | `kind`, `id`, `expectedVersion`, `reason` | Deleted ID; imported identities require archive instead |
-| `uploadPdf` | `fileName`, canonical `base64` | `fileId`, filename, byte count; PDF signature and 5 MiB maximum checked; no public URL/key |
+| Key          | Input                                                   | Result                                                                                                                    |
+| ------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `list`       | `kind: resource/event`                                  | Admin records including ID, source identity, version, active/order and editable values; no storage key/URL or source hash |
+| `categories` | none                                                    | Catalog ID/name/parent/active for category choices                                                                        |
+| `create`     | `entry: {kind, values}`, `reason` (3..600 chars)        | ID/version, immediately live                                                                                              |
+| `update`     | create input + `id`, `expectedVersion` positive integer | ID/new version; stale/missing => CONFLICT, reload/review                                                                  |
+| `remove`     | `kind`, `id`, `expectedVersion`, `reason`               | Deleted ID; imported identities require archive instead                                                                   |
+| `uploadPdf`  | `fileName`, canonical `base64`                          | `fileId`, filename, byte count; PDF signature and 5 MiB maximum checked; no public URL/key                                |
 
 Resource values: required title/category/fileId; nullable description; isActive;
 nonnegative sortOrder. Event values: required title/startDate/endDate; nullable
@@ -204,7 +200,6 @@ normalization remains trim + uppercase, accepting legacy 4–32 alphanumeric cod
 for email signup, Google choice and KOL campaigns. No signup payload or invitation
 contract changes; RPC request/response envelopes remain unchanged.
 
-
 Adjustment idempotency compares the original expected obligation as well as amount/reason; a changed precondition with the same operation ID returns KOL_SETTLEMENT_CONFLICT. CSV financial integers remain numeric, while textual formula prefixes are neutralized.
 
 ## KOL external settlement source (23 October 2026)
@@ -212,12 +207,12 @@ Adjustment idempotency compares the original expected obligation as well as amou
 All four procedures are admin-only, under `/rpc/adminReferral/`. Request bodies
 use `{"json": input}` and results use the existing JSON envelope.
 
-| Procedure | Input | Output |
-| --- | --- | --- |
-| `getKolSettlement` | `decisionId` UUID | Decision, ordered immutable entries, calculated/adjustment/obligation/transferred/outstanding/overpayment IDR and status |
-| `recordKolTransfer` | `decisionId`, globally unique `operationId` UUID, positive whole `amountIdr` (max 1e9), `paidAt` ISO timestamp not in future, nonempty `reference` (max600) | Current settlement readback |
-| `adjustKolCommission` | `decisionId`, `operationId`, nonzero signed whole `amountIdr` (absolute max1e9), `expectedObligationIdr`, required `reason` (3..600) | Current settlement readback |
-| `exportKolMonthly` | `month` YYYY-MM (2000..2099) | `filename`, UTF-8 BOM `csv` |
+| Procedure             | Input                                                                                                                                                       | Output                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `getKolSettlement`    | `decisionId` UUID                                                                                                                                           | Decision, ordered immutable entries, calculated/adjustment/obligation/transferred/outstanding/overpayment IDR and status |
+| `recordKolTransfer`   | `decisionId`, globally unique `operationId` UUID, positive whole `amountIdr` (max 1e9), `paidAt` ISO timestamp not in future, nonempty `reference` (max600) | Current settlement readback                                                                                              |
+| `adjustKolCommission` | `decisionId`, `operationId`, nonzero signed whole `amountIdr` (absolute max1e9), `expectedObligationIdr`, required `reason` (3..600)                        | Current settlement readback                                                                                              |
+| `exportKolMonthly`    | `month` YYYY-MM (2000..2099)                                                                                                                                | `filename`, UTF-8 BOM `csv`                                                                                              |
 
 Same operation/payload/actor retries return current readback without another entry
 or audit. Reusing a key with changed financial fields or another actor/decision
@@ -235,7 +230,6 @@ rows only. Includes campaign/code/student/purchase/refund state, cash reference,
 reason, actor and timestamps; dates are labeled UTC. Formula-like cells are
 neutralized. More than 5000 selected decisions fails explicitly, never truncates.
 Earlier transfer-deferred notes refer to the preceding decision-only checkpoint.
-
 
 ## Referral/KOL synthetic browser contract evidence
 
@@ -274,16 +268,16 @@ metadata. RPC request bodies use the `{"json": input}` envelope.
   that are not pending cannot add attribution. No OTP is sent by this flow.
 - `POST /rpc/referral/getMine` — verified student, no input. Returns
   `{ code, settings: { welcomeMarks, friendRewardMarks }, semester: { key,
-  startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
+startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
   as ISO timestamps; semester boundaries are Jan–Jun and Jul–Dec in WIB.
 - `POST /rpc/adminReferral/getSettings` — admin, no input; returns the active
   versioned welcome/reward/cap settings.
 - `POST /rpc/adminReferral/updateSettings` — admin; input
   `{ expectedVersion, welcomeMarks, friendRewardMarks, semesterCapMarks,
-  reason }`; creates an audited settings revision.
+reason }`; creates an audited settings revision.
 - `POST /rpc/adminReferral/createKolCampaign` — admin; input
   `{ name, code, activationAt?, expiresAt, attributionWindowDays,
-  flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
+flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
   globally unique, and at least one commission term is positive.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
   campaign dates, code, attribution window, and saved terms.
@@ -398,7 +392,6 @@ routes are limited to 10 requests per minute and return
   the live student name, session/tutor/class metadata, all three feedback
   sections, WIB generation date and page numbering. The bundled font and
   placeholder Cogito header need no runtime remote assets.
-
 
 ## Ongoing experience UI (22 October 2026)
 
@@ -2535,16 +2528,13 @@ Role sidebar sections collapse independently in local mounted UI state. No RPC
 input/output, HTTP path, access rule, or persistence contract changes; the
 existing `booking/listMine` action-count query remains unchanged.
 
-
 ### KOL responsive polish checkpoint
 
 KOL responsive checkpoint (2026-10-25): frontend layout only; no endpoint, input, response, envelope or error-contract change. Existing synthetic settlement wire tests still pass. This is not live API or authorization evidence.
 
-
 ### Economy/payout responsive verification (25 October 2026)
 
 No procedure, input, response, authorization or submit/retry identity changes. `playwright.finance-layout.config.ts` uses synthetic session/RPC responses on mock origin 3357, with no API process. Its layout checks do not verify API validation, accounting or replay behavior.
-
 
 ### Canonical KB/calendar editor pages (25 October 2026)
 

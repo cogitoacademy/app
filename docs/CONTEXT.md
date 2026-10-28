@@ -6,11 +6,9 @@ Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 as
 
 The unchanged 100% coverage gate still fails: API 87.6%, overall 87.8%, function lower bounds 94.8%, 45 files with unverified function unions. A minimal reproduction proves partition-dependent Bun line denominators and absent function identities; zero branch records are not branch-coverage proof. See [BUN-COVERAGE-LIMITATION.md](BUN-COVERAGE-LIMITATION.md) for raw evidence, reproduction and next gate. No coverage filter/threshold was weakened. Initial interrupted/undersized-memory attempts are not passes. Hosted CI, genuine remaining coverage, provider/private-R2 acceptance, production restore/cutover and client approvals/UAT remain open.
 
-
 ## Server acceptance follow-up (28 October 2026)
 
 Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
-
 
 ## V3 local regression continuation (28 October 2026)
 
@@ -32,11 +30,9 @@ No reset, migration, dev/prod activation or production storage operation. Resour
 
 Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The live catalog browser spec now passes 1/1 installed-Edge journey against isolated PostgreSQL 6769/Redis 6381, covering archive/restore/move persistence readback, inherited colors, and student HTTP 403 for admin list/archive. Test fixtures are cleaned up; no reset/migration or dev/production access. Historical-reference/concurrency and broader consumer acceptance remain open; see RUNBOOK for the 26 October checkpoint.
 
-
 ## Admin KOL campaign UI (26 October 2026)
 
 `/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.
-
 
 ## V3 bounded regression checkpoint (25 October 2026)
 
@@ -56,7 +52,6 @@ No DB mutation, migration, reset, seed, parent API restart or production action
 was performed for this checkpoint. Historical real-DB evidence retains its own
 source/environment scope. Run commands are in RUNBOOK. Backlog T09/T12 rows now
 reflect their later integration/local-dev checkpoints; T13 remains in progress.
-
 
 ## Referral session cache correction (24 October 2026)
 
@@ -94,8 +89,6 @@ fix; fresh session and reuse regression passes. Three mocked Edge UI/wire cases
 cover friend/KOL/no-code, invalid code, reload and stale cached session. These
 are not PostgreSQL, real Google or reward-ledger acceptance.
 
-
-
 ## Real dev class-to-PDF checkpoint (24 October 2026)
 
 On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
@@ -129,7 +122,6 @@ future financial reversal must use an approved audited correction, never deletio
 Local evidence/PDF/render remain ignored under this checkout's
 `tmp/dev-journey/`; private login/session files must never be committed or shared.
 Production, real provider delivery, full browser journey and client UAT remain gates.
-
 
 ## KB/calendar local dev activation (24 October 2026)
 
@@ -259,7 +251,6 @@ The shared uppercase unique namespace includes KOL codes. Allocation scans at mo
 HTTP 409, never a longer code or a silent alternate prefix. Database concurrency,
 auth/provider and browser acceptance remain parent-owned and unrun for this slice.
 
-
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and
@@ -325,7 +316,6 @@ DB-free focused units and web typecheck are the validation scope; guarded parent
 PostgreSQL/concurrency, admin browser and migration/deployment acceptance remain
 open. Earlier settlement-deferred checkpoints below describe their historical
 source slices, superseded here for implementation only. T09 remains in progress.
-
 
 ## Synthetic referral/KOL browser checkpoint (23 October 2026)
 
@@ -419,7 +409,6 @@ The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
 browser reconciliation display and broader release UAT remain separate gates.
 This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
 
-
 ## Referral review corrections (22 October 2026)
 
 Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
@@ -480,6 +469,7 @@ findings with no remaining spec/behavior findings. Its P2 documentation-status
 finding is corrected in this follow-up; the reviewer did not rerun tests.
 OAuth/browser UAT, development/production migration, and provider acceptance
 remain open.
+
 ## Report PDF parent verification (22 October 2026)
 
 The parent repaired long metadata pagination and added a semantic student-search
@@ -682,7 +672,6 @@ current application hard-delete path was found, and this documents the existing
 schema boundary rather than adding a release gate. No historical actor is
 invented and no legacy row is backfilled.
 
-
 ## V3 execution priorities (22 October 2026)
 
 Owner direction: finish core V3 work through feature branches and GitHub PRs into
@@ -690,8 +679,6 @@ Owner direction: finish core V3 work through feature branches and GitHub PRs int
 squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migration
 are tertiary. Their scope/release gates remain until an approved client deferral;
 this priority change does not authorize production release or changing `main`.
-
-
 
 ## Explicit ongoing experience (22 October 2026)
 
@@ -2834,13 +2821,13 @@ file are the permanent record; plan-file archives are not maintained.
 > ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
 > decision). Fresh clones need no `.superpowers/` content.
 
-| Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 ordinary rescheduling, Q14/Q15, OPS01 and final release gates remain open. |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
-| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
-| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
-| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                   |
+| Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 ordinary rescheduling, Q14/Q15, OPS01 and final release gates remain open. |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active
 production payment-provider guide.
@@ -3358,11 +3345,9 @@ passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 task
 
 Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long unbroken history references overflowed the card (1743px content at 288/358/736/1119px card widths) and were clipped by the existing app scroller. Settlement cards now wrap identifiers; settlement/export buttons grow with labels and retry actions wrap. Synthetic Edge checks pass 13/13; see RUNBOOK. No backend, accounting or authorization changes. Economy, payout, class/report, native 200% zoom, RTL and screen-reader acceptance remain unverified.
 
-
 ### Economy/payout responsive checkpoint (25 October 2026)
 
 The bounded frontend slice gives V3 economy amount controls a 14rem minimum width so ten-digit IDR values remain readable inside locally scrolling tables. Shared Card/NumberField styles and financial/auth/RPC behavior are unchanged. Dedicated mocked Edge coverage inspects economy read/edit and tutor payout prepared, unpaid-preview and void/reconciliation drawers at 320/390/768/1440 CSS px. This is synthetic layout evidence, not payout persistence or release acceptance; native 200% zoom remains unverified. See RUNBOOK and the active UI audit plan.
-
 
 ### Canonical KB/calendar management (25 October 2026)
 

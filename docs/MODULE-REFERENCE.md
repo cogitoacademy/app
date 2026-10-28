@@ -4,11 +4,9 @@
 
 `CompetitionCatalogPage` groups the server's flat catalog into parent cards with child edit rows, including parent context for child-only search matches. `keepPreviousData` keeps the search field mounted while query keys change. Create/edit uses a Selia drawer with guarded dirty closing; descriptions/colors/movement are progressively disclosed. Palette validation, reason requirements, version-conflict retention and reference-gated lifecycle mutation handlers are retained. Parent palette previews read the current draft. No accounting or catalog eligibility policy changes.
 
-
 ## Admin KOL campaign presentation (26 October 2026)
 
 `KolCampaignsSection` composes Selia fields/cards on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
-
 
 ## Referral session cache correction (24 October 2026)
 
@@ -43,7 +41,6 @@ user creation; never reopen attribution. Legacy referral codes remain accepted;
 no code format or reward changes. Browser referral route preserves safe redirect
 and reads a fresh session after save. No migration or backfill is part of this fix.
 
-
 ## Real dev class-to-PDF checkpoint (24 October 2026)
 
 On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
@@ -77,7 +74,6 @@ future financial reversal must use an approved audited correction, never deletio
 Local evidence/PDF/render remain ignored under this checkout's
 `tmp/dev-journey/`; private login/session files must never be committed or shared.
 Production, real provider delivery, full browser journey and client UAT remain gates.
-
 
 ## KB/calendar local dev activation (24 October 2026)
 
@@ -228,7 +224,6 @@ uppercase/global-code + owner unique constraints arbitrate insert races, with an
 owner reread after each insert and before a final exhaustion error. Infrastructure errors propagate. Exhaustion raises
 `REFERRAL_CODE_EXHAUSTED`, mapped to HTTP 409; format is never weakened.
 
-
 KOL settlement entries persist expected_obligation_idr for adjustment replay matching (additive migration 0074). Monthly CSV SQL binds explicit ISO timestamptz bounds, and the encoder preserves validated numeric adjustments.
 
 ## KOL external settlement source (23 October 2026)
@@ -264,7 +259,6 @@ CSV is current reconciliation selected by monthly activity, with summary and ent
 rows, not a tax or month-end closing report. Read-only repeatable-read protects
 its multi-query snapshot. Additive 0073 remains unapplied; parent DB acceptance
 is required. Earlier decision-only deferred scope is superseded by this source.
-
 
 ## Referral/KOL browser contract coverage
 
@@ -343,6 +337,7 @@ guarded loopback test 6769/cogito-test (journal 72). Development 6767 and
 production remain unmigrated. Wallet creation accepts the caller's transaction,
 including its upsert, so referral credits do not escape the signup or completion
 transaction.
+
 ## Report PDF pagination follow-up (22 October 2026)
 
 Metadata columns paginate wrapped lines above the footer and label continued
@@ -466,7 +461,6 @@ Chromium journey (52.3s). The browser verifies assigned-tutor authorship, versio
 history, consumption of only the owned booking hold, and no repeat settlement
 on correction. Migration 0070 is applied to local test/dev; production is separate.
 The endpoint and service contracts below are unchanged by these fixture repairs.
-
 
 ## Ongoing tutor experience control (22 October 2026)
 
@@ -2573,16 +2567,13 @@ Numeric Marks amounts in the web UI are rendered through `apps/web/src/component
 
 The admin Invite Tutor form card opts out of CSS Grid cross-axis stretching. Keep it content-height so `CardFooter` remains flush with the card's rounded bottom boundary. The neighboring Invitations card follows the grid parent's stretched height as a flex column, and its body pushes `TablePagination` to the bottom whenever the table content is shorter than that space. These layout rules do not affect invitation service behavior.
 
-
 ### KOL responsive polish checkpoint
 
 KOL settlement frontend (2026-10-25): KolSettlementPanel wraps long history identifiers and allows multiline transfer/adjustment/retry actions; AdminKolCommissionsPage allows the monthly export action to grow. All operation identity, retry locking, amount/date/reason submission and financial rules are unchanged. Synthetic render/wire coverage is not database accounting proof.
 
-
 ### Economy/payout frontend layout (25 October 2026)
 
 `V3EconomySettings.AmountInput` retains Selia numeric behavior and applies a 14rem minimum control width; package and competition tables retain local horizontal scrolling. Tutor payout rendering required no production change in this bounded slice. The synthetic harness covers prepared-transfer, unpaid-preview and reconciliation drawers and rejects write requests; tax conversion, immutable snapshots, payout identities and services remain unchanged.
-
 
 ### KB/calendar page composition (25 October 2026)
 
