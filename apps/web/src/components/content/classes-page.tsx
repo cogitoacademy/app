@@ -5,6 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   IconArrowUpRight,
+  IconClock,
+  IconMapPin,
+  IconChevronRight,
   IconCalendarEvent,
   IconSchool,
   IconSearch,
@@ -51,13 +54,13 @@ export function ClassesPage() {
   );
 
   return (
-    <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 space-y-2">
+    <Stack direction="column" spacing="md" className="w-full min-w-0 pb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <Heading level={1} size="md">
             Find your next class
           </Heading>
-          <Text className="max-w-2xl text-muted">
+          <Text className="text-muted">
             Prepare for your competition with a cohort or a focused masterclass.
           </Text>
         </div>
@@ -231,7 +234,35 @@ export function ClassesPage() {
                       className="group flex h-full min-w-0 flex-col text-foreground no-underline transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none"
                       data-testid={`class-card-${academyClass.id}`}
                     >
-                      <CardBody className="flex h-full min-w-0 flex-col gap-3 p-4">
+                      <div className="flex min-w-0 flex-col gap-3 p-4 md:hidden">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-accent" aria-hidden="true">
+                            <span className="text-sm uppercase">{new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "Asia/Jakarta" }).format(date)}</span>
+                            <span className="text-2xl font-semibold tabular-nums">{day}</span>
+                            <span className="text-sm uppercase">{month}</span>
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <Text className="flex items-center gap-2"><IconClock className="size-4 shrink-0 text-muted" aria-hidden="true" />{formattedTime} WIB</Text>
+                            <Text className="flex items-center gap-2 text-muted"><IconMapPin className="size-4 shrink-0" aria-hidden="true" />{firstSession.mode === "online" ? "Online" : "Offline"}</Text>
+                            <Text className="flex min-w-0 items-center gap-2 text-muted"><IconUsers className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{tutors.length ? tutors.join(", ") : "Tutor to be announced"}</span></Text>
+                          </div>
+                        </div>
+                        <Heading level={2} size="sm" className="truncate" title={academyClass.titleEn}>{academyClass.titleEn}</Heading>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Badge variant="secondary" size="sm">{academyClass.competition.parent ? `${academyClass.competition.parent.name} · ` : ""}{academyClass.competition.name}</Badge>
+                          <div className="flex flex-wrap items-center gap-x-1 text-muted">
+                            <CogitoMarks value={academyClass.kind === "cohort" ? (academyClass.cohortFullRateMarks ?? 0) : (academyClass.masterclassRateMarks ?? 0)} />
+                            <span className="text-sm">{academyClass.kind === "cohort" ? "per session · full plan" : "per student"}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" size="sm">{academyClass.kind === "cohort" ? "Cohort" : "Masterclass"}</Badge>
+                          {academyClass.state === "postponed" ? <Badge variant="warning" size="sm">Postponed</Badge> : null}
+                          <Text className="text-sm text-muted">{academyClass.sessions.length} session{academyClass.sessions.length === 1 ? "" : "s"} · {nextSession ? "Next" : "Started"} {formattedDate}</Text>
+                        </div>
+                        <span className="mt-auto flex h-11 items-center justify-center gap-2 rounded bg-primary font-medium text-primary-foreground ring ring-primary-border">Details <IconChevronRight className="size-4" aria-hidden="true" /></span>
+                      </div>
+                      <CardBody className="hidden h-full min-w-0 flex-col gap-3 p-4 md:flex">
                         <div className="flex min-w-0 items-start gap-3">
                           {coverUrl ? (
                             <img

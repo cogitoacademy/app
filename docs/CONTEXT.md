@@ -3373,3 +3373,7 @@ Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar
 Academy class capacity is set by Cogito per session and is independent of tutor online/offline private teaching limits. Draft save and publication retain tutor status/mode, schedule overlap, session quota, and managed-room capacity validation.
 
 Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
+
+Classes catalog mobile cards follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a full-width Details action. Desktop cards retain their existing layout. Rates retain their per-session/full-plan or per-student labels.
+
+Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
