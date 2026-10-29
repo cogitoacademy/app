@@ -44,6 +44,11 @@ function fixture(
   records: unknown[] = [],
   lists: unknown[][] = [],
   updatedRows: unknown[][] = [],
+  competition: unknown = {
+    id: "competition1",
+    parentId: null,
+    isActive: true,
+  },
 ) {
   const updates: unknown[] = [];
   const db = {
@@ -51,11 +56,7 @@ function fixture(
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(db),
     query: {
       subjectCategory: {
-        findFirst: async () => ({
-          id: "competition1",
-          parentId: null,
-          isActive: true,
-        }),
+        findFirst: async () => competition,
       },
       academyClass: {
         findFirst: async () => records.shift(),
@@ -75,6 +76,7 @@ function fixture(
         };
       },
     }),
+    delete: () => ({ where: async () => [] }),
   };
   const audit = { record: mock(async () => undefined) };
   const meeting = { createMeeting: mock(async () => undefined) };
@@ -96,6 +98,7 @@ describe("academy class service reads and meeting recovery", () => {
     "foreign-session",
     "lost-update",
     "deleted-update",
+    "session-update-conflict",
   ] as const)("draft editing detects %s", async (scenario) => {
     const session = {
       id: "session1",
@@ -134,6 +137,10 @@ describe("academy class service reads and meeting recovery", () => {
         scenario === "missing" ? null : before,
         scenario === "deleted-update" ? null : { ...before, version: 2 },
       ],
+      [],
+      scenario === "session-update-conflict"
+        ? [[{ id: published.id, version: 2 }], []]
+        : [],
     );
     await expect(
       f.service.saveDraft("admin1", {
@@ -155,13 +162,23 @@ describe("academy class service reads and meeting recovery", () => {
             ? "ACADEMY_CLASS_STATE_CONFLICT"
             : scenario === "version" || scenario === "lost-update"
               ? "ACADEMY_CLASS_VERSION_CONFLICT"
-              : "ACADEMY_CLASS_INVALID_OPERATION",
+              : scenario === "session-update-conflict"
+                ? "ACADEMY_CLASS_STATE_CONFLICT"
+                : "ACADEMY_CLASS_INVALID_OPERATION",
     });
     expect(f.audit.record).not.toHaveBeenCalled();
-    expect(f.updates).toHaveLength(scenario.endsWith("update") ? 1 : 0);
+    expect(f.updates).toHaveLength(
+      scenario === "session-update-conflict"
+        ? 3
+        : scenario.endsWith("update")
+          ? 1
+          : 0,
+    );
   });
 
   test.each([
+    "inactive-competition",
+    "inactive-parent",
     "minimum-date",
     "minimum-capacity",
     "curriculum",
@@ -203,8 +220,25 @@ describe("academy class service reads and meeting recovery", () => {
       selects.push(
         scenario === "missing-room" ? [] : [{ id: "room1", capacity: 3 }],
       );
-    const f = fixture(selects);
+    const f = fixture(
+      selects,
+      [],
+      [],
+      [],
+      scenario === "inactive-competition"
+        ? { id: "competition1", parentId: null, isActive: false }
+        : scenario === "inactive-parent"
+          ? {
+              id: "specialization1",
+              parentId: "competition1",
+              isActive: true,
+              parent: { isActive: false },
+            }
+          : undefined,
+    );
     const messages = {
+      "inactive-competition": "Select an active competition or specialization",
+      "inactive-parent": "Select an active competition or specialization",
       "minimum-date":
         "The minimum-enrollment check must be before the first session",
       "minimum-capacity":
@@ -466,6 +500,16 @@ describe("academy class service reads and meeting recovery", () => {
         reason: "Publish class",
       }),
     ).rejects.toBeInstanceOf(AcademyClassNotFoundError);
+    await expect(
+      fixture(
+        [[{ id: published.id }]],
+        [{ ...published, version: 1 }],
+      ).service.publish("admin-1", {
+        id: published.id,
+        expectedVersion: 1,
+        reason: "Publish class",
+      }),
+    ).rejects.toBeInstanceOf(AcademyClassStateConflictError);
   });
 
   test("admin listing retains details while the published catalog merges and sorts public records", async () => {
