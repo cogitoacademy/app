@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { completionFeedbackInput } from "../../modules/booking/booking.types";
 import { classSessionSettlementAmounts } from "../../modules/class-enrollment/class-enrollment.reports";
 import { createClassSessionReportService } from "../../modules/class-enrollment/class-enrollment.reports";
 import {
@@ -32,7 +33,15 @@ function reportServiceFixture(
   referralPort?: {
     recordEligibleFirstCompletion: (...args: unknown[]) => void;
   },
+  options: {
+    clock?: (() => Date) | null;
+    updates?: Record<string, unknown>[];
+  } = {},
 ) {
+  const clock =
+    options.clock === null
+      ? undefined
+      : (options.clock ?? (() => new Date("2040-01-01T00:00:00.000Z")));
   const tx = {
     select: () => {
       const query = {
@@ -50,7 +59,20 @@ function reportServiceFixture(
     insert: () => ({
       values: () => ({ returning: async () => savedReports.shift() ?? [] }),
     }),
-    update: () => ({ set: () => ({ where: async () => undefined }) }),
+    update: () => {
+      const query = {
+        set: (values: unknown) => {
+          options.updates?.push(values as Record<string, unknown>);
+          return query;
+        },
+        where: () => query,
+        returning: async () => savedReports.shift() ?? [],
+        // eslint-disable-next-line unicorn/no-thenable -- Drizzle query builders are PromiseLike.
+        then: (resolve: (result: undefined) => unknown) =>
+          Promise.resolve(undefined).then(resolve),
+      };
+      return query;
+    },
   };
   const service = createClassSessionReportService({
     db: {
@@ -60,7 +82,7 @@ function reportServiceFixture(
     wallet: { deduct: async () => undefined },
     notification: { write: async () => undefined },
     referralPort,
-    clock: () => new Date("2040-01-01T00:00:00.000Z"),
+    ...(clock ? { clock } : {}),
   });
   return service;
 }
@@ -102,6 +124,34 @@ test("report service validates feedback, actor role, and admin reason before dat
   await expect(
     service.listSessionReports("user-1", "unknown" as never, {}),
   ).rejects.toBeInstanceOf(ClassEnrollmentNotFoundError);
+});
+
+test("uses the fallback feedback message if a parser error has no issues", async () => {
+  const parse = spyOn(completionFeedbackInput, "safeParse").mockReturnValue({
+    success: false,
+    error: { issues: [] },
+  } as never);
+  const service = createClassSessionReportService({
+    db: {} as never,
+    wallet: { deduct: async () => undefined },
+    notification: { write: async () => undefined },
+  });
+
+  try {
+    await expect(
+      service.submitSessionReport("admin-1", "admin", {
+        classId: reportClass.id,
+        sessionId: reportSession.id,
+        requestKey: crypto.randomUUID(),
+        expectedVersion: 0,
+        deliveryConfirmed: true,
+        adminReason: "A valid reason",
+        feedback: TEST_COMPLETION_FEEDBACK,
+      }),
+    ).rejects.toMatchObject({ message: "Invalid session feedback" });
+  } finally {
+    parse.mockRestore();
+  }
 });
 
 test.each([
@@ -244,6 +294,119 @@ test("a first funded report records referral eligibility", async () => {
   });
   expect(result).toMatchObject({ id: savedReport.id, version: 1 });
   expect(referralCalls).toHaveLength(1);
+});
+
+test("a tutor can edit their completed report without an admin reason", async () => {
+  const updatedReport = {
+    id: "report-1",
+    sessionId: reportSession.id,
+    version: 2,
+    discussion: TEST_COMPLETION_FEEDBACK.discussion,
+    strengths: TEST_COMPLETION_FEEDBACK.strengths,
+    improvements: TEST_COMPLETION_FEEDBACK.improvements,
+    createdAt: new Date("2039-12-31T12:00:00.000Z"),
+    updatedAt: new Date("2040-01-01T00:00:00.000Z"),
+  };
+  const updates: Record<string, unknown>[] = [];
+  const service = reportServiceFixture(
+    [
+      [reportClass],
+      [{ ...reportSession, state: "completed" }],
+      [{ id: "report-1", version: 1 }],
+      [],
+      [],
+    ],
+    [[updatedReport]],
+    undefined,
+    { clock: null, updates },
+  );
+
+  const result = await service.submitSessionReport("tutor-1", "tutor", {
+    classId: reportClass.id,
+    sessionId: reportSession.id,
+    requestKey: crypto.randomUUID(),
+    expectedVersion: 1,
+    deliveryConfirmed: true,
+    feedback: TEST_COMPLETION_FEEDBACK,
+  });
+
+  expect(result).toMatchObject({ id: updatedReport.id, version: 2 });
+  expect(updates[0]).toMatchObject({
+    adminReason: null,
+    currentActorRole: "tutor",
+  });
+});
+
+test("list reports defaults absent settlement data to zero", async () => {
+  const reportedRow = {
+    classId: reportClass.id,
+    classTitle: reportClass.titleEn,
+    classKind: reportClass.kind,
+    sessionId: reportSession.id,
+    sequenceNumber: 1,
+    sessionTitle: reportSession.titleEn,
+    startAt: reportSession.startAt,
+    endAt: reportSession.endAt,
+    mode: "online",
+    state: "completed",
+    tutorFeeIdr: reportSession.tutorFeeIdr,
+    reportId: "report-1",
+    reportVersion: 1,
+    discussion: TEST_COMPLETION_FEEDBACK.discussion,
+    strengths: TEST_COMPLETION_FEEDBACK.strengths,
+    improvements: TEST_COMPLETION_FEEDBACK.improvements,
+    reportCreatedAt: new Date("2040-01-01T00:00:00.000Z"),
+    reportUpdatedAt: new Date("2040-01-01T00:00:00.000Z"),
+  };
+  const unreportedRow = {
+    ...reportedRow,
+    sessionId: "session-2",
+    reportId: null,
+    reportVersion: null,
+    discussion: null,
+    strengths: null,
+    improvements: null,
+    reportCreatedAt: null,
+    reportUpdatedAt: null,
+  };
+  const results: unknown[][] = [[reportedRow, unreportedRow], [], []];
+  const whereArguments: unknown[] = [];
+  let selectIndex = 0;
+  const db = {
+    select: () => {
+      const result = results[selectIndex++] ?? [];
+      const query = {
+        from: () => query,
+        innerJoin: () => query,
+        leftJoin: () => query,
+        where: (condition: unknown) => {
+          whereArguments.push(condition);
+          return query;
+        },
+        orderBy: () => query,
+        // eslint-disable-next-line unicorn/no-thenable -- Drizzle query builders are PromiseLike.
+        then: (resolve: (result: unknown[]) => unknown) =>
+          Promise.resolve(result).then(resolve),
+      };
+      return query;
+    },
+  };
+  const service = createClassSessionReportService({
+    db: db as never,
+    wallet: { deduct: async () => undefined },
+    notification: { write: async () => undefined },
+  });
+
+  const result = await service.listSessionReports("admin-1", "admin", {});
+
+  expect(whereArguments[0]).toBeDefined();
+  expect(result).toMatchObject([
+    { settlement: { deductedMarks: 0, tutorFeeIdr: 0, settled: true } },
+    {
+      report: null,
+      settlement: { deductedMarks: 0, tutorFeeIdr: 0, settled: false },
+    },
+  ]);
 });
 
 test("admin report reasons enforce Unicode character bounds after trimming", () => {
