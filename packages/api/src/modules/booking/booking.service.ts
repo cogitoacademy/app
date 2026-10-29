@@ -434,23 +434,19 @@ export function normalizeCompletionFeedback(
   };
 }
 
+const LEGACY_COMPLETION_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
+
 export function decodeLegacyCompletionFeedbackText(value: string): string {
-  return value.replace(/&(amp|lt|gt|quot|#39);/g, (entity) => {
-    switch (entity) {
-      case "&amp;":
-        return "&";
-      case "&lt;":
-        return "<";
-      case "&gt;":
-        return ">";
-      case "&quot;":
-        return '"';
-      case "&#39;":
-        return "'";
-      default:
-        return entity;
-    }
-  });
+  return value.replace(
+    /&(amp|lt|gt|quot|#39);/g,
+    (entity) => LEGACY_COMPLETION_ENTITIES[entity]!,
+  );
 }
 
 export function restoreCompletionFeedbackForRead<T extends CompletionFeedback>(
