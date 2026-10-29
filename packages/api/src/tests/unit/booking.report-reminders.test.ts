@@ -916,5 +916,14 @@ describe("legacy booking missing-report reminders", () => {
         },
       }),
     ).toBe("Review the ended booking before reporting.");
+    expect(
+      notificationEmailHtml({
+        body: "Review the ended booking before reporting.",
+        metadata: {
+          action: "unsupported-action",
+          actionUrl: "https://cogito.example/bookings/b1",
+        },
+      }),
+    ).toBe("Review the ended booking before reporting.");
   });
 });
