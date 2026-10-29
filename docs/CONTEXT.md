@@ -3371,3 +3371,5 @@ Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar
 ### Academy capacity policy (2026-10-29)
 
 Academy class capacity is set by Cogito per session and is independent of tutor online/offline private teaching limits. Draft save and publication retain tutor status/mode, schedule overlap, session quota, and managed-room capacity validation.
+
+Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.

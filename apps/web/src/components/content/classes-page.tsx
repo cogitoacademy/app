@@ -25,6 +25,7 @@ import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { FilterTabBar } from "@/components/filter-tab-bar";
 import Loader from "@/components/loader";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { orpc } from "@/utils/orpc";
@@ -91,27 +92,16 @@ export function ClassesPage() {
       </Card>
 
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          role="group"
-          aria-label="Class type"
-          className="flex min-w-0 flex-wrap gap-1 rounded-xl bg-tabs p-1"
-        >
-          {[
+        <FilterTabBar
+          label="Class type"
+          activeTab={kind}
+          onChange={setKind}
+          tabs={[
             { value: "all", label: "All classes" },
             { value: "cohort", label: "Cohorts" },
             { value: "masterclass", label: "Masterclasses" },
-          ].map((filter) => (
-            <Button
-              key={filter.value}
-              variant={kind === filter.value ? "secondary" : "plain"}
-              pill
-              aria-pressed={kind === filter.value}
-              onClick={() => setKind(filter.value)}
-            >
-              {filter.label}
-            </Button>
-          ))}
-        </div>
+          ]}
+        />
         <Field className="w-full sm:max-w-xs">
           <FieldLabel htmlFor="class-search" className="sr-only">
             Search classes
