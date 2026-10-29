@@ -9,9 +9,11 @@ import {
   TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   InvalidDateRangeError,
+  OptimisticLockError,
   TutorPayoutFinanceUnavailableError,
   mapTutorError,
 } from "../../modules/tutor/tutor.errors";
+import { InvalidTutorSubjectSelectionError } from "../../modules/tutor-subjects/subject-selection";
 
 class TestDomainError extends DomainError {
   readonly domain = "test";
@@ -28,6 +30,19 @@ describe("tutor.errors", () => {
       code: "INTERNAL_SERVER_ERROR",
       status: 500,
     });
+  });
+  it("maps invalid subject selections and optimistic conflicts", () => {
+    expect(
+      mapTutorError(
+        new InvalidTutorSubjectSelectionError({ reason: "inactive" }),
+      ).status,
+    ).toBe(400);
+    expect(mapTutorError(new OptimisticLockError("tp_1", 2)).status).toBe(409);
+  });
+  it("handles absent details on profile errors", () => {
+    const error = new TutorProfileIncompleteError("tp_1", []);
+    Object.defineProperty(error, "details", { value: undefined });
+    expect(mapTutorError(error).data).toEqual({});
   });
   describe("TutorProfileNotFoundError", () => {
     it("should be instance of DomainError", () => {

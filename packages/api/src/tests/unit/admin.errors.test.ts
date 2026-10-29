@@ -5,6 +5,7 @@ import {
   OptimisticLockError,
   TutorPayoutNotAvailableError,
   WalletNotFoundError,
+  EconomyCompetitionNotInCatalogError,
   mapAdminError,
 } from "../../modules/admin/admin.errors";
 import {
@@ -51,6 +52,12 @@ describe("admin.errors", () => {
   });
 
   describe("mapAdminError", () => {
+    test("maps economy competition catalog violations to BAD_REQUEST", () => {
+      const err = new EconomyCompetitionNotInCatalogError("unlisted");
+      expect(err.details).toEqual({ slug: "unlisted" });
+      expect(mapAdminError(err).status).toBe(400);
+    });
+
     test("maps unavailable tutor payouts to NOT_FOUND", () => {
       const err = new TutorPayoutNotAvailableError("t1");
       expect(err.details).toEqual({ tutorId: "t1" });
