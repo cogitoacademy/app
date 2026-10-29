@@ -472,12 +472,54 @@ describe("competition catalog service", () => {
       }).success,
     ).toBe(false);
     expect(
+      competitionPaletteInput.safeParse({
+        lightTextColor: "oklch(1.1 0.1 20)",
+        lightBackgroundColor: "oklch(0.5 0.1 20)",
+        darkTextColor: "oklch(0.5 0.1 20)",
+        darkBackgroundColor: "oklch(0.5 0.1 20)",
+      }).success,
+    ).toBe(false);
+    expect(
       createCompetitionParentInput.safeParse({
         slug: "new-parent",
         name: "New parent",
         reason: "Create parent",
       }).success,
     ).toBe(false);
+  });
+
+  test("normalizes blank localized fields and accepts each palette patch", () => {
+    const parentWithBlankLocalizedFields = createCompetitionParentInput.parse({
+      slug: "new-parent",
+      name: "New parent",
+      nameId: "   ",
+      description: "   ",
+      descriptionId: "",
+      lightTextColor: "oklch(1 0 0)",
+      lightBackgroundColor: "oklch(0.5 0.1 20)",
+      darkTextColor: "oklch(0.5 0.1 20)",
+      darkBackgroundColor: "oklch(0.5 0.1 20)",
+      reason: "Create parent",
+    });
+    expect(parentWithBlankLocalizedFields.nameId).toBeNull();
+    expect(parentWithBlankLocalizedFields.description).toBeNull();
+    expect(parentWithBlankLocalizedFields.descriptionId).toBeNull();
+
+    for (const field of [
+      "lightTextColor",
+      "lightBackgroundColor",
+      "darkTextColor",
+      "darkBackgroundColor",
+    ] as const) {
+      expect(
+        updateCompetitionCatalogEntryInput.safeParse({
+          id: parent.id,
+          expectedVersion: 1,
+          reason: "Update palette",
+          [field]: "oklch(0.6 0.1 30)",
+        }).success,
+      ).toBe(true);
+    }
   });
 
   test("creates an inactive parent and audits the reason in its transaction", async () => {

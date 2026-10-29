@@ -27,11 +27,10 @@ const oklchColor = z
     "Color must use opaque OKLCH syntax: oklch(L C H)",
   )
   .transform((value, ctx) => {
-    const match = value.match(
+    // The preceding regex guarantees a match before this transform runs.
+    const [, lightnessText, chromaText, hueText] = value.match(
       /^oklch\(\s*(\d*\.?\d+)\s+(\d*\.?\d+)\s+(\d*\.?\d+)\s*\)$/i,
-    );
-    if (!match) return z.NEVER;
-    const [, lightnessText, chromaText, hueText] = match;
+    )!;
     const lightness = Number(lightnessText);
     const chroma = Number(chromaText);
     const hue = Number(hueText);
