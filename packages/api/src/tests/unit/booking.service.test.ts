@@ -4392,6 +4392,50 @@ describe("BookingService", () => {
       );
     });
 
+    test("keeps surviving group holds unchanged when its tutor profile is missing", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({
+        confirmationState: "reconfirmed",
+        heldAmount: 42,
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          decrementBookingConfirmedHeadcount: mock(async () => undefined),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () => null),
+        },
+      });
+
+      await expect(service.reconfirm("student1", "b1", false)).resolves.toEqual(
+        {
+          reconfirmed: false,
+        },
+      );
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+    });
+
     test("M5: decline refreshes the reconfirmation deadline to now + 12h when the group survives", async () => {
       const booking = makeBooking({
         type: "group",
