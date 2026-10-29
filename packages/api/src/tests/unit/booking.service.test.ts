@@ -1263,6 +1263,99 @@ describe("BookingService", () => {
         service.createSolo("student1", { ...soloInput, subjectId: "unknown" }),
       ).rejects.toThrow(BookingNotEditableError);
     });
+
+    test("rejects a tutor topic whose competition is no longer selectable", async () => {
+      const { service, db } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "inactive-competition",
+            categorySlug: "inactive-competition",
+            categoryName: "Inactive Competition",
+            subcategoryId: "topic",
+            subcategorySlug: "topic",
+            subcategoryName: "Topic",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+      });
+      db.transaction.mockImplementation(async (fn: any) =>
+        fn({
+          execute: mock(async () => {}),
+          query: {
+            subjectCategory: {
+              findFirst: mock(async () => ({
+                parent: { parentId: "archived-parent", isActive: false },
+              })),
+            },
+          },
+        }),
+      );
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: "topic" }),
+      ).rejects.toBeInstanceOf(BookingNotEditableError);
+    });
+
+    test("rejects active V3 pricing when the selected competition has no rate", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "competition-without-rate",
+            categorySlug: "competition-without-rate",
+            categoryName: "Competition without rate",
+            subcategoryId: "topic",
+            subcategorySlug: "topic",
+            subcategoryName: "Topic",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 13,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              competitionRates: {},
+            },
+          })),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: "topic" }),
+      ).rejects.toBeInstanceOf(BookingV3CompetitionUnavailableError);
+    });
+
+    test("requires the V3 pricing function when a competition rate exists", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "competition-mun",
+            categorySlug: "competition-model-united-nations",
+            categoryName: "Model United Nations",
+            subcategoryId: "mun-speech",
+            subcategorySlug: "speech",
+            subcategoryName: "Speech",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 13,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", {
+          ...soloInput,
+          subjectId: "mun-speech",
+        }),
+      ).rejects.toThrow("A supported competition topic must be selected");
+    });
   });
 
   describe("createGroup", () => {
