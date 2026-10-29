@@ -412,6 +412,46 @@ describe("createPaymentRepo", () => {
     expect(select).toHaveBeenCalledTimes(1);
   });
 
+  test("top-up quote methods default to db and use the default unlocked lookup", async () => {
+    const quote = { id: "quote1", userId: "u1" };
+    const db = makeSelectConn([quote]);
+    const repo = createPaymentRepo(db as any);
+    await expect(
+      repo.findTopUpQuoteByRequestKey("u1", "request1"),
+    ).resolves.toEqual(quote);
+    await expect(repo.findTopUpQuoteById("u1", "quote1")).resolves.toEqual(
+      quote,
+    );
+    expect(db.select).toHaveBeenCalledTimes(2);
+    expect(db.chain.for).not.toHaveBeenCalled();
+  });
+
+  test("provider-reference lookup defaults to the repository database", async () => {
+    const row = { id: "payment1", providerReference: "ref1" };
+    const db = makeSelectConn([row]);
+    const repo = createPaymentRepo(db as any);
+    await expect(repo.findPaymentByProviderReference("ref1")).resolves.toEqual(
+      row,
+    );
+    expect(db.select).toHaveBeenCalledTimes(1);
+  });
+
+  test("payment readers use the default database when no transaction is supplied", async () => {
+    const row = { id: "payment1" };
+    for (const method of ["quote", "event", "id"] as const) {
+      const db = makeSelectConn([row]);
+      const repo = createPaymentRepo(db as any);
+      const result =
+        method === "quote"
+          ? repo.findPaymentByQuote("quote1")
+          : method === "event"
+            ? repo.findPaymentByProviderEventId("event1")
+            : repo.findPaymentById("payment1");
+      await expect(result).resolves.toEqual(row);
+      expect(db.select).toHaveBeenCalledTimes(1);
+    }
+  });
+
   test("repo methods use provided conn when given", async () => {
     const row = { id: "pkg1", code: "starter", marks: 50 };
     const limit = mock(async () => [row]);
