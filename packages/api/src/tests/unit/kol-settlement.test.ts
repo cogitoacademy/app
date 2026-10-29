@@ -101,4 +101,10 @@ describe("KOL external settlement", () => {
       `\uFEFF"' =SUM(A1)","bank,""ref""\nnext",-5000`,
     );
   });
+
+  test("CSV rejects numeric cells outside safe integer IDR precision", () => {
+    expect(() => kolCsv([[Number.MAX_SAFE_INTEGER + 1]])).toThrow(
+      "Unsafe CSV amount.",
+    );
+  });
 });

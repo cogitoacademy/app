@@ -15,4 +15,10 @@ describe("three-month report window", () => {
       reportDateWindow(new Date("2026-05-31T04:00:00.000Z")).startAt,
     ).toEqual(new Date("2026-02-27T17:00:00.000Z"));
   });
+
+  test("rejects an invalid generation date", () => {
+    expect(() => reportDateWindow(new Date(Number.NaN))).toThrow(
+      "Report generation time must be a valid date",
+    );
+  });
 });
