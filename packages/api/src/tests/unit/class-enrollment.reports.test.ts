@@ -89,9 +89,16 @@ test("report service validates feedback, actor role, and admin reason before dat
   await expect(
     service.submitSessionReport("user-1", "student" as never, input),
   ).rejects.toBeInstanceOf(ClassEnrollmentNotFoundError);
-  await expect(
-    service.submitSessionReport("admin-1", "admin", input),
-  ).rejects.toBeInstanceOf(ClassEnrollmentInvalidOperationError);
+  await Promise.all(
+    [undefined, "ab", "😀".repeat(501)].map((adminReason) =>
+      expect(
+        service.submitSessionReport("admin-1", "admin", {
+          ...input,
+          adminReason,
+        }),
+      ).rejects.toBeInstanceOf(ClassEnrollmentInvalidOperationError),
+    ),
+  );
   await expect(
     service.listSessionReports("user-1", "unknown" as never, {}),
   ).rejects.toBeInstanceOf(ClassEnrollmentNotFoundError);
@@ -170,6 +177,27 @@ test.each([
         ? ClassEnrollmentInvalidOperationError
         : ClassEnrollmentConflictError,
   );
+});
+
+test("rejects a report insert race when the conditional save returns no row", async () => {
+  const service = reportServiceFixture([
+    [reportClass],
+    [reportSession],
+    [],
+    [],
+  ]);
+
+  await expect(
+    service.submitSessionReport("admin-1", "admin", {
+      classId: reportClass.id,
+      sessionId: reportSession.id,
+      requestKey: crypto.randomUUID(),
+      expectedVersion: 0,
+      deliveryConfirmed: true,
+      adminReason: "Report delivered",
+      feedback: TEST_COMPLETION_FEEDBACK,
+    }),
+  ).rejects.toBeInstanceOf(ClassEnrollmentConflictError);
 });
 
 test("a first funded report records referral eligibility", async () => {
