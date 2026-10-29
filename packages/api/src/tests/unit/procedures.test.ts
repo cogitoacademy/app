@@ -2,29 +2,6 @@ import { describe, test, expect } from "bun:test";
 import { ORPCError } from "@orpc/server";
 
 describe("procedures", () => {
-  test("referral-choice gate only rejects pending students", async () => {
-    const { assertReferralChoiceSaved } = await import("../../procedures");
-
-    expect(() =>
-      assertReferralChoiceSaved({
-        role: "student",
-        referralChoicePending: true,
-      } as any),
-    ).toThrow(ORPCError);
-    expect(() =>
-      assertReferralChoiceSaved({
-        role: "student",
-        referralChoicePending: false,
-      } as any),
-    ).not.toThrow();
-    expect(() =>
-      assertReferralChoiceSaved({
-        role: "tutor",
-        referralChoicePending: true,
-      } as any),
-    ).not.toThrow();
-  });
-
   test("exports publicProcedure, protectedProcedure, and adminProcedure", async () => {
     const mod = await import("../../procedures");
     expect(mod.publicProcedure).toBeDefined();
@@ -104,6 +81,17 @@ describe("procedures", () => {
       code: "FORBIDDEN",
       message: "REFERRAL_CHOICE_REQUIRED",
     });
+  });
+
+  test("requireReferralChoiceSaved rejects an unauthenticated request", async () => {
+    const { requireReferralChoiceSaved } = await import("../../procedures");
+
+    await expect(
+      (requireReferralChoiceSaved as any)({
+        context: { session: null, services: {} },
+        next: async () => "should not reach",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   test("referral choice gate does not block non-student accounts", async () => {
