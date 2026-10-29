@@ -138,6 +138,23 @@ test("rejects local PDF reads through a symlink", async () => {
   }
 });
 
+test("local PDF writes accept identical retries and reject a hash collision", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-idempotent-write-"));
+  const store = createPrivateKbStorage({
+    KB_PRIVATE_DIR: join(root, "private"),
+    UPLOAD_DIR: join(root, "public"),
+  });
+  try {
+    await store.put(key, pdf);
+    await expect(store.put(key, pdf)).resolves.toBeUndefined();
+    await expect(
+      store.put(key, new TextEncoder().encode("%PDF-different")),
+    ).rejects.toThrow("Private file hash collision");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("rethrows unexpected local PDF write errors", async () => {
   const root = await mkdtemp(join(tmpdir(), "cogito-kb-write-error-"));
   const writeError = Object.assign(new Error("synthetic disk failure"), {
