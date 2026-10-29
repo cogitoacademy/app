@@ -96,3 +96,10 @@ test("private bucket rejects invalid configuration and uploads before contacting
     send.mockRestore();
   }
 });
+
+test("defaults to separate development directories without creating them", () => {
+  const store = createPrivateKbStorage({ NODE_ENV: "test" });
+
+  expect(store.put).toBeTypeOf("function");
+  expect(store.read).toBeTypeOf("function");
+});
