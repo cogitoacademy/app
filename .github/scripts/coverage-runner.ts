@@ -55,7 +55,7 @@ async function main() {
       arguments: [...fixtures, payout]
         .flatMap((path) => [
           "--path-ignore-patterns",
-          `**/${path.split("/").at(-1)}`,
+          `**/packages/api/src/tests/integration/${path.split("/").at(-1)}`,
         ])
         .concat([
           "./packages/api/src/tests/",
