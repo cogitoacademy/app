@@ -10553,6 +10553,67 @@ describe("Booking ownership and locked-record guards", () => {
 });
 
 describe("Tutor payout safety guards", () => {
+  test.each([
+    "bankName",
+    "bankAccountNumber",
+    "bankAccountHolderName",
+    "bankAccountOpeningCity",
+    "bankAccountOwnership",
+    "bankTransferDisclaimerAccepted",
+  ] as const)("payout preparation identifies missing %s", async (field) => {
+    const profile = {
+      bankName: "BCA",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null,
+      taxRateOverrideBps: null,
+      version: 1,
+      [field]:
+        field === "bankTransferDisclaimerAccepted"
+          ? false
+          : field === "bankAccountOwnership"
+            ? ""
+            : "  ",
+    };
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const { service, repo } = createService({
+      repo: {
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+      },
+    });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: preview.sourceKeys,
+        previewVersion: preview.previewVersion,
+        operationId: crypto.randomUUID(),
+      }),
+    ).rejects.toMatchObject({
+      code: "PAYOUT_PROFILE_INCOMPLETE",
+      details: { missingFields: [field] },
+    });
+    expect(repo.insertTutorPayout).not.toHaveBeenCalled();
+  });
+
   test("a payout preview requires a tutor profile and a unique non-empty session selection", async () => {
     const missing = createService();
     await expect(
@@ -10570,6 +10631,104 @@ describe("Tutor payout safety guards", () => {
     await expect(
       service.previewTutorPayout("tutor1", ["fee1", "fee1"]),
     ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  });
+
+  test("transfer recording rejects a payout whose source preview has changed", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const { service } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          taxLegalName: "Tutor Legal",
+          nik: "0012345678901234",
+          npwp: null,
+          taxRateOverrideBps: null,
+          version: 1,
+        })),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        findTutorPayoutById: mock(async () => ({
+          id: "payout1",
+          tutorId: "tutor1",
+          status: "prepared",
+          sourceKeys: [fee.eventKey],
+          previewVersion: "stale-preview",
+        })),
+      },
+    });
+
+    await expect(
+      service.recordTutorPayoutTransfer("admin1", {
+        payoutId: "payout1",
+        previewVersion: "stale-preview",
+        actualAmountIdr: 9_750,
+        paidAt: new Date("2026-10-28T00:00:00Z"),
+      }),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  });
+
+  test("transfer recording reports a concurrent payout state change", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    let payout: Record<string, unknown>;
+    const { service, db } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          taxLegalName: "Tutor Legal",
+          nik: "0012345678901234",
+          npwp: null,
+          taxRateOverrideBps: null,
+          version: 1,
+        })),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        listTutorPayoutAllocationsByPayoutId: mock(async () => [
+          { sourceKey: fee.eventKey, active: true },
+        ]),
+        findTutorPayoutById: mock(async () => payout),
+      },
+    });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    payout = {
+      id: "payout1",
+      tutorId: "tutor1",
+      status: "prepared",
+      sourceKeys: [fee.eventKey],
+      previewVersion: preview.previewVersion,
+      netHonorariumIdr: preview.netHonorariumIdr,
+    };
+    const set = mock(() => ({ where: () => ({ returning: async () => [] }) }));
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({ execute: mock(async () => undefined), update: () => ({ set }) }),
+    );
+
+    await expect(
+      service.recordTutorPayoutTransfer("admin1", {
+        payoutId: payout.id,
+        previewVersion: preview.previewVersion,
+        actualAmountIdr: preview.netHonorariumIdr,
+        paidAt: new Date("2026-10-28T00:00:00Z"),
+      }),
+    ).rejects.toThrow("Payout state changed; reload and retry");
+    expect(set).toHaveBeenCalledTimes(1);
   });
 
   test.each(["identical", "different-tutor", "different-preview"] as const)(
