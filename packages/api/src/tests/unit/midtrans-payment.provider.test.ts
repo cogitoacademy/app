@@ -794,9 +794,8 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
       ),
     ) as never;
 
-    const status = await provider.getPaymentRequestStatus!(
-      "pay-refund-history",
-    );
+    const status =
+      await provider.getPaymentRequestStatus!("pay-refund-history");
     expect(status.status).toBe("REFUNDED");
     expect(status.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
   });
