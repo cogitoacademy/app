@@ -173,7 +173,6 @@ function assertTutorCapacity(
 }
 
 function stableSerialize(value: unknown): string {
-  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Array.isArray(value)) {
     return `[${value.map(stableSerialize).join(",")}]`;
   }
