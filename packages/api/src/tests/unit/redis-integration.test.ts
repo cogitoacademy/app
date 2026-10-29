@@ -157,6 +157,15 @@ describe("IdempotencyStore with Redis", () => {
     expect(await store.getResult("key1")).toEqual({ status: "ok" });
   });
 
+  test("reports a missing Redis key as unprocessed", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const store = new IdempotencyStore({
+      redis: redis as unknown as RedisClient,
+    });
+
+    expect(await store.isProcessed("missing")).toBe(false);
+  });
+
   test("uses Redis hits and returns non-JSON cached values unchanged", async () => {
     const { IdempotencyStore } = await import("../../lib/idempotency");
     const store = new IdempotencyStore({
@@ -238,6 +247,23 @@ describe("IdempotencyStore with Redis", () => {
     await store.markProcessed("key1", { status: "fallback" });
     expect(await store.isProcessed("key1")).toBe(true);
     expect(await store.getResult("key1")).toEqual({ status: "fallback" });
+  });
+
+  test("falls back to in-memory when Redis claim and release fail", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const brokenRedis = {
+      set: mock(async () => {
+        throw new Error("down");
+      }),
+      del: mock(async () => {
+        throw new Error("down");
+      }),
+    } as unknown as RedisClient;
+    const store = new IdempotencyStore({ redis: brokenRedis });
+
+    expect(await store.claim("claim-key")).toBe(true);
+    await store.release("claim-key");
+    expect(await store.claim("claim-key")).toBe(true);
   });
 
   test("uses Redis prefix for keys", async () => {
