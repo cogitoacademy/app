@@ -1,3 +1,19 @@
+type PublicCompetitionColors = {
+  lightTextColor?: string | null;
+  lightBackgroundColor?: string | null;
+  darkTextColor?: string | null;
+  darkBackgroundColor?: string | null;
+};
+
+function publicCompetitionColors(value: PublicCompetitionColors) {
+  return {
+    lightTextColor: value.lightTextColor ?? null,
+    lightBackgroundColor: value.lightBackgroundColor ?? null,
+    darkTextColor: value.darkTextColor ?? null,
+    darkBackgroundColor: value.darkBackgroundColor ?? null,
+  };
+}
+
 export type PublicAcademyClassSource = {
   id: string;
   kind: string;
@@ -9,9 +25,9 @@ export type PublicAcademyClassSource = {
   cohortHalfRateMarks: number | null;
   cohortSingleRateMarks: number | null;
   masterclassRateMarks: number | null;
-  competition: {
+  competition: PublicCompetitionColors & {
     name: string;
-    parent: { name: string } | null;
+    parent: (PublicCompetitionColors & { name: string }) | null;
   };
   sessions: {
     id: string;
@@ -38,8 +54,12 @@ export function toPublicAcademyClass(record: PublicAcademyClassSource) {
     masterclassRateMarks: record.masterclassRateMarks,
     competition: {
       name: record.competition.name,
+      ...publicCompetitionColors(record.competition),
       parent: record.competition.parent
-        ? { name: record.competition.parent.name }
+        ? {
+            name: record.competition.parent.name,
+            ...publicCompetitionColors(record.competition.parent),
+          }
         : null,
     },
     sessions: record.sessions.map((session) => ({

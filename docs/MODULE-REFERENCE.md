@@ -2591,3 +2591,5 @@ The canonical Knowledge Bank/calendar route components select the existing read-
 ### Academy capacity policy (2026-10-29)
 
 Academy draft and publish validation does not apply tutor private teaching limits (`onlineMaxClassSize` / `offlineMaxClassSize`). Session capacity is admin-controlled; enrollment quota enforcement, room capacity, tutor delivery mode/status, and scheduling checks remain in force. Private booking validation is unchanged.
+
+Academy public projection explicitly allowlists the four competition palette fields on competition and parent; unrelated private competition fields remain excluded.

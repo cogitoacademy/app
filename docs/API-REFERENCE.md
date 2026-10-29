@@ -2553,3 +2553,5 @@ Existing `adminContent.list/categories/create/update/remove/uploadPdf` contracts
 ### Academy capacity policy (2026-10-29)
 
 `admin.saveAcademyClassDraft` and `admin.publishAcademyClass` do not compare session capacity with tutor `onlineMaxClassSize` or `offlineMaxClassSize`. Admin sets Academy capacity; managed-room limits still apply. Endpoint inputs and outputs are unchanged.
+
+Public classes list/get competition and parent projections include lightTextColor, lightBackgroundColor, darkTextColor and darkBackgroundColor (nullable).

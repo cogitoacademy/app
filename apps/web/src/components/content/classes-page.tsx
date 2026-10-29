@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  IconArrowUpRight,
   IconClock,
   IconMapPin,
   IconChevronRight,
@@ -14,8 +13,8 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import { Button } from "@cogito-app/ui/components/selia/button";
-import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+import { Button, buttonVariants } from "@cogito-app/ui/components/selia/button";
+import { Card } from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -24,14 +23,17 @@ import {
   InputGroupAddon,
 } from "@cogito-app/ui/components/selia/input-group";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { FilterTabBar } from "@/components/filter-tab-bar";
 import Loader from "@/components/loader";
-import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { orpc } from "@/utils/orpc";
+import {
+  competitionPaletteClassName,
+  getCompetitionPalette,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
 import { useNow } from "@/hooks/use-now";
 
 export function ClassesPage() {
@@ -190,6 +192,27 @@ export function ClassesPage() {
                   );
                   const firstSession = nextSession ?? academyClass.sessions[0];
                   if (!firstSession) return null;
+                  const rates = (
+                    academyClass.kind === "cohort"
+                      ? [
+                          academyClass.cohortFullRateMarks,
+                          academyClass.cohortHalfRateMarks,
+                          academyClass.cohortSingleRateMarks,
+                        ]
+                      : [academyClass.masterclassRateMarks]
+                  ).filter((rate): rate is number => rate !== null && rate > 0);
+                  const startingRate = rates.length ? Math.min(...rates) : null;
+                  const palette = getCompetitionPalette(
+                    academyClass.competition.parent ?? academyClass.competition,
+                  );
+                  const cohortDates = academyClass.sessions
+                    .map((session) => new Date(session.startAt).getTime())
+                    .toSorted((left, right) => left - right);
+                  const cohortDateFormatter = new Intl.DateTimeFormat("en", {
+                    dateStyle: "medium",
+                    timeZone: "Asia/Jakarta",
+                  });
+                  const cohortDateRange = `${cohortDateFormatter.format(cohortDates[0])} – ${cohortDateFormatter.format(cohortDates[cohortDates.length - 1])}`;
                   const date = new Date(firstSession.startAt);
                   const month = new Intl.DateTimeFormat("en", {
                     month: "short",
@@ -214,13 +237,6 @@ export function ClassesPage() {
                         .filter(Boolean),
                     ),
                   ];
-                  const coverUrl = resolveProfileImageUrl(
-                    academyClass.coverKey?.startsWith("http")
-                      ? academyClass.coverKey
-                      : academyClass.coverKey
-                        ? `/uploads/${academyClass.coverKey}`
-                        : undefined,
-                  );
                   return (
                     <Card
                       key={academyClass.id}
@@ -234,142 +250,136 @@ export function ClassesPage() {
                       className="group flex h-full min-w-0 flex-col text-foreground no-underline transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none"
                       data-testid={`class-card-${academyClass.id}`}
                     >
-                      <div className="flex min-w-0 flex-col gap-3 p-4 md:hidden">
+                      <div className="flex h-full min-w-0 flex-col gap-3 p-4">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-accent" aria-hidden="true">
-                            <span className="text-sm uppercase">{new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "Asia/Jakarta" }).format(date)}</span>
-                            <span className="text-2xl font-semibold tabular-nums">{day}</span>
+                          <div
+                            className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-accent"
+                            aria-hidden="true"
+                          >
+                            <span className="text-sm uppercase">
+                              {new Intl.DateTimeFormat("en", {
+                                weekday: "short",
+                                timeZone: "Asia/Jakarta",
+                              }).format(date)}
+                            </span>
+                            <span className="text-2xl font-semibold tabular-nums">
+                              {day}
+                            </span>
                             <span className="text-sm uppercase">{month}</span>
                           </div>
-                          <div className="min-w-0 space-y-1">
-                            <Text className="flex items-center gap-2"><IconClock className="size-4 shrink-0 text-muted" aria-hidden="true" />{formattedTime} WIB</Text>
-                            <Text className="flex items-center gap-2 text-muted"><IconMapPin className="size-4 shrink-0" aria-hidden="true" />{firstSession.mode === "online" ? "Online" : "Offline"}</Text>
-                            <Text className="flex min-w-0 items-center gap-2 text-muted"><IconUsers className="size-4 shrink-0" aria-hidden="true" /><span className="truncate">{tutors.length ? tutors.join(", ") : "Tutor to be announced"}</span></Text>
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <Text className="flex items-center gap-2">
+                              {academyClass.kind === "cohort" ? (
+                                <IconCalendarEvent
+                                  className="size-4 shrink-0 text-muted"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <IconClock
+                                  className="size-4 shrink-0 text-muted"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {academyClass.kind === "cohort"
+                                ? cohortDateRange
+                                : `${formattedTime} WIB`}
+                            </Text>
+                            <Text className="flex items-center gap-2 text-muted">
+                              <IconMapPin
+                                className="size-4 shrink-0"
+                                aria-hidden="true"
+                              />
+                              {firstSession.mode === "online"
+                                ? "Online"
+                                : "Offline"}
+                            </Text>
+                            <Text className="flex min-w-0 items-center gap-2 text-muted">
+                              {academyClass.kind === "cohort" ? (
+                                <IconCalendarEvent
+                                  className="size-4 shrink-0"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <IconUsers
+                                  className="size-4 shrink-0"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <span className="truncate">
+                                {academyClass.kind === "cohort"
+                                  ? `${academyClass.sessions.length} session${academyClass.sessions.length === 1 ? "" : "s"}`
+                                  : tutors.length
+                                    ? tutors.join(", ")
+                                    : "Tutor to be announced"}
+                              </span>
+                            </Text>
                           </div>
                         </div>
-                        <Heading level={2} size="sm" className="truncate" title={academyClass.titleEn}>{academyClass.titleEn}</Heading>
+                        <Heading
+                          level={2}
+                          size="sm"
+                          className="truncate"
+                          title={academyClass.titleEn}
+                        >
+                          {academyClass.titleEn}
+                        </Heading>
                         <div className="flex flex-wrap items-center gap-3">
-                          <Badge variant="secondary" size="sm">{academyClass.competition.parent ? `${academyClass.competition.parent.name} · ` : ""}{academyClass.competition.name}</Badge>
+                          <Badge
+                            variant="secondary"
+                            size="sm"
+                            className={
+                              palette ? competitionPaletteClassName : undefined
+                            }
+                            style={getCompetitionPaletteStyle(palette)}
+                          >
+                            {academyClass.competition.parent
+                              ? `${academyClass.competition.parent.name} · `
+                              : ""}
+                            {academyClass.competition.name}
+                          </Badge>
                           <div className="flex flex-wrap items-center gap-x-1 text-muted">
-                            <CogitoMarks value={academyClass.kind === "cohort" ? (academyClass.cohortFullRateMarks ?? 0) : (academyClass.masterclassRateMarks ?? 0)} />
-                            <span className="text-sm">{academyClass.kind === "cohort" ? "per session · full plan" : "per student"}</span>
+                            {startingRate !== null ? (
+                              <>
+                                <span className="text-sm">Start from</span>
+                                <CogitoMarks value={startingRate} />
+                              </>
+                            ) : (
+                              <span className="text-sm">Price unavailable</span>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary" size="sm">{academyClass.kind === "cohort" ? "Cohort" : "Masterclass"}</Badge>
-                          {academyClass.state === "postponed" ? <Badge variant="warning" size="sm">Postponed</Badge> : null}
-                          <Text className="text-sm text-muted">{academyClass.sessions.length} session{academyClass.sessions.length === 1 ? "" : "s"} · {nextSession ? "Next" : "Started"} {formattedDate}</Text>
+                          <Badge variant="tertiary" size="sm">
+                            {academyClass.kind === "cohort"
+                              ? "Cohort"
+                              : "Masterclass"}
+                          </Badge>
+                          {academyClass.state === "postponed" ? (
+                            <Badge variant="warning" size="sm">
+                              Postponed
+                            </Badge>
+                          ) : null}
+                          <Text className="text-sm text-muted">
+                            {academyClass.kind === "cohort"
+                              ? nextSession
+                                ? "Enroll before your selected session starts · subject to availability"
+                                : "No upcoming sessions"
+                              : `${nextSession ? "Next" : "Started"} ${formattedDate}`}
+                          </Text>
                         </div>
-                        <span className="mt-auto flex h-11 items-center justify-center gap-2 rounded bg-primary font-medium text-primary-foreground ring ring-primary-border">Details <IconChevronRight className="size-4" aria-hidden="true" /></span>
+                        <span
+                          className={buttonVariants({
+                            size: "sm",
+                            className: "mt-auto self-end",
+                          })}
+                        >
+                          Details{" "}
+                          <IconChevronRight
+                            className="size-4"
+                            aria-hidden="true"
+                          />
+                        </span>
                       </div>
-                      <CardBody className="hidden h-full min-w-0 flex-col gap-3 p-4 md:flex">
-                        <div className="flex min-w-0 items-start gap-3">
-                          {coverUrl ? (
-                            <img
-                              src={coverUrl}
-                              alt=""
-                              className="size-14 shrink-0 rounded-lg bg-accent object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div
-                              className="flex size-14 shrink-0 flex-col items-center justify-center rounded-lg bg-accent"
-                              aria-hidden="true"
-                            >
-                              <span className="text-xs font-medium uppercase text-muted">
-                                {month}
-                              </span>
-                              <span className="text-xl font-semibold tabular-nums">
-                                {day}
-                              </span>
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <Badge variant="secondary" size="sm">
-                                {academyClass.kind === "cohort"
-                                  ? "Cohort"
-                                  : "Masterclass"}
-                              </Badge>
-                              {academyClass.state === "postponed" ? (
-                                <Badge variant="warning" size="sm">
-                                  Postponed
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <Text className="line-clamp-1 text-xs font-medium text-muted">
-                              {academyClass.competition.parent
-                                ? `${academyClass.competition.parent.name} · `
-                                : ""}
-                              {academyClass.competition.name}
-                            </Text>
-                            <Heading
-                              level={2}
-                              size="sm"
-                              className="line-clamp-2 break-words leading-snug group-hover:underline"
-                            >
-                              {academyClass.titleEn}
-                            </Heading>
-                          </div>
-                        </div>
-                        <Text className="line-clamp-2 min-h-10 text-sm leading-relaxed text-muted">
-                          {academyClass.descriptionEn}
-                        </Text>
-                        <div className="mt-auto">
-                          <Separator className="my-3" />
-                          <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex min-w-0 flex-1 items-start gap-2">
-                              <IconCalendarEvent
-                                className="mt-0.5 size-4 shrink-0 text-dimmed"
-                                aria-hidden="true"
-                              />
-                              <div className="min-w-0">
-                                <Text className="line-clamp-1 text-xs font-medium">
-                                  {nextSession ? "Next" : "Started"} ·{" "}
-                                  {formattedDate}
-                                </Text>
-                                <Text className="text-xs text-muted">
-                                  {formattedTime} WIB ·{" "}
-                                  {academyClass.sessions.length} session
-                                  {academyClass.sessions.length === 1
-                                    ? ""
-                                    : "s"}
-                                </Text>
-                              </div>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <Text className="font-semibold tabular-nums">
-                                <CogitoMarks
-                                  value={
-                                    academyClass.kind === "cohort"
-                                      ? (academyClass.cohortFullRateMarks ?? 0)
-                                      : (academyClass.masterclassRateMarks ?? 0)
-                                  }
-                                />
-                              </Text>
-                              <Text className="text-xs text-muted">
-                                {academyClass.kind === "cohort"
-                                  ? "per session · full plan"
-                                  : "per student"}
-                              </Text>
-                            </div>
-                          </div>
-                          <div className="mt-2 flex min-w-0 items-center gap-2">
-                            <IconUsers
-                              className="size-4 shrink-0 text-dimmed"
-                              aria-hidden="true"
-                            />
-                            <Text className="min-w-0 flex-1 truncate text-xs text-muted">
-                              {tutors.length
-                                ? tutors.join(", ")
-                                : "Tutor to be announced"}
-                            </Text>
-                            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-foreground">
-                              Details <IconArrowUpRight className="size-4" />
-                            </span>
-                          </div>
-                        </div>
-                      </CardBody>
                     </Card>
                   );
                 })}

@@ -3374,6 +3374,16 @@ Academy class capacity is set by Cogito per session and is independent of tutor 
 
 Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
 
-Classes catalog mobile cards follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a full-width Details action. Desktop cards retain their existing layout. Rates retain their per-session/full-plan or per-student labels.
+Classes catalog cards on mobile and desktop follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a compact Details action aligned to the right. The same card composition is used across the responsive catalog grid. Prices use Start from with the lowest positive configured cohort plan rate or the masterclass rate; missing rates show Price unavailable.
 
 Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
+
+Classes competition badges use the configured parent competition palette (or the competition itself for root types), with light/dark theme support and a neutral fallback.
+
+Classes card metadata shows tutor names for masterclasses and session count for cohorts; cohort cards omit tutor names and avoid repeating the session count.
+
+Classes card session metadata uses an explicit flex column so icon-bearing Selia Text rows remain stacked vertically.
+
+Cohort catalog cards show the first-to-last session date range instead of a session time. Enrollment copy reflects the per-session start cutoff and availability, not a single cohort-wide deadline; single-session enrollment can select a future session mid-cohort, while full/half plans quote remaining upcoming sessions.
+
+Classes catalog Cohort/Masterclass type badges use the tertiary variant to distinguish them from the card background.

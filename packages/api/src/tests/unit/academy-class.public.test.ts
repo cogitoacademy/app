@@ -18,6 +18,7 @@ describe("toPublicAcademyClass", () => {
       version: 3,
       competition: {
         name: "Synthetic specialization",
+        lightTextColor: "red",
         privateNotes: "hidden",
         parent: { name: "Synthetic competition", privateNotes: "hidden" },
       },
@@ -56,7 +57,17 @@ describe("toPublicAcademyClass", () => {
       masterclassRateMarks: null,
       competition: {
         name: "Synthetic specialization",
-        parent: { name: "Synthetic competition" },
+        lightTextColor: "red",
+        lightBackgroundColor: null,
+        darkTextColor: null,
+        darkBackgroundColor: null,
+        parent: {
+          name: "Synthetic competition",
+          lightTextColor: null,
+          lightBackgroundColor: null,
+          darkTextColor: null,
+          darkBackgroundColor: null,
+        },
       },
       sessions: [
         {
