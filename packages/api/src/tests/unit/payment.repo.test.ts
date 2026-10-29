@@ -452,6 +452,50 @@ describe("createPaymentRepo", () => {
     }
   });
 
+  test("quote insert defaults to db and returns the inserted row", async () => {
+    const quote = { id: "quote1" };
+    const returning = mock(async () => [quote]);
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
+    const insert = mock(() => ({ values }));
+    const repo = createPaymentRepo({ insert } as any);
+    await expect(
+      repo.insertTopUpQuote({ id: "quote1" } as any),
+    ).resolves.toEqual(quote);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  test("reconciliation query defaults to db and returns its bounded result", async () => {
+    const rows = [{ id: "payment1" }];
+    const db = makeSelectConn(rows);
+    const repo = createPaymentRepo(db as any);
+    await expect(
+      repo.findPaymentsForReconciliation(
+        "midtrans",
+        new Date("2026-10-01T00:00:00Z"),
+        5,
+        new Date("2026-09-01T00:00:00Z"),
+      ),
+    ).resolves.toEqual(rows);
+    expect(db.chain.limit).toHaveBeenCalledWith(5);
+  });
+
+  test("status mutation wrappers default to db", async () => {
+    const returning = mock(async () => []);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const repo = createPaymentRepo({ update } as any);
+    await repo.updatePaymentStatus("payment1", { status: "FAILED" });
+    await repo.updatePaymentIntent("payment1", {
+      providerIntentState: "READY",
+    });
+    await repo.updatePaymentStatusIfInCreditState("payment1", {
+      status: "REFUNDED",
+    });
+    expect(update).toHaveBeenCalledTimes(3);
+  });
+
   test("repo methods use provided conn when given", async () => {
     const row = { id: "pkg1", code: "starter", marks: 50 };
     const limit = mock(async () => [row]);
