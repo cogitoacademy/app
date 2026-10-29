@@ -289,6 +289,30 @@ describe("public content tutor projection", () => {
     expect(toPublicTutorDto(nestedParent).subjects).toEqual([]);
   });
 
+  test("drops malformed nested profile data without exposing it", () => {
+    const row = {
+      ...makeSensitiveRow(),
+      education: [null, { university: "University", degree: 42 }],
+      achievements: [
+        { competitionName: "Competition", year: 2025.5, awards: [] },
+      ],
+      experiences: [
+        {
+          role: "Tutor",
+          organization: "School",
+          startYear: 2022.5,
+          endYear: null,
+          description: "Experience",
+        },
+      ],
+    } as unknown as PublicTutorRow;
+
+    const tutor = toPublicTutorDto(row);
+    expect(tutor.education).toEqual([]);
+    expect(tutor.achievements).toEqual([]);
+    expect(tutor.experiences).toEqual([]);
+  });
+
   test("returns an empty array unchanged when there are no published profiles", async () => {
     const service = createPublicContentService({
       repo: { listPublishedTutors: async () => [] } as any,

@@ -174,6 +174,114 @@ describe("class enrollment locked request replay", () => {
     },
   );
 
+  test("a defaulted half enrollment requires a fresh half-plan quote", async () => {
+    const previous = { ...enrollment, plan: "half", state: "active" };
+    const f = fixture({
+      findStudentClassRecords: mock(async () => ({
+        enrollments: [previous],
+        installments: [
+          {
+            enrollmentId: previous.id,
+            ordinal: 2,
+            state: "defaulted",
+          },
+        ],
+        allocations: [],
+      })),
+    });
+    try {
+      await expect(
+        f.service.createEnrollment("student1", {
+          classId: "class1",
+          plan: "single",
+          sessionId: session.id,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).rejects.toMatchObject({ code: "CLASS_ENROLLMENT_CONFLICT" });
+      expect(f.repo.lockSessions).not.toHaveBeenCalled();
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
+
+  test("maps an invalid plan quote to an enrollment operation error", async () => {
+    const f = fixture({
+      findEnrollmentByRequestKey: mock(async () => null),
+      findStudentClassRecords: mock(async () => ({
+        enrollments: [],
+        installments: [],
+        allocations: [],
+      })),
+    });
+    try {
+      await expect(
+        f.service.createEnrollment("student1", {
+          classId: "class1",
+          plan: "masterclass",
+          requestKey: crypto.randomUUID(),
+        }),
+      ).rejects.toMatchObject({ code: "CLASS_ENROLLMENT_INVALID_OPERATION" });
+    } finally {
+      f.restore();
+    }
+  });
+
+  test("rethrows unexpected errors from enrollment quote calculation", async () => {
+    const f = fixture({
+      findEnrollmentByRequestKey: mock(async () => null),
+      findStudentClassRecords: mock(async () => ({
+        enrollments: [],
+        installments: [],
+        allocations: [],
+      })),
+      listClassSessions: mock(async () => [
+        session,
+        { ...session, id: "malformed", startAt: "not-a-date" as any },
+      ]),
+    });
+    try {
+      await expect(
+        f.service.createEnrollment("student1", {
+          classId: "class1",
+          plan: "single",
+          sessionId: session.id,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).rejects.toThrow("getTime");
+    } finally {
+      f.restore();
+    }
+  });
+
+  test("rejects a selected session already blocked by another enrollment", async () => {
+    const f = fixture({
+      findEnrollmentByRequestKey: mock(async () => null),
+      findStudentClassRecords: mock(async () => ({
+        enrollments: [],
+        installments: [],
+        allocations: [],
+      })),
+      expireStaleCheckoutsForSessions: mock(async () => undefined),
+      findBlockingAllocationForSessions: mock(async () => [
+        { sessionId: session.id },
+      ]),
+    });
+    try {
+      await expect(
+        f.service.createEnrollment("student1", {
+          classId: "class1",
+          plan: "single",
+          sessionId: session.id,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).rejects.toMatchObject({ code: "CLASS_ENROLLMENT_CONFLICT" });
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
+
   test.each(["cancelled", "completed", "draft"] as const)(
     "non-enrolling %s classes expose only existing student history",
     async (state) => {
