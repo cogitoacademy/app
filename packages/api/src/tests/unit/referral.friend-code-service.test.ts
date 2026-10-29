@@ -4,7 +4,7 @@ import { createReferralHandler } from "../../modules/referral/referral.handler";
 import { ReferralError } from "../../modules/referral/referral.errors";
 
 // Scripted query results exercise getMine wiring without opening a database.
-function fixture(results: unknown[][]) {
+function fixture(results: unknown[][], saveReturnsRow = true) {
   const inserted: Record<string, unknown>[] = [];
   const updates: Record<string, unknown>[] = [];
   const db = {
@@ -32,7 +32,8 @@ function fixture(results: unknown[][]) {
         inserted.push(value);
         return {
           onConflictDoNothing: async () => undefined,
-          returning: async () => [{ id: "saved-choice", ...value }],
+          returning: async () =>
+            saveReturnsRow ? [{ id: "saved-choice", ...value }] : [],
         };
       },
     }),
@@ -64,6 +65,97 @@ function fixture(results: unknown[][]) {
     db: db as unknown as Parameters<typeof service.applyEmailSignupChoice>[0],
   };
 }
+
+test.each([
+  "free",
+  "missing-choice",
+  "kol",
+  "missing-referrer",
+  "missing-student",
+  "changed-role",
+] as const)(
+  "first completion skips ineligible referral rewards: %s",
+  async (scenario) => {
+    const choice = {
+      id: "choice1",
+      kind: "friend",
+      referrerUserId: "referrer1",
+    };
+    const rows: unknown[][] =
+      scenario === "free"
+        ? []
+        : scenario === "missing-choice"
+          ? [[]]
+          : scenario === "kol"
+            ? [[{ ...choice, kind: "kol" }]]
+            : scenario === "missing-referrer"
+              ? [[{ ...choice, referrerUserId: null }]]
+              : [
+                  [choice],
+                  [],
+                  scenario === "missing-student"
+                    ? [{ id: "referrer1", role: "student" }]
+                    : [
+                        { id: "referrer1", role: "student" },
+                        { id: "student1", role: "tutor" },
+                      ],
+                ];
+    const f = fixture(rows);
+    await expect(
+      f.service.recordEligibleFirstCompletion(f.db, {
+        studentId: "student1",
+        completionType: "solo",
+        completionId: "booking1",
+        completedAt: new Date("2026-10-28T00:00:00Z"),
+        chargedMarks: scenario === "free" ? 0 : 10,
+      }),
+    ).resolves.toBeNull();
+    expect(f.results).toEqual([]);
+    expect(f.inserted).toEqual([]);
+    expect(f.wallet.credit).not.toHaveBeenCalled();
+  },
+);
+
+test.each(["usage", "decision"] as const)(
+  "first completion requires a persisted %s row",
+  async (scenario) => {
+    const f = fixture(
+      [
+        [
+          {
+            id: "choice1",
+            kind: "friend",
+            referrerUserId: "referrer1",
+            friendRewardMarksSnapshot: 10,
+          },
+        ],
+        [],
+        [
+          { id: "student1", role: "student" },
+          { id: "referrer1", role: "student" },
+        ],
+        [],
+        scenario === "usage" ? [] : [{ id: "usage1", creditedMarks: 0 }],
+      ],
+      false,
+    );
+    await expect(
+      f.service.recordEligibleFirstCompletion(f.db, {
+        studentId: "student1",
+        completionType: "solo",
+        completionId: "booking1",
+        completedAt: new Date("2026-10-28T00:00:00Z"),
+        chargedMarks: 10,
+      }),
+    ).rejects.toThrow(
+      scenario === "usage"
+        ? "Referral semester usage was not locked."
+        : "Friend reward decision was not saved.",
+    );
+    expect(f.wallet.credit).not.toHaveBeenCalled();
+    expect(f.results).toEqual([]);
+  },
+);
 
 test("signup rejects invalid referral identities before crediting a wallet", async () => {
   const student = [{ role: "student" }];
