@@ -766,6 +766,61 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
     );
   });
 
+  test("filters malformed refund history and accepts safe fallback identities", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "refund",
+          order_id: "pay-refund-history",
+          gross_amount: "50000.00",
+          refund_amount: "50000.00",
+          currency: "IDR",
+          refunds: [
+            null,
+            { refund_chargeback_id: 1.5, refund_key: "fallback-key" },
+            { refund_key: "x".repeat(129) },
+            {
+              refund_chargeback_id: 12,
+              refund_amount: "12.50",
+              created_at: "2026-10-23 10:00:00",
+            },
+            {
+              refund_key: "later-key",
+              refund_amount: "20.00",
+              created_at: "2026-10-23T10:05:00+07:00",
+            },
+          ],
+        }),
+      ),
+    ) as never;
+
+    const status = await provider.getPaymentRequestStatus!(
+      "pay-refund-history",
+    );
+    expect(status.status).toBe("REFUNDED");
+    expect(status.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  test("omits refund identity when the authenticated history is not an array", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "refund",
+          order_id: "pay-refund-no-history",
+          gross_amount: "50000.00",
+          currency: "IDR",
+          refunds: { refund_key: "not-an-array" },
+        }),
+      ),
+    ) as never;
+
+    const status = await provider.getPaymentRequestStatus!(
+      "pay-refund-no-history",
+    );
+    expect(status.status).toBe("REFUNDED");
+    expect(status.providerRefundIdentity).toBeUndefined();
+  });
+
   test("rejects a successful status without a valid IDR amount and currency", async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(
