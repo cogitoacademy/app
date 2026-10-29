@@ -3959,6 +3959,8 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
+Boolean environment values accept `true`/`1` and `false`/`0` (case-insensitive); empty or whitespace-only values use the documented default, while unknown spellings fail startup validation.
+
 | Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                      |
 | --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                     |

@@ -30,7 +30,8 @@ const boolSchema = (defaultValue: boolean) =>
     // direct schema.parse() calls too (createEnv's emptyStringAsUndefined
     // only handles process.env, not explicit "" values).
     if (v === undefined || v === "") return defaultValue;
-    return boolFromEnv(v);
+    const normalized = boolFromEnv(v);
+    return normalized === undefined ? defaultValue : normalized;
   }, z.boolean());
 
 const serverShape = {

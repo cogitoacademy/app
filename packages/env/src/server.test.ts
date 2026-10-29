@@ -31,6 +31,12 @@ describe("server environment schema", () => {
     expect(result.GOOGLE_MEET_ENABLED).toBe(false);
     expect(result.DB_SSL_ENABLED).toBe(true);
     expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
+
+    const whitespaceDefault = serverEnvSchema.parse({
+      ...baseEnv(),
+      TRUST_PROXY: "   ",
+    });
+    expect(whitespaceDefault.TRUST_PROXY).toBe(false);
   });
 
   test("rejects unknown boolean strings", () => {
