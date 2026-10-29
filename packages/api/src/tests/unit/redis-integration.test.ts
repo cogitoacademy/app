@@ -65,6 +65,32 @@ describe("CircuitBreaker with Redis", () => {
     expect(result).toBe("ok");
   });
 
+  test("uses default key and zero defaults while a half-open attempt remains", async () => {
+    await redis.hset(`${COGITO_NS.CIRCUIT_BREAKER}:default`, [
+      "state",
+      "half-open",
+    ]);
+    const cb = new CircuitBreaker({
+      failureThreshold: 3,
+      resetTimeoutMs: 60_000,
+      halfOpenMaxAttempts: 2,
+      redis: redis as unknown as RedisClient,
+    });
+
+    await expect(
+      cb.execute(() => Promise.reject(new Error("still failing"))),
+    ).rejects.toThrow("still failing");
+
+    expect(cb.getState()).toBe("half-open");
+    expect(
+      await redis.hgetall(`${COGITO_NS.CIRCUIT_BREAKER}:default`),
+    ).toMatchObject({
+      failureCount: "1",
+      lastFailureTime: expect.any(String),
+      halfOpenAttempts: "1",
+    });
+  });
+
   test("works without Redis (in-memory fallback)", async () => {
     const cb = new CircuitBreaker({
       failureThreshold: 3,
@@ -129,6 +155,55 @@ describe("IdempotencyStore with Redis", () => {
     await store.markProcessed("key1", { status: "ok" });
     expect(await store.isProcessed("key1")).toBe(true);
     expect(await store.getResult("key1")).toEqual({ status: "ok" });
+  });
+
+  test("uses Redis hits and returns non-JSON cached values unchanged", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const store = new IdempotencyStore({
+      redis: redis as unknown as RedisClient,
+    });
+    await redis.set(`${COGITO_NS.IDEMPOTENCY}:raw`, "pending", {
+      type: "EX",
+      value: 60,
+    });
+
+    expect(await store.isProcessed("raw")).toBe(true);
+    expect(await store.getResult("raw")).toBe("pending");
+    expect(await store.getOrSet("raw", async () => "should not run")).toBe(
+      "pending",
+    );
+  });
+
+  test("evicts the oldest in-memory result when the store reaches its cap", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const store = new IdempotencyStore({ maxEntries: 1 });
+    await store.markProcessed("first", { result: 1 });
+    await store.markProcessed("second", { result: 2 });
+
+    expect(await store.getResult("first")).toBeUndefined();
+    expect(await store.getResult("second")).toEqual({ result: 2 });
+  });
+
+  test("falls through when a Redis cache entry disappears during the read", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const staleRedis = {
+      exists: mock(async () => 1),
+      get: mock(async () => null),
+      set: mock(async () => "OK" as const),
+    } as unknown as RedisClient;
+    const store = new IdempotencyStore({ redis: staleRedis });
+
+    expect(await store.getResult("expired")).toBeUndefined();
+    expect(await store.getOrSet("expired", async () => "fresh")).toBe("fresh");
+  });
+
+  test("expires an in-memory result after its retention window", async () => {
+    const { IdempotencyStore } = await import("../../lib/idempotency");
+    const store = new IdempotencyStore({ maxAgeMs: -1 });
+    await store.markProcessed("expired", { result: 1 });
+
+    expect(await store.isProcessed("expired")).toBe(false);
+    expect(await store.getResult("expired")).toBeUndefined();
   });
 
   test("falls back to in-memory when Redis fails", async () => {
