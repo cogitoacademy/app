@@ -3,7 +3,10 @@ import { createRouterClient } from "@orpc/server";
 
 import type { Context } from "../../context";
 import { createFaqHandler } from "../../modules/faq/faq.handler";
-import { FaqVersionConflictError } from "../../modules/faq/faq.errors";
+import {
+  FaqNotFoundError,
+  FaqVersionConflictError,
+} from "../../modules/faq/faq.errors";
 import type { FaqRepo, FaqRow } from "../../modules/faq/faq.repo";
 import { createFaqRouter } from "../../modules/faq/faq.router";
 import { createFaqService } from "../../modules/faq/faq.service";
@@ -282,6 +285,20 @@ describe("FAQ content", () => {
     expect(entry?.modifiedAt).toBe("2026-10-01T00:00:00.000Z");
   });
 
+  test("rejects invalid modification timestamps from the repository", async () => {
+    const service = createFaqService({
+      repo: makeRepo({
+        listAdmin: mock(async () => [
+          makeRow({ updatedAt: "invalid" as unknown as Date }),
+        ]),
+      }) as FaqRepo,
+    });
+
+    await expect(service.listAdmin()).rejects.toThrow(
+      "FAQ faq-1 has an invalid updatedAt value",
+    );
+  });
+
   test("sorts public entries alphabetically in the requested locale", async () => {
     const service = createFaqService({
       repo: makeRepo({
@@ -310,6 +327,23 @@ describe("FAQ content", () => {
     ]);
   });
 
+  test("uses stable IDs to order public entries with equal questions", async () => {
+    const service = createFaqService({
+      repo: makeRepo({
+        listPublic: mock(async () => [
+          makeRow({ id: "z", questionEn: "Same?" }),
+          makeRow({ id: "a", questionEn: "Same?" }),
+        ]),
+      }) as FaqRepo,
+    });
+
+    expect(
+      (await service.listPublic({ locale: "en", surface: "full" })).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["a", "z"]);
+  });
+
   test("uses an atomic expected-version update and reports stale edits", async () => {
     const input = updateFaqInput.parse({
       id: "faq-1",
@@ -334,6 +368,24 @@ describe("FAQ content", () => {
       expect.objectContaining({ questionEn: "Updated question" }),
     );
     expect(findById).toHaveBeenCalledWith("faq-1");
+  });
+
+  test("reports deletion between an update attempt and version lookup", async () => {
+    const input = updateFaqInput.parse({
+      id: "faq-1",
+      expectedVersion: 1,
+      ...validInput(),
+    });
+    const service = createFaqService({
+      repo: makeRepo({
+        updateIfVersion: mock(async () => undefined),
+        findById: mock(async () => undefined),
+      }) as FaqRepo,
+    });
+
+    await expect(service.update(input)).rejects.toBeInstanceOf(
+      FaqNotFoundError,
+    );
   });
 
   test("allows anonymous public reads and keeps admin writes protected", async () => {
