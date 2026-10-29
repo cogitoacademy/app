@@ -91,6 +91,7 @@ test.each([
   "missing-session",
   "stale-session-version",
   "session-not-upcoming",
+  "session-started",
   "session-has-report",
 ] as const)("session cancellation preview rejects %s", async (scenario) => {
   const service = fixture({
@@ -114,7 +115,9 @@ test.each([
             startAt:
               scenario === "session-not-upcoming"
                 ? new Date(now.getTime() - 1)
-                : new Date(now.getTime() + 60_000),
+                : scenario === "session-started"
+                  ? now
+                  : new Date(now.getTime() + 60_000),
             tutorId: "tutor1",
             sequenceNumber: 1,
           },
@@ -126,7 +129,8 @@ test.each([
       scenario === "missing-class" || scenario === "missing-session"
         ? "CLASS_ENROLLMENT_NOT_FOUND"
         : scenario === "unavailable-class" ||
-            scenario === "session-not-upcoming"
+            scenario === "session-not-upcoming" ||
+            scenario === "session-started"
           ? "CLASS_ENROLLMENT_INVALID_OPERATION"
           : "CLASS_ENROLLMENT_CONFLICT",
   });

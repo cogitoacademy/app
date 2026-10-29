@@ -90,6 +90,18 @@ describe("createRoomService", () => {
   });
 
   describe("listPendingApprovals", () => {
+    test("lists pending approvals with repository defaults", async () => {
+      const approvals = [{ bookingId: "default-page" }];
+      const findPendingRoomApprovals = mock(async (_conn) => approvals);
+      const service = createRoomService(
+        makeRepo({ findPendingRoomApprovals }),
+        makeDb(),
+      );
+
+      await expect(service.listPendingApprovals()).resolves.toEqual(approvals);
+      expect(findPendingRoomApprovals).toHaveBeenCalledWith(expect.anything());
+    });
+
     test("returns pending room approvals from repo", async () => {
       const approvals = [
         {

@@ -644,5 +644,14 @@ describe("legacy booking missing-report reminders", () => {
         },
       }),
     ).toBe("Review the ended booking before reporting.");
+    expect(
+      notificationEmailHtml({
+        body: "Review the ended booking before reporting.",
+        metadata: {
+          action: "booking-session-report",
+          actionUrl: "not a valid URL",
+        },
+      }),
+    ).toBe("Review the ended booking before reporting.");
   });
 });
