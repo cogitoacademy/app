@@ -33,8 +33,7 @@ export function calculateV3SessionPrice(
   if (!Object.hasOwn(config.competitionRates, competition)) {
     throw new RangeError("Unsupported competition");
   }
-  const rate = config.competitionRates[competition];
-  if (!rate) throw new RangeError("Unsupported competition");
+  const rate = config.competitionRates[competition]!;
   const offline = modality === "offline";
   const totalMarks =
     rate.soloMarks +
