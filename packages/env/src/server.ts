@@ -112,21 +112,20 @@ const serverShape = {
 export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
   // Shared test-mode UAT allowlist validation: whenever set, every entry must
   // be a valid email and the trimmed list must not be empty.
-  const validateSharedTestAllowedEmails = () => {
-    if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
-      const emails = val.PAYMENT_TEST_ALLOWED_EMAILS.split(",")
-        .map((email) => email.trim())
-        .filter(Boolean);
-      if (
-        emails.length === 0 ||
-        emails.some((email) => !z.string().email().safeParse(email).success)
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
-          message: "must be a comma-separated list of valid email addresses",
-        });
-      }
+  const validateSharedTestAllowedEmails = (value: string) => {
+    const emails = value
+      .split(",")
+      .map((email) => email.trim())
+      .filter(Boolean);
+    if (
+      emails.length === 0 ||
+      emails.some((email) => !z.string().email().safeParse(email).success)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
+        message: "must be a comma-separated list of valid email addresses",
+      });
     }
   };
 
@@ -176,7 +175,7 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
       });
     }
     if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
-      validateSharedTestAllowedEmails();
+      validateSharedTestAllowedEmails(val.PAYMENT_TEST_ALLOWED_EMAILS);
     }
   }
 

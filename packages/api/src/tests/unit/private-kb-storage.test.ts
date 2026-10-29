@@ -1,4 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
+import * as fsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -133,6 +134,25 @@ test("rejects local PDF reads through a symlink", async () => {
     });
     await expect(store.read(key)).rejects.toThrow("symlinks are forbidden");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rethrows unexpected local PDF write errors", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-write-error-"));
+  const writeError = Object.assign(new Error("synthetic disk failure"), {
+    code: "EIO",
+  });
+  const write = spyOn(fsPromises, "writeFile").mockRejectedValue(writeError);
+  try {
+    const store = createPrivateKbStorage({
+      KB_PRIVATE_DIR: join(root, "private"),
+      UPLOAD_DIR: join(root, "public"),
+    });
+
+    await expect(store.put(key, pdf)).rejects.toBe(writeError);
+  } finally {
+    write.mockRestore();
     await rm(root, { recursive: true, force: true });
   }
 });

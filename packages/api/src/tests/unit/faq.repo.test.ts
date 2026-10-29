@@ -76,4 +76,32 @@ describe("FAQ repository empty database results", () => {
       } as any),
     ).rejects.toBeInstanceOf(FaqLandingLimitError);
   });
+
+  test("rejects an update that would exceed the landing FAQ limit", async () => {
+    const selections = [
+      [{ version: 1 }],
+      Array.from({ length: FAQ_LANDING_MAX_ITEMS }, (_, index) => ({
+        id: `faq-${index}`,
+      })),
+    ];
+    const tx = {
+      execute: async () => undefined,
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => selections.shift() }),
+        }),
+      }),
+    };
+    const db = {
+      transaction: async (fn: (transaction: unknown) => unknown) => fn(tx),
+    };
+    const repo = createFaqRepo(db as any);
+
+    await expect(
+      repo.updateIfVersion("faq-current", 1, {
+        isActive: true,
+        showOnLanding: true,
+      }),
+    ).rejects.toBeInstanceOf(FaqLandingLimitError);
+  });
 });

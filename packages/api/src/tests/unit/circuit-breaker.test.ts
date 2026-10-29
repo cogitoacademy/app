@@ -120,4 +120,26 @@ describe("CircuitBreaker", () => {
     ).rejects.toThrow("fail");
     expect(monitor).toHaveBeenCalledTimes(1);
   });
+
+  test("continues with local state when Redis state loading fails", async () => {
+    const cb = new CircuitBreaker({
+      failureThreshold: 1,
+      resetTimeoutMs: 5000,
+      halfOpenMaxAttempts: 1,
+      redis: {
+        hgetall: async () => {
+          throw new Error("Redis unavailable");
+        },
+        hset: async () => {
+          throw new Error("Redis unavailable");
+        },
+        expire: async () => {
+          throw new Error("Redis unavailable");
+        },
+      } as never,
+    });
+
+    await expect(cb.execute(async () => "ok")).resolves.toBe("ok");
+    expect(cb.getState()).toBe("closed");
+  });
 });

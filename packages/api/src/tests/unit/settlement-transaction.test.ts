@@ -36,4 +36,32 @@ describe("settlement transaction retry", () => {
       expect(attempts).toBe(code === "40P01" ? 3 : 1);
     }
   });
+
+  test("does not retry a non-deadlock wrapped beyond the inspection limit", async () => {
+    const error = {
+      cause: {
+        cause: {
+          cause: {
+            cause: {
+              cause: Object.assign(new Error("unique violation"), {
+                code: "23505",
+              }),
+            },
+          },
+        },
+      },
+    };
+    let attempts = 0;
+    const db = {
+      transaction: async () => {
+        attempts += 1;
+        throw error;
+      },
+    } as unknown as DbType;
+
+    await expect(settlementTransaction(db, async () => undefined)).rejects.toBe(
+      error,
+    );
+    expect(attempts).toBe(1);
+  });
 });
