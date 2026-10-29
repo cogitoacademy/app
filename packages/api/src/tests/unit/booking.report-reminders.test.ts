@@ -352,7 +352,270 @@ function makeProcessor(
   });
 }
 
+function makeTransactionDb(resultSets: unknown[][]): DbType {
+  const tx = {
+    select: () => {
+      const result = resultSets.shift() ?? [];
+      const query = {
+        from: () => query,
+        where: () => query,
+        for: async () => result,
+        limit: async () => result,
+      };
+      return query;
+    },
+  };
+  return {
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+      callback(tx),
+  } as never;
+}
+
+function makeProductionCandidate(
+  overrides: Partial<LegacyBookingReportReminderCandidate> = {},
+): LegacyBookingReportReminderCandidate {
+  const scheduledStartAt = new Date("2026-10-20T02:00:00.000Z");
+  const scheduledEndAt = new Date("2026-10-20T03:00:00.000Z");
+  return {
+    bookingId: "booking-1",
+    bookingType: "solo",
+    tutorId: "tutor-1",
+    sessionId: null,
+    scheduledStartAt,
+    scheduledEndAt,
+    scheduledStartAtEpoch: epochSeconds(scheduledStartAt),
+    scheduledEndAtEpoch: epochSeconds(scheduledEndAt),
+    reminderPeriod: 0,
+    cursorScheduledEndAt: scheduledEndAt,
+    ...overrides,
+  };
+}
+
 describe("legacy booking missing-report reminders", () => {
+  test.each([-1, 0.5])(
+    "skips invalid reminder period %s before attempting a write",
+    async (reminderPeriod) => {
+      const candidate = makeProductionCandidate({ reminderPeriod });
+      let writeAttempts = 0;
+      const repo: BookingReportReminderRepo = {
+        findDue: async () => [candidate],
+        writeIfPending: async () => {
+          writeAttempts += 1;
+          return true;
+        },
+      };
+      const processor = makeProcessor(
+        repo,
+        { write: async () => undefined },
+        () => new Date("2026-10-21T03:00:00.000Z"),
+      );
+
+      await expect(processor.processPendingReportReminders()).resolves.toEqual({
+        checked: 1,
+        queued: 0,
+        skipped: 1,
+        failed: 0,
+      });
+      expect(writeAttempts).toBe(0);
+    },
+  );
+
+  test("writeIfPending rejects a series candidate without a session id", async () => {
+    const candidate = makeProductionCandidate({
+      bookingType: "series",
+      sessionId: null,
+    });
+    const bookingRow = {
+      id: candidate.bookingId,
+      type: candidate.bookingType,
+      tutorId: candidate.tutorId,
+      currentState: "scheduled",
+      completedAt: null,
+      scheduledStartAtEpoch: candidate.scheduledStartAtEpoch,
+      scheduledEndAtEpoch: candidate.scheduledEndAtEpoch,
+      reminderPeriod: candidate.reminderPeriod,
+    };
+    const repo = createBookingReportReminderRepo();
+
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([[bookingRow]]),
+        candidate,
+        new Date("2026-10-21T03:00:00.000Z"),
+        bookingReportReminderEventKey(
+          candidate.bookingId,
+          candidate.sessionId,
+          candidate.reminderPeriod,
+        ),
+        async () => {
+          throw new Error("The missing session must not be written");
+        },
+      ),
+    ).resolves.toBe(false);
+  });
+
+  test("writeIfPending rejects a single booking candidate with a session id", async () => {
+    const candidate = makeProductionCandidate({
+      sessionId: "unexpected-session",
+    });
+    const bookingRow = {
+      id: candidate.bookingId,
+      type: candidate.bookingType,
+      tutorId: candidate.tutorId,
+      currentState: "scheduled",
+      completedAt: null,
+      scheduledStartAtEpoch: candidate.scheduledStartAtEpoch,
+      scheduledEndAtEpoch: candidate.scheduledEndAtEpoch,
+      reminderPeriod: candidate.reminderPeriod,
+    };
+    const repo = createBookingReportReminderRepo();
+
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([[bookingRow]]),
+        candidate,
+        new Date("2026-10-21T03:00:00.000Z"),
+        bookingReportReminderEventKey(
+          candidate.bookingId,
+          candidate.sessionId,
+          candidate.reminderPeriod,
+        ),
+        async () => {
+          throw new Error("A mismatched session must not be written");
+        },
+      ),
+    ).resolves.toBe(false);
+  });
+
+  test.each([
+    ["missing", []],
+    [
+      "cancelled",
+      [
+        {
+          id: "session-1",
+          currentState: "cancelled",
+          completedAt: null,
+          scheduledStartAtEpoch: epochSeconds(
+            new Date("2026-10-20T02:00:00.000Z"),
+          ),
+          scheduledEndAtEpoch: epochSeconds(
+            new Date("2026-10-20T03:00:00.000Z"),
+          ),
+          reminderPeriod: 0,
+        },
+      ],
+    ],
+    [
+      "completed",
+      [
+        {
+          id: "session-1",
+          currentState: "scheduled",
+          completedAt: new Date("2026-10-21T02:00:00.000Z"),
+          scheduledStartAtEpoch: epochSeconds(
+            new Date("2026-10-20T02:00:00.000Z"),
+          ),
+          scheduledEndAtEpoch: epochSeconds(
+            new Date("2026-10-20T03:00:00.000Z"),
+          ),
+          reminderPeriod: 0,
+        },
+      ],
+    ],
+  ] as const)(
+    "writeIfPending rejects a %s series session",
+    async (_, sessionRows) => {
+      const candidate = makeProductionCandidate({
+        bookingType: "series",
+        sessionId: "session-1",
+      });
+      const bookingRow = {
+        id: candidate.bookingId,
+        type: candidate.bookingType,
+        tutorId: candidate.tutorId,
+        currentState: "scheduled",
+        completedAt: null,
+        scheduledStartAtEpoch: candidate.scheduledStartAtEpoch,
+        scheduledEndAtEpoch: candidate.scheduledEndAtEpoch,
+        reminderPeriod: candidate.reminderPeriod,
+      };
+      const repo = createBookingReportReminderRepo();
+
+      await expect(
+        repo.writeIfPending(
+          makeTransactionDb([[bookingRow], [...sessionRows]]),
+          candidate,
+          new Date("2026-10-21T03:00:00.000Z"),
+          bookingReportReminderEventKey(
+            candidate.bookingId,
+            candidate.sessionId,
+            candidate.reminderPeriod,
+          ),
+          async () => {
+            throw new Error("An invalid session must not be written");
+          },
+        ),
+      ).resolves.toBe(false);
+    },
+  );
+
+  test("writeIfPending allows one valid series reminder and skips an existing report", async () => {
+    const candidate = makeProductionCandidate({
+      bookingType: "series",
+      sessionId: "session-1",
+    });
+    const bookingRow = {
+      id: candidate.bookingId,
+      type: candidate.bookingType,
+      tutorId: candidate.tutorId,
+      currentState: "scheduled",
+      completedAt: null,
+      scheduledStartAtEpoch: candidate.scheduledStartAtEpoch,
+      scheduledEndAtEpoch: candidate.scheduledEndAtEpoch,
+      reminderPeriod: candidate.reminderPeriod,
+    };
+    const sessionRow = {
+      id: candidate.sessionId,
+      currentState: "scheduled",
+      completedAt: null,
+      scheduledStartAtEpoch: candidate.scheduledStartAtEpoch,
+      scheduledEndAtEpoch: candidate.scheduledEndAtEpoch,
+      reminderPeriod: candidate.reminderPeriod,
+    };
+    const repo = createBookingReportReminderRepo();
+    let writeCount = 0;
+    const eventKey = bookingReportReminderEventKey(
+      candidate.bookingId,
+      candidate.sessionId,
+      candidate.reminderPeriod,
+    );
+
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([[bookingRow], [sessionRow], [], []]),
+        candidate,
+        new Date("2026-10-21T03:00:00.000Z"),
+        eventKey,
+        async () => {
+          writeCount += 1;
+        },
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([[bookingRow], [sessionRow], [{ id: "report-1" }]]),
+        candidate,
+        new Date("2026-10-21T03:00:00.000Z"),
+        eventKey,
+        async () => {
+          writeCount += 1;
+        },
+      ),
+    ).resolves.toBe(false);
+    expect(writeCount).toBe(1);
+  });
+
   test("starts at session end and repeats on 24-hour elapsed boundaries", () => {
     const endAt = new Date("2026-10-21T03:00:00.000Z");
     expect(datePeriodForTest(endAt, new Date(endAt.getTime() - 1))).toBe(null);

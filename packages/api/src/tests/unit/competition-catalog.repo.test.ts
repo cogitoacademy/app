@@ -117,7 +117,19 @@ test("catalog listing hides inactive entries unless archived entries are request
   await expect(
     listCompetitionCatalog(fixture.connection, { includeArchived: true }),
   ).resolves.toHaveLength(4);
-  expect(fixture.catalogReads).toBe(2);
+  await expect(
+    listCompetitionCatalog(fixture.connection, {
+      includeArchived: true,
+      query: "active child",
+    }),
+  ).resolves.toMatchObject([{ id: "active-child" }]);
+  await expect(
+    listCompetitionCatalog(fixture.connection, {
+      includeArchived: false,
+      query: "missing",
+    }),
+  ).resolves.toEqual([]);
+  expect(fixture.catalogReads).toBe(4);
 });
 
 test("catalog references return early when empty and query either reference kind", async () => {
@@ -194,6 +206,36 @@ test("catalog updates include supplied fields and return null for stale mutation
   ).resolves.toBeNull();
 });
 
+test("catalog activation, movement, and deletion return changed rows", async () => {
+  const activeRow = { id: "entry-1", isActive: true, version: 3 };
+  const movedRow = { id: "entry-1", parentId: "parent-1", version: 4 };
+  const deletedRow = { id: "entry-1", version: 5 };
+  const fixture = connectionFixture({
+    mutationResults: [[activeRow], [movedRow], [deletedRow]],
+  });
+
+  await expect(
+    setCompetitionCatalogEntryActive(fixture.connection, {
+      id: "entry-1",
+      expectedVersion: 2,
+      isActive: true,
+    }),
+  ).resolves.toEqual(activeRow);
+  await expect(
+    moveCompetitionSpecialization(
+      fixture.connection,
+      { id: "entry-1", parentId: "parent-1", expectedVersion: 3 },
+      true,
+    ),
+  ).resolves.toEqual(movedRow);
+  await expect(
+    deleteCompetitionCatalogEntry(fixture.connection, {
+      id: "entry-1",
+      expectedVersion: 4,
+    }),
+  ).resolves.toEqual(deletedRow);
+});
+
 test("reference counts short-circuit empty entries and handle absent and calendar counts", async () => {
   const emptyFixture = connectionFixture();
   await expect(
@@ -210,7 +252,10 @@ test("reference counts short-circuit empty entries and handle absent and calenda
   });
   expect(emptyFixture.selectCalls).toBe(0);
 
-  const entry = [{ id: "entry-1", slug: "english" }];
+  const entry = [
+    { id: "entry-1", slug: "english" },
+    { id: "entry-2", slug: "competition-debate" },
+  ];
   const defaultFixture = connectionFixture({
     queryResults: [
       [],
@@ -230,6 +275,7 @@ test("reference counts short-circuit empty entries and handle absent and calenda
     bookings: 4,
     economyRevisions: 5,
     bookingSessions: 6,
+    defaultRates: 1,
     calendarEvents: 0,
   });
   expect(defaultFixture.selectCalls).toBe(6);
