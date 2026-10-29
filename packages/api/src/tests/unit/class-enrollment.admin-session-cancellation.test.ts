@@ -149,3 +149,21 @@ test("a postponed class can preview cancellation of an upcoming session", async 
     releasedAllocationIds: [],
   });
 });
+
+test("confirmation rejects a quote that changed after preview", async () => {
+  const service = fixture();
+  const quote = await service.preview("admin1", input);
+
+  await expect(
+    service.confirm("admin1", {
+      ...input,
+      requestKey: "66adbbbc-34e2-4b3f-9f56-a48aa14edc04",
+      quoteVersion: "f".repeat(64),
+    }),
+  ).rejects.toMatchObject({
+    code: "CLASS_ENROLLMENT_CONFLICT",
+    message:
+      "Session cancellation amounts or enrollment payments changed; review a fresh quote",
+  });
+  expect(quote.quoteVersion).not.toBe("f".repeat(64));
+});
