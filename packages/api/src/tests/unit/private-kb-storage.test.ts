@@ -1,4 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   GetObjectCommand,
   PutObjectCommand,
@@ -102,4 +105,34 @@ test("defaults to separate development directories without creating them", () =>
 
   expect(store.put).toBeTypeOf("function");
   expect(store.read).toBeTypeOf("function");
+});
+
+test("rejects local PDF reads through a symlink", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-symlink-"));
+  const privateDir = join(root, "private");
+  const targetPath = join(root, "outside.pdf");
+  const keyPath = join(privateDir, key);
+  try {
+    await mkdir(privateDir);
+    await writeFile(targetPath, pdf);
+    try {
+      await symlink(targetPath, keyPath);
+    } catch (error) {
+      if (
+        process.platform === "win32" &&
+        (error as NodeJS.ErrnoException).code === "EPERM"
+      ) {
+        return;
+      }
+      throw error;
+    }
+
+    const store = createPrivateKbStorage({
+      KB_PRIVATE_DIR: privateDir,
+      UPLOAD_DIR: join(root, "public"),
+    });
+    await expect(store.read(key)).rejects.toThrow("symlinks are forbidden");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

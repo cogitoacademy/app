@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getById,
+  getListItemById,
   remove,
   updateDetails,
 } from "../../modules/admin-knowledge-bank/admin-knowledge-bank.repo";
@@ -17,6 +18,22 @@ describe("admin knowledge-bank repository", () => {
     };
 
     await expect(getById(conn as any, "missing-grant")).resolves.toBeNull();
+  });
+
+  test("returns null when the joined grant lookup finds no row", async () => {
+    const conn = {
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({ limit: async () => [] }),
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      getListItemById(conn as any, "missing-grant"),
+    ).resolves.toBeNull();
   });
 
   test("returns null when an update finds no grant", async () => {
