@@ -1613,6 +1613,81 @@ describe("PaymentService", () => {
       ).rejects.toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
     });
 
+    test.each(["missing-amount", "missing-currency"] as const)(
+      "Midtrans refund status rejects %s",
+      async (scenario) => {
+        const repo = makeRepo({
+          findPaymentByProviderReference: mock(async () => ({
+            id: "pay1",
+            status: PAYMENT_STATUS.PAID,
+            provider: "midtrans",
+            amountIdr: 50000,
+            providerReference: "midtrans:user1:pkg1",
+          })),
+        });
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: makeWallet() as any,
+          repo,
+          provider: makeProvider() as any,
+          providerName: "midtrans",
+        });
+        const { amountIdr, currency } = {
+          amountIdr: scenario === "missing-amount" ? undefined : 50000,
+          currency: scenario === "missing-currency" ? undefined : "IDR",
+        };
+
+        await expect(
+          service.confirmFromWebhook({
+            provider: "midtrans",
+            providerReference: "midtrans:user1:pkg1",
+            status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+            amountIdr,
+            currency,
+          }),
+        ).rejects.toMatchObject({
+          code: "PAYMENT_WEBHOOK_MISMATCH",
+          message: "Payment refund status is missing its amount or currency",
+        });
+      },
+    );
+
+    test.each([1.5, 50001])(
+      "rejects a refund amount outside the charge: %s",
+      async (refundAmountIdr) => {
+        const repo = makeRepo({
+          findPaymentByProviderReference: mock(async () => ({
+            id: "pay1",
+            status: PAYMENT_STATUS.PAID,
+            provider: "midtrans",
+            amountIdr: 50000,
+            providerReference: "midtrans:user1:pkg1",
+          })),
+        });
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: makeWallet() as any,
+          repo,
+          provider: makeProvider() as any,
+          providerName: "midtrans",
+        });
+
+        await expect(
+          service.confirmFromWebhook({
+            provider: "midtrans",
+            providerReference: "midtrans:user1:pkg1",
+            status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+            amountIdr: 50000,
+            refundAmountIdr,
+            currency: "IDR",
+          }),
+        ).rejects.toMatchObject({
+          code: "PAYMENT_WEBHOOK_MISMATCH",
+          message: "Payment refund amount mismatch",
+        });
+      },
+    );
+
     test("amount mismatch error carries expected/received amounts for diagnosis", async () => {
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => ({
