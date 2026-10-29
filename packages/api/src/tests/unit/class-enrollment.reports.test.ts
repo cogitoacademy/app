@@ -29,7 +29,9 @@ const reportSession = {
 function reportServiceFixture(
   rows: unknown[][],
   savedReports: unknown[][] = [],
-  referralPort?: { recordEligibleFirstCompletion: (...args: unknown[]) => void },
+  referralPort?: {
+    recordEligibleFirstCompletion: (...args: unknown[]) => void;
+  },
 ) {
   const tx = {
     select: () => {
@@ -139,9 +141,7 @@ test.each([
   if (hasReport) rows.push([{ id: "report-1", version: 1 }]);
   else rows.push([]);
   if (hasAllocation) {
-    rows.push([
-      allocation("allocation-1", "funded", { rate: 10, funded: 10 }),
-    ]);
+    rows.push([allocation("allocation-1", "funded", { rate: 10, funded: 10 })]);
     rows.push([]);
   } else {
     rows.push([]);
@@ -159,9 +159,7 @@ test.each([
     feedback: TEST_COMPLETION_FEEDBACK,
   });
   await expect(pending).rejects.toBeInstanceOf(
-    ["missing-class", "missing-session", "foreign-session"].includes(
-      scenario,
-    )
+    ["missing-class", "missing-session", "foreign-session"].includes(scenario)
       ? ClassEnrollmentNotFoundError
       : [
             "delivery-unconfirmed",
@@ -208,14 +206,14 @@ test("a first funded report records referral eligibility", async () => {
   );
 
   const result = await service.submitSessionReport("admin-1", "admin", {
-      classId: reportClass.id,
-      sessionId: reportSession.id,
-      requestKey: crypto.randomUUID(),
-      expectedVersion: 0,
-      deliveryConfirmed: true,
-      adminReason: "Report delivered",
-      feedback: TEST_COMPLETION_FEEDBACK,
-    });
+    classId: reportClass.id,
+    sessionId: reportSession.id,
+    requestKey: crypto.randomUUID(),
+    expectedVersion: 0,
+    deliveryConfirmed: true,
+    adminReason: "Report delivered",
+    feedback: TEST_COMPLETION_FEEDBACK,
+  });
   expect(result).toMatchObject({ id: savedReport.id, version: 1 });
   expect(referralCalls).toHaveLength(1);
 });
