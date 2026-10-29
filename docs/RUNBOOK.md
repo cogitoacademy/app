@@ -4474,3 +4474,7 @@ This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vi
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+### Academy capacity policy (2026-10-29)
+
+Academy capacity changes require no migration or environment change. Restart the API to load updated draft/publish validation. For acceptance, save and publish online and in-person sessions above the assigned tutor private teaching limit; keep in-person capacity within the room limit and confirm schedule conflicts still fail.

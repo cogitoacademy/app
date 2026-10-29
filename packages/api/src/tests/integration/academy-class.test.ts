@@ -123,8 +123,9 @@ describe("academy class drafts and published reads", () => {
       inviteId: invite.id,
       onboardingStatus: "published",
       modality: "both",
-      onlineMaxClassSize: 6,
-      offlineMaxClassSize: 6,
+      // Academy session capacities intentionally exceed private teaching limits.
+      onlineMaxClassSize: 1,
+      offlineMaxClassSize: 1,
     });
 
     const competition = await db.query.subjectCategory.findFirst({
@@ -251,6 +252,63 @@ describe("academy class drafts and published reads", () => {
       }),
     ).rejects.toThrow("changed in another admin session");
   });
+
+  for (const mode of ["online", "in_person"] as const) {
+    test(`saves and publishes a ${mode} masterclass above private tutor capacity`, async () => {
+      await db
+        .update(tutorProfile)
+        .set({ onlineMaxClassSize: 2, offlineMaxClassSize: 2 })
+        .where(eq(tutorProfile.userId, tutorId));
+      const draft = await adminClient.admin.saveAcademyClassDraft({
+        kind: "masterclass",
+        competitionId,
+        titleEn: `Academy capacity regression ${mode}`,
+        descriptionEn:
+          "Cogito sets capacity independently of private bookings.",
+        tutorFeeIdr: 300_000,
+        masterclassRateMarks: 5,
+        reason:
+          "Verify Academy capacity is independent of private teaching limits",
+        sessions: [
+          {
+            capacity: 5,
+            titleEn: "Capacity regression",
+            startAt:
+              mode === "online"
+                ? "2037-01-05T10:00:00.000Z"
+                : "2037-01-06T10:00:00.000Z",
+            endAt:
+              mode === "online"
+                ? "2037-01-05T11:00:00.000Z"
+                : "2037-01-06T11:00:00.000Z",
+            mode,
+            roomId: mode === "in_person" ? roomId : null,
+            tutorId,
+          },
+        ],
+      });
+      expect(draft.state).toBe("draft");
+      expect(draft.sessions[0]?.capacity).toBe(5);
+
+      // The profile may change after draft creation; publish must not reapply
+      // private capacity limits when it rereads the tutor under its lock.
+      await db
+        .update(tutorProfile)
+        .set({
+          onlineMaxClassSize: 1,
+          offlineMaxClassSize: 1,
+        })
+        .where(eq(tutorProfile.userId, tutorId));
+      const published = await adminClient.admin.publishAcademyClass({
+        id: draft.id,
+        expectedVersion: draft.version,
+        reason: "Publish above private teaching capacity",
+      });
+      expect(published.state).toBe("published");
+      expect(published.sessions[0]?.capacity).toBe(5);
+      expect(published.sessions[0]?.mode).toBe(mode);
+    });
+  }
 
   test("rejects session capacity above an active room's capacity", async () => {
     const before = await db.select().from(academyClass);

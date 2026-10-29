@@ -1497,3 +1497,7 @@ Ready to start after normal implementation review: default price golden tables, 
 ## Documentation and evidence per PR
 
 Update affected `docs/CONTEXT.md`, `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/RUNBOOK.md`, and this active plan with actual behavior/status. Do not publish proposed RPCs as implemented reference. API docs must use actual slash-separated oRPC keys and JSON envelopes. For each task record implementation PR/commit, requirement/case IDs passed, exact test command/environment, migration effects and unresolved material dependency. No credentials, NIK/NPWP or real student report data in evidence artifacts.
+
+### Academy capacity policy (2026-10-29)
+
+Implemented Academy capacity independence from private tutor teaching limits in draft save and publication. Integration fixtures use private limits of one with larger Academy sessions for both delivery modes. The previous integration run passed 11 tests; the continuation rerun on 2026-10-29 could not connect to the local test database at 127.0.0.1:6769. Room, schedule, and enrollment guards are retained.

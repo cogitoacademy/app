@@ -230,16 +230,6 @@ export function createAcademyClassService(deps: {
           { session: index + 1, tutorId: session.tutorId },
         );
       }
-      const maxClassSize =
-        session.mode === "online"
-          ? profile.onlineMaxClassSize
-          : profile.offlineMaxClassSize;
-      if (session.capacity > maxClassSize) {
-        throw new AcademyClassInvalidOperationError(
-          "Session capacity exceeds the tutor's maximum class size",
-          { session: index + 1, maximum: maxClassSize },
-        );
-      }
       if (
         session.tutorFeeIdr < 1 ||
         session.tutorFeeIdr !== record.tutorFeeIdr
@@ -449,16 +439,6 @@ export function createAcademyClassService(deps: {
         throw new AcademyClassInvalidOperationError(
           "The assigned tutor does not support this session mode",
           { session: index + 1, tutorId: session.tutorId },
-        );
-      }
-      const maxClassSize =
-        session.mode === "online"
-          ? profile.onlineMaxClassSize
-          : profile.offlineMaxClassSize;
-      if (session.capacity > maxClassSize) {
-        throw new AcademyClassInvalidOperationError(
-          "Session capacity exceeds the tutor's maximum class size",
-          { session: index + 1, maximum: maxClassSize },
         );
       }
     }
