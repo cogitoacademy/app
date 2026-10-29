@@ -3,6 +3,8 @@ import {
   findPackageByCode,
   findPaymentByProviderReference,
   findLatestPaymentByUserAndPackage,
+  findTopUpQuoteById,
+  insertTopUpQuote,
   findPaymentById,
   findPaymentByProviderEventId,
   findPaymentsForReconciliation,
@@ -13,7 +15,15 @@ import {
 
 function makeQueryChain(resolvedValue: any) {
   const chain: any = {};
-  const methods = ["from", "innerJoin", "where", "limit", "offset", "orderBy"];
+  const methods = [
+    "from",
+    "innerJoin",
+    "where",
+    "limit",
+    "offset",
+    "orderBy",
+    "for",
+  ];
   const promise = Promise.resolve(resolvedValue);
 
   for (const method of methods) {
@@ -54,6 +64,64 @@ describe("findPackageByCode", () => {
     const result = await findPackageByCode(conn, "missing");
 
     expect(result).toBeNull();
+  });
+
+  test("locks the matching provider reference when requested", async () => {
+    const row = { id: "p2", providerReference: "ref-2" };
+    const { select, chain } = makeSelectConn([row]);
+    const result = await findPaymentByProviderReference(
+      { select } as any,
+      "ref-2",
+      true,
+    );
+    expect(result).toEqual(row);
+    expect(chain.for).toHaveBeenCalledWith("update");
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("findTopUpQuoteById", () => {
+  test("uses an update lock when requested and returns null when unavailable", async () => {
+    const quote = { id: "quote1", userId: "u1" };
+    const locked = makeSelectConn([quote]);
+    await expect(
+      findTopUpQuoteById(
+        { select: locked.select } as any,
+        "u1",
+        "quote1",
+        true,
+      ),
+    ).resolves.toEqual(quote);
+    expect(locked.chain.for).toHaveBeenCalledWith("update");
+
+    await expect(
+      findTopUpQuoteById(
+        { select: makeSelectConn([]).select } as any,
+        "u1",
+        "absent",
+      ),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("insertTopUpQuote", () => {
+  test("returns the inserted quote or null when the request key already exists", async () => {
+    for (const rows of [[{ id: "quote1" }], []]) {
+      const returning = mock(async () => rows);
+      const onConflictDoNothing = mock(() => ({ returning }));
+      const values = mock(() => ({ onConflictDoNothing }));
+      const insert = mock(() => ({ values }));
+      const result = await insertTopUpQuote(
+        { insert } as any,
+        {
+          id: "quote1",
+          userId: "u1",
+          requestKey: "request1",
+        } as any,
+      );
+      expect(result).toEqual(rows[0] ?? null);
+      expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
