@@ -275,3 +275,18 @@ test("markInstallmentDefaulted rejects an installment without reserved seats", a
     ),
   ).rejects.toThrow("Unpaid installment must own only unfunded reserved seats");
 });
+
+test("markInstallmentDefaulted releases its unfunded seats", async () => {
+  const repo = createClassEnrollmentRepo();
+
+  await expect(
+    repo.markInstallmentDefaulted(
+      connection(
+        [[reservedAllocation({ state: "unfunded_reserved" })]],
+        [[{ id: "installment-1" }], [{ id: "allocation-1" }]],
+      ),
+      "installment-1",
+      now,
+    ),
+  ).resolves.toBe(true);
+});
