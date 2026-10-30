@@ -2,7 +2,6 @@
 
 import Loader from "@/components/loader";
 
-
 import type { CogitoUser } from "@cogito-app/auth";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";

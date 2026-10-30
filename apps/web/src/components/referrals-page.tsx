@@ -2,7 +2,6 @@
 
 import Loader from "@/components/loader";
 
-
 import { IconCopy, IconUsers } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {

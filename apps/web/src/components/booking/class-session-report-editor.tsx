@@ -129,7 +129,9 @@ export function ClassSessionReportEditor({
   const submitReport = useMutation(
     orpc.classes.submitSessionReport.mutationOptions(),
   );
-  const reportAbsence = useMutation(orpc.admin.reportTutorAbsence.mutationOptions());
+  const reportAbsence = useMutation(
+    orpc.admin.reportTutorAbsence.mutationOptions(),
+  );
   const rows = reportsQuery.data ?? [];
   const [drafts, setDrafts] = useState<Record<string, ReportDraft>>({});
   const [baseVersions, setBaseVersions] = useState<Record<string, number>>({});
@@ -141,7 +143,9 @@ export function ClassSessionReportEditor({
     null,
   );
   const [absenceReason, setAbsenceReason] = useState("");
-  const [absenceRequestKeys, setAbsenceRequestKeys] = useState<Record<string, string>>({});
+  const [absenceRequestKeys, setAbsenceRequestKeys] = useState<
+    Record<string, string>
+  >({});
 
   if (reportsQuery.isPending) return <Loader />;
   const selectedRow = rows.find((row) => row.sessionId === sessionId);
@@ -354,35 +358,92 @@ export function ClassSessionReportEditor({
               </Badge>
             </CardHeader>
             <CardBody className="space-y-4">
-              {role === "tutor" && selectedRow.tutorId === auth.data?.user.id && selectedRow.state === "scheduled" && !selectedRow.absenceReportedAt ? (
-                <form className="space-y-3 border-b border-border pb-4" onSubmit={async (event) => {
-                  event.preventDefault();
-                  const reason = absenceReason.trim();
-                  if (reason.length < 3) return;
-                  try {
-                    const requestKey = absenceRequestKeys[selectedRow.sessionId] ?? crypto.randomUUID();
-                    setAbsenceRequestKeys((current) => ({ ...current, [selectedRow.sessionId]: requestKey }));
-                    await reportAbsence.mutateAsync({ sessionId: selectedRow.sessionId, requestKey, reason });
-                    setAbsenceReason("");
-                    setAbsenceRequestKeys((current) => { const next = { ...current }; delete next[selectedRow.sessionId]; return next; });
-                    await queryClient.invalidateQueries({ queryKey: orpc.classes.listSessionReports.key() });
-                    toastManager.add({ title: "Absence notice recorded", type: "success" });
-                  } catch (error) {
-                    toastManager.add({ title: "Absence notice could not be recorded", description: getUserFacingError(error), type: "error" });
-                  }
-                }}>
+              {role === "tutor" &&
+              selectedRow.tutorId === auth.data?.user.id &&
+              selectedRow.state === "scheduled" &&
+              !selectedRow.absenceReportedAt ? (
+                <form
+                  className="space-y-3 border-b border-border pb-4"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    const reason = absenceReason.trim();
+                    if (reason.length < 3) return;
+                    try {
+                      const requestKey =
+                        absenceRequestKeys[selectedRow.sessionId] ??
+                        crypto.randomUUID();
+                      setAbsenceRequestKeys((current) => ({
+                        ...current,
+                        [selectedRow.sessionId]: requestKey,
+                      }));
+                      await reportAbsence.mutateAsync({
+                        sessionId: selectedRow.sessionId,
+                        requestKey,
+                        reason,
+                      });
+                      setAbsenceReason("");
+                      setAbsenceRequestKeys((current) => {
+                        const next = { ...current };
+                        delete next[selectedRow.sessionId];
+                        return next;
+                      });
+                      await queryClient.invalidateQueries({
+                        queryKey: orpc.classes.listSessionReports.key(),
+                      });
+                      toastManager.add({
+                        title: "Absence notice recorded",
+                        type: "success",
+                      });
+                    } catch (error) {
+                      toastManager.add({
+                        title: "Absence notice could not be recorded",
+                        description: getUserFacingError(error),
+                        type: "error",
+                      });
+                    }
+                  }}
+                >
                   <Text className="font-medium">Report tutor absence</Text>
                   <Field>
-                    <FieldLabel htmlFor={`absence-reason-${selectedRow.sessionId}`}>Reason</FieldLabel>
-                    <Input id={`absence-reason-${selectedRow.sessionId}`} value={absenceReason} onChange={(event) => setAbsenceReason(event.target.value)} maxLength={1000} required />
-                    <FieldDescription>Submitted notices include the server time. Notices within 24 hours of session start are marked late.</FieldDescription>
+                    <FieldLabel
+                      htmlFor={`absence-reason-${selectedRow.sessionId}`}
+                    >
+                      Reason
+                    </FieldLabel>
+                    <Input
+                      id={`absence-reason-${selectedRow.sessionId}`}
+                      value={absenceReason}
+                      onChange={(event) => setAbsenceReason(event.target.value)}
+                      maxLength={1000}
+                      required
+                    />
+                    <FieldDescription>
+                      Submitted notices include the server time. Notices within
+                      24 hours of session start are marked late.
+                    </FieldDescription>
                   </Field>
-                  <Button type="submit" variant="secondary" disabled={absenceReason.trim().length < 3 || reportAbsence.isPending}>Report absence</Button>
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    disabled={
+                      absenceReason.trim().length < 3 || reportAbsence.isPending
+                    }
+                  >
+                    Report absence
+                  </Button>
                 </form>
               ) : selectedRow.absenceReportedAt ? (
-                <div className="space-y-1 border-b border-border pb-4" role="status">
-                  <Text className="font-medium">Tutor absence notice recorded{selectedRow.absenceLate ? " · Late notice" : ""}</Text>
-                  <Text className="text-muted">{formatSessionDate(selectedRow.absenceReportedAt)}</Text>
+                <div
+                  className="space-y-1 border-b border-border pb-4"
+                  role="status"
+                >
+                  <Text className="font-medium">
+                    Tutor absence notice recorded
+                    {selectedRow.absenceLate ? " · Late notice" : ""}
+                  </Text>
+                  <Text className="text-muted">
+                    {formatSessionDate(selectedRow.absenceReportedAt)}
+                  </Text>
                 </div>
               ) : null}
               <div className="grid gap-3 text-sm sm:grid-cols-2">

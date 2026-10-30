@@ -563,11 +563,17 @@ export function createClassSessionReportService(deps: {
         academyClassSessionReport,
         eq(academyClassSessionReport.sessionId, academyClassSession.id),
       )
-      .leftJoin(academyClassTutorAbsence, and(
-        eq(academyClassTutorAbsence.sessionId, academyClassSession.id),
-        eq(academyClassTutorAbsence.tutorId, academyClassSession.tutorId),
-        eq(academyClassTutorAbsence.assignmentVersion, academyClassSession.version),
-      ))
+      .leftJoin(
+        academyClassTutorAbsence,
+        and(
+          eq(academyClassTutorAbsence.sessionId, academyClassSession.id),
+          eq(academyClassTutorAbsence.tutorId, academyClassSession.tutorId),
+          eq(
+            academyClassTutorAbsence.assignmentVersion,
+            academyClassSession.version,
+          ),
+        ),
+      )
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(
         asc(academyClassSession.startAt),

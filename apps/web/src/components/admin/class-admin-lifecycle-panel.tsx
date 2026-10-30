@@ -2,7 +2,6 @@
 
 import Loader from "@/components/loader";
 
-
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
 import { useState } from "react";

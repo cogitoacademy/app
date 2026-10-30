@@ -2,7 +2,6 @@
 
 import Loader from "@/components/loader";
 
-
 import {
   IconSearch,
   IconUsers,

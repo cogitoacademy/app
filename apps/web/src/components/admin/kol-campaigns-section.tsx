@@ -2,7 +2,6 @@
 
 import Loader from "@/components/loader";
 
-
 import { IconSpeakerphone } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";

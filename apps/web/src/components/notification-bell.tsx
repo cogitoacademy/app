@@ -37,7 +37,9 @@ export function NotificationBell() {
   const navigate = useNavigate();
 
   const unreadQuery = useQuery(
-    orpc.notification.list.queryOptions({ input: { unreadOnly: true, limit: 1 } }),
+    orpc.notification.list.queryOptions({
+      input: { unreadOnly: true, limit: 1 },
+    }),
   );
 
   const listQuery = useQuery(
@@ -126,7 +128,9 @@ export function NotificationBell() {
           <Button
             variant="outline"
             size="icon"
-            aria-label={hasUnread ? "Notifications, unread updates" : "Notifications"}
+            aria-label={
+              hasUnread ? "Notifications, unread updates" : "Notifications"
+            }
             data-slot="notification-trigger"
             className="relative"
           />

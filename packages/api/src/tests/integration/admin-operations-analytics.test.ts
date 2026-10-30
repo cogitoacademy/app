@@ -37,27 +37,23 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
     await db.transaction(async (tx) => {
       const before = await getDashboardAnalytics(tx, query);
       const ids = Array.from({ length: 4 }, () => crypto.randomUUID());
-      await tx
-        .insert(s.user)
-        .values(
-          ids.map((id, index) => ({
-            id,
-            email: `${tag}-${index}@example.test`,
-            name: "Analytics fixture",
-            role: index === 0 ? "tutor" : "student",
-          })),
-        );
+      await tx.insert(s.user).values(
+        ids.map((id, index) => ({
+          id,
+          email: `${tag}-${index}@example.test`,
+          name: "Analytics fixture",
+          role: index === 0 ? "tutor" : "student",
+        })),
+      );
       const wallets = await tx
         .insert(s.wallet)
         .values(
-          ids
-            .slice(1)
-            .map((id) => ({
-              userId: id,
-              totalBalance: 1000,
-              heldBalance: 1000,
-              availableBalance: 0,
-            })),
+          ids.slice(1).map((id) => ({
+            userId: id,
+            totalBalance: 1000,
+            heldBalance: 1000,
+            availableBalance: 0,
+          })),
         )
         .returning();
       const snapshot = (marks: number) => ({
@@ -102,19 +98,17 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
         amount: number,
         walletIndex = 0,
       ) => {
-        await tx
-          .insert(s.ledgerEntry)
-          .values({
-            walletId: wallets[walletIndex]!.id,
-            bookingId,
-            eventKey,
-            entryType: "deduct",
-            actorType: "system",
-            amount,
-            beforeBalance: 1000,
-            afterBalance: 1000 - amount,
-            sourceReference: tag,
-          });
+        await tx.insert(s.ledgerEntry).values({
+          walletId: wallets[walletIndex]!.id,
+          bookingId,
+          eventKey,
+          entryType: "deduct",
+          actorType: "system",
+          amount,
+          beforeBalance: 1000,
+          afterBalance: 1000 - amount,
+          sourceReference: tag,
+        });
       };
       const solo = await makeBooking(
         "solo",
@@ -164,15 +158,13 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
         `booking.${series.id}.session.${sessions[0]!.id}.deduct`,
         50,
       );
-      await tx
-        .insert(s.bookingParticipant)
-        .values({
-          bookingId: series.id,
-          userId: ids[1]!,
-          role: "proposer",
-          confirmationState: "confirmed",
-          heldAmount: 35,
-        });
+      await tx.insert(s.bookingParticipant).values({
+        bookingId: series.id,
+        userId: ids[1]!,
+        role: "proposer",
+        confirmationState: "confirmed",
+        heldAmount: 35,
+      });
       const future = await makeBooking(
         "group",
         "scheduled",
@@ -209,15 +201,13 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
         44,
         false,
       );
-      await tx
-        .insert(s.bookingParticipant)
-        .values({
-          bookingId: unpriced.id,
-          userId: ids[1]!,
-          role: "proposer",
-          confirmationState: "confirmed",
-          heldAmount: 44,
-        });
+      await tx.insert(s.bookingParticipant).values({
+        bookingId: unpriced.id,
+        userId: ids[1]!,
+        role: "proposer",
+        confirmationState: "confirmed",
+        heldAmount: 44,
+      });
       const [competition] = await tx.select().from(s.subjectCategory).limit(1);
       expect(competition).toBeDefined();
       const [klass] = await tx
@@ -327,18 +317,16 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
           })),
         )
         .returning();
-      await tx
-        .insert(s.academyClassSessionReport)
-        .values({
-          sessionId: classSessions[0]!.id,
-          deliveryTutorId: ids[0]!,
-          currentActorId: ids[0]!,
-          currentActorRole: "tutor",
-          deliveryConfirmed: true,
-          discussion: ["Test"],
-          strengths: ["Test"],
-          improvements: ["Test"],
-        });
+      await tx.insert(s.academyClassSessionReport).values({
+        sessionId: classSessions[0]!.id,
+        deliveryTutorId: ids[0]!,
+        currentActorId: ids[0]!,
+        currentActorRole: "tutor",
+        deliveryConfirmed: true,
+        discussion: ["Test"],
+        strengths: ["Test"],
+        improvements: ["Test"],
+      });
       await ledger(
         null,
         `class-allocation:${allocations[0]!.id}:complete:deduct`,
@@ -394,16 +382,14 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
           },
         ])
         .returning();
-      await tx
-        .insert(s.refundRecord)
-        .values({
-          paymentId: payments[1]!.id,
-          walletId: wallets[0]!.id,
-          amountIdr: 200000,
-          marks: 20,
-          reason: tag,
-          createdAt: new Date("2044-01-12"),
-        });
+      await tx.insert(s.refundRecord).values({
+        paymentId: payments[1]!.id,
+        walletId: wallets[0]!.id,
+        amountIdr: 200000,
+        marks: 20,
+        reason: tag,
+        createdAt: new Date("2044-01-12"),
+      });
       const fees = await tx
         .insert(s.tutorSessionFee)
         .values([
@@ -436,21 +422,19 @@ test("Q15 analytics separates receipts, delivered service, commitments and fee o
           status: "paid",
         })
         .returning();
-      await tx
-        .insert(s.tutorPayoutAllocation)
-        .values({
-          payoutId: payout!.id,
-          sourceKey: `${tag}:fee1`,
-          sourceType: "fee_event",
-          tutorSessionFeeId: fees[0]!.id,
-          bookingId: solo.id,
-          bookingType: "solo",
-          deliveryStatus: "completed",
-          scheduledStartAt: solo.scheduledStartAt,
-          earnedAt: new Date("2044-01-10"),
-          grossHonorariumIdr: 100000,
-          active: true,
-        });
+      await tx.insert(s.tutorPayoutAllocation).values({
+        payoutId: payout!.id,
+        sourceKey: `${tag}:fee1`,
+        sourceType: "fee_event",
+        tutorSessionFeeId: fees[0]!.id,
+        bookingId: solo.id,
+        bookingType: "solo",
+        deliveryStatus: "completed",
+        scheduledStartAt: solo.scheduledStartAt,
+        earnedAt: new Date("2044-01-10"),
+        grossHonorariumIdr: 100000,
+        active: true,
+      });
       const after = await getDashboardAnalytics(tx, query);
       const delta = (key: string) =>
         Number(after.operationsSummary[key]) -

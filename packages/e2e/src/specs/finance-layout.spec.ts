@@ -227,11 +227,14 @@ async function mockFinance(page: Page, activation = false) {
         })),
       };
     else if (activation && procedure.endsWith("activateV3EconomySettings")) {
-      expect(route.request().postDataJSON().json).toEqual({ version: 1, expectedActiveRevision: null, reason: "Approved new pricing" });
+      expect(route.request().postDataJSON().json).toEqual({
+        version: 1,
+        expectedActiveRevision: null,
+        reason: "Approved new pricing",
+      });
       activeRevision = 1;
       data = { activeRevision };
-    }
-    else if (procedure.endsWith("getTutorPayoutReport"))
+    } else if (procedure.endsWith("getTutorPayoutReport"))
       data = payoutRows().map((row, index) =>
         index === 1
           ? {
@@ -491,13 +494,22 @@ for (const width of [320, 390, 768, 1440]) {
   });
 }
 
-test("economy activation requires reason and refreshes active badge", async ({ page }) => {
+test("economy activation requires reason and refreshes active badge", async ({
+  page,
+}) => {
   const errors = await mockFinance(page, true);
   await page.goto("/admin-economy");
-  await expect(page.getByText("Draft · not active", { exact: true })).toBeVisible();
-  const button = page.getByRole("button", { name: "Activate saved pricing", exact: true });
+  await expect(
+    page.getByText("Draft · not active", { exact: true }),
+  ).toBeVisible();
+  const button = page.getByRole("button", {
+    name: "Activate saved pricing",
+    exact: true,
+  });
   await expect(button).toBeDisabled();
-  await page.getByLabel("Reason for activating pricing", { exact: true }).fill("Approved new pricing");
+  await page
+    .getByLabel("Reason for activating pricing", { exact: true })
+    .fill("Approved new pricing");
   await button.click();
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(button).toHaveCount(0);

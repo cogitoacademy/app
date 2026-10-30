@@ -35,7 +35,8 @@ const {
   wallet,
 } = await import("../packages/db/src/schema");
 const { services } = await import("../packages/api/src/services");
-const { chromium } = await import("../packages/e2e/node_modules/@playwright/test");
+const { chromium } =
+  await import("../packages/e2e/node_modules/@playwright/test");
 
 const sandboxApi = "https://api.sandbox.midtrans.com";
 const runId = crypto.randomUUID();
@@ -65,15 +66,28 @@ let cleanupError: unknown;
 
 async function providerStatus(orderId: string) {
   const url = new URL(`/v2/${encodeURIComponent(orderId)}/status`, sandboxApi);
-  assert.equal(url.origin, sandboxApi, "Provider status must remain Sandbox-only");
-  const response = await fetch(url, { headers: { authorization: auth, accept: "application/json" } });
+  assert.equal(
+    url.origin,
+    sandboxApi,
+    "Provider status must remain Sandbox-only",
+  );
+  const response = await fetch(url, {
+    headers: { authorization: auth, accept: "application/json" },
+  });
   if (response.status === 404) return null;
-  assert.equal(response.status, 200, `Sandbox status request returned ${response.status}`);
+  assert.equal(
+    response.status,
+    200,
+    `Sandbox status request returned ${response.status}`,
+  );
   return (await response.json()) as Record<string, unknown>;
 }
 
 const sandboxProbe = await fetch(
-  new URL(`/v2/midtrans-readonly-probe-${crypto.randomUUID()}/status`, sandboxApi),
+  new URL(
+    `/v2/midtrans-readonly-probe-${crypto.randomUUID()}/status`,
+    sandboxApi,
+  ),
   { headers: { authorization: auth, accept: "application/json" } },
 );
 assert.equal(sandboxProbe.status, 200);
@@ -88,7 +102,11 @@ async function expirePendingSandboxOrder(orderId: string) {
   const remote = await providerStatus(orderId);
   if (!remote || remote.transaction_status !== "pending") return remote;
   const url = new URL(`/v2/${encodeURIComponent(orderId)}/expire`, sandboxApi);
-  assert.equal(url.origin, sandboxApi, "Provider expiry must remain Sandbox-only");
+  assert.equal(
+    url.origin,
+    sandboxApi,
+    "Provider expiry must remain Sandbox-only",
+  );
   const response = await fetch(url, {
     method: "POST",
     headers: { authorization: auth, accept: "application/json" },
@@ -101,8 +119,15 @@ mkdirSync("tmp/v3-only-dev", { recursive: true });
 try {
   const [database] = await db.execute(sql`select current_database() as name`);
   assert.equal(database?.name, "cogito-app");
-  assert.equal((await db.select({ id: user.id }).from(user).where(eq(user.id, userId))).length, 0);
-  assert.ok((await services.payment.getTopUpCatalog()).active, "V3 pricing must be active");
+  assert.equal(
+    (await db.select({ id: user.id }).from(user).where(eq(user.id, userId)))
+      .length,
+    0,
+  );
+  assert.ok(
+    (await services.payment.getTopUpCatalog()).active,
+    "V3 pricing must be active",
+  );
 
   await db.insert(user).values({
     id: userId,
@@ -114,7 +139,9 @@ try {
   fixtureCreated = true;
   const walletRow = await services.wallet.getOrCreate(userId);
   const catalog = await services.payment.getTopUpCatalog();
-  const smallestPackage = [...catalog.packages].sort((a, b) => a.marks - b.marks)[0];
+  const smallestPackage = [...catalog.packages].sort(
+    (a, b) => a.marks - b.marks,
+  )[0];
   assert.ok(smallestPackage, "Active V3 catalog needs a package");
   const quote = await services.payment.createTopUpQuote(userId, {
     requestKey: runId,
@@ -134,7 +161,10 @@ try {
   paymentId = purchase.paymentId;
   assert.equal(purchase.status, "PENDING");
   assert.ok(purchase.checkoutUrl);
-  assert.equal(new URL(purchase.checkoutUrl!).hostname, "app.sandbox.midtrans.com");
+  assert.equal(
+    new URL(purchase.checkoutUrl!).hostname,
+    "app.sandbox.midtrans.com",
+  );
   evidence.quote = {
     revision: quote.revision,
     marks: quote.marks,
@@ -149,10 +179,18 @@ try {
   };
 
   const remotePending = await providerStatus(paymentId);
-  evidence.initialProviderStatus = remotePending?.transaction_status ?? "not-found";
+  evidence.initialProviderStatus =
+    remotePending?.transaction_status ?? "not-found";
   evidence.initialProviderDetails = remotePending
     ? Object.fromEntries(
-        ["status_code", "status_message", "transaction_status", "order_id", "currency", "gross_amount"]
+        [
+          "status_code",
+          "status_message",
+          "transaction_status",
+          "order_id",
+          "currency",
+          "gross_amount",
+        ]
           .filter((key) => key in remotePending)
           .map((key) => [key, remotePending[key]]),
       )
@@ -163,9 +201,15 @@ try {
   browser = await chromium.launch({ channel: "msedge", headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto(purchase.checkoutUrl!, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.goto(purchase.checkoutUrl!, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
   assert.equal(new URL(page.url()).hostname, "app.sandbox.midtrans.com");
-  await page.screenshot({ path: "tmp/v3-only-dev/midtrans-sandbox-checkout.png", fullPage: true });
+  await page.screenshot({
+    path: "tmp/v3-only-dev/midtrans-sandbox-checkout.png",
+    fullPage: true,
+  });
   const checkoutText = (await page.locator("body").innerText()).slice(0, 3000);
   await page.getByText("Card Payment", { exact: true }).last().click();
   await page.waitForTimeout(1500);
@@ -183,21 +227,30 @@ try {
       };
     }),
   );
-  await page.locator('input[autocomplete="cc-number"]').fill("4811111111111114");
+  await page
+    .locator('input[autocomplete="cc-number"]')
+    .fill("4811111111111114");
   await page.locator('input[autocomplete="cc-exp"]').fill("01/30");
   await page.locator('input[autocomplete="cc-csc"]').fill("123");
   await page.getByText("Pay now", { exact: true }).click();
   await page.waitForTimeout(2500);
   const paymentHost = new URL(page.url()).hostname;
   assert.ok(
-    ["app.sandbox.midtrans.com", "simulator.sandbox.midtrans.com"].includes(paymentHost),
+    ["app.sandbox.midtrans.com", "simulator.sandbox.midtrans.com"].includes(
+      paymentHost,
+    ),
     `Sandbox checkout redirected to unexpected host ${paymentHost}`,
   );
   const nextStepText = (await page.locator("body").innerText()).slice(0, 3000);
   const nextStepFields = await page.locator("input").evaluateAll((nodes) =>
     nodes.map((node) => {
       const input = node as HTMLInputElement;
-      return { type: input.type, name: input.name, placeholder: input.placeholder, autocomplete: input.autocomplete };
+      return {
+        type: input.type,
+        name: input.name,
+        placeholder: input.placeholder,
+        autocomplete: input.autocomplete,
+      };
     }),
   );
   evidence.checkoutPage = {
@@ -210,18 +263,22 @@ try {
     nextStepFields,
     paymentHost,
   };
-  console.log(JSON.stringify({
-    checkoutHost: new URL(page.url()).hostname,
-    providerStatus: evidence.initialProviderStatus,
-    providerDetails: evidence.initialProviderDetails,
-    checkoutTitle: evidence.checkoutPage && (evidence.checkoutPage as Record<string, unknown>).title,
-    checkoutText,
-    cardStepText,
-    fields,
-    nextStepText,
-    nextStepFields,
-    paymentHost,
-  }));
+  console.log(
+    JSON.stringify({
+      checkoutHost: new URL(page.url()).hostname,
+      providerStatus: evidence.initialProviderStatus,
+      providerDetails: evidence.initialProviderDetails,
+      checkoutTitle:
+        evidence.checkoutPage &&
+        (evidence.checkoutPage as Record<string, unknown>).title,
+      checkoutText,
+      cardStepText,
+      fields,
+      nextStepText,
+      nextStepFields,
+      paymentHost,
+    }),
+  );
   await context.close();
   await browser.close();
   browser = undefined;
@@ -233,9 +290,15 @@ try {
     try {
       const remote = await expirePendingSandboxOrder(paymentId);
       if (remote) {
-        evidence.finalProviderStatus = String(remote.transaction_status ?? "unknown");
-        if (remote.transaction_status === "settlement" || remote.transaction_status === "capture") {
-          evidence.cleanup = "retained settled fixture for signed webhook verification";
+        evidence.finalProviderStatus = String(
+          remote.transaction_status ?? "unknown",
+        );
+        if (
+          remote.transaction_status === "settlement" ||
+          remote.transaction_status === "capture"
+        ) {
+          evidence.cleanup =
+            "retained settled fixture for signed webhook verification";
         }
       }
     } catch (error) {
@@ -246,17 +309,23 @@ try {
     try {
       await db.delete(notification).where(eq(notification.userId, userId));
       await db.delete(auditLog).where(eq(auditLog.actorId, userId));
-      if (paymentId) await db.delete(paymentRecord).where(eq(paymentRecord.id, paymentId));
-      if (quoteId) await db.delete(economyV3TopUpQuote).where(eq(economyV3TopUpQuote.id, quoteId));
+      if (paymentId)
+        await db.delete(paymentRecord).where(eq(paymentRecord.id, paymentId));
+      if (quoteId)
+        await db
+          .delete(economyV3TopUpQuote)
+          .where(eq(economyV3TopUpQuote.id, quoteId));
       await db.delete(wallet).where(eq(wallet.userId, userId));
       await db.delete(user).where(eq(user.id, userId));
-      evidence.cleanup = "temporary user, wallet, quote, payment, ledger and notifications removed";
+      evidence.cleanup =
+        "temporary user, wallet, quote, payment, ledger and notifications removed";
     } catch (error) {
       cleanupError = error;
     }
   }
   evidence.completedAt = new Date().toISOString();
-  evidence.cleanupError = cleanupError instanceof Error ? cleanupError.message : undefined;
+  evidence.cleanupError =
+    cleanupError instanceof Error ? cleanupError.message : undefined;
   const afterBookings = await db
     .select({ id: booking.id, priceSnapshot: booking.priceSnapshot })
     .from(booking);
@@ -264,21 +333,33 @@ try {
     .select({ activeRevision: economyV3Activation.activeRevision })
     .from(economyV3Activation)
     .where(eq(economyV3Activation.id, "default"));
-  assert.deepEqual(afterBookings, beforeBookings, "Existing booking rows changed");
-  assert.deepEqual(afterActivation, beforeActivation, "Active V3 pricing pointer changed");
+  assert.deepEqual(
+    afterBookings,
+    beforeBookings,
+    "Existing booking rows changed",
+  );
+  assert.deepEqual(
+    afterActivation,
+    beforeActivation,
+    "Active V3 pricing pointer changed",
+  );
   evidence.existingBookingsUnchanged = true;
   evidence.pricingPointerUnchanged = true;
   writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
-  console.log(JSON.stringify({
-    evidencePath,
-    mode: evidence.mode,
-    target: evidence.target,
-    checkoutHost: (evidence.purchase as Record<string, unknown> | undefined)?.checkoutHost,
-    providerStatus: evidence.finalProviderStatus ?? evidence.initialProviderStatus,
-    cleanup: evidence.cleanup,
-    error: evidence.error,
-    cleanupError: evidence.cleanupError,
-  }));
+  console.log(
+    JSON.stringify({
+      evidencePath,
+      mode: evidence.mode,
+      target: evidence.target,
+      checkoutHost: (evidence.purchase as Record<string, unknown> | undefined)
+        ?.checkoutHost,
+      providerStatus:
+        evidence.finalProviderStatus ?? evidence.initialProviderStatus,
+      cleanup: evidence.cleanup,
+      error: evidence.error,
+      cleanupError: evidence.cleanupError,
+    }),
+  );
 }
 
 await db.$client.end();

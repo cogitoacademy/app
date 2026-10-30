@@ -177,7 +177,9 @@ try {
     expectedVersion: draft.version,
     reason: "Verify live same-event reschedule",
   });
-  const before = published.sessions.find((session) => session.id === sessionId)!;
+  const before = published.sessions.find(
+    (session) => session.id === sessionId,
+  )!;
   assert.equal(before.state, "scheduled");
   assert.equal(before.mode, "online");
   assert.equal(before.tutorId, assignment.id);

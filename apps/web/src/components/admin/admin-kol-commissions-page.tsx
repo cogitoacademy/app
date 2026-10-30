@@ -4,7 +4,6 @@ import { IconInbox } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import Loader from "@/components/loader";
 
-
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -179,7 +178,12 @@ export function AdminKolCommissionsPage() {
               Commission decisions could not be loaded. Refresh to try again.
             </Text>
           ) : rows.length === 0 ? (
-            <EmptyState icon={<IconInbox />} title="No KOL commission decisions yet." description="Commission decisions will appear here when available." size="compact" />
+            <EmptyState
+              icon={<IconInbox />}
+              title="No KOL commission decisions yet."
+              description="Commission decisions will appear here when available."
+              size="compact"
+            />
           ) : (
             <TableContainer>
               <Table>

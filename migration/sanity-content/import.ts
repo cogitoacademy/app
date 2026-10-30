@@ -38,7 +38,9 @@ const preparedSchema = z.object({
       categorySourceIds: z.array(z.string()),
       educationLevels: z
         .array(z.string())
-        .transform((levels) => levels.filter((level) => level.trim().length > 0)),
+        .transform((levels) =>
+          levels.filter((level) => level.trim().length > 0),
+        ),
       scale: z.string().nullable(),
       organizer: z.string().nullable(),
       registrationDeadline: z.string().nullable(),

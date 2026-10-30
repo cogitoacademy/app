@@ -32,7 +32,10 @@ export function TutorCapacityFields({
       label={<Text className="font-medium">Teaching capacity</Text>}
       description={
         <Text className="mt-1 text-sm text-muted">
-          Choose the maximum number of students for private sessions. Select one student for one-on-one sessions only. This limit does not apply to Academy classes (cohorts and masterclasses), which have their own capacity set by Cogito.
+          Choose the maximum number of students for private sessions. Select one
+          student for one-on-one sessions only. This limit does not apply to
+          Academy classes (cohorts and masterclasses), which have their own
+          capacity set by Cogito.
         </Text>
       }
     >

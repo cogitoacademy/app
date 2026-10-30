@@ -314,8 +314,7 @@ export function AppSidebar({
                                 }
                                 preload="intent"
                                 aria-label={
-                                  item.to === "/bookings" &&
-                                  hasBookingAction
+                                  item.to === "/bookings" && hasBookingAction
                                     ? `${item.label}, bookings need action`
                                     : item.label
                                 }
@@ -326,8 +325,7 @@ export function AppSidebar({
                             <span className="min-w-0 truncate">
                               {item.label}
                             </span>
-                            {item.to === "/bookings" &&
-                            hasBookingAction ? (
+                            {item.to === "/bookings" && hasBookingAction ? (
                               <span
                                 aria-hidden="true"
                                 className="ml-auto size-2 shrink-0 rounded-full bg-danger"
