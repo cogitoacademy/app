@@ -92,8 +92,6 @@ import {
 import { formatBookingDateOnly } from "@/components/booking/booking-ui";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
-const DEFAULT_SOLO_PRICE = 42;
-
 type Modality = "online" | "offline";
 type StudentMatch = { id: string; name: string; image: string | null };
 type SelectedSession = {
@@ -196,6 +194,53 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
   );
   const walletQuery = useQuery(orpc.wallet.get.queryOptions());
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const quoteTopUp = useMutation(
+    orpc.payment.createTopUpQuote.mutationOptions({
+      onSuccess: () => setTopUpOpen(true),
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Top-up unavailable",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const purchaseTopUp = useMutation(
+    orpc.payment.createPurchaseFromQuote.mutationOptions({
+      onSuccess: (purchase) => {
+        if (purchase.checkoutUrl) {
+          window.open(
+            purchase.checkoutUrl,
+            "cogito-booking-payment",
+            "noopener",
+          );
+        } else {
+          toastManager.add({
+            title: "Payment is being confirmed",
+            description: "Return here to check your balance before continuing.",
+            type: "warning",
+          });
+        }
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Checkout could not be started",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({
+        queryKey: orpc.wallet.get.queryKey(),
+      });
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [queryClient]);
+
   const selectedBookingModality: Modality =
     profileQuery.data?.modality === "offline" ? "offline" : selectedModality;
   const maxClassSize =
@@ -470,20 +515,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         effectiveModality
       ]
     : undefined;
-  const hasCatalogSubjects = subjects.length > 0;
-  const hasCompetitionPricing =
-    profile.pricesByCompetition != null || profile.pricingRevision != null;
-  const pricesForModality = selectedSubject
-    ? selectedCompetitionPrices
-    : hasCatalogSubjects || hasCompetitionPricing
-      ? undefined
-      : (profile.pricesByModality?.[effectiveModality] ?? profile.prices);
-  const perSessionPrice =
-    selectedSubject || hasCatalogSubjects || hasCompetitionPricing
-      ? pricesForModality?.["1"]
-      : (pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE);
+  const pricesForModality = selectedCompetitionPrices;
+  const perSessionPrice = pricesForModality?.["1"];
   const baseSessionPrice = isGroupBooking
-    ? (pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice)
+    ? pricesForModality?.[String(invitees.length + 1)]
     : perSessionPrice;
   const priceAvailable =
     typeof baseSessionPrice === "number" &&
@@ -556,7 +591,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedSlot) return;
+    if (!selectedSlot || !effectiveSubjectId) return;
 
     const buildSessionStart = (slot: (typeof selectedSlots)[number]) =>
       toSessionStart(slot.startDate, slot.time, BOOKING_TIMEZONE);
@@ -564,12 +599,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
     const baseInput = {
       tutorId: profile.userId,
-      subjectId: effectiveSubjectId || undefined,
+      subjectId: effectiveSubjectId,
       availabilitySlotId: selectedSlot.id,
       modality: effectiveModality,
       timezone: BOOKING_TIMEZONE,
-      // Keep the existing API field for compatibility while the booking UI
-      // presents this as one flexible Session Notes field.
+      // Session Notes use the learningGoal storage field.
       learningGoal: sessionNotes.trim(),
     };
     if (isGroupBooking) {
@@ -1320,8 +1354,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <Button
                   block
                   size="md"
-                  nativeButton={false}
-                  render={<Link to="/balance" aria-label="Top up balance" />}
+                  type="button"
+                  progress={quoteTopUp.isPending}
+                  disabled={quoteTopUp.isPending || submitDisabled}
+                  onClick={() =>
+                    quoteTopUp.mutate({
+                      requestKey: crypto.randomUUID(),
+                      marks: requiredHold - availableBalance,
+                    })
+                  }
                 >
                   Top up balance
                 </Button>
@@ -1369,6 +1410,72 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </Button>
         </div>
       </div>
+
+      <Drawer open={topUpOpen} onOpenChange={setTopUpOpen}>
+        <DrawerPopup>
+          <DrawerHeader>
+            <DrawerTitle>
+              {hasEnoughMarks
+                ? "Your balance is ready"
+                : `Top up ${quoteTopUp.data?.marks ?? 0} Marks?`}
+            </DrawerTitle>
+            <DrawerDescription>
+              Complete payment in the payment tab, then return here. Your
+              booking selections stay on this page. The slot is reserved only
+              after you send the booking request.
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody>
+            {hasEnoughMarks ? (
+              <Text>You can continue with your booking.</Text>
+            ) : (
+              <Text>
+                Exact top-up: Rp
+                {(
+                  quoteTopUp.data?.exactPackage?.priceIdr ??
+                  quoteTopUp.data?.customAmountIdr ??
+                  0
+                ).toLocaleString("id-ID")}
+              </Text>
+            )}
+          </DrawerBody>
+          <DrawerFooter>
+            {hasEnoughMarks ? (
+              <Button
+                onClick={() => {
+                  setTopUpOpen(false);
+                  setSummaryOpen(true);
+                }}
+              >
+                Continue booking
+              </Button>
+            ) : (
+              <Button
+                progress={purchaseTopUp.isPending}
+                disabled={purchaseTopUp.isPending || !quoteTopUp.data}
+                onClick={() => {
+                  const quote = quoteTopUp.data;
+                  if (quote)
+                    purchaseTopUp.mutate({
+                      quoteId: quote.quoteId,
+                      choice: quote.exactPackage ? "package" : "custom",
+                    });
+                }}
+              >
+                Continue to Midtrans
+              </Button>
+            )}
+            <Button
+              variant="plain"
+              onClick={() => {
+                void walletQuery.refetch();
+              }}
+            >
+              Check balance
+            </Button>
+          </DrawerFooter>
+        </DrawerPopup>
+      </Drawer>
 
       <TutorDrawer
         tutor={profile}
@@ -1492,8 +1599,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <Button
                 block
                 size="lg"
-                nativeButton={false}
-                render={<Link to="/balance" aria-label="Top up balance" />}
+                type="button"
+                progress={quoteTopUp.isPending}
+                disabled={quoteTopUp.isPending || submitDisabled}
+                onClick={() =>
+                  quoteTopUp.mutate({
+                    requestKey: crypto.randomUUID(),
+                    marks: requiredHold - availableBalance,
+                  })
+                }
               >
                 Top up balance
               </Button>

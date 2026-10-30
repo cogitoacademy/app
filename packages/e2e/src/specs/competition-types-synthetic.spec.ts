@@ -332,6 +332,8 @@ for (const width of [320, 390, 768, 1440])
           elements
             .filter((el) => {
               if (!el.getClientRects().length) return false;
+              if (el.closest('[aria-label="Competition types table"]'))
+                return false;
               const r = el.getBoundingClientRect();
               return (
                 r.left < -1 ||
@@ -445,3 +447,74 @@ test("palette previews follow unsaved edits and moving a type retains reason and
     },
   });
 });
+
+for (const width of [320, 390, 768]) {
+  test(`catalog toolbar and horizontal table scroll at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockCatalog(page);
+    const search = page.getByRole("textbox", {
+      name: "Search competition catalog",
+    });
+    const filter = page.getByRole("combobox", {
+      name: "Filter catalog status",
+    });
+    const add = page.getByRole("button", {
+      name: "Add competition",
+      exact: true,
+    });
+    const searchBox = (await search.boundingBox())!;
+    for (const control of [filter, add]) {
+      await expect(control).toBeVisible();
+      const box = (await control.boundingBox())!;
+      expect(Math.abs(box.y - searchBox.y)).toBeLessThan(2);
+      expect(box.width).toBeLessThanOrEqual(40);
+    }
+    await expect(add).toHaveText("");
+    await expect(
+      page.getByRole("status").filter({ hasText: /^4 groups$/ }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "About competition colors" })
+      .click();
+    await expect(
+      page.getByText("Specializations inherit their competition’s colors.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    const table = page.getByRole("region", { name: "Competition types table" });
+    const dimensions = await table.evaluate((el) => {
+      el.scrollLeft = 150;
+      return {
+        width: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        left: el.scrollLeft,
+      };
+    });
+    expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.width);
+    expect(dimensions.left).toBeGreaterThan(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await filter.click();
+    await page.getByRole("option", { name: "Archived", exact: true }).click();
+    await expect(
+      table.getByRole("button", {
+        name: "Edit competition Retired competition",
+        exact: true,
+      }),
+    ).toHaveCount(1);
+    await expect(
+      table.getByRole("button", {
+        name: "Edit competition Debate",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await add.click();
+    await expect(
+      page.getByRole("heading", { name: "Add competition", exact: true }),
+    ).toBeVisible();
+  });
+}

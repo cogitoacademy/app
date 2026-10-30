@@ -54,10 +54,6 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function formatClassSize(size: number) {
-  return `${size} ${size === 1 ? "student" : "students"}`;
-}
-
 type TutorDrawerProps = {
   tutor: {
     id: string;
@@ -72,10 +68,6 @@ type TutorDrawerProps = {
     modality: string | null;
     onlineMaxClassSize: number;
     offlineMaxClassSize: number;
-    prices: Record<string, number> | null;
-    pricesByModality?: Partial<
-      Record<"online" | "offline", Record<string, number>>
-    > | null;
     pricesByCompetition?: Record<
       string,
       Partial<Record<"online" | "offline", Record<string, number>>>
@@ -94,14 +86,8 @@ type PricingMap = Record<string, number>;
 type PricingByModality = Partial<Record<PricingModality, PricingMap>>;
 const PRICING_MODALITIES = ["online", "offline"] as const;
 
-function getPricingTableData(
-  pricesByModality: PricingByModality | null | undefined,
-  legacyPrices: PricingMap | null,
-  modality: string | null,
-) {
-  const priceMaps: PricingByModality = pricesByModality ?? {
-    [modality === "offline" ? "offline" : "online"]: legacyPrices ?? {},
-  };
+function getPricingTableData(pricesByModality: PricingByModality) {
+  const priceMaps = pricesByModality;
   const modalities = PRICING_MODALITIES.filter(
     (currentModality) =>
       Object.keys(priceMaps[currentModality] ?? {}).length > 0,
@@ -146,23 +132,15 @@ export function TutorDrawer({
   const tutorName = selectedTutor.user?.name ?? "Tutor";
 
   const subjectGroups = groupTutorSubjects(selectedTutor.subjects);
-  const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
-    selectedTutor.pricesByModality,
-    selectedTutor.prices,
-    selectedTutor.modality,
-  );
   const competitionPriceTables = subjectGroups.flatMap((group) => {
     const parent = group.parent;
     const prices = parent
       ? selectedTutor.pricesByCompetition?.[parent.slug]
       : undefined;
     if (!parent || !prices) return [];
-    const table = getPricingTableData(prices, null, selectedTutor.modality);
+    const table = getPricingTableData(prices);
     return [{ slug: parent.slug, name: parent.name, ...table }];
   });
-  const hasCompetitionPricing =
-    selectedTutor.pricesByCompetition != null ||
-    selectedTutor.pricingRevision != null;
   const subjectLabels = subjectGroups.flatMap((group) =>
     group.children.map((subject) => ({
       id: subject.id,
@@ -265,9 +243,7 @@ export function TutorDrawer({
             </div>
           )}
 
-          {(priceRows.length > 0 ||
-            competitionPriceTables.length > 0 ||
-            hasCompetitionPricing) && (
+          {
             <div className="mt-5">
               <Heading size="sm" className="mb-2">
                 Pricing
@@ -290,36 +266,13 @@ export function TutorDrawer({
                     </section>
                   ))}
                 </div>
-              ) : hasCompetitionPricing ? (
-                <Text className="text-sm text-muted">
-                  Pricing is unavailable for the selected competition.
-                </Text>
               ) : (
-                <>
-                  <Text className="mb-3 text-sm text-muted">
-                    {selectedTutor.modality === "both"
-                      ? `Maximum class size: ${formatClassSize(selectedTutor.onlineMaxClassSize)} online · ${formatClassSize(selectedTutor.offlineMaxClassSize)} offline`
-                      : `Maximum class size: ${formatClassSize(
-                          selectedTutor.modality === "offline"
-                            ? selectedTutor.offlineMaxClassSize
-                            : selectedTutor.onlineMaxClassSize,
-                        )}`}
-                  </Text>
-                  <TutorPricingTable
-                    modalities={priceModalities}
-                    rows={priceRows}
-                    columnLabels={{
-                      online: "Online",
-                      offline: "Offline",
-                    }}
-                    renderValue={(value) => (
-                      <CogitoMarks size="3" value={value} />
-                    )}
-                  />
-                </>
+                <Text className="text-sm text-muted">
+                  Pricing is not available yet.
+                </Text>
               )}
             </div>
-          )}
+          }
 
           {hasProfileHighlights ? (
             <section

@@ -18,9 +18,7 @@ import { tutorSessionFee } from "./tutor-session-fee";
 
 /**
  * Immutable per-session source allocation for a manually recorded tutor
- * transfer. Legacy snapshot rows are captured when a new payout is marked paid;
- * historical payout batches are intentionally not backfilled without a source
- * reconciliation.
+ * transfer, backed by an immutable tutor session fee event.
  */
 export const tutorPayoutAllocation = pgTable(
   "tutor_payout_allocation",
@@ -30,11 +28,10 @@ export const tutorPayoutAllocation = pgTable(
       .notNull()
       .references(() => tutorPayout.id, { onDelete: "restrict" }),
     sourceKey: text("source_key").notNull(),
-    sourceType: text("source_type").notNull(),
-    tutorSessionFeeId: text("tutor_session_fee_id").references(
-      () => tutorSessionFee.id,
-      { onDelete: "restrict" },
-    ),
+    sourceType: text("source_type", { enum: ["fee_event"] }).notNull(),
+    tutorSessionFeeId: text("tutor_session_fee_id")
+      .notNull()
+      .references(() => tutorSessionFee.id, { onDelete: "restrict" }),
     bookingId: text("booking_id").references(() => booking.id, {
       onDelete: "restrict",
     }),
@@ -73,7 +70,7 @@ export const tutorPayoutAllocation = pgTable(
     ),
     check(
       "tutor_payout_allocation_source_type_check",
-      sql`${table.sourceType} IN ('fee_event','legacy_booking','legacy_series_session')`,
+      sql`${table.sourceType} = 'fee_event'`,
     ),
     check(
       "tutor_payout_allocation_booking_type_check",

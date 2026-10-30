@@ -210,7 +210,6 @@ export function FaqRichTextEditor({
       <FieldLabel id={labelId} htmlFor={id}>
         {label}
       </FieldLabel>
-      <FieldDescription id={descriptionId}>{description}</FieldDescription>
       <div className="overflow-hidden rounded-lg border border-input-border bg-background focus-within:border-input-accent-border focus-within:ring-2 focus-within:ring-primary/30">
         <div
           role="toolbar"
@@ -347,6 +346,7 @@ export function FaqRichTextEditor({
         ) : null}
         <EditorContent editor={editor} />
       </div>
+      <FieldDescription id={descriptionId}>{description}</FieldDescription>
       {error ? (
         <p id={errorId} className="text-sm text-danger">
           {error}

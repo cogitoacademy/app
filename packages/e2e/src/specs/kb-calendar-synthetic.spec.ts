@@ -337,3 +337,93 @@ for (const width of [320, 390, 768, 1440]) {
     expect(state.errors).toEqual([]);
   });
 }
+
+test("calendar month scrolls horizontally within its panel", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApp(page);
+  await page.route(
+    "http://localhost:3317/rpc/content/listCompetitions**",
+    (route) =>
+      route.fulfill({
+        json: {
+          json: [
+            {
+              id: "scroll-event",
+              title: "Scroll competition",
+              startDate: "2026-10-24T00:00:00Z",
+              endDate: "2026-10-24T12:00:00Z",
+              categories: [],
+              educationLevels: [],
+            },
+          ],
+          meta: [],
+        },
+      }),
+  );
+  await page.goto("/calendar");
+  const panel = page
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("button", { name: /Calendar options/ }) });
+  const body = panel.locator('[data-slot="card-body"]');
+  await expect(body).toBeVisible();
+  const dimensions = await body.evaluate((el) => {
+    el.scrollLeft = 160;
+    return {
+      width: el.clientWidth,
+      scrollWidth: el.scrollWidth,
+      left: el.scrollLeft,
+    };
+  });
+  expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.width);
+  expect(dimensions.left).toBeGreaterThan(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  const manage = panel.getByRole("button", {
+    name: "Manage calendar",
+    exact: true,
+  });
+  await expect(manage).toHaveText("");
+  const filter = panel.getByRole("button", { name: /Calendar options/ });
+  expect((await manage.boundingBox())!.x).toBeLessThan(
+    (await filter.boundingBox())!.x,
+  );
+  await body.evaluate((el) => {
+    el.scrollLeft = 0;
+  });
+  await body.hover();
+  await page.mouse.wheel(180, 0);
+  await expect
+    .poll(() => body.evaluate((el) => el.scrollLeft))
+    .toBeGreaterThan(0);
+  await manage.click();
+  await expect(
+    page.getByRole("button", { name: "Add event", exact: true }),
+  ).toBeVisible();
+});
+
+test("calendar settings remain available with no events and hidden for readers", async ({
+  page,
+}) => {
+  await mockApp(page);
+  await page.goto("/calendar");
+  await expect(
+    page.getByRole("button", { name: "Manage calendar", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Manage calendar", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Add event", exact: true }),
+  ).toBeVisible();
+  await mockApp(page, "student");
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: /Calendar options/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Manage calendar", exact: true }),
+  ).toHaveCount(0);
+});

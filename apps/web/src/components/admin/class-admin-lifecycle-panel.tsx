@@ -1,5 +1,8 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
 import { useState } from "react";
@@ -247,7 +250,7 @@ export function ClassAdminLifecyclePanel({
           </CardHeader>
           <CardBody className="space-y-3">
             {minimumCheck.isPending ? (
-              <Text className="text-sm text-muted">Loading current count…</Text>
+              <Loader />
             ) : minimumCheck.isError ? (
               <Text className="text-sm text-danger-foreground">
                 Current count is unavailable. Refresh this class to try again.

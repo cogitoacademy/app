@@ -36,7 +36,9 @@ const preparedSchema = z.object({
       startDate: z.string(),
       endDate: z.string(),
       categorySourceIds: z.array(z.string()),
-      educationLevels: z.array(z.string()),
+      educationLevels: z
+        .array(z.string())
+        .transform((levels) => levels.filter((level) => level.trim().length > 0)),
       scale: z.string().nullable(),
       organizer: z.string().nullable(),
       registrationDeadline: z.string().nullable(),
@@ -183,9 +185,10 @@ async function main() {
     );
   const { env } = await import("../../packages/env/src/server");
   if (
-    env.CONTENT_ADMIN_ENABLED ||
-    env.KB_SOURCE !== "sanity" ||
-    env.CC_SOURCE !== "sanity"
+    !args.includes("--seed-mode") &&
+    (env.CONTENT_ADMIN_ENABLED ||
+      env.KB_SOURCE !== "sanity" ||
+      env.CC_SOURCE !== "sanity")
   )
     throw new Error(
       "Import requires authoring disabled and both consumers still on Sanity",

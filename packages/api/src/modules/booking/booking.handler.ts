@@ -63,6 +63,15 @@ export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
 
 export function createBookingHandler(booking: BookingService) {
   return {
+    listReportSessions: async ({ context }: { context: Context }) =>
+      withDomainMap(
+        () =>
+          booking.listReportSessions(
+            context.session!.user.id,
+            context.session!.user.role ?? "",
+          ),
+        mapBookingError,
+      ),
     proposeReschedule: async ({
       context,
       input,

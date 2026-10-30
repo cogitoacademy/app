@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { adminProcedure } from "../../procedures";
 import type { ContentAdminHandler } from "./content-admin.handler";
 import {
@@ -9,6 +10,9 @@ import {
 } from "./content-admin.types";
 export function createContentAdminRouter(handler: ContentAdminHandler) {
   return {
+    previewPdf: adminProcedure
+      .input(z.object({ fileId: z.string().min(1).max(200) }).strict())
+      .handler(handler.previewPdf),
     list: adminProcedure.input(kindInput).handler(handler.list),
     categories: adminProcedure.handler(handler.categories),
     create: adminProcedure.input(createContentInput).handler(handler.create),

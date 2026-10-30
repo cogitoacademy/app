@@ -304,8 +304,43 @@ export function createClassEnrollmentRepo() {
           asc(academyClassEnrollmentInstallment.ordinal),
         ),
       conn
-        .select()
+        .select({
+          id: academyClassEnrollmentAllocation.id,
+          enrollmentId: academyClassEnrollmentAllocation.enrollmentId,
+          installmentId: academyClassEnrollmentAllocation.installmentId,
+          classId: academyClassEnrollmentAllocation.classId,
+          sessionId: academyClassEnrollmentAllocation.sessionId,
+          studentId: academyClassEnrollmentAllocation.studentId,
+          ordinal: academyClassEnrollmentAllocation.ordinal,
+          sequenceNumber: academyClassEnrollmentAllocation.sequenceNumber,
+          rateMarks: academyClassEnrollmentAllocation.rateMarks,
+          state: academyClassEnrollmentAllocation.state,
+          fundingEventKey: academyClassEnrollmentAllocation.fundingEventKey,
+          fundingSourceReference:
+            academyClassEnrollmentAllocation.fundingSourceReference,
+          fundedMarks: academyClassEnrollmentAllocation.fundedMarks,
+          spentMarks: academyClassEnrollmentAllocation.spentMarks,
+          releasedMarks: academyClassEnrollmentAllocation.releasedMarks,
+          fundedAt: academyClassEnrollmentAllocation.fundedAt,
+          createdAt: academyClassEnrollmentAllocation.createdAt,
+          updatedAt: academyClassEnrollmentAllocation.updatedAt,
+          scheduleChangeVersion:
+            academyClassEnrollmentAllocation.scheduleChangeVersion,
+          currentScheduleChangeVersion:
+            academyClassSession.scheduleChangeVersion,
+          scheduleChangeNotifiedAt:
+            academyClassSession.scheduleChangeNotifiedAt,
+          scheduleChangeExitUntil: academyClassSession.scheduleChangeExitUntil,
+          scheduleChangeSessionState: academyClassSession.state,
+        })
         .from(academyClassEnrollmentAllocation)
+        .innerJoin(
+          academyClassSession,
+          eq(
+            academyClassEnrollmentAllocation.sessionId,
+            academyClassSession.id,
+          ),
+        )
         .where(
           inArray(academyClassEnrollmentAllocation.enrollmentId, enrollmentIds),
         )

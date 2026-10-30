@@ -20,7 +20,6 @@ export type StudentReportPdfEntry = {
   scheduledStartAt: Date;
   metadata: Array<{ label: string; value: string }>;
   sections: ReportFeedbackSection[];
-  isLegacy: boolean;
 };
 
 export type StudentReportPdfModel = {
@@ -324,14 +323,7 @@ export async function createStudentReportPdf(
     let cursor = addPage(pdf, bold, header);
     pages.push(cursor.page);
     const newContinuationPage = () => {
-      cursor = addPage(
-        pdf,
-        bold,
-        header,
-        entry.isLegacy
-          ? "LEGACY REPORT - CONTINUATION"
-          : "SESSION REPORT - CONTINUATION",
-      );
+      cursor = addPage(pdf, bold, header, "SESSION REPORT - CONTINUATION");
       pages.push(cursor.page);
       return cursor;
     };

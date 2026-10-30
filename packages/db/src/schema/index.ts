@@ -28,3 +28,5 @@ export * from "./academy-class-enrollment";
 export * from "./academy-class-session-report";
 
 export * from "./content-v3";
+
+export * from "./activity";

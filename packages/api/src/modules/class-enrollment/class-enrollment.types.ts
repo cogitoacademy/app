@@ -37,6 +37,29 @@ export const confirmClassEnrollmentCancellationInput =
     quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
   });
 
+export const changedSessionCancellationInput = z
+  .object({
+    enrollmentId: z.string().uuid(),
+    sessionId: z.string().uuid(),
+    scheduleChangeVersion: z.number().int().positive(),
+  })
+  .strict();
+export const confirmChangedSessionCancellationInput =
+  changedSessionCancellationInput.extend({
+    requestKey: z.string().uuid(),
+    quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+export const changedSessionCancellationOutput = z.object({
+  enrollmentId: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  scheduleChangeVersion: z.number().int().positive(),
+  notifiedAt: z.date(),
+  exitUntil: z.date(),
+  refundableMarks: z.number().int().nonnegative(),
+  fundingState: z.enum(["funded", "unfunded"]),
+  quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
 export const classEnrollmentCancellationOutput = z.object({
   enrollmentId: z.string().uuid(),
   sessionId: z.string().uuid().nullable(),
@@ -108,6 +131,9 @@ export const enrollmentAllocationOutput = z.object({
   fundedMarks: z.number().int().nonnegative(),
   spentMarks: z.number().int().nonnegative(),
   releasedMarks: z.number().int().nonnegative(),
+  scheduleChangeVersion: z.number().int().positive().nullable().optional(),
+  scheduleChangeNotifiedAt: z.date().nullable().optional(),
+  scheduleChangeExitUntil: z.date().nullable().optional(),
 });
 
 export const studentClassEnrollmentOutput = z.object({
@@ -379,12 +405,15 @@ export const listClassSessionReportsOutput = z.array(
     classNumber: z.number().int().positive(),
     classKind: z.enum(["cohort", "masterclass"]),
     sessionId: z.string().uuid(),
+    tutorId: z.string(),
     sequenceNumber: z.number().int().positive(),
     sessionTitle: z.string(),
     startAt: z.date(),
     endAt: z.date(),
     mode: z.enum(["online", "in_person"]),
     state: z.enum(["scheduled", "completed", "cancelled"]),
+    absenceReportedAt: z.date().nullable(),
+    absenceLate: z.boolean().nullable(),
     report: classSessionReportOutput.nullable(),
     settlement: z
       .object({

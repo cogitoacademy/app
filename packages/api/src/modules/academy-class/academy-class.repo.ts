@@ -40,7 +40,12 @@ export function createAcademyClassRepo() {
       with: {
         competition: { with: { parent: true } },
         sessions: {
-          with: { tutor: true, room: true, meeting: true },
+          with: {
+            tutor: true,
+            room: true,
+            meeting: true,
+            tutorAbsences: { with: { tutor: true } },
+          },
           orderBy: [asc(academyClassSession.sequenceNumber)],
         },
       },
@@ -54,7 +59,12 @@ export function createAcademyClassRepo() {
       with: {
         competition: { with: { parent: true } },
         sessions: {
-          with: { tutor: true, room: true, meeting: true },
+          with: {
+            tutor: true,
+            room: true,
+            meeting: true,
+            tutorAbsences: { with: { tutor: true } },
+          },
           orderBy: [asc(academyClassSession.sequenceNumber)],
         },
       },
@@ -270,6 +280,56 @@ export function createAcademyClassRepo() {
           eq(academyClassSession.state, "scheduled"),
           inArray(academyClass.state, ["published", "postponed"]),
           sql`${academyClassSession.classId} <> ${classId}`,
+          lt(academyClassSession.startAt, endAt),
+          gt(academyClassSession.endAt, startAt),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async function findTutorClassSessionOverlap(
+    conn: DbOrTx,
+    sessionId: string,
+    tutorId: string,
+    startAt: Date,
+    endAt: Date,
+  ) {
+    const [row] = await conn
+      .select({ id: academyClassSession.id })
+      .from(academyClassSession)
+      .innerJoin(academyClass, eq(academyClassSession.classId, academyClass.id))
+      .where(
+        and(
+          eq(academyClassSession.tutorId, tutorId),
+          eq(academyClassSession.state, "scheduled"),
+          inArray(academyClass.state, ["published", "postponed"]),
+          sql`${academyClassSession.id} <> ${sessionId}`,
+          lt(academyClassSession.startAt, endAt),
+          gt(academyClassSession.endAt, startAt),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async function findRoomClassSessionOverlap(
+    conn: DbOrTx,
+    sessionId: string,
+    roomId: string,
+    startAt: Date,
+    endAt: Date,
+  ) {
+    const [row] = await conn
+      .select({ id: academyClassSession.id })
+      .from(academyClassSession)
+      .innerJoin(academyClass, eq(academyClassSession.classId, academyClass.id))
+      .where(
+        and(
+          eq(academyClassSession.roomId, roomId),
+          eq(academyClassSession.state, "scheduled"),
+          inArray(academyClass.state, ["published", "postponed"]),
+          sql`${academyClassSession.id} <> ${sessionId}`,
           lt(academyClassSession.startAt, endAt),
           gt(academyClassSession.endAt, startAt),
         ),
@@ -665,6 +725,8 @@ export function createAcademyClassRepo() {
     findTutorClassOverlap,
     findRoomBookingOverlap,
     findRoomClassOverlap,
+    findTutorClassSessionOverlap,
+    findRoomClassSessionOverlap,
     listReadyMeetingIds,
     claimMeeting,
     findMeetingAttemptDetails,

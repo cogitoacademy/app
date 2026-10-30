@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -103,6 +104,13 @@ export const academyClassSession = pgTable(
     tutorFeeIdr: integer("tutor_fee_idr").notNull(),
     state: text("state").notNull().default("draft"),
     version: integer("version").notNull().default(1),
+    scheduleChangeVersion: integer("schedule_change_version"),
+    scheduleChangeNotifiedAt: timestamp("schedule_change_notified_at", {
+      withTimezone: true,
+    }),
+    scheduleChangeExitUntil: timestamp("schedule_change_exit_until", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -138,6 +146,10 @@ export const academyClassSession = pgTable(
       sql`${table.state} IN ('draft', 'scheduled', 'completed', 'cancelled')`,
     ),
     check("academy_class_session_version_positive", sql`${table.version} > 0`),
+    check(
+      "academy_class_session_schedule_change_window_check",
+      sql`(${table.scheduleChangeVersion} IS NULL AND ${table.scheduleChangeNotifiedAt} IS NULL AND ${table.scheduleChangeExitUntil} IS NULL) OR (${table.scheduleChangeVersion} > 0 AND ${table.scheduleChangeNotifiedAt} IS NOT NULL AND ${table.scheduleChangeExitUntil} IS NOT NULL AND ${table.scheduleChangeExitUntil} >= ${table.scheduleChangeNotifiedAt})`,
+    ),
     uniqueIndex("academy_class_session_class_sequence_uniq").on(
       table.classId,
       table.sequenceNumber,
@@ -149,6 +161,49 @@ export const academyClassSession = pgTable(
     index("academy_class_session_room_start_idx").on(
       table.roomId,
       table.startAt,
+    ),
+  ],
+);
+
+export const academyClassTutorAbsence = pgTable(
+  "academy_class_tutor_absence",
+  {
+    id: uuidPrimaryKey,
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => academyClassSession.id, { onDelete: "restrict" }),
+    tutorId: text("tutor_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    requestKey: text("request_key").notNull(),
+    assignmentVersion: integer("assignment_version").notNull(),
+    reason: text("reason").notNull(),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull(),
+    scheduledStartAt: timestamp("scheduled_start_at", {
+      withTimezone: true,
+    }).notNull(),
+    late: boolean("late").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "academy_class_tutor_absence_assignment_version_positive",
+      sql`${table.assignmentVersion} > 0`,
+    ),
+    uniqueIndex("academy_class_tutor_absence_assignment_uniq").on(
+      table.sessionId,
+      table.tutorId,
+      table.assignmentVersion,
+    ),
+    uniqueIndex("academy_class_tutor_absence_request_uniq").on(
+      table.tutorId,
+      table.requestKey,
+    ),
+    index("academy_class_tutor_absence_tutor_reported_idx").on(
+      table.tutorId,
+      table.reportedAt,
     ),
   ],
 );
@@ -222,7 +277,7 @@ export const academyClassRelations = relations(
 
 export const academyClassSessionRelations = relations(
   academyClassSession,
-  ({ one }) => ({
+  ({ one, many }) => ({
     academyClass: one(academyClass, {
       fields: [academyClassSession.classId],
       references: [academyClass.id],
@@ -238,6 +293,21 @@ export const academyClassSessionRelations = relations(
     meeting: one(academyClassMeeting, {
       fields: [academyClassSession.id],
       references: [academyClassMeeting.sessionId],
+    }),
+    tutorAbsences: many(academyClassTutorAbsence),
+  }),
+);
+
+export const academyClassTutorAbsenceRelations = relations(
+  academyClassTutorAbsence,
+  ({ one }) => ({
+    session: one(academyClassSession, {
+      fields: [academyClassTutorAbsence.sessionId],
+      references: [academyClassSession.id],
+    }),
+    tutor: one(user, {
+      fields: [academyClassTutorAbsence.tutorId],
+      references: [user.id],
     }),
   }),
 );

@@ -63,6 +63,7 @@ export function createEconomyRepo() {
     getV3RevisionByVersion,
     getActiveV3Revision,
     appendV3Revision,
+    activateV3Revision,
   };
 }
 
@@ -122,3 +123,39 @@ export async function appendV3Revision(
 }
 
 export type EconomyRepo = ReturnType<typeof createEconomyRepo>;
+
+export async function activateV3Revision(
+  conn: DbOrTx,
+  input: {
+    version: number;
+    expectedActiveRevision: number | null;
+    updatedBy: string;
+  },
+) {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended('economy-v3-revision', 0))`,
+  );
+  const latest = await getLatestV3Revision(conn);
+  const active = await getActiveV3Revision(conn);
+  if (
+    latest?.version !== input.version ||
+    (active?.version ?? null) !== input.expectedActiveRevision
+  )
+    return null;
+  await conn
+    .insert(economyV3Activation)
+    .values({
+      id: "default",
+      activeRevision: input.version,
+      updatedBy: input.updatedBy,
+    })
+    .onConflictDoUpdate({
+      target: economyV3Activation.id,
+      set: {
+        activeRevision: input.version,
+        updatedBy: input.updatedBy,
+        updatedAt: new Date(),
+      },
+    });
+  return latest;
+}

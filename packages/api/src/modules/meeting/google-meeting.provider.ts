@@ -430,6 +430,7 @@ export function createGoogleMeetingProvider(
       endAt?: Date;
       location?: string;
       description?: string;
+      attendee?: MeetingAttendee;
     },
     classEvent = false,
   ): Promise<void> {
@@ -471,6 +472,18 @@ export function createGoogleMeetingProvider(
               ...(changes.description !== undefined
                 ? { description: changes.description }
                 : {}),
+              ...(changes.attendee
+                ? {
+                    attendees: [
+                      {
+                        email: changes.attendee.email,
+                        ...(changes.attendee.name
+                          ? { displayName: changes.attendee.name }
+                          : {}),
+                      },
+                    ],
+                  }
+                : {}),
             }),
           },
           TIMEOUT_MS,
@@ -510,6 +523,18 @@ export function createGoogleMeetingProvider(
                   : {}),
                 ...(changes.description !== undefined
                   ? { description: changes.description }
+                  : {}),
+                ...(changes.attendee
+                  ? {
+                      attendees: [
+                        {
+                          email: changes.attendee.email,
+                          ...(changes.attendee.name
+                            ? { displayName: changes.attendee.name }
+                            : {}),
+                        },
+                      ],
+                    }
                   : {}),
               },
             }),
@@ -1065,6 +1090,7 @@ export function createGoogleMeetingProvider(
     sessionId: string,
     scheduledStartAt: Date,
     scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
   ) {
     const startedAt = Date.now();
     const eventId =
@@ -1076,6 +1102,7 @@ export function createGoogleMeetingProvider(
         {
           startAt: scheduledStartAt,
           endAt: scheduledEndAt,
+          attendee,
         },
         true,
       );

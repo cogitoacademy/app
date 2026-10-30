@@ -9,7 +9,6 @@ import {
 } from "@cogito-app/db/schema";
 import type {
   BookingPriceSnapshot,
-  LegacyBookingPriceSnapshot,
   V3BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
 import {
@@ -27,11 +26,9 @@ import {
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
   MAX_SERIES_SESSIONS,
-  DEFAULT_SOLO_PRICE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
-  TUTOR_PAYOUT_RATE_IDR,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
@@ -80,6 +77,7 @@ import {
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { completionFeedbackInput } from "./booking.types";
+import { listPrivateReportSessions } from "./private-report-sessions";
 import { FEEDBACK_LENGTH_ERROR } from "./feedback-rules";
 import {
   lockCompletionReportRequest,
@@ -91,10 +89,7 @@ import {
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import { applyBookingTopicPalettes } from "./booking-topic-palette";
-import {
-  buildTutorSessionFeeRecord,
-  tutorSessionFeeEventKey,
-} from "./tutor-session-fee";
+import { buildTutorSessionFeeRecord } from "./tutor-session-fee";
 import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 import {
   isSelectableCompetitionRef,
@@ -130,7 +125,6 @@ import {
   formatBookingEventTitle,
   formatCalendarCompetitionLabel,
 } from "./booking-event-title";
-import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
 import {
   calculateTutorPayoutAmounts,
   calculateTutorTaxIdr,
@@ -220,18 +214,18 @@ function getPerStudentMarks(
   snapshot: BookingPriceSnapshot | null | undefined,
 ): number | null {
   if (!snapshot) return null;
-  return snapshot.engine === "v3"
-    ? snapshot.perStudentMarks
-    : snapshot.perStudent;
+  if (snapshot.engine !== "v3")
+    throw new BookingV3PricingRevisionUnavailableError(0);
+  return snapshot.perStudentMarks;
 }
 
 function getCollectedMarks(
   snapshot: BookingPriceSnapshot,
-  headcount: number,
+  _headcount: number,
 ): number {
-  return snapshot.engine === "v3"
-    ? snapshot.collectedMarks
-    : snapshot.perStudent * headcount;
+  if (snapshot.engine !== "v3")
+    throw new BookingV3PricingRevisionUnavailableError(0);
+  return snapshot.collectedMarks;
 }
 
 function seriesNoShowEventKey(
@@ -337,15 +331,12 @@ export interface TutorPayoutResult {
   tutorPayoutIdr: number;
 }
 
-export type TutorPayoutAllocationSourceType =
-  | "fee_event"
-  | "legacy_booking"
-  | "legacy_series_session";
+export type TutorPayoutAllocationSourceType = "fee_event";
 
 export interface TutorPayoutSourceItem {
   sourceKey: string;
   sourceType: TutorPayoutAllocationSourceType;
-  tutorSessionFeeId: string | null;
+  tutorSessionFeeId: string;
   bookingId: string | null;
   bookingNumber: number | null;
   bookingSessionId: string | null;
@@ -431,44 +422,6 @@ export function normalizeCompletionFeedback(
     discussion: parsed.data.discussion,
     strengths: parsed.data.strengths,
     improvements: parsed.data.improvements,
-  };
-}
-
-export function decodeLegacyCompletionFeedbackText(value: string): string {
-  return value.replace(/&(amp|lt|gt|quot|#39);/g, (entity) => {
-    switch (entity) {
-      case "&amp;":
-        return "&";
-      case "&lt;":
-        return "<";
-      case "&gt;":
-        return ">";
-      case "&quot;":
-        return '"';
-      case "&#39;":
-        return "'";
-      default:
-        return entity;
-    }
-  });
-}
-
-export function restoreCompletionFeedbackForRead<T extends CompletionFeedback>(
-  feedback: T,
-  history: ReadonlyArray<{ status: string }>,
-): T {
-  if (
-    history.some(
-      ({ status }) => status === "submitted" || status === "corrected",
-    )
-  ) {
-    return feedback;
-  }
-  return {
-    ...feedback,
-    discussion: feedback.discussion.map(decodeLegacyCompletionFeedbackText),
-    strengths: feedback.strengths.map(decodeLegacyCompletionFeedbackText),
-    improvements: feedback.improvements.map(decodeLegacyCompletionFeedbackText),
   };
 }
 
@@ -757,25 +710,11 @@ export function createBookingService(deps: {
     if (b.type !== BOOKING_TYPE.GROUP && !isV3GroupSeries) return;
     if (remaining.length < MIN_GROUP_HEADCOUNT) return;
 
-    const profile = await repo.findTutorProfile(tx, b.tutorId);
-    if (!profile) {
-      log({
-        level: "warn",
-        action: "group_reprice_skipped",
-        bookingId: b.id,
-        message: "Tutor profile missing; group repricing skipped",
-      });
-      return;
-    }
-
     const newSize = remaining.length;
     const newSnapshot = await computePriceSnapshot(
       tx,
-      profile,
-      b.modality as Modality,
       newSize as GroupSize,
       b.priceSnapshot,
-      true,
     );
     const newPerStudent = getPerStudentMarks(newSnapshot)!;
     const oldPerStudent = getPerStudentMarks(b.priceSnapshot) ?? newPerStudent;
@@ -1096,21 +1035,10 @@ export function createBookingService(deps: {
     tutorId: string,
     subjectId?: string,
   ) {
+    if (!subjectId) throw new BookingV3CompetitionRequiredError();
     const topic = await repo.findTutorSubjectTopic(conn, tutorId, subjectId);
     if (subjectId && !topic) {
       throw new BookingNotEditableError(subjectId);
-    }
-    if (!subjectId && !topic) {
-      const assignmentState = await repo.getTutorSubjectAssignmentState(
-        conn,
-        tutorId,
-      );
-      if (
-        assignmentState.hasAssignments &&
-        !assignmentState.hasActiveAssignments
-      ) {
-        throw new BookingNotEditableError(tutorId);
-      }
     }
     if (
       topic &&
@@ -1178,26 +1106,12 @@ export function createBookingService(deps: {
 
   async function computeInitialPriceSnapshot(
     conn: DbOrTx,
-    profile: {
-      prices?: Record<string, number> | null;
-      baseRatesIdr?: { online?: number; offline?: number } | null;
-    },
     modality: Modality,
     headcount: GroupSize,
     topic: Awaited<ReturnType<typeof resolveSessionTopic>>,
   ): Promise<BookingPriceSnapshot> {
     const active = await pricing.getActiveV3Config?.(conn);
-    if (!active) {
-      if (
-        topic &&
-        !V3_COMPETITIONS.includes(
-          topic.categorySlug as (typeof V3_COMPETITIONS)[number],
-        )
-      ) {
-        throw new BookingV3CompetitionUnavailableError(topic.categorySlug);
-      }
-      return computePriceSnapshot(conn, profile, modality, headcount);
-    }
+    if (!active) throw new BookingV3PricingRevisionUnavailableError(0);
     if (!topic) throw new BookingV3CompetitionRequiredError();
     const competition = topic.categorySlug;
     if (!Object.hasOwn(active.values.competitionRates, competition)) {
@@ -1236,7 +1150,6 @@ export function createBookingService(deps: {
     );
     const priceSnapshot = await computeInitialPriceSnapshot(
       tx,
-      profile,
       input.modality,
       headcount,
       sessionTopic,
@@ -1245,149 +1158,48 @@ export function createBookingService(deps: {
     return { profile, sessionTopic, priceSnapshot };
   }
 
-  /**
-   * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
-   * Marks map until they are migrated to IDR, so existing bookings and
-   * migrations remain readable while the new economy rolls out.
-   */
   async function computePriceSnapshot(
     conn: DbOrTx,
-    profile: {
-      prices?: Record<string, number> | null;
-      baseRatesIdr?: { online?: number; offline?: number } | null;
-    },
-    modality: Modality,
     groupSize: GroupSize,
-    previousSnapshot?: BookingPriceSnapshot | null,
-    legacyReprice = false,
-  ) {
-    if (previousSnapshot?.engine === "v3") {
-      const revision = await pricing.getV3ConfigByVersion?.(
-        previousSnapshot.v3Revision,
-        conn,
-      );
-      if (
-        !revision ||
-        revision.version !== previousSnapshot.v3Revision ||
-        !pricing.calculateV3SessionPrice
-      ) {
-        throw new BookingV3PricingRevisionUnavailableError(
-          previousSnapshot.v3Revision,
-        );
-      }
-      const competition = previousSnapshot.competition;
-      if (!Object.hasOwn(revision.values.competitionRates, competition)) {
-        throw new BookingV3CompetitionUnavailableError(
-          previousSnapshot.competition,
-        );
-      }
-      return buildV3Snapshot(
-        revision.version,
-        pricing.calculateV3SessionPrice(
-          {
-            competition,
-            modality: previousSnapshot.modality,
-            headcount: groupSize,
-          },
-          revision.values,
-        ),
-      );
+    previousSnapshot: BookingPriceSnapshot | null,
+  ): Promise<V3BookingPriceSnapshot> {
+    if (previousSnapshot?.engine !== "v3") {
+      throw new BookingV3PricingRevisionUnavailableError(0);
     }
-
-    const previousLegacy = previousSnapshot as
-      | LegacyBookingPriceSnapshot
-      | null
-      | undefined;
-    const hasLockedIdrInputs =
-      previousLegacy?.economyVersion !== undefined ||
-      previousLegacy?.markValueIdr !== undefined ||
-      previousLegacy?.tutorBaseRateIdr !== undefined;
-    if (!hasLockedIdrInputs && (previousLegacy || legacyReprice)) {
-      return pricing.computeSplit(
-        modality,
-        (profile.prices?.[String(groupSize)] ?? DEFAULT_SOLO_PRICE) as number,
-        groupSize,
-      );
-    }
-
-    const baseRates = profile.baseRatesIdr;
-    const baseRateIdr =
-      previousLegacy?.tutorBaseRateIdr ??
-      (hasLockedIdrInputs
-        ? undefined
-        : modality === MODALITY.OFFLINE
-          ? baseRates?.offline
-          : baseRates?.online);
-    if (typeof baseRateIdr !== "number") {
-      if (hasLockedIdrInputs) {
-        throw new BookingV3PricingRevisionUnavailableError(
-          previousLegacy?.economyVersion ?? 0,
-        );
-      }
-      return pricing.computeSplit(
-        modality,
-        (profile.prices?.[String(groupSize)] ??
-          previousLegacy?.perStudent ??
-          DEFAULT_SOLO_PRICE) as number,
-        groupSize,
-      );
-    }
-
-    if (!pricing.getEconomyConfig || !pricing.computeEconomics) {
-      throw new Error("IDR pricing is not configured");
-    }
+    const revision = await pricing.getV3ConfigByVersion?.(
+      previousSnapshot.v3Revision,
+      conn,
+    );
     if (
-      hasLockedIdrInputs &&
-      (previousLegacy?.markValueIdr === undefined ||
-        previousLegacy.tutorIncrementIdr === undefined ||
-        previousLegacy.cogitoBaseTakeIdr === undefined ||
-        previousLegacy.cogitoIncrementIdr === undefined)
+      !revision ||
+      revision.version !== previousSnapshot.v3Revision ||
+      !pricing.calculateV3SessionPrice
     ) {
       throw new BookingV3PricingRevisionUnavailableError(
-        previousLegacy?.economyVersion ?? 0,
+        previousSnapshot.v3Revision,
       );
     }
-    const current = await pricing.getEconomyConfig(conn);
-    const config =
-      previousLegacy?.markValueIdr !== undefined
-        ? {
-            ...current,
-            version: previousLegacy.economyVersion ?? current.version,
-            markValueIdr: previousLegacy.markValueIdr,
-            onlineTutorIncrementIdr:
-              modality === MODALITY.ONLINE &&
-              previousLegacy.tutorIncrementIdr !== undefined
-                ? previousLegacy.tutorIncrementIdr
-                : current.onlineTutorIncrementIdr,
-            offlineTutorIncrementIdr:
-              modality === MODALITY.OFFLINE &&
-              previousLegacy.tutorIncrementIdr !== undefined
-                ? previousLegacy.tutorIncrementIdr
-                : current.offlineTutorIncrementIdr,
-            onlineCogitoBaseIdr:
-              modality === MODALITY.ONLINE &&
-              previousLegacy.cogitoBaseTakeIdr !== undefined
-                ? previousLegacy.cogitoBaseTakeIdr
-                : current.onlineCogitoBaseIdr,
-            offlineCogitoBaseIdr:
-              modality === MODALITY.OFFLINE &&
-              previousLegacy.cogitoBaseTakeIdr !== undefined
-                ? previousLegacy.cogitoBaseTakeIdr
-                : current.offlineCogitoBaseIdr,
-            onlineCogitoIncrementIdr:
-              modality === MODALITY.ONLINE &&
-              previousLegacy.cogitoIncrementIdr !== undefined
-                ? previousLegacy.cogitoIncrementIdr
-                : current.onlineCogitoIncrementIdr,
-            offlineCogitoIncrementIdr:
-              modality === MODALITY.OFFLINE &&
-              previousLegacy.cogitoIncrementIdr !== undefined
-                ? previousLegacy.cogitoIncrementIdr
-                : current.offlineCogitoIncrementIdr,
-          }
-        : current;
-
-    return pricing.computeEconomics(modality, baseRateIdr, groupSize, config);
+    if (
+      !Object.hasOwn(
+        revision.values.competitionRates,
+        previousSnapshot.competition,
+      )
+    ) {
+      throw new BookingV3CompetitionUnavailableError(
+        previousSnapshot.competition,
+      );
+    }
+    return buildV3Snapshot(
+      revision.version,
+      pricing.calculateV3SessionPrice(
+        {
+          competition: previousSnapshot.competition,
+          modality: previousSnapshot.modality,
+          headcount: groupSize,
+        },
+        revision.values,
+      ),
+    );
   }
 
   /**
@@ -2353,23 +2165,9 @@ export function createBookingService(deps: {
           report.id,
         );
         if (!history.some((entry) => entry.version === report.version)) {
-          await repo.insertCompletionFeedbackHistory(tx, {
-            feedbackId: report.id,
-            bookingId: report.bookingId,
-            sessionId: report.sessionId,
-            version: report.version,
-            status: "legacy_snapshot",
-            actorId: null,
-            actorRole: "legacy",
-            reason: null,
-            deliveryConfirmed: null,
-            discussion: report.discussion,
-            strengths: report.strengths,
-            improvements: report.improvements,
-            requestKey: null,
-            requestPayload: null,
-            createdAt: report.createdAt,
-          });
+          throw new BookingCompletionReportConflictError(
+            "Report history is incomplete; cannot correct this report",
+          );
         }
         const updated = await repo.updateCompletionFeedback(tx, {
           id: report.id,
@@ -3168,17 +2966,7 @@ export function createBookingService(deps: {
     if (!isStaffReader) {
       await assertBookingAccess(b, userId, db, bookingId);
     }
-    const reports = await repo.listCompletionFeedbackByBooking(db, bookingId);
-    const history = await repo.listCompletionFeedbackHistoryStatesByBooking(
-      db,
-      bookingId,
-    );
-    const feedbacks = reports.map((report) =>
-      restoreCompletionFeedbackForRead(
-        report,
-        history.filter((entry) => entry.feedbackId === report.id),
-      ),
-    );
+    const feedbacks = await repo.listCompletionFeedbackByBooking(db, bookingId);
     if (isStaffReader) return feedbacks;
     const entitled = [];
     const bookingType =
@@ -3236,11 +3024,7 @@ export function createBookingService(deps: {
       db,
       bookingId,
     );
-    return history.map((entry) =>
-      entry.status === "legacy_snapshot"
-        ? restoreCompletionFeedbackForRead(entry, [])
-        : entry,
-    );
+    return history;
   }
 
   /**
@@ -4166,8 +3950,9 @@ export function createBookingService(deps: {
       }
 
       const size = b.targetGroupSize;
-      const pricePerStudent = (getPerStudentMarks(b.priceSnapshot) ??
-        DEFAULT_SOLO_PRICE) as number;
+      const pricePerStudent = getPerStudentMarks(b.priceSnapshot);
+      if (pricePerStudent === null)
+        throw new BookingV3PricingRevisionUnavailableError(0);
 
       // A group-series invitee accepts the whole package up front: the hold is
       // pricePerStudent per session × the number of sessions. The proposer of a
@@ -5170,15 +4955,7 @@ export function createBookingService(deps: {
     return repo.listSessionsBySeriesId(db, bookingId);
   }
 
-  /**
-   * Aggregates tutor earnings from COMPLETED bookings in a date range.
-   *
-   * The stored per-booking `priceSnapshot` (G19-correct tutorShare/cogitoTake)
-   * is authoritative — no flat-rate recomputation. For series bookings the
-   * per-session snapshots are summed so a completed series pays out every
-   * session; a series completed without session rows falls back to its
-   * booking-level snapshot.
-   */
+  // Earnings are sourced exclusively from immutable delivered-session fee events.
   async function aggregateTutorPayouts(
     conn: DbOrTx,
     input: {
@@ -5188,28 +4965,14 @@ export function createBookingService(deps: {
       dateBasis?: "scheduledStartAt" | "completedAt";
       excludeAllocatedSources?: boolean;
       excludedSourceKeys?: ReadonlySet<string>;
-      legacyCutoffAt?: Date;
     },
   ): Promise<TutorPayoutAggregate> {
-    const bookings = await repo.findCompletedBookingsByTutor(
-      conn,
-      input.tutorId,
-      input.legacyCutoffAt ?? input.dateFrom,
-      input.dateTo,
-      input.dateBasis,
-    );
     const feeRows = await repo.findTutorSessionFeesByTutor(
       conn,
       input.tutorId,
-      input.legacyCutoffAt ? undefined : input.dateFrom,
+      input.dateFrom,
       input.dateTo,
       input.dateBasis,
-    );
-    const feeEventKeys = new Set(
-      await repo.listTutorSessionFeeEventKeysByBookings(
-        conn,
-        bookings.map((booking) => booking.id),
-      ),
     );
     const allocatedSourceKeys = new Set(
       input.excludeAllocatedSources
@@ -5219,8 +4982,8 @@ export function createBookingService(deps: {
 
     let completedSessions = 0;
     let totalMarks = 0;
-    let cogitoTake = 0;
-    let tutorPayout = 0;
+    const cogitoTake = 0;
+    const tutorPayout = 0;
     let tutorPayoutIdr = 0;
     const items: TutorPayoutSourceItem[] = [];
 
@@ -5238,23 +5001,23 @@ export function createBookingService(deps: {
         source.collectedMarks ??
         (snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0));
       totalMarks += collectedMarks;
-      if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
-      if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
-      const sourceGrossHonorariumIdr =
-        grossHonorariumIdr ??
-        snap?.tutorHonorariumIdr ??
-        (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
-          TUTOR_PAYOUT_RATE_IDR;
+      const sourceGrossHonorariumIdr = grossHonorariumIdr;
+      if (
+        !Number.isSafeInteger(sourceGrossHonorariumIdr) ||
+        sourceGrossHonorariumIdr! < 0
+      ) {
+        throw new RangeError(
+          "Session fee event must contain a valid IDR honorarium",
+        );
+      }
       items.push({
         ...source,
-        grossHonorariumIdr: Math.round(sourceGrossHonorariumIdr),
+        grossHonorariumIdr: sourceGrossHonorariumIdr!,
         collectedMarks,
         priceSnapshot: snap ?? null,
       });
     };
 
-    // New completions use the immutable fee fact. Older records and explicit
-    // legacy payout-eligible no-shows still use their booking snapshots below.
     for (const fee of feeRows) {
       if (allocatedSourceKeys.has(fee.eventKey)) continue;
       addPayoutSnapshot(
@@ -5278,81 +5041,6 @@ export function createBookingService(deps: {
         },
         fee.grossHonorariumIdr,
       );
-    }
-
-    for (const b of bookings) {
-      if (b.type === BOOKING_TYPE.SERIES) {
-        const sessions = await repo.listSessionsBySeriesId(conn, b.id);
-        const completed = sessions.filter(
-          (s) => s.currentState === BOOKING_STATE.COMPLETED,
-        );
-        if (completed.length > 0) {
-          for (const s of completed) {
-            const sourceKey = tutorSessionFeeEventKey(b.id, s.id);
-            if (
-              feeEventKeys.has(sourceKey) ||
-              allocatedSourceKeys.has(sourceKey)
-            ) {
-              continue;
-            }
-            addPayoutSnapshot(s.priceSnapshot ?? b.priceSnapshot, {
-              sourceKey,
-              sourceType: "legacy_series_session",
-              tutorSessionFeeId: null,
-              bookingId: b.id,
-              bookingNumber: b.bookingNumber,
-              bookingSessionId: s.id,
-              classSessionId: null,
-              deliveryLabel: null,
-              bookingType: "series",
-              deliveryStatus: "completed",
-              scheduledStartAt: s.scheduledStartAt,
-              earnedAt: s.completedAt ?? b.completedAt ?? s.scheduledStartAt,
-            });
-          }
-        } else {
-          const sourceKey = tutorSessionFeeEventKey(b.id, null);
-          if (
-            !feeEventKeys.has(sourceKey) &&
-            !allocatedSourceKeys.has(sourceKey)
-          ) {
-            addPayoutSnapshot(b.priceSnapshot, {
-              sourceKey,
-              sourceType: "legacy_booking",
-              tutorSessionFeeId: null,
-              bookingId: b.id,
-              bookingNumber: b.bookingNumber,
-              bookingSessionId: null,
-              classSessionId: null,
-              deliveryLabel: null,
-              bookingType: "series",
-              deliveryStatus: "completed",
-              scheduledStartAt: b.scheduledStartAt,
-              earnedAt: b.completedAt ?? b.scheduledStartAt,
-            });
-          }
-        }
-      } else {
-        const sourceKey = tutorSessionFeeEventKey(b.id, null);
-        if (feeEventKeys.has(sourceKey) || allocatedSourceKeys.has(sourceKey)) {
-          continue;
-        }
-        addPayoutSnapshot(b.priceSnapshot, {
-          sourceKey,
-          sourceType: "legacy_booking",
-          tutorSessionFeeId: null,
-          bookingId: b.id,
-          bookingNumber: b.bookingNumber,
-          bookingSessionId: null,
-          classSessionId: null,
-          deliveryLabel: null,
-          bookingType: b.type as TutorPayoutSourceItem["bookingType"],
-          deliveryStatus:
-            b.currentState === BOOKING_STATE.NO_SHOW ? "no_show" : "completed",
-          scheduledStartAt: b.scheduledStartAt,
-          earnedAt: b.completedAt ?? b.scheduledStartAt,
-        });
-      }
     }
 
     items.sort(
@@ -5418,8 +5106,8 @@ export function createBookingService(deps: {
     tutorId: string,
     dateTo?: Date,
   ) {
-    const [lastPaid, blockedSourceRows] = await Promise.all([
-      repo.findLatestLegacyTutorPayoutCutoff(conn, tutorId),
+    const [payouts, blockedSourceRows] = await Promise.all([
+      repo.listTutorPayoutsByTutorId(conn, tutorId),
       repo.listTutorPayoutReconciliationSourceKeys(conn, tutorId),
     ]);
     const aggregate = await aggregateTutorPayouts(conn, {
@@ -5430,13 +5118,12 @@ export function createBookingService(deps: {
       excludedSourceKeys: new Set(
         blockedSourceRows.map((row) => row.sourceKey),
       ),
-      // The historical cutoff applies only to allocationless legacy rows.
-      // Allocations and unresolved reconciliation both exclude source keys.
-      legacyCutoffAt: lastPaid
-        ? new Date(lastPaid.cutoffAt.getTime() + 1)
-        : undefined,
     });
-    return { ...aggregate, lastPaidAt: lastPaid?.paidAt ?? null };
+    return {
+      ...aggregate,
+      lastPaidAt:
+        payouts.find((payout) => payout.status === "paid")?.paidAt ?? null,
+    };
   }
 
   function taxRateFor(
@@ -5485,18 +5172,11 @@ export function createBookingService(deps: {
 
     const [aggregate, config, blockedSourceRows] = await Promise.all([
       (async () => {
-        const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
-          conn,
-          input.tutorId,
-        );
         const allSources = await aggregateTutorPayouts(conn, {
           tutorId: input.tutorId,
           dateTo: new Date(),
           dateBasis: "completedAt",
           excludeAllocatedSources: !input.payoutId,
-          legacyCutoffAt: lastPaid
-            ? new Date(lastPaid.cutoffAt.getTime() + 1)
-            : undefined,
         });
         if (!input.payoutId) return allSources;
 
@@ -7251,6 +6931,8 @@ export function createBookingService(deps: {
 
   return {
     getById,
+    listReportSessions: (actorId: string, role: string) =>
+      listPrivateReportSessions(db, actorId, role),
     getRescheduleAvailability,
     listMine,
     listForTutor,

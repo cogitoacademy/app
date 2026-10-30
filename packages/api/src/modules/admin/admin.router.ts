@@ -17,14 +17,17 @@ import {
   adminResolveTutorPayoutReconciliationInput,
   adminUpdateTutorTaxConfigInput,
   adminSetTutorTaxRateOverrideInput,
-  adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
+  adminActivateV3EconomyInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
 
 export function createAdminRouter(handler: AdminHandler) {
   return {
+    activateV3EconomySettings: adminProcedure
+      .input(adminActivateV3EconomyInput)
+      .handler(handler.activateV3EconomySettings),
     getV3EconomySettings: adminProcedure
       .route({
         method: "POST",
@@ -252,28 +255,5 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(adminSetTutorTaxRateOverrideInput)
       .handler(handler.setTutorTaxRateOverride),
-
-    getEconomySettings: adminProcedure
-      .route({
-        method: "POST",
-        path: "/admin/economy/get",
-        tags: ["Admin", "Economy"],
-        summary: "Get active economy settings",
-        description:
-          "Returns the active Cogito take schedule and computational Mark value",
-      })
-      .handler(handler.getEconomySettings),
-
-    updateEconomySettings: adminProcedure
-      .route({
-        method: "POST",
-        path: "/admin/economy/update",
-        tags: ["Admin", "Economy"],
-        summary: "Update the Cogito take schedule",
-        description:
-          "Updates future-booking Cogito take rates with optimistic locking and an audit record",
-      })
-      .input(adminUpdateEconomySettingsInput)
-      .handler(handler.updateEconomySettings),
   };
 }

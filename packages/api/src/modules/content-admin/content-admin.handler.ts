@@ -12,6 +12,11 @@ import {
 } from "./content-admin.types";
 export function createContentAdminHandler(service: ContentAdminService) {
   return {
+    previewPdf: ({ input }: { input: { fileId: string } }) =>
+      withDomainMap(
+        () => service.previewPdf(input.fileId),
+        mapContentAdminError,
+      ),
     list: ({ input }: { input: z.infer<typeof kindInput> }) =>
       withDomainMap(() => service.list(input.kind), mapContentAdminError),
     categories: () =>

@@ -190,6 +190,7 @@ export const academyClassEnrollmentAllocation = pgTable(
         "checkout_reserved" | "unfunded_reserved" | "funded" | "released"
       >()
       .notNull(),
+    scheduleChangeVersion: integer("schedule_change_version"),
     fundingEventKey: text("funding_event_key").notNull(),
     fundingSourceReference: text("funding_source_reference").notNull(),
     fundedMarks: integer("funded_marks").notNull().default(0),
@@ -220,6 +221,10 @@ export const academyClassEnrollmentAllocation = pgTable(
     check(
       "academy_class_enrollment_allocation_marks_check",
       sql`${table.fundedMarks} >= 0 AND ${table.fundedMarks} <= ${table.rateMarks} AND ${table.spentMarks} >= 0 AND ${table.releasedMarks} >= 0 AND ${table.spentMarks} + ${table.releasedMarks} <= ${table.fundedMarks}`,
+    ),
+    check(
+      "academy_class_enrollment_allocation_schedule_change_version_check",
+      sql`${table.scheduleChangeVersion} IS NULL OR ${table.scheduleChangeVersion} > 0`,
     ),
     check(
       "academy_class_enrollment_allocation_funding_state_check",

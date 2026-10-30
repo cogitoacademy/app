@@ -1,3 +1,4 @@
+import { getOperationsAnalytics } from "./admin-operations-analytics";
 import {
   asc,
   and,
@@ -144,29 +145,9 @@ export async function getDashboardAnalytics(
   const bookingCount = sql<number>`count(*)::int`;
   const completedCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} = 'completed')::int`;
   const exceptionCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} IN ('declined', 'cancelled', 'late_cancelled', 'no_show', 'expired'))::int`;
-  const legacySnapshot = sql`jsonb_typeof(${booking.priceSnapshot}) = 'object'
-    AND ${booking.priceSnapshot}->>'engine' IS NULL
-    AND jsonb_typeof(${booking.priceSnapshot}->'perStudent') = 'number'
-    AND jsonb_typeof(${booking.priceSnapshot}->'baseline') = 'number'
-    AND jsonb_typeof(${booking.priceSnapshot}->'tutorShare') = 'number'
-    AND jsonb_typeof(${booking.priceSnapshot}->'cogitoTake') = 'number'`;
-  const v3SnapshotCount = sql<number>`count(*) FILTER (
-    WHERE ${booking.priceSnapshot}->>'engine' = 'v3'
-  )::int`;
-  const legacySnapshotCount = sql<number>`count(*) FILTER (
-    WHERE ${legacySnapshot}
-  )::int`;
-  const otherSnapshotCount = sql<number>`count(*) FILTER (
-    WHERE ${booking.priceSnapshot} IS NOT NULL
-      AND ${booking.priceSnapshot}->>'engine' IS DISTINCT FROM 'v3'
-      AND NOT COALESCE((${legacySnapshot}), false)
-  )::int`;
-  const missingSnapshotCount = sql<number>`count(*) FILTER (
-    WHERE ${booking.priceSnapshot} IS NULL
-  )::int`;
   const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
   const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
-  const successfulPayment = sql`${paymentRecord.status} in ('PAID', 'SETTLED')`;
+  const successfulPayment = sql`${paymentRecord.providerSuccessAt} IS NOT NULL AND ${paymentRecord.status} in ('PAID', 'SETTLED', 'REFUNDED')`;
 
   const [
     bookingSummaryRows,
@@ -180,6 +161,7 @@ export async function getDashboardAnalytics(
     marksSummaryRows,
     paymentSummaryRows,
     refundSummaryRows,
+    operationsSummary,
   ] = await Promise.all([
     conn
       .select({
@@ -187,10 +169,6 @@ export async function getDashboardAnalytics(
         completed: completedCount,
         exceptions: exceptionCount,
         activeLearners: sql<number>`count(distinct ${booking.proposerId})::int`,
-        v3SnapshotCount,
-        legacySnapshotCount,
-        otherSnapshotCount,
-        missingSnapshotCount,
       })
       .from(booking)
       .where(periodFilter),
@@ -298,10 +276,10 @@ export async function getDashboardAnalytics(
     conn
       .select({
         payingStudents: sql<number>`count(distinct ${paymentRecord.userId}) FILTER (WHERE ${successfulPayment})::int`,
-        grossRevenueIdr: sql<number>`coalesce(sum(${paymentRecord.amountIdr}) FILTER (
+        grossReceiptsIdr: sql<number>`coalesce(sum(${paymentRecord.amountIdr}) FILTER (
           WHERE ${successfulPayment}
-            AND ${gte(paymentRecord.updatedAt, query.periodStart)}
-            AND ${lte(paymentRecord.updatedAt, query.periodEnd)}
+            AND ${gte(paymentRecord.providerSuccessAt, query.periodStart)}
+            AND ${lte(paymentRecord.providerSuccessAt, query.periodEnd)}
         ), 0)::bigint`,
       })
       .from(paymentRecord),
@@ -313,18 +291,16 @@ export async function getDashboardAnalytics(
         ), 0)::bigint`,
       })
       .from(refundRecord),
+    getOperationsAnalytics(conn, query),
   ]);
 
   return {
+    operationsSummary,
     bookingSummary: bookingSummaryRows[0] ?? {
       bookings: 0,
       completed: 0,
       exceptions: 0,
       activeLearners: 0,
-      v3SnapshotCount: 0,
-      legacySnapshotCount: 0,
-      otherSnapshotCount: 0,
-      missingSnapshotCount: 0,
     },
     userSummary: userSummaryRows[0] ?? { newStudents: 0, newTutors: 0 },
     bookingTrend,
@@ -348,7 +324,7 @@ export async function getDashboardAnalytics(
     },
     paymentSummary: paymentSummaryRows[0] ?? {
       payingStudents: 0,
-      grossRevenueIdr: 0,
+      grossReceiptsIdr: 0,
     },
     refundSummary: refundSummaryRows[0] ?? { refundedIdr: 0 },
   };

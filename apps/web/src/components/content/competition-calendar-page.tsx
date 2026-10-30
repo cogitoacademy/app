@@ -2,7 +2,7 @@
 
 import { wibCalendarDate } from "./calendar-utils";
 import { isValid } from "date-fns";
-import { IconCalendarEvent, IconRefresh } from "@tabler/icons-react";
+import { IconRefresh } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -73,7 +73,11 @@ export function CompetitionCalendarPage({
   }
 
   return (
-    <Stack direction="column" spacing="lg" className="min-h-0 flex-nowrap">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="min-h-0 min-w-0 w-full max-w-full flex-nowrap"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Heading level={1} size="md">
@@ -86,21 +90,8 @@ export function CompetitionCalendarPage({
             place.
           </Text>
         </div>
-        {onManage ? (
-          <Button variant="secondary" onClick={onManage}>
-            Manage calendar
-          </Button>
-        ) : null}
       </div>
-      {events.length > 0 ? (
-        <CompetitionCalendar events={events} />
-      ) : (
-        <EmptyStateCard
-          icon={<IconCalendarEvent className="text-cogito-orange" />}
-          title="No competitions yet"
-          description="Published competitions will appear here when they are available."
-        />
-      )}
+      <CompetitionCalendar events={events} onManage={onManage} />
     </Stack>
   );
 }

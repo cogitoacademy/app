@@ -32,8 +32,7 @@ export function TutorCapacityFields({
       label={<Text className="font-medium">Teaching capacity</Text>}
       description={
         <Text className="mt-1 text-sm text-muted">
-          Choose the largest class students can request. Select one student to
-          accept private classes only.
+          Choose the maximum number of students for private sessions. Select one student for one-on-one sessions only. This limit does not apply to Academy classes (cohorts and masterclasses), which have their own capacity set by Cogito.
         </Text>
       }
     >
@@ -48,7 +47,7 @@ export function TutorCapacityFields({
               className="w-full sm:grid-cols-1!"
               description={
                 <FieldDescription>
-                  New booking requests cannot exceed this capacity.
+                  Private session booking requests cannot exceed this capacity.
                 </FieldDescription>
               }
             >

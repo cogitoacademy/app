@@ -56,9 +56,7 @@ export function ClassDetailPage() {
   if (academyClass.isPending)
     return (
       <Stack direction="column" spacing="md" aria-busy="true">
-        <Text className="text-muted" role="status">
-          Loading class details…
-        </Text>
+        <Loader />
         <Loader />
       </Stack>
     );

@@ -21,16 +21,4 @@ CREATE TABLE "economy_config" (
 	CONSTRAINT "economy_config_updated_by_user_id_fk" FOREIGN KEY ("updated_by") REFERENCES "user"("id") ON DELETE set null
 );
 -- statement-breakpoint
-INSERT INTO "economy_config" (
-	"id",
-	"mark_value_idr",
-	"min_tutor_base_rate_idr",
-	"online_tutor_increment_idr",
-	"offline_tutor_increment_idr",
-	"online_cogito_base_idr",
-	"online_cogito_increment_idr",
-	"offline_cogito_base_idr",
-	"offline_cogito_increment_idr"
-) VALUES ('default', 5000, 50000, 30000, 40000, 50000, 20000, 90000, 40000)
-ON CONFLICT ("id") DO NOTHING;
-
+-- Default economy config is inserted by apps/server/src/seed/seed.ts.

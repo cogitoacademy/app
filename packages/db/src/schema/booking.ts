@@ -397,11 +397,11 @@ export const sessionCompletionFeedbackHistory = pgTable(
     // Text preserves the session ID, but report history follows feedback and booking cascades.
     sessionId: text("session_id"),
     version: integer("version").notNull(),
-    status: text("status").notNull(),
+    status: text("status", { enum: ["submitted", "corrected"] }).notNull(),
     actorId: text("actor_id").references(() => user.id, {
       onDelete: "set null",
     }),
-    actorRole: text("actor_role").notNull(),
+    actorRole: text("actor_role", { enum: ["admin", "tutor"] }).notNull(),
     reason: text("reason"),
     deliveryConfirmed: boolean("delivery_confirmed"),
     discussion: jsonb("discussion").$type<string[]>().notNull(),
@@ -415,11 +415,11 @@ export const sessionCompletionFeedbackHistory = pgTable(
     check("session_feedback_history_version_check", sql`${table.version} > 0`),
     check(
       "session_feedback_history_status_check",
-      sql`${table.status} IN ('submitted','corrected','legacy_snapshot')`,
+      sql`${table.status} IN ('submitted','corrected')`,
     ),
     check(
       "session_feedback_history_actor_check",
-      sql`${table.actorRole} IN ('admin','tutor','legacy')`,
+      sql`${table.actorRole} IN ('admin','tutor')`,
     ),
     uniqueIndex("session_feedback_history_feedback_version_uniq").on(
       table.feedbackId,

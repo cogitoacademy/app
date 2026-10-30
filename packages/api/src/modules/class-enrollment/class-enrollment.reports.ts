@@ -16,6 +16,7 @@ import {
   academyClassSession,
   academyClassSessionReport,
   academyClassSessionReportRevision,
+  academyClassTutorAbsence,
   auditLog,
   tutorSessionFee,
   wallet as walletTable,
@@ -538,12 +539,15 @@ export function createClassSessionReportService(deps: {
         classNumber: academyClass.classNumber,
         classKind: academyClass.kind,
         sessionId: academyClassSession.id,
+        tutorId: academyClassSession.tutorId,
         sequenceNumber: academyClassSession.sequenceNumber,
         sessionTitle: academyClassSession.titleEn,
         startAt: academyClassSession.startAt,
         endAt: academyClassSession.endAt,
         mode: academyClassSession.mode,
         state: academyClassSession.state,
+        absenceReportedAt: academyClassTutorAbsence.reportedAt,
+        absenceLate: academyClassTutorAbsence.late,
         tutorFeeIdr: academyClassSession.tutorFeeIdr,
         reportId: academyClassSessionReport.id,
         reportVersion: academyClassSessionReport.version,
@@ -559,6 +563,11 @@ export function createClassSessionReportService(deps: {
         academyClassSessionReport,
         eq(academyClassSessionReport.sessionId, academyClassSession.id),
       )
+      .leftJoin(academyClassTutorAbsence, and(
+        eq(academyClassTutorAbsence.sessionId, academyClassSession.id),
+        eq(academyClassTutorAbsence.tutorId, academyClassSession.tutorId),
+        eq(academyClassTutorAbsence.assignmentVersion, academyClassSession.version),
+      ))
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(
         asc(academyClassSession.startAt),
@@ -608,12 +617,15 @@ export function createClassSessionReportService(deps: {
       classNumber: row.classNumber,
       classKind: row.classKind as "cohort" | "masterclass",
       sessionId: row.sessionId,
+      tutorId: row.tutorId,
       sequenceNumber: row.sequenceNumber,
       sessionTitle: row.sessionTitle,
       startAt: row.startAt,
       endAt: row.endAt,
       mode: row.mode as "online" | "in_person",
       state: row.state as "scheduled" | "completed" | "cancelled",
+      absenceReportedAt: actorRole === "student" ? null : row.absenceReportedAt,
+      absenceLate: actorRole === "student" ? null : row.absenceLate,
       report: row.reportId
         ? {
             id: row.reportId,

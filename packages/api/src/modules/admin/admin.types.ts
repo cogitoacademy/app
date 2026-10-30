@@ -173,30 +173,15 @@ export const adminListLedgerEntriesInput = z.object({
   dateTo: z.string().max(100).optional(),
 });
 
-export const adminUpdateEconomySettingsInput = z.object({
-  expectedVersion: z.number().int().min(1),
-  onlineCogitoBaseIdr: z
-    .number()
-    .int()
-    .min(5_000)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  onlineCogitoIncrementIdr: z
-    .number()
-    .int()
-    .min(0)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  offlineCogitoBaseIdr: z
-    .number()
-    .int()
-    .min(5_000)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  offlineCogitoIncrementIdr: z
-    .number()
-    .int()
-    .min(0)
-    .max(10_000_000)
-    .multipleOf(5_000),
-});
+export const adminActivateV3EconomyInput = z
+  .object({
+    version: z.number().int().min(1).max(2_000_000_000),
+    expectedActiveRevision: z
+      .number()
+      .int()
+      .min(1)
+      .max(2_000_000_000)
+      .nullable(),
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();

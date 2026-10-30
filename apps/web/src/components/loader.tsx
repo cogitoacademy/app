@@ -1,3 +1,5 @@
+"use client";
+
 import { Spinner } from "@cogito-app/ui/components/selia/spinner";
 
 export default function Loader() {

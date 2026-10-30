@@ -10,11 +10,8 @@ import {
 } from "../../modules/booking/booking.types";
 import {
   completionFeedbackEntitlementEventKeys,
-  decodeLegacyCompletionFeedbackText,
   normalizeCompletionFeedback,
-  restoreCompletionFeedbackForRead,
 } from "../../modules/booking/booking.service";
-import { escapeHtml } from "../../lib/sanitize";
 
 const input = (discussion: string[]) => ({
   bookingId: "b1",
@@ -83,38 +80,6 @@ describe("completion feedback input", () => {
         strengths: ["😀".repeat(601)],
       }),
     ).toThrow("at most 600 characters");
-  });
-
-  test("decodes one layer only for known legacy escaped feedback", () => {
-    const legacy = `Legacy ${"text &amp; <tag> 'quoted' \"double\" ".repeat(45)}`;
-    const legacyStored = escapeHtml(legacy);
-    expect(decodeLegacyCompletionFeedbackText(legacyStored)).toBe(legacy);
-    expect(legacy.length).toBeGreaterThan(600);
-
-    const current = {
-      discussion: ["Literal &amp; entity", "&lt; is typed text"],
-      strengths: ['<plain> & "quotes" \''],
-      improvements: ["unchanged"],
-    };
-    expect(
-      restoreCompletionFeedbackForRead(current, [
-        { status: "submitted" },
-        { status: "corrected" },
-      ]),
-    ).toBe(current);
-    expect(
-      restoreCompletionFeedbackForRead(
-        {
-          discussion: [
-            escapeHtml("Literal &amp; entity"),
-            escapeHtml("&lt; is typed text"),
-          ],
-          strengths: [escapeHtml('<plain> & "quotes" \'')],
-          improvements: [escapeHtml("unchanged")],
-        },
-        [{ status: "legacy_snapshot" }],
-      ),
-    ).toEqual(current);
   });
 
   test("rejects missing feedback", () => {

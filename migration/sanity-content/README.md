@@ -103,15 +103,28 @@ ignored `tmp/`. Private storage defaults outside public `uploads`.
 
 `import.ts` defaults to offline dry-run. It requires `--manifest`, `--mapping`
 (source category ID -> destination parent catalog ID) and `--assets`. It validates
-all source identities/ranges/links/PDF size+SHA-256 before any writes. Different
+all source identities/ranges/links/PDF size+SHA-256 before any writes.
+
+From the repository root, run a dry-run import with explicit local paths:
+
+```sh
+bun run seed-sanity-content -- --manifest tmp/v3-content/kb-calendar-prepared.json --mapping tmp/v3-content/dev-category-mapping.json --assets tmp/v3-content/assets
+```
+
+Keep the extracted snapshot, mapping and assets under ignored `tmp/`; the command
+does not have defaults for workspace-specific files. Different
 source IDs are retained even when title/date match. Mapping values may deliberately
 map several legacy categories to one reviewed catalog parent; no name matching.
-Apply additionally requires `--apply --expect-target host:port/database --actor
-existing-admin-id`, server env loaded, consumers still on Sanity and admin
-writing disabled. Identical version-1 imports skip; changed data/admin edits
-conflict. Records commit individually with audits; earlier successes/private
-orphans survive a later failure. This is deliberate restartable import, not an
-all-or-nothing batch. A PDF upload cannot be rolled back by a DB transaction.
+Direct importer apply additionally requires `--apply --expect-target
+host:port/database --actor existing-admin-id`, server env loaded, consumers
+still on Sanity and admin writing disabled. For an explicit local seed after
+switching consumers to the database, run `bun run seed-sanity-content:apply`;
+this uses the existing guarded server seed, its admin actor and configured DB
+target, and skips unrelated demo fixtures. Identical version-1 imports skip;
+changed data/admin edits conflict. Records commit individually with audits;
+earlier successes/private orphans survive a later failure. This is deliberate
+restartable import, not an all-or-nothing batch. A PDF upload cannot be rolled
+back by a DB transaction.
 
 See `docs/RUNBOOK.md` for the complete migration/import/activation and rollback
 sequence, private bucket denial proof and manual-upload alternative. No actual

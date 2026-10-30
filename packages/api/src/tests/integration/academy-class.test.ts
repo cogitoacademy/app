@@ -542,7 +542,7 @@ describe("academy class drafts and published reads", () => {
     }
   });
 
-  test("rejects an outdated publish version and a non-approved tutor fee", async () => {
+  test("rejects an outdated publish version and publishes a custom per-class tutor fee", async () => {
     const startAt = new Date("2036-03-01T10:00:00.000Z");
     const input = {
       kind: "masterclass" as const,
@@ -587,22 +587,23 @@ describe("academy class drafts and published reads", () => {
 
     const wrongFee = await adminClient.admin.saveAcademyClassDraft({
       ...input,
-      titleEn: `Wrong-fee masterclass ${suffix}`,
+      titleEn: `Custom-fee masterclass ${suffix}`,
       tutorFeeIdr: 250_000,
-      reason: "Create draft with non-approved fee",
+      reason: "Create draft with agreed custom fee",
     });
-    await expect(
-      adminClient.admin.publishAcademyClass({
-        id: wrongFee.id,
-        expectedVersion: wrongFee.version,
-        reason: "Reject non-approved tutor fee",
-      }),
-    ).rejects.toThrow(
-      "approved masterclass tutor fee is Rp300,000 per session",
-    );
-    expect(
-      (await adminClient.admin.getAcademyClass({ id: wrongFee.id })).state,
-    ).toBe("draft");
+    await adminClient.admin.publishAcademyClass({
+      id: wrongFee.id,
+      expectedVersion: wrongFee.version,
+      reason: "Publish agreed per-class tutor fee",
+    });
+    const published = await adminClient.admin.getAcademyClass({
+      id: wrongFee.id,
+    });
+    expect(published.state).toBe("published");
+    expect(published.tutorFeeIdr).toBe(250_000);
+    expect(published.sessions.map((session) => session.tutorFeeIdr)).toEqual([
+      250_000,
+    ]);
   });
 
   test("rechecks managed room capacity after a gated concurrent room update", async () => {

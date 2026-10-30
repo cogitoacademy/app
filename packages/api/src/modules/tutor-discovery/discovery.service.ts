@@ -1,9 +1,7 @@
 import type { tutorProfile, user } from "@cogito-app/db/schema";
 import type { DiscoveryRepo } from "./discovery.repo";
 import { TutorProfileNotFoundError } from "./discovery.errors";
-import type { EconomyParameters } from "../economy";
 import type { GroupSize, PricingPort } from "../pricing/pricing.service";
-import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
 import type { V3ConfigRevision } from "../pricing/pricing.service";
 import {
   toNormalizedTutorSubjects,
@@ -57,21 +55,9 @@ export interface ProfileProjection {
   user: { name: string | null; image: string | null } | null;
 }
 
-function limitPrices(
-  prices: Record<string, number> | null,
-  maxClassSize: number,
-) {
-  if (!prices) return null;
-  return Object.fromEntries(
-    Object.entries(prices).filter(([size]) => Number(size) <= maxClassSize),
-  );
-}
-
 export function buildProjection(profile: ProfileWithUser): ProfileProjection {
   const onlineMaxClassSize = profile.onlineMaxClassSize ?? 6;
   const offlineMaxClassSize = profile.offlineMaxClassSize ?? 6;
-  const preferredMaxClassSize =
-    profile.modality === "offline" ? offlineMaxClassSize : onlineMaxClassSize;
   return {
     id: profile.id,
     userId: profile.userId,
@@ -87,7 +73,7 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     modality: profile.modality,
     onlineMaxClassSize,
     offlineMaxClassSize,
-    prices: limitPrices(profile.prices, preferredMaxClassSize),
+    prices: null,
     pricesByModality: null,
     pricesByCompetition: null,
     pricingRevision: null,
@@ -102,93 +88,6 @@ function getSupportedModalities(modality: string | null): SupportedModality[] {
   if (modality === "offline") return ["offline"];
   if (modality === "both") return ["online", "offline"];
   return ["online"];
-}
-
-function buildEconomyPrices(
-  profile: ProfileWithUser,
-  projection: ProfileProjection,
-  pricing: PricingPort,
-  config: EconomyParameters,
-): ProfileProjection {
-  if (!profile.baseRatesIdr) return projection;
-
-  const pricesByModality: PricesByModality = {};
-  for (const modality of getSupportedModalities(profile.modality)) {
-    const baseRateIdr = profile.baseRatesIdr[modality];
-    if (typeof baseRateIdr !== "number") continue;
-
-    const prices: Record<string, number> = {};
-    const maxClassSize =
-      modality === "offline"
-        ? (profile.offlineMaxClassSize ?? 6)
-        : (profile.onlineMaxClassSize ?? 6);
-    for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
-      if (size > maxClassSize) break;
-      prices[String(size)] = pricing.computeEconomics(
-        modality,
-        baseRateIdr,
-        size,
-        config,
-      ).perStudent;
-    }
-    pricesByModality[modality] = prices;
-  }
-
-  const preferredModality =
-    profile.modality === "offline" ? "offline" : "online";
-  const preferredPrices =
-    pricesByModality[preferredModality] ?? Object.values(pricesByModality)[0];
-
-  return {
-    ...projection,
-    prices: preferredPrices ?? projection.prices,
-    pricesByModality,
-  };
-}
-
-function buildLegacyCompetitionPrices(
-  profile: ProfileWithUser,
-  projection: ProfileProjection,
-  pricing: PricingPort,
-  config: EconomyParameters,
-): ProfileProjection {
-  const legacySlugs = new Set<string>(V3_COMPETITIONS);
-  const pricesByCompetition: PricesByCompetition = {};
-  for (const subject of projection.subjects) {
-    const slug = subject.parent.slug;
-    if (!subject.isSelectable || !legacySlugs.has(slug)) continue;
-    const pricesByModality: PricesByModality = {};
-    for (const modality of getSupportedModalities(profile.modality)) {
-      const baseRateIdr = profile.baseRatesIdr?.[modality];
-      if (typeof baseRateIdr !== "number") continue;
-      const maxClassSize =
-        modality === "offline"
-          ? (profile.offlineMaxClassSize ?? 6)
-          : (profile.onlineMaxClassSize ?? 6);
-      const prices: Record<string, number> = {};
-      for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
-        if (size > maxClassSize) break;
-        prices[String(size)] = pricing.computeEconomics(
-          modality,
-          baseRateIdr,
-          size,
-          config,
-        ).perStudent;
-      }
-      pricesByModality[modality] = prices;
-    }
-    pricesByCompetition[slug] = pricesByModality;
-  }
-
-  return {
-    ...projection,
-    // A tutor with catalog subjects must be priced against the selected
-    // subject's parent. Keep the unscoped legacy price only for uncategorized
-    // profiles that predate the catalog.
-    prices: null,
-    pricesByModality: null,
-    pricesByCompetition,
-  };
 }
 
 function buildV3CompetitionPrices(
@@ -250,32 +149,16 @@ export function createDiscoveryService(deps: {
         buildV3CompetitionPrices(profile, projections[index]!, pricing, active),
       );
     }
-    const legacyPriced = profiles.filter((profile) => profile.baseRatesIdr);
-    if (legacyPriced.length === 0) return projections;
-    const config = await pricing.getEconomyConfig();
-    return profiles.map((profile, index) =>
-      profile.subjects?.length
-        ? buildLegacyCompetitionPrices(
-            profile,
-            projections[index]!,
-            pricing,
-            config,
-          )
-        : buildEconomyPrices(profile, projections[index]!, pricing, config),
-    );
+    return projections;
   }
 
   async function projectProfile(profile: ProfileWithUser) {
     const projection = buildProjection(profile);
     if (!pricing) return projection;
     const active = await pricing.getActiveV3Config();
-    if (active)
-      return buildV3CompetitionPrices(profile, projection, pricing, active);
-    if (!profile.baseRatesIdr) return projection;
-    const config = await pricing.getEconomyConfig();
-    return profile.subjects?.length
-      ? buildLegacyCompetitionPrices(profile, projection, pricing, config)
-      : buildEconomyPrices(profile, projection, pricing, config);
+    return active
+      ? buildV3CompetitionPrices(profile, projection, pricing, active)
+      : projection;
   }
 
   async function listPublished(opts?: {

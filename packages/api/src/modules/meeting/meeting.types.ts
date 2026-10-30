@@ -64,6 +64,7 @@ export interface MeetingPort {
     sessionId: string,
     scheduledStartAt: Date,
     scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
   ): Promise<void>;
   /**
    * Creates a provider-side meeting event and persists the local

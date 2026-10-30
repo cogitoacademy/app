@@ -56,7 +56,6 @@ import {
 
 import { orpc } from "@/utils/orpc";
 import { InfoPreview } from "@/components/info-preview";
-import { getBusinessSummary } from "./admin-analytics-compat";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -341,7 +340,8 @@ function AnalyticsContent({
   data: DashboardAnalytics;
   periodDescription: string;
 }) {
-  const businessSummary = getBusinessSummary(data);
+  const businessSummary = data.businessSummary;
+  const operations = data.operationsSummary;
   const stateData = STATE_ORDER.map((state) => {
     const row = data.stateBreakdown.find(
       (candidate) => candidate.state === state,
@@ -350,7 +350,6 @@ function AnalyticsContent({
   }).filter((row) => row.count > 0);
   const hasBookingTrend = data.summary.bookings > 0;
   const hasUserTrend = data.summary.newStudents + data.summary.newTutors > 0;
-  const pricingSnapshots = data.summary.pricingSnapshotBreakdown;
   const totalModalityBookings = data.modalityBreakdown.reduce(
     (total, row) => total + row.count,
     0,
@@ -361,7 +360,7 @@ function AnalyticsContent({
   );
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <AnalyticsMetric
           icon={<IconChartBar />}
           label="Bookings"
@@ -375,21 +374,6 @@ function AnalyticsContent({
           value={`${percentageFormatter.format(data.summary.completionRate)}%`}
           helper={`${numberFormatter.format(data.summary.resolvedBookings)} resolved bookings`}
           tone="success-subtle"
-        />
-        <AnalyticsMetric
-          icon={<IconChartHistogram />}
-          label="V3 bookings"
-          value={
-            pricingSnapshots
-              ? numberFormatter.format(pricingSnapshots.v3)
-              : "Unavailable"
-          }
-          helper={
-            pricingSnapshots
-              ? `${numberFormatter.format(pricingSnapshots.legacy)} legacy · ${numberFormatter.format(pricingSnapshots.other)} other · ${numberFormatter.format(pricingSnapshots.missing)} missing`
-              : "Pricing snapshot counts are not available from this API version."
-          }
-          tone="info-subtle"
         />
         <AnalyticsMetric
           icon={<IconUserPlus />}
@@ -440,8 +424,8 @@ function AnalyticsContent({
           </AnalyticsSection>
 
           <AnalyticsSection
-            title="Marks & revenue"
-            description="Current student wallet health and realized top-up payments."
+            title="Wallets & top-up receipts"
+            description="Wallet health and successful top-up receipts, separate from service delivery."
           >
             <AnalyticsMetric
               icon={<IconCoins />}
@@ -469,14 +453,78 @@ function AnalyticsContent({
             />
             <AnalyticsMetric
               icon={<IconCash />}
-              label="Net top-up revenue"
-              value={formatIdr(businessSummary.netRevenueIdr)}
-              helper={`Gross ${formatIdr(businessSummary.grossRevenueIdr)} · refunds ${formatIdr(businessSummary.refundedIdr)}`}
+              label="Top-up receipts"
+              value={formatIdr(businessSummary.netReceiptsIdr)}
+              helper={`Gross ${formatIdr(businessSummary.grossReceiptsIdr)} · refunds ${formatIdr(businessSummary.refundedIdr)}`}
               tone="info-subtle"
             />
           </AnalyticsSection>
         </>
       ) : null}
+
+      {operations.unavailablePaymentDates > 0 ? (
+        <Text role="status" className="mt-4 text-sm text-muted">
+          Some successful payments have no success date; period receipts exclude
+          them.
+        </Text>
+      ) : null}
+      {operations.unavailablePrivateRates > 0 ? (
+        <Text role="status" className="mt-4 text-sm text-muted">
+          Some upcoming rates are unavailable; totals exclude those seats.
+        </Text>
+      ) : null}
+      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-3">
+        <BusinessFacts
+          title="Service delivered"
+          description="Selected period · by session delivery date. Marks measure settled service, not IDR revenue."
+          rows={[
+            {
+              label: "Private service delivered",
+              value: `${numberFormatter.format(operations.delivered.privateMarks)} Marks`,
+              detail: `${numberFormatter.format(operations.delivered.privateSessions)} sessions`,
+            },
+            {
+              label: "Academy service delivered",
+              value: `${numberFormatter.format(operations.delivered.academyMarks)} Marks`,
+              detail: `${numberFormatter.format(operations.delivered.academySeatSessions)} student seat-sessions`,
+            },
+          ]}
+        />
+        <BusinessFacts
+          title="Upcoming commitments"
+          description={`As of ${new Date(operations.asOf).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" })} WIB · confirmed future sessions; independent of the period filter.`}
+          rows={[
+            {
+              label: "Upcoming private sessions",
+              value: `${numberFormatter.format(operations.upcoming.privateSeatSessions)} seat-sessions`,
+              detail: `${numberFormatter.format(operations.upcoming.privateFundedMarks)} funded Marks · ${numberFormatter.format(operations.upcoming.privateUnfundedMarks)} unfunded Marks`,
+            },
+            {
+              label: "Upcoming Academy seats",
+              value: `${numberFormatter.format(operations.upcoming.academySeatSessions)} seat-sessions`,
+              detail: `${numberFormatter.format(operations.upcoming.academyFundedMarks)} funded Marks · ${numberFormatter.format(operations.upcoming.academyUnfundedMarks)} unfunded Marks`,
+            },
+          ]}
+        />
+        <BusinessFacts
+          title="Tutor fees"
+          description="Earned in the selected period. Payment status is current; paid fees include allocated gross honorarium before tax and transfer deductions."
+          rows={[
+            {
+              label: "Tutor fees earned",
+              value: formatIdr(operations.tutorFees.earnedIdr),
+            },
+            {
+              label: "Tutor fees paid",
+              value: formatIdr(operations.tutorFees.paidIdr),
+            },
+            {
+              label: "Tutor fees unpaid",
+              value: formatIdr(operations.tutorFees.unpaidIdr),
+            },
+          ]}
+        />
+      </div>
 
       <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
         <Card className="h-full">
@@ -846,10 +894,10 @@ function AnalyticsContent({
       </div>
 
       <Text className="mt-3 text-xs text-dimmed">
-        Snapshot counts use booking creation date and include all booking
-        states. Booking-money totals are unavailable until their Marks, session,
-        and participant basis is defined. Net top-up revenue below uses paid or
-        settled payments less recorded refunds.
+        Booking demand charts use request creation dates. Service delivery uses
+        session dates; top-up receipts use successful payment and refund dates.
+        Marks, top-up receipts and tutor costs are separate measures and do not
+        represent profit.
       </Text>
     </>
   );
@@ -951,5 +999,35 @@ function AnalyticsError({ onRetry }: { onRetry: () => void }) {
         </Button>
       </CardBody>
     </Card>
+  );
+}
+
+function BusinessFacts({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: Array<{ label: string; value: string; detail?: string }>;
+}) {
+  return (
+    <section className="min-w-0" aria-label={title}>
+      <Heading size="sm">{title}</Heading>
+      <Text className="mt-1 text-sm text-muted">{description}</Text>
+      <dl className="mt-3 divide-y divide-border">
+        {rows.map((row) => (
+          <div key={row.label} className="py-3">
+            <dt className="text-sm text-muted">{row.label}</dt>
+            <dd className="mt-1 break-words text-xl font-semibold">
+              {row.value}
+            </dd>
+            {row.detail ? (
+              <dd className="mt-1 text-xs text-dimmed">{row.detail}</dd>
+            ) : null}
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

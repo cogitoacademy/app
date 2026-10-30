@@ -144,7 +144,10 @@ function HistoryFieldChanges({
         return fallback;
       })();
   const visibleChanges = changes.filter(
-    (change) => change.path !== "profileImageUrl",
+    (change) =>
+      !["profileImageUrl", "prices", "baseRatesIdr"].includes(
+        stripPendingProfileChangesPrefix(change.path).split(".")[0] ?? "",
+      ),
   );
   if (visibleChanges.length === 0) return null;
 

@@ -1163,7 +1163,7 @@ function AdminStateHistoryCard({
       </CardHeader>
       <CardBody className="px-6 py-2">
         {loading ? (
-          <Text className="py-4 text-muted">Loading state history…</Text>
+          <Loader />
         ) : error ? (
           <div className="py-4">
             <Text>{errorMessage ?? "State history could not be loaded."}</Text>
@@ -1232,7 +1232,7 @@ function AdminParticipantFinancialDetails({
           {affected ? <Badge variant="warning">Affected</Badge> : null}
         </div>
         {walletLoading ? (
-          <Text className="text-xs text-muted">Loading wallet…</Text>
+          <Loader />
         ) : wallet ? (
           <div className="grid grid-cols-3 gap-3 text-right">
             <WalletMetric label="Total" value={wallet.totalBalance} />
@@ -1248,7 +1248,7 @@ function AdminParticipantFinancialDetails({
       <div className="mt-3 border-t border-border pt-3">
         <Text className="text-xs font-medium text-muted">Booking ledger</Text>
         {ledgerLoading ? (
-          <Text className="mt-1 text-xs text-muted">Loading entries…</Text>
+          <Loader />
         ) : ledger.length > 0 ? (
           <div className="mt-1 divide-y divide-border">
             {ledger.slice(0, 4).map((entry) => (
@@ -1494,9 +1494,7 @@ function OverrideDialog({
             </div>
             <div className="overflow-hidden rounded-lg border border-item-border bg-item">
               {participantQuery.isPending ? (
-                <Text className="p-3.5 text-sm text-muted">
-                  Loading participants…
-                </Text>
+                <Loader />
               ) : participantQuery.isError ? (
                 <div className="flex items-center justify-between gap-3 p-3.5">
                   <Text className="text-sm text-danger">

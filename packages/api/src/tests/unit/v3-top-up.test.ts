@@ -72,6 +72,29 @@ function setup() {
 }
 
 describe("V3 durable top-up offers", () => {
+  test("creates a purchase through an explicit quote choice", async () => {
+    const h = setup();
+    const quote = await h.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 440,
+    });
+
+    const purchase = await h.service.createPurchaseFromTopUpQuote(
+      "student",
+      "wallet",
+      quote.quoteId,
+      "custom",
+    );
+
+    expect(purchase).toMatchObject({
+      paymentId: expect.any(String),
+      status: "PENDING",
+      quoteId: quote.quoteId,
+      choice: "custom",
+    });
+    expect(h.provider.createIntent).toHaveBeenCalledTimes(1);
+  });
+
   test("rejects calculated amounts outside PostgreSQL integer capacity before persistence", async () => {
     const h = setup();
     await expect(
@@ -240,6 +263,15 @@ describe("V3 durable top-up offers", () => {
       expect(h.wallet.credit).toHaveBeenCalledTimes(1);
     },
   );
+
+  test("inactive V3 also rejects legacy package sales", async () => {
+    const h = setup();
+    h.setActive(null);
+    await expect(
+      h.service.createIntent("student", "wallet", "starter"),
+    ).rejects.toThrow();
+    expect(h.provider.createIntent).not.toHaveBeenCalled();
+  });
 
   test("active V3 rejects legacy package sales", async () => {
     const h = setup();

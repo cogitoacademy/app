@@ -81,6 +81,20 @@ function setupAdmin() {
     transaction: mock(async (fn: (conn: DbOrTx) => Promise<unknown>) => fn(tx)),
   };
   const economy = {
+    getV3ConfigByVersion: mock(async () => ({
+      version: 1,
+      values: structuredClone(DEFAULT_V3_ECONOMY_CONFIG),
+    })),
+    activateV3Config: mock(
+      async () => ({ version: 1 }) as { version: number } | null,
+    ),
+    getActiveV3Config: mock(
+      async () =>
+        null as {
+          version: number;
+          values: typeof DEFAULT_V3_ECONOMY_CONFIG;
+        } | null,
+    ),
     getV3Config: mock(async () => ({
       version: 0,
       values: structuredClone(DEFAULT_V3_ECONOMY_CONFIG),
@@ -150,6 +164,18 @@ describe("V3 admin revision transaction", () => {
         details: { reason: "Initial rates", status: "draft" },
       }),
     );
+  });
+
+  test("settings expose the active revision independently of the latest draft", async () => {
+    const { service, economy } = setupAdmin();
+    economy.getActiveV3Config.mockResolvedValue({
+      version: 7,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+    });
+    expect(await service.getV3EconomySettings()).toMatchObject({
+      activeRevision: 7,
+      version: 0,
+    });
   });
 
   test("settings list catalog parents with their saved rate readiness", async () => {
@@ -235,6 +261,7 @@ describe("V3 admin RPC role checks", () => {
   const save = mock(async () => ({ version: 1, status: "draft" }));
   const router = createAdminRouter(
     createAdminHandler({
+      activateV3EconomySettings: mock(async () => ({ activeRevision: 1 })),
       getV3EconomySettings: get,
       previewV3EconomySettings: preview,
       saveV3EconomySettings: save,
@@ -248,6 +275,13 @@ describe("V3 admin RPC role checks", () => {
           session: role ? { user: { id: "u1", role } } : null,
         } as unknown as Context,
       });
+      await expect(
+        client.activateV3EconomySettings({
+          version: 1,
+          expectedActiveRevision: null,
+          reason: "Approved",
+        }),
+      ).rejects.toMatchObject({ code: role ? "FORBIDDEN" : "UNAUTHORIZED" });
       const code = role ? "FORBIDDEN" : "UNAUTHORIZED";
       await expect(client.getV3EconomySettings()).rejects.toMatchObject({
         code,
@@ -280,5 +314,53 @@ describe("V3 admin RPC role checks", () => {
     await expect(
       client.saveV3EconomySettings({ ...saveInput(), reason: " " }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("V3 pricing activation", () => {
+  const input = {
+    version: 1,
+    expectedActiveRevision: null,
+    reason: "Approved pricing",
+  };
+  test("activates and audits in the same transaction", async () => {
+    const { service, economy, audit, tx } = setupAdmin();
+    expect(await service.activateV3EconomySettings("admin1", input)).toEqual({
+      activeRevision: 1,
+    });
+    expect(economy.activateV3Config).toHaveBeenCalledWith(tx, {
+      ...input,
+      updatedBy: "admin1",
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: tx,
+        action: "economy_v3_revision_activated",
+        beforeState: { activeRevision: null },
+        afterState: { activeRevision: 1 },
+      }),
+    );
+  });
+  test("stale activation never emits a success audit", async () => {
+    const { service, economy, audit } = setupAdmin();
+    economy.activateV3Config.mockResolvedValue(null);
+    await expect(
+      service.activateV3EconomySettings("admin1", input),
+    ).rejects.toBeInstanceOf(EconomyConfigConflictError);
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+  test("audit failure rejects activation transaction", async () => {
+    const { service, audit } = setupAdmin();
+    audit.record.mockRejectedValue(new Error("audit unavailable"));
+    await expect(
+      service.activateV3EconomySettings("admin1", input),
+    ).rejects.toThrow("audit unavailable");
+  });
+  test("invalid reason fails before opening a transaction", async () => {
+    const { service, db } = setupAdmin();
+    await expect(
+      service.activateV3EconomySettings("admin1", { ...input, reason: " " }),
+    ).rejects.toThrow();
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,9 @@ import {
   listAcademyClassesInput,
   publishAcademyClassInput,
   retryAcademyClassMeetingsInput,
+  reportTutorAbsenceInput,
+  replaceAbsentClassTutorInput,
+  rescheduleAcademyClassSessionInput,
   saveAcademyClassDraftInput,
 } from "./academy-class.types";
 import type { z } from "zod";
@@ -62,6 +65,39 @@ export function createAcademyClassHandler(service: AcademyClassService) {
     }) =>
       withDomainMap(
         () => service.retryMeetings(context.session!.user.id, input),
+        mapAcademyClassError,
+      ),
+    reportTutorAbsence: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof reportTutorAbsenceInput>;
+    }) =>
+      withDomainMap(
+        () => service.reportTutorAbsence(context.session!.user.id, input),
+        mapAcademyClassError,
+      ),
+    replaceAbsentClassTutor: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof replaceAbsentClassTutorInput>;
+    }) =>
+      withDomainMap(
+        () => service.replaceAbsentTutor(context.session!.user.id, input),
+        mapAcademyClassError,
+      ),
+    rescheduleClassSession: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof rescheduleAcademyClassSessionInput>;
+    }) =>
+      withDomainMap(
+        () => service.rescheduleSession(context.session!.user.id, input),
         mapAcademyClassError,
       ),
   };

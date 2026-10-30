@@ -7,7 +7,6 @@ import {
   bookingParticipant,
   bookingSession,
   sessionCompletionFeedback,
-  sessionCompletionFeedbackHistory,
   subjectCategory,
   user,
 } from "@cogito-app/db/schema";
@@ -29,13 +28,10 @@ import {
   type StudentReportPdfEntry,
   type StudentReportPdfModel,
 } from "./report-export.pdf";
-import { isLegacyFeedbackVersion } from "./report-export.legacy";
 import { reportDateWindow } from "./report-export.window";
+import { selectReports } from "./report-export.selection";
 import { hasChargeableFeedbackEntitlement } from "../booking/booking.repo";
-import {
-  completionFeedbackEntitlementEventKeys,
-  restoreCompletionFeedbackForRead,
-} from "../booking/booking.service";
+import { completionFeedbackEntitlementEventKeys } from "../booking/booking.service";
 import type { DbType } from "../../lib/db";
 import type {
   BookingSessionTopic,
@@ -48,6 +44,7 @@ type PrivateReportRow = {
   id: string;
   version: number;
   bookingId: string;
+  bookingNumber: number;
   bookingType: string;
   targetGroupSize: number;
   sessionId: string | null;
@@ -70,6 +67,13 @@ export type ReportExportSummary = {
   periodStart: Date;
   generatedAt: Date;
   timezone: "Asia/Jakarta";
+};
+
+type ExportableReport = StudentReportPdfEntry & {
+  key: string;
+  reference: string;
+  title: string;
+  type: "private" | "cohort" | "masterclass";
 };
 
 function dateLabel(value: Date) {
@@ -195,12 +199,6 @@ function classMetadata(row: {
   ];
 }
 
-type FeedbackHistoryMetadata = {
-  version: number;
-  status: string;
-  actorRole: string;
-};
-
 export function createReportExportService(deps: {
   db: DbType;
   clock?: () => Date;
@@ -233,6 +231,7 @@ export function createReportExportService(deps: {
           id: sessionCompletionFeedback.id,
           version: sessionCompletionFeedback.version,
           bookingId: booking.id,
+          bookingNumber: booking.bookingNumber,
           bookingType: booking.type,
           targetGroupSize: booking.targetGroupSize,
           sessionId: sessionCompletionFeedback.sessionId,
@@ -331,54 +330,25 @@ export function createReportExportService(deps: {
         sessionsBySeries.set(session.bookingId, sessions);
       }
 
-      const historyRows = entitledPrivateRows.length
-        ? await tx
-            .select({
-              feedbackId: sessionCompletionFeedbackHistory.feedbackId,
-              status: sessionCompletionFeedbackHistory.status,
-              version: sessionCompletionFeedbackHistory.version,
-              actorRole: sessionCompletionFeedbackHistory.actorRole,
-            })
-            .from(sessionCompletionFeedbackHistory)
-            .where(
-              inArray(
-                sessionCompletionFeedbackHistory.feedbackId,
-                entitledPrivateRows.map((row) => row.id),
-              ),
-            )
-        : [];
-      const historyByFeedback = new Map<string, FeedbackHistoryMetadata[]>();
-      for (const history of historyRows) {
-        const rows = historyByFeedback.get(history.feedbackId) ?? [];
-        rows.push({
-          status: history.status,
-          version: history.version,
-          actorRole: history.actorRole,
-        });
-        historyByFeedback.set(history.feedbackId, rows);
-      }
-
-      const privateReports: StudentReportPdfEntry[] = entitledPrivateRows.map(
+      const privateReports: ExportableReport[] = entitledPrivateRows.map(
         (row) => {
           const start = row.childStartAt ?? row.bookingStartAt;
           const end = row.childEndAt ?? row.bookingEndAt;
           const sessions = sessionsBySeries.get(row.bookingId);
-          const history = historyByFeedback.get(row.id) ?? [];
-          const feedback = restoreCompletionFeedbackForRead(
-            {
-              discussion: row.discussion,
-              strengths: row.strengths,
-              improvements: row.improvements,
-            },
-            history,
-          );
           const sections = reportSections(
-            feedback.discussion,
-            feedback.strengths,
-            feedback.improvements,
+            row.discussion,
+            row.strengths,
+            row.improvements,
           );
           return {
             id: row.id,
+            key: `private:${row.id}`,
+            reference: `BKG-${row.bookingNumber}${row.sessionId ? `-S${(sessions?.indexOf(row.sessionId) ?? 0) + 1}` : ""}`,
+            title: text(
+              row.sessionTopic?.subcategoryName ?? row.learningGoal,
+              "Private session",
+            ),
+            type: "private" as const,
             scheduledStartAt: start,
             metadata: privateMetadata(
               row,
@@ -390,7 +360,6 @@ export function createReportExportService(deps: {
               sessions?.length,
             ),
             sections,
-            isLegacy: isLegacyFeedbackVersion(history, row.version),
           };
         },
       );
@@ -401,6 +370,7 @@ export function createReportExportService(deps: {
           startAt: academyClassSession.startAt,
           endAt: academyClassSession.endAt,
           classId: academyClass.id,
+          classNumber: academyClass.classNumber,
           classTitle: academyClass.titleEn,
           classKind: academyClass.kind,
           competition: subjectCategory.name,
@@ -447,7 +417,7 @@ export function createReportExportService(deps: {
           ),
         );
 
-      const classReports: StudentReportPdfEntry[] = classRows.map((row) => {
+      const classReports: ExportableReport[] = classRows.map((row) => {
         const sections = reportSections(
           row.discussion,
           row.strengths,
@@ -455,10 +425,13 @@ export function createReportExportService(deps: {
         );
         return {
           id: row.id,
+          key: `class:${row.id}`,
+          reference: `CLS-${row.classNumber}-S${row.sequenceNumber}`,
+          title: `${row.classTitle} · ${row.sessionTitle}`,
+          type: row.classKind === "cohort" ? "cohort" : "masterclass",
           scheduledStartAt: row.startAt,
           metadata: classMetadata(row),
           sections,
-          isLegacy: false,
         };
       });
 
@@ -489,13 +462,40 @@ export function createReportExportService(deps: {
     };
   }
 
-  async function generatePdf(studentId: string): Promise<Uint8Array | null> {
+  async function listReports(studentId: string) {
     const data = await loadStudentReports(studentId);
-    if (!data || data.reports.length === 0) return null;
+    if (!data) return null;
+    return {
+      ...data,
+      reports: data.reports.map(({ key, ...report }) =>
+        Object.assign(report, { id: key }),
+      ),
+      timezone: "Asia/Jakarta" as const,
+    };
+  }
+
+  async function generatePdf(
+    studentId: string,
+    reportIds: string[],
+  ): Promise<Uint8Array | null> {
+    const data = await loadStudentReports(studentId);
+    if (!data) return null;
+    data.reports = selectReports(
+      data.reports,
+      reportIds,
+      (report) => report.key,
+    );
+    data.reports = data.reports.map((report) => ({
+      ...report,
+      metadata: [
+        { label: "Reference", value: report.reference },
+        ...report.metadata,
+      ],
+    }));
     return pdfRenderer(data);
   }
 
-  return { getSummary, generatePdf };
+  return { getSummary, listReports, generatePdf };
 }
 
 export type ReportExportService = ReturnType<typeof createReportExportService>;

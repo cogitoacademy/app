@@ -327,3 +327,56 @@ describe("explicit DB cutover", () => {
     expect(await s.listStudentResources()).toEqual(resources);
   });
 });
+
+describe("calendar authoring without a manual reason", () => {
+  test("uses automatic audit reasons and retains the resource requirement", async () => {
+    const reasons: string[] = [];
+    const repo = {
+      save: async (_entry: unknown, _actor: string, reason: string) => {
+        reasons.push(reason);
+        return { id: "event" };
+      },
+      remove: async (
+        _kind: string,
+        _id: string,
+        _version: number,
+        _actor: string,
+        reason: string,
+      ) => {
+        reasons.push(reason);
+      },
+    } as unknown as ContentAdminRepo;
+    const service = createContentAdminService({
+      repo,
+      storage,
+      enabled: () => true,
+    });
+    await service.create(
+      { entry: { kind: "event", values: eventFields.parse(event) } },
+      "admin",
+    );
+    await service.update(
+      {
+        entry: { kind: "event", values: eventFields.parse(event) },
+        id: "event",
+        expectedVersion: 1,
+      },
+      "admin",
+    );
+    await service.remove(
+      { kind: "event", id: "event", expectedVersion: 2 },
+      "admin",
+    );
+    expect(reasons).toEqual([
+      "Competition event created",
+      "Competition event updated",
+      "Competition event deleted",
+    ]);
+    await expect(
+      service.create(
+        { entry: { kind: "resource", values: resourceFields.parse(resource) } },
+        "admin",
+      ),
+    ).rejects.toThrow("Enter a reason for change");
+  });
+});

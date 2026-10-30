@@ -29,7 +29,7 @@ describe("Admin dashboard analytics", () => {
     adminClient = createTestClient(await createTestContext(auth.cookie));
   });
 
-  test("classifies known, unknown, malformed, and missing pricing snapshots from PostgreSQL", async () => {
+  test("returns current V3 dashboard sections without retired pricing-engine diagnostics", async () => {
     const now = new Date();
     const scheduledStartAt = new Date(now.getTime() + 60 * 60 * 1000);
     const scheduledEndAt = new Date(
@@ -64,36 +64,6 @@ describe("Admin dashboard analytics", () => {
           tutorHonorariumIdr: 100_000,
         },
       },
-      {
-        ...commonBooking,
-        id: crypto.randomUUID(),
-        priceSnapshot: {
-          perStudent: 10,
-          baseline: 10,
-          tutorShare: 7,
-          cogitoTake: 3,
-          baselineCogitoTake: 3,
-          baselineTutorShare: 7,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
-        },
-      },
-      {
-        ...commonBooking,
-        id: crypto.randomUUID(),
-        priceSnapshot: null,
-      },
-      {
-        ...commonBooking,
-        id: crypto.randomUUID(),
-        priceSnapshot: { engine: "future" } as any,
-      },
-      {
-        ...commonBooking,
-        id: crypto.randomUUID(),
-        priceSnapshot: {} as any,
-      },
     ]);
 
     const result = await adminClient.admin.getDashboardAnalytics({
@@ -101,13 +71,10 @@ describe("Admin dashboard analytics", () => {
     });
 
     expect(result.period).toBe("7d");
-    expect(result.summary.bookings).toBe(5);
-    expect(result.summary.pricingSnapshotBreakdown).toEqual({
-      v3: 1,
-      legacy: 1,
-      other: 2,
-      missing: 1,
-    });
+    expect(result.summary.bookings).toBe(1);
+    expect(result.operationsSummary.upcoming.privateSeatSessions).toBe(0);
+    expect(result.operationsSummary.tutorFees.earnedIdr).toBe(0);
+    expect(result.businessSummary.grossReceiptsIdr).toBe(0);
     expect(result.businessSummary.totalAccounts).toBe(1);
     expect(result.businessSummary.totalStudents).toBe(0);
   });

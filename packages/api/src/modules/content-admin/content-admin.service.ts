@@ -39,6 +39,16 @@ export function createContentAdminService(deps: {
         [key: string]: unknown;
       }>;
     },
+    async previewPdf(fileId: string) {
+      ready();
+      const file = await deps.repo.file(fileId);
+      if (!file) throw new ContentInvalidError("PDF not found");
+      const bytes = await deps.storage().read(file.storageKey);
+      return {
+        fileName: file.fileName,
+        base64: Buffer.from(bytes).toString("base64"),
+      };
+    },
     async categories() {
       ready();
       return (await deps.repo.categories()).map((c) => ({
@@ -50,26 +60,38 @@ export function createContentAdminService(deps: {
     },
     async create(input: z.infer<typeof createContentInput>, actorId: string) {
       ready();
+      const parsed = createContentInput.parse(input);
+      if (parsed.entry.kind === "resource" && !parsed.reason)
+        throw new ContentInvalidError("Enter a reason for change");
       return deps.repo.save(
-        createContentInput.parse(input).entry,
+        parsed.entry,
         actorId,
-        input.reason,
+        parsed.reason ?? "Competition event created",
       );
     },
     async update(input: z.infer<typeof updateContentInput>, actorId: string) {
       ready();
       const parsed = updateContentInput.parse(input);
-      return deps.repo.save(parsed.entry, actorId, parsed.reason, parsed);
+      if (parsed.entry.kind === "resource" && !parsed.reason)
+        throw new ContentInvalidError("Enter a reason for change");
+      return deps.repo.save(
+        parsed.entry,
+        actorId,
+        parsed.reason ?? "Competition event updated",
+        parsed,
+      );
     },
     async remove(input: z.infer<typeof deleteContentInput>, actorId: string) {
       ready();
       const p = deleteContentInput.parse(input);
+      if (p.kind === "resource" && !p.reason)
+        throw new ContentInvalidError("Enter a reason for change");
       return deps.repo.remove(
         p.kind,
         p.id,
         p.expectedVersion,
         actorId,
-        p.reason,
+        p.reason ?? "Competition event deleted",
       );
     },
     async uploadPdf(input: z.infer<typeof uploadPdfInput>) {

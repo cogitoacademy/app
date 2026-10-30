@@ -1,5 +1,7 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
@@ -110,7 +112,7 @@ export function SubjectSelector({
     return metadata;
   }, [categories, selectedSubjects]);
 
-  const legacySelectedSubjects = useMemo(
+  const archivedSelectedSubjects = useMemo(
     () =>
       (selectedSubjects ?? []).filter(
         (subject) => subject.isSelectable === false,
@@ -188,20 +190,20 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {legacySelectedSubjects.length > 0 ? (
+      {archivedSelectedSubjects.length > 0 ? (
         <div className="rounded-lg border border-item-border bg-item p-3">
           <Text className="text-sm lg:text-base font-medium">
             Previously selected
           </Text>
           <Text className="mt-1 text-xs lg:text-sm text-muted">
-            These legacy specializations remain on your profile but are no
+            These archived specializations remain on your profile but are no
             longer available for new selection.
           </Text>
           <div
             className="mt-3 flex flex-wrap gap-2"
-            aria-label="Previously selected legacy specializations"
+            aria-label="Previously selected archived specializations"
           >
-            {legacySelectedSubjects.map((subject) => (
+            {archivedSelectedSubjects.map((subject) => (
               <Chip
                 key={subject.id}
                 variant="outline"
@@ -223,11 +225,7 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {isPending ? (
-        <Text className="text-muted" role="status">
-          Loading competition categories…
-        </Text>
-      ) : null}
+      {isPending ? <Loader /> : null}
       {isError ? (
         <Text className="text-muted" role="status">
           Competition categories are temporarily unavailable. Your current

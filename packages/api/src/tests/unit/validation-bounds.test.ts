@@ -252,6 +252,7 @@ describe("Validation bounds — string .max()", () => {
       tutorId: "t1",
       availabilitySlotId: "s1",
       modality: "online",
+      subjectId: "math",
       scheduledStartAt: futureDate(1),
       scheduledEndAt: futureDate(2),
       timezone: LONG_TIMEZONE,
@@ -577,6 +578,7 @@ describe("Validation bounds — date in the future", () => {
       tutorId: "t1",
       availabilitySlotId: "s1",
       modality: "online",
+      subjectId: "math",
       scheduledStartAt: futureDate(1),
       scheduledEndAt: futureDate(2),
     });

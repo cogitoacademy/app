@@ -37,7 +37,8 @@ import {
   BookingTutorCapacityError,
   TutorPayoutPreviewStaleError,
   TutorPayoutTaxProfileIncompleteError,
-  BookingV3CompetitionUnavailableError,
+  BookingV3CompetitionRequiredError,
+  BookingV3PricingRevisionUnavailableError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -77,7 +78,19 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
       all: 0,
     })),
     findTutorProfile: mock(async () => null),
-    findTutorSubjectTopic: mock(async () => null),
+    findTutorSubjectTopic: mock(
+      async (_conn: any, _tutorId: string, subjectId: string) =>
+        subjectId === "mun-speech"
+          ? {
+              categoryId: "competition-mun",
+              categorySlug: "competition-model-united-nations",
+              categoryName: "Model United Nations",
+              subcategoryId: "mun-speech",
+              subcategorySlug: "speech",
+              subcategoryName: "Speech",
+            }
+          : null,
+    ),
     getTutorSubjectAssignmentState: mock(async () => ({
       hasAssignments: false,
       hasActiveAssignments: false,
@@ -129,9 +142,9 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listTutorPayoutAllocatedSourceKeys: mock(async () => []),
     insertTutorPayoutAllocations: mock(async () => []),
     listTutorPayoutAllocationsByPayoutId: mock(async () => []),
-    findLatestLegacyTutorPayoutCutoff: mock(async () => null),
     listTutorPayoutProfiles: mock(async () => []),
     listTutorPayoutRecords: mock(async () => []),
+    listTutorPayoutsByTutorId: mock(async () => []),
     findTutorTaxConfig: mock(async () => null),
     findTutorPayoutByIdempotencyKey: mock(async () => null),
     listTutorPayoutReconciliationSourceKeys: mock(async () => []),
@@ -208,18 +221,15 @@ function makeWallet(overrides: Record<string, unknown> = {}) {
 
 function makePricing() {
   return {
-    computeSplit: mock((_modality: string, _price: number, _size: number) => ({
-      perStudent: 42,
-      baseline: 42,
-      tutorShare: 33.6,
-      cogitoTake: 8.4,
-      baselineCogitoTake: 12,
-      baselineTutorShare: 30,
-      extraTotal: 0,
-      cogitoExtraTake: 0,
-      tutorExtraShare: 0,
+    getActiveV3Config: mock(async () => ({
+      version: 1,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
     })),
-    validatePrices: mock(() => null),
+    getV3ConfigByVersion: mock(async () => ({
+      version: 1,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+    })),
+    calculateV3SessionPrice: mock(calculateV3SessionPrice),
   };
 }
 
@@ -272,15 +282,14 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     holdAmount: 42,
     originalMarks: 42,
     priceSnapshot: {
-      perStudent: 42,
-      baseline: 42,
-      tutorShare: 33.6,
-      cogitoTake: 8.4,
-      baselineCogitoTake: 12,
-      baselineTutorShare: 30,
-      extraTotal: 0,
-      cogitoExtraTake: 0,
-      tutorExtraShare: 0,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-model-united-nations",
+      modality: "online",
+      headcount: 1,
+      perStudentMarks: 42,
+      collectedMarks: 42,
+      tutorHonorariumIdr: 200_000,
     },
     scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
     scheduledEndAt: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
@@ -324,50 +333,6 @@ function makeParticipant(overrides: Record<string, unknown> = {}) {
     confirmationState: "confirmed",
     heldAmount: 42,
     ...overrides,
-  };
-}
-
-function realComputeSplit(
-  modality: string,
-  tutorPricePerStudent: number,
-  confirmedHeadcount: number,
-) {
-  const ONLINE: Record<number, { tutor: number; cogito: number }> = {
-    1: { tutor: 30, cogito: 12 },
-    2: { tutor: 54, cogito: 16 },
-    3: { tutor: 64, cogito: 20 },
-    4: { tutor: 74, cogito: 22 },
-    5: { tutor: 81, cogito: 24 },
-    6: { tutor: 88, cogito: 26 },
-  };
-  const OFFLINE: Record<number, { tutor: number; cogito: number }> = {
-    1: { tutor: 35, cogito: 15 },
-    2: { tutor: 70, cogito: 20 },
-    3: { tutor: 95, cogito: 25 },
-    4: { tutor: 115, cogito: 25 },
-    5: { tutor: 120, cogito: 30 },
-    6: { tutor: 127, cogito: 35 },
-  };
-  const perStudent = Math.floor(tutorPricePerStudent);
-  const tutorTotal = perStudent * confirmedHeadcount;
-  const baseline =
-    modality === "offline"
-      ? OFFLINE[confirmedHeadcount]
-      : ONLINE[confirmedHeadcount];
-  const baselineTotal = baseline!.tutor + baseline!.cogito;
-  const extraTotal = Math.max(0, tutorTotal - baselineTotal);
-  const cogitoExtraTake = Math.floor(extraTotal / 5);
-  const tutorExtraShare = extraTotal - cogitoExtraTake;
-  return {
-    perStudent,
-    baseline: baselineTotal,
-    tutorShare: baseline!.tutor + tutorExtraShare,
-    cogitoTake: baseline!.cogito + cogitoExtraTake,
-    baselineCogitoTake: baseline!.cogito,
-    baselineTutorShare: baseline!.tutor,
-    extraTotal,
-    cogitoExtraTake,
-    tutorExtraShare,
   };
 }
 
@@ -832,6 +797,7 @@ describe("BookingService", () => {
 
   describe("createSolo", () => {
     const soloInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -997,8 +963,8 @@ describe("BookingService", () => {
       });
     });
 
-    test("keeps legacy booking available when tutor has no catalog assignments", async () => {
-      const { service, repo, wallet } = createService({
+    test("rejects missing subject even when tutor has no catalog assignments", async () => {
+      const { service, repo } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
           findTutorSubjectTopic: mock(async () => null),
@@ -1012,15 +978,13 @@ describe("BookingService", () => {
         },
       });
 
-      await service.createSolo("student1", soloInput);
-
-      expect(repo.insertBooking.mock.calls[0]?.[1]).toMatchObject({
-        sessionTopic: null,
-      });
-      expect(wallet.hold).toHaveBeenCalledTimes(1);
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
     });
 
-    test("auto-selects a tutor's single active topic for a legacy caller", async () => {
+    test("requires explicit subject even when tutor has one active topic", async () => {
       const sessionTopic = {
         categoryId: "competition-mun",
         categorySlug: "competition-model-united-nations",
@@ -1039,11 +1003,10 @@ describe("BookingService", () => {
         },
       });
 
-      await service.createSolo("student1", soloInput);
-
-      expect(repo.insertBooking.mock.calls[0]?.[1]).toMatchObject({
-        sessionTopic,
-      });
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
     });
 
     test("rejects an explicitly requested archived specialization without holding Marks", async () => {
@@ -1081,16 +1044,16 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        BookingNotEditableError,
-      );
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
 
       expect(wallet.hold).not.toHaveBeenCalled();
       expect(repo.insertBooking).not.toHaveBeenCalled();
     });
 
-    test("preserves ambiguous multi-topic legacy booking behavior", async () => {
-      const { service, repo, wallet } = createService({
+    test("rejects missing subject when tutor teaches multiple topics", async () => {
+      const { service, repo } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
           findTutorSubjectTopic: mock(async () => null),
@@ -1104,12 +1067,10 @@ describe("BookingService", () => {
         },
       });
 
-      await service.createSolo("student1", soloInput);
-
-      expect(repo.insertBooking.mock.calls[0]?.[1]).toMatchObject({
-        sessionTopic: null,
-      });
-      expect(wallet.hold).toHaveBeenCalledTimes(1);
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
     });
 
     test("prices a V3 solo booking from the selected topic and pins its revision", async () => {
@@ -1249,7 +1210,7 @@ describe("BookingService", () => {
           ...soloInput,
           subjectId: "policy-speech",
         }),
-      ).rejects.toBeInstanceOf(BookingV3CompetitionUnavailableError);
+      ).rejects.toBeInstanceOf(BookingV3PricingRevisionUnavailableError);
       expect(wallet.hold).not.toHaveBeenCalled();
       expect(repo.insertBooking).not.toHaveBeenCalled();
     });
@@ -1272,7 +1233,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(
         "A supported competition topic must be selected for V3 pricing",
       );
       expect(wallet.hold).not.toHaveBeenCalled();
@@ -1290,6 +1253,7 @@ describe("BookingService", () => {
 
   describe("createGroup", () => {
     const groupInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -1357,8 +1321,8 @@ describe("BookingService", () => {
       );
       for (const [params] of inviteeWrites) {
         expect(params.body).toMatch(/schedule/i);
-        expect(params.body).toContain("42");
-        expect(params.body).toContain("126");
+        expect(params.body).toContain("25");
+        expect(params.body).toContain("75");
         expect(params.body).toContain("/bookings/");
         expect(params.body).toMatch(/https?:\/\//);
         expect(params.emailRequired).toBe(true);
@@ -1458,6 +1422,7 @@ describe("BookingService", () => {
 
   describe("createSeries", () => {
     const seriesInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -1559,7 +1524,7 @@ describe("BookingService", () => {
       await service.createSeries("student1", seriesInput);
 
       expect(wallet.hold).toHaveBeenCalledTimes(1);
-      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
+      expect(wallet.hold.mock.calls[0][1].amount).toBe(100);
       expect(repo.insertBooking).toHaveBeenCalledTimes(1);
       expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
       expect(repo.insertBookingSession).toHaveBeenCalledTimes(2);
@@ -1632,6 +1597,7 @@ describe("BookingService", () => {
 
   describe("createGroupSeries (FR-20)", () => {
     const groupSeriesInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -1705,9 +1671,9 @@ describe("BookingService", () => {
         groupSeriesInput,
       );
 
-      // Package = perSession (42) × 2 sessions; proposer holds up front.
+      // Package = perSession (25) × 2 sessions; proposer holds up front.
       expect(wallet.hold).toHaveBeenCalledTimes(1);
-      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
+      expect(wallet.hold.mock.calls[0][1].amount).toBe(50);
       expect(repo.insertBooking).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -1715,7 +1681,7 @@ describe("BookingService", () => {
           targetGroupSize: 3,
           confirmedHeadcount: 1,
           currentState: "awaiting_participant_confirmation",
-          holdAmount: 84,
+          holdAmount: 50,
         }),
       );
       expect(repo.insertParticipant).toHaveBeenCalledTimes(3);
@@ -1735,8 +1701,8 @@ describe("BookingService", () => {
       for (const [params] of inviteeWrites) {
         expect(params.title).toBe("Group series invitation");
         expect(params.body).toContain("cannot opt out");
-        expect(params.body).toContain("42");
-        expect(params.body).toContain("84");
+        expect(params.body).toContain("25");
+        expect(params.body).toContain("50");
         expect(params.body).toContain("/bookings/");
         expect(params.body).toMatch(/https?:\/\//);
         expect(params.emailRequired).toBe(true);
@@ -2973,7 +2939,7 @@ describe("BookingService", () => {
         tutorId: "tutor1",
         scheduledStartAt: session.scheduledStartAt,
         eventKey: "tutor-session-fee:session:s1",
-        grossHonorariumIdr: 235_200,
+        grossHonorariumIdr: 200_000,
         priceSnapshot: booking.priceSnapshot,
       });
       expect(feeRecord.earnedAt).toBeInstanceOf(Date);
@@ -3659,15 +3625,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         confirmedHeadcount: 1,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service, wallet, repo } = createService({
@@ -3710,15 +3675,14 @@ describe("BookingService", () => {
         targetGroupSize: 2,
         confirmedHeadcount: 1,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -3823,7 +3787,7 @@ describe("BookingService", () => {
       expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
     });
 
-    test("preserves legacy partial group-series pricing when V3 is inactive", async () => {
+    test("reprices a partial V3 group series from its pinned revision without active pricing", async () => {
       const booking = makeBooking({
         type: "series",
         currentState: "awaiting_participant_confirmation",
@@ -3836,6 +3800,7 @@ describe("BookingService", () => {
         makeParticipant({ id: "p3", userId: "student3", heldAmount: 84 }),
       ];
       const { service, repo, wallet } = createService({
+        pricing: { getActiveV3Config: mock(async () => null) },
         repo: {
           findBookingById: mock(async () => booking),
           findParticipant: mock(async () =>
@@ -3856,8 +3821,8 @@ describe("BookingService", () => {
 
       await service.declineInvite("student2", "b1", "busy");
 
-      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
-      expect(repo.updateScheduledSeriesPriceSnapshot).not.toHaveBeenCalled();
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledTimes(1);
+      expect(repo.updateScheduledSeriesPriceSnapshot).toHaveBeenCalledTimes(1);
       expect(wallet.hold).not.toHaveBeenCalled();
       expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
         expect.anything(),
@@ -4113,22 +4078,21 @@ describe("BookingService", () => {
       );
     });
 
-    test("syncs the booking hold when a flat group price map keeps the same rate", async () => {
+    test("syncs the booking hold when a pinned V3 group formula keeps the same rate", async () => {
       let booking = makeBooking({
         type: "group",
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         holdAmount: 126,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       let reconfirmedCount = 0;
@@ -4141,6 +4105,22 @@ describe("BookingService", () => {
         makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
       ];
       const { service, repo } = createService({
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 42,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 42,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
         repo: {
           findBookingById: mock(async () => ({ ...booking, version: 1 })),
           findParticipant: mock(async () => participant),
@@ -4226,15 +4206,14 @@ describe("BookingService", () => {
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -4265,7 +4244,7 @@ describe("BookingService", () => {
 
       const result = await service.reconfirm("student1", "b1", false);
       expect(result).toEqual({ reconfirmed: false });
-      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(wallet.release.mock.calls[0][1].amount).toBe(42);
       expect(repo.decrementBookingConfirmedHeadcount).toHaveBeenCalledTimes(1);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
@@ -4281,15 +4260,14 @@ describe("BookingService", () => {
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -4330,7 +4308,7 @@ describe("BookingService", () => {
     });
 
     test("N1: equal per-student price at the old and new headcounts does not loop the F3 reissue forever", async () => {
-      // Legacy flat price map: the per-student price is the same at sizes 2
+      // A pinned V3 formula can have equal per-student prices at sizes 2
       // and 3, so repriceGroupForHeadcount early-returns without updating
       // holdAmount — the F3 derivation (holdAmount/perStudent) then reports a
       // stale size-3 headcount for a booking that now has 2 confirmed
@@ -4343,10 +4321,14 @@ describe("BookingService", () => {
         // left mid-cycle.
         holdAmount: 126,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 126,
-          tutorShare: 100.8,
-          cogitoTake: 25.2,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const p2 = makeParticipant({
@@ -4381,6 +4363,11 @@ describe("BookingService", () => {
               }
             },
           ),
+          updateBookingPriceSnapshot: mock(
+            async (_tx: unknown, _id: string, updates: any) => {
+              Object.assign(liveBooking, updates);
+            },
+          ),
           updateBookingHoldAmount: mock(
             async (_tx: unknown, _id: string, amount: number) => {
               liveBooking.holdAmount = amount;
@@ -4396,7 +4383,7 @@ describe("BookingService", () => {
             }
           }),
           findTutorProfile: mock(async () =>
-            // FLAT legacy price map: sizes 2 and 3 price identically.
+            // The pinned V3 configuration produces the same price at sizes 2 and 3.
             makeTutorProfile({ prices: { "2": 42, "3": 42 } }),
           ),
           updateBookingVersioned: mock(
@@ -4406,7 +4393,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 42,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 42,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       // First accept: headcount dropped 3 → 2 while holdAmount still says 3,
@@ -4441,10 +4443,14 @@ describe("BookingService", () => {
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -4633,7 +4639,11 @@ describe("BookingService", () => {
       await service.withdraw("student1", "b1");
 
       expect(repo.decrementBookingConfirmedHeadcount).not.toHaveBeenCalled();
-      expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ confirmationState: "withdrawn_pre_h2" }),
+      );
     });
 
     test("B7: double-withdraw is a no-op (no second headcount decrement)", async () => {
@@ -4825,15 +4835,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4864,7 +4873,7 @@ describe("BookingService", () => {
 
       await service.withdraw("student1", "b1");
 
-      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
@@ -4881,15 +4890,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4970,15 +4978,14 @@ describe("BookingService", () => {
         holdAmount: 126,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 126,
-          tutorShare: 100.8,
-          cogitoTake: 25.2,
-          baselineCogitoTake: 16,
-          baselineTutorShare: 54,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -5024,7 +5031,22 @@ describe("BookingService", () => {
             throw new InsufficientMarksError(60, 84);
           }),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 30,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 66,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       const result = await service.withdraw("student1", "b1");
@@ -5182,15 +5204,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -6447,15 +6468,14 @@ describe("BookingService", () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -6489,15 +6509,14 @@ describe("BookingService", () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -7486,10 +7505,14 @@ describe("BookingService", () => {
         confirmedHeadcount: 4,
         holdAmount: 112,
         priceSnapshot: {
-          perStudent: 28,
-          baseline: 112,
-          tutorShare: 89.6,
-          cogitoTake: 22.4,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 28,
+          collectedMarks: 112,
+          tutorHonorariumIdr: 260_000,
         },
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         ...overrides,
@@ -7534,7 +7557,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 7,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 91,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       const result = await service.withdraw("student1", "b1");
@@ -7552,9 +7590,9 @@ describe("BookingService", () => {
         expect.objectContaining({ holdAmount: 105 }),
       );
       const snapshotArg = repo.updateBookingPriceSnapshot.mock.calls[0][2] as {
-        priceSnapshot: { perStudent: number };
+        priceSnapshot: { perStudentMarks: number };
       };
-      expect(snapshotArg.priceSnapshot.perStudent).toBe(35);
+      expect(snapshotArg.priceSnapshot.perStudentMarks).toBe(35);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
         expect.anything(),
         "p2",
@@ -7597,7 +7635,6 @@ describe("BookingService", () => {
             availableBalance: 0,
           })),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
       });
 
       // PRD TC-19: the group falls through to expiry on an unfunded reprice —
@@ -7641,7 +7678,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 36,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 4,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       await service.withdraw("student1", "b1");
@@ -9097,7 +9149,7 @@ describe("BookingService additional coverage paths", () => {
     ).rejects.toThrow(BookingNotOwnedError);
   });
 
-  test("aggregates completed series session payout snapshots", async () => {
+  test("ignores completed booking/session snapshots without fee events", async () => {
     const series = makeBooking({
       id: "series-1",
       type: "series",
@@ -9132,15 +9184,15 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getTutorPayouts({ tutorId: "tutor1" }),
     ).resolves.toEqual({
-      completedSessions: 2,
-      totalMarks: 140,
-      cogitoTake: 28,
-      tutorPayout: 112,
-      tutorPayoutIdr: 640_000,
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
     });
   });
 
-  test("preserves explicit legacy payout eligibility for no-shows without fee events", async () => {
+  test("no-show override cannot create payout eligibility without a fee event", async () => {
     const eligibleNoShow = makeBooking({
       id: "eligible-no-show",
       currentState: "no_show",
@@ -9161,11 +9213,11 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getTutorPayouts({ tutorId: "tutor1" }),
     ).resolves.toEqual({
-      completedSessions: 1,
-      totalMarks: 50,
-      cogitoTake: 10,
-      tutorPayout: 40,
-      tutorPayoutIdr: 200_000,
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
     });
   });
 
@@ -9215,13 +9267,13 @@ describe("BookingService additional coverage paths", () => {
     ).resolves.toEqual({
       completedSessions: 1,
       totalMarks: 50,
-      cogitoTake: 10,
-      tutorPayout: 40,
+      cogitoTake: 0,
+      tutorPayout: 0,
       tutorPayoutIdr: 45_000,
     });
   });
 
-  test("falls back to the series booking snapshot when no session rows are completed", async () => {
+  test("does not infer missing series fees from parent snapshots", async () => {
     const series = makeBooking({
       id: "series-without-rows",
       type: "series",
@@ -9242,117 +9294,90 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getTutorPayouts({ tutorId: "tutor1" }),
     ).resolves.toEqual({
-      completedSessions: 1,
-      totalMarks: 100,
-      cogitoTake: 20,
-      tutorPayout: 80,
-      tutorPayoutIdr: 81_000,
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
     });
   });
 
-  test("reports totalMarks from the split basis (baseline), not actualMarksPooled", async () => {
-    const solo = makeBooking({
-      id: "solo-ledger",
-      type: "solo",
-      priceSnapshot: {
-        baseline: 100,
-        actualMarksPooled: 102,
-        cogitoTake: 20,
-        tutorShare: 80,
-        tutorHonorariumIdr: 400_000,
-      },
-    });
+  test("reports V3 collected Marks separately from IDR honorarium", async () => {
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [solo]),
-        listSessionsBySeriesId: mock(async () => []),
-      },
-    });
-
-    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
-    // The ledger columns reconcile: totalMarks = cogitoTake + tutorPayout
-    // (both are derived from the same `baseline` split basis).
-    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
-    expect(result.totalMarks).toBe(100);
-    // IDR honorarium is authoritative when present.
-    expect(result.tutorPayoutIdr).toBe(400_000);
-  });
-
-  test("uses each booking snapshot's honorarium after a tutor changes fee", async () => {
-    const oldBooking = makeBooking({
-      id: "old-booking",
-      currentState: "completed",
-      priceSnapshot: {
-        baseline: 40,
-        cogitoTake: 8,
-        tutorShare: 32,
-        tutorBaseRateIdr: 175_000,
-        tutorHonorariumIdr: 175_000,
-      },
-    });
-    const newBooking = makeBooking({
-      id: "new-booking",
-      currentState: "completed",
-      priceSnapshot: {
-        baseline: 50,
-        cogitoTake: 10,
-        tutorShare: 40,
-        tutorBaseRateIdr: 225_000,
-        tutorHonorariumIdr: 225_000,
-      },
-    });
-    const { service } = createService({
-      repo: {
-        findCompletedBookingsByTutor: mock(async () => [
-          oldBooking,
-          newBooking,
-        ]),
-      },
-    });
-
-    await expect(
-      service.getTutorPayouts({ tutorId: "tutor1" }),
-    ).resolves.toMatchObject({
-      completedSessions: 2,
-      tutorPayoutIdr: 400_000,
-    });
-  });
-
-  test("reconciles series session payouts the same way (baseline basis, not pooled)", async () => {
-    const series = makeBooking({
-      id: "series-ledger",
-      type: "series",
-      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
-    });
-    const { service } = createService({
-      repo: {
-        findCompletedBookingsByTutor: mock(async () => [series]),
-        listSessionsBySeriesId: mock(async () => [
+        findTutorSessionFeesByTutor: mock(async () => [
           {
-            id: "series-session-1",
-            scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
-            completedAt: new Date("2026-08-02T01:30:00Z"),
-            currentState: "completed",
-            priceSnapshot: {
-              baseline: 60,
-              actualMarksPooled: 62,
-              cogitoTake: 14,
-              tutorShare: 46,
-              tutorHonorariumIdr: 230_000,
-            },
+            eventKey: "fee:solo",
+            grossHonorariumIdr: 400_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 102 },
           },
         ]),
       },
     });
-
-    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
-    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
-    expect(result.totalMarks).toBe(60);
-    expect(result.tutorPayoutIdr).toBe(230_000);
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 1,
+      totalMarks: 102,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 400_000,
+    });
   });
 
-  test("includes fee facts after the last payout cutoff", async () => {
-    const cutoffAt = new Date("2026-08-01T00:00:00Z");
+  test("uses immutable fee-event honoraria after a tutor rate changes", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            scheduledStartAt: new Date("2026-01-01"),
+            earnedAt: new Date("2026-01-01"),
+            eventKey: "fee:old",
+            grossHonorariumIdr: 175_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 40 },
+          },
+          {
+            scheduledStartAt: new Date("2026-02-01"),
+            earnedAt: new Date("2026-02-01"),
+            eventKey: "fee:new",
+            grossHonorariumIdr: 225_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          },
+        ]),
+      },
+    });
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 2,
+      totalMarks: 90,
+      tutorPayoutIdr: 400_000,
+    });
+  });
+
+  test("counts delivered series fee events without parent snapshot totals", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            eventKey: "fee:series-session",
+            bookingSessionId: "session-1",
+            grossHonorariumIdr: 210_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 60 },
+          },
+        ]),
+      },
+    });
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 1,
+      totalMarks: 60,
+      tutorPayoutIdr: 210_000,
+    });
+  });
+
+  test("includes fee facts without a historical payout cutoff", async () => {
     const fee = {
       id: "fee-1",
       bookingId: "series-1",
@@ -9374,10 +9399,6 @@ describe("BookingService additional coverage paths", () => {
     const findTutorSessionFeesByTutor = mock(async () => [fee]);
     const { service } = createService({
       repo: {
-        findLatestLegacyTutorPayoutCutoff: mock(async () => ({
-          cutoffAt,
-          paidAt: cutoffAt,
-        })),
         findCompletedBookingsByTutor,
         findTutorSessionFeesByTutor,
         listTutorSessionFeeEventKeysByBookings: mock(async () => [
@@ -9389,13 +9410,7 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getPendingTutorPayouts("tutor1"),
     ).resolves.toMatchObject({ completedSessions: 1, tutorPayoutIdr: 45_000 });
-    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
-      expect.anything(),
-      "tutor1",
-      new Date(cutoffAt.getTime() + 1),
-      undefined,
-      "completedAt",
-    );
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
     expect(findTutorSessionFeesByTutor).toHaveBeenCalledWith(
       expect.anything(),
       "tutor1",
@@ -9418,6 +9433,17 @@ describe("BookingService additional coverage paths", () => {
     const { service } = createService({
       repo: {
         findCompletedBookingsByTutor: mock(async () => [completed]),
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            id: "fee1",
+            bookingId: completed.id,
+            eventKey: "tutor-session-fee:booking:b1",
+            scheduledStartAt: completed.scheduledStartAt,
+            earnedAt: completed.scheduledEndAt,
+            grossHonorariumIdr: 200_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          },
+        ]),
         listTutorPayoutAllocatedSourceKeys: mock(async () => [
           "tutor-session-fee:booking:b1",
         ]),
@@ -9457,6 +9483,17 @@ describe("BookingService additional coverage paths", () => {
     const { service } = createService({
       repo: {
         findCompletedBookingsByTutor: mock(async () => [released, unrelated]),
+        findTutorSessionFeesByTutor: mock(async () =>
+          [released, unrelated].map((booking) => ({
+            id: booking.id,
+            bookingId: booking.id,
+            eventKey: `tutor-session-fee:booking:${booking.id}`,
+            scheduledStartAt: booking.scheduledStartAt,
+            earnedAt: booking.scheduledEndAt,
+            grossHonorariumIdr: booking.priceSnapshot.tutorHonorariumIdr,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          })),
+        ),
         listTutorPayoutReconciliationSourceKeys: mock(async () => [
           {
             sourceKey: "tutor-session-fee:booking:b1",
@@ -9471,32 +9508,24 @@ describe("BookingService additional coverage paths", () => {
     expect(result.tutorPayoutIdr).toBe(300_000);
   });
 
-  test("returns pending payouts since the last cutoff", async () => {
+  test("reports last paid timestamp without using a historical cutoff", async () => {
     const cutoffAt = new Date("2026-08-01T00:00:00Z");
     const findCompletedBookingsByTutor = mock(async () => []);
     const { service } = createService({
       repo: {
-        findLatestLegacyTutorPayoutCutoff: mock(async () => ({
-          cutoffAt,
-          paidAt: cutoffAt,
-        })),
+        listTutorPayoutsByTutorId: mock(async () => [
+          { status: "paid", paidAt: cutoffAt },
+        ]),
         findCompletedBookingsByTutor,
       },
     });
     await expect(
       service.getPendingTutorPayouts("tutor1"),
     ).resolves.toMatchObject({ completedSessions: 0, lastPaidAt: cutoffAt });
-    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
-      expect.anything(),
-      "tutor1",
-      new Date(cutoffAt.getTime() + 1),
-      undefined,
-      "completedAt",
-    );
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
   });
 
   test("builds a report with paid batches and current unpaid rows", async () => {
-    const cutoffAt = new Date("2026-08-01T00:00:00Z");
     const completed = makeBooking({
       currentState: "completed",
       completedAt: new Date("2026-07-01T00:00:00Z"),
@@ -9570,8 +9599,21 @@ describe("BookingService additional coverage paths", () => {
         listTutorPayoutProfiles,
         listTutorPayoutRecords,
         findCompletedBookingsByTutor,
-        findLatestLegacyTutorPayoutCutoff: mock(async (tutorId: string) =>
-          tutorId === "tutor2" ? { cutoffAt, paidAt: cutoffAt } : null,
+        findTutorSessionFeesByTutor: mock(
+          async (_conn: unknown, tutorId: string) =>
+            tutorId === "tutor1"
+              ? [
+                  {
+                    id: "fee-report",
+                    bookingId: completed.id,
+                    eventKey: "fee:report",
+                    scheduledStartAt: completed.scheduledStartAt,
+                    earnedAt: completed.scheduledEndAt,
+                    grossHonorariumIdr: 200_000,
+                    priceSnapshot: { engine: "v3", collectedMarks: 50 },
+                  },
+                ]
+              : [],
         ),
       },
     });
@@ -9608,13 +9650,7 @@ describe("BookingService additional coverage paths", () => {
         payoutAccountComplete: true,
       }),
     );
-    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
-      expect.anything(),
-      "tutor1",
-      undefined,
-      expect.any(Date),
-      "completedAt",
-    );
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
   });
 
   test("prepares a versioned batch with fee, tax, and bank snapshots", async () => {
@@ -10025,8 +10061,9 @@ describe("BookingService coverage paths", () => {
     });
   });
 
-  test("rejects an IDR booking when the economy pricing port is unavailable", async () => {
+  test("rejects new bookings when active V3 pricing is unavailable", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10037,6 +10074,7 @@ describe("BookingService coverage paths", () => {
       timezone: "Asia/Jakarta",
     };
     const { service } = createService({
+      pricing: { getActiveV3Config: mock(async () => null) },
       repo: {
         findTutorProfile: mock(async () =>
           makeTutorProfile({ baseRatesIdr: { online: 125_000 } }),
@@ -10047,11 +10085,11 @@ describe("BookingService coverage paths", () => {
     });
 
     await expect(service.createSolo("student1", input)).rejects.toThrow(
-      "IDR pricing is not configured",
+      BookingV3PricingRevisionUnavailableError,
     );
   });
 
-  test("preserves IDR snapshot economics while repricing online and offline groups", async () => {
+  test("rejects retired IDR snapshots while repricing online and offline groups", async () => {
     const previousSnapshot = {
       perStudent: 100,
       baseline: 100,
@@ -10116,34 +10154,17 @@ describe("BookingService coverage paths", () => {
         },
       });
 
-      await service.withdraw("student1", "b1");
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
+        BookingV3PricingRevisionUnavailableError,
+      );
     }
 
-    expect(computeEconomics).toHaveBeenCalledTimes(2);
-    expect(computeEconomics.mock.calls[0]?.[1]).toBe(125_000);
-    expect(computeEconomics.mock.calls[1]?.[1]).toBe(125_000);
-    expect(computeEconomics.mock.calls[0]?.[3]).toEqual(
-      expect.objectContaining({
-        version: 7,
-        markValueIdr: 1_000,
-        onlineTutorIncrementIdr: 5_000,
-        onlineCogitoBaseIdr: 20_000,
-        onlineCogitoIncrementIdr: 2_000,
-      }),
-    );
-    expect(computeEconomics.mock.calls[1]?.[3]).toEqual(
-      expect.objectContaining({
-        version: 7,
-        markValueIdr: 1_000,
-        offlineTutorIncrementIdr: 5_000,
-        offlineCogitoBaseIdr: 20_000,
-        offlineCogitoIncrementIdr: 2_000,
-      }),
-    );
+    expect(computeEconomics).not.toHaveBeenCalled();
   });
 
   test("rejects a group booking when the tutor slot overlaps an existing booking", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10174,6 +10195,7 @@ describe("BookingService coverage paths", () => {
 
   test("requests a room when creating an offline group booking", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "offline" as const,
@@ -10369,6 +10391,7 @@ describe("BookingService coverage paths", () => {
 
   test("rejects a series when the proposer cannot fund all sessions", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10418,6 +10441,7 @@ describe("BookingService coverage paths", () => {
       ),
     });
     const baseInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10504,8 +10528,9 @@ describe("BookingService coverage paths", () => {
     ).rejects.toThrow(BookingConflictError);
   });
 
-  test("uses the IDR economy pricing snapshot when creating a solo booking", async () => {
+  test("creates a V3 snapshot without consulting retired IDR economics", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10567,22 +10592,25 @@ describe("BookingService coverage paths", () => {
 
     await service.createSolo("student1", input);
 
-    expect(getEconomyConfig).toHaveBeenCalledTimes(1);
-    expect(computeEconomics).toHaveBeenCalledWith(
-      "online",
-      125_000,
-      1,
-      expect.objectContaining({ version: 3, markValueIdr: 1_000 }),
-    );
+    expect(getEconomyConfig).not.toHaveBeenCalled();
+    expect(computeEconomics).not.toHaveBeenCalled();
     expect(repo.insertBooking).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ priceSnapshot: snapshot }),
+      expect.objectContaining({
+        priceSnapshot: expect.objectContaining({
+          engine: "v3",
+          v3Revision: 1,
+          perStudentMarks: 50,
+          tutorHonorariumIdr: 200_000,
+        }),
+      }),
     );
   });
 
   test("rejects a solo booking that does not fit the tutor availability window", async () => {
     const start = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -10757,5 +10785,51 @@ describe("BookingService coverage paths", () => {
     await expect(
       service.syncOfflineCalendarAfterRoomRemoval("b1"),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("V3-only booking and payout", () => {
+  test("V3 rejects missing active pricing before holding Marks", async () => {
+    const { service, wallet } = createService({
+      repo: {
+        findTutorProfile: mock(async () => makeTutorProfile()),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+        findTutorSubjectTopic: mock(async () => ({
+          categoryId: "mun",
+          categorySlug: "competition-model-united-nations",
+          categoryName: "MUN",
+          subcategoryId: "speech",
+          subcategorySlug: "speech",
+          subcategoryName: "Speech",
+        })),
+      },
+      pricing: { getActiveV3Config: mock(async () => null) },
+    });
+    await expect(
+      service.createSolo("student1", {
+        tutorId: "tutor1",
+        subjectId: "speech",
+        availabilitySlotId: "slot1",
+        modality: "online",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        timezone: "Asia/Jakarta",
+      }),
+    ).rejects.toThrow("V3 price revision");
+    expect(wallet.hold).not.toHaveBeenCalled();
+  });
+
+  test("V3 payout excludes snapshot-only legacy booking sources", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [
+          makeBooking({ currentState: "completed" }),
+        ]),
+        findTutorSessionFeesByTutor: mock(async () => []),
+      },
+    });
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    expect(result.completedSessions).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(0);
+    expect(repo.findCompletedBookingsByTutor).not.toHaveBeenCalled();
   });
 });

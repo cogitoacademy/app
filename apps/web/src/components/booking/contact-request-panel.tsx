@@ -1,5 +1,8 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -146,7 +149,7 @@ export function ContactRequestPanel({ bookingId }: { bookingId: string }) {
     return (
       <Card className="min-w-0 overflow-hidden">
         <CardBody>
-          <Text className="text-muted">Loading contact options…</Text>
+          <Loader />
         </CardBody>
       </Card>
     );

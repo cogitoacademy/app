@@ -1,4 +1,5 @@
 import { authorizeReportExport } from "@cogito-app/api/modules/report-export/report-export.access";
+import { ReportSelectionError } from "@cogito-app/api/modules/report-export/report-export.selection";
 import { Elysia, t } from "elysia";
 import type { Context as ApiContext } from "@cogito-app/api/context";
 import type { Context as ElysiaContext } from "elysia";
@@ -61,6 +62,32 @@ export function registerReportExportRoutes(
     { body },
   );
 
+  app.post(
+    "/reports/student/list",
+    async ({ request, set, ...routeContext }) => {
+      const context = await contextFactory({
+        context: { request, ...routeContext } as ElysiaContext,
+      });
+      const actor = context.session?.user as
+        | { id: string; role?: string }
+        | undefined;
+      if (!actor) return jsonError(401, "Unauthorized");
+      const authorization = authorizeReportExport(
+        { id: actor.id, role: actor.role ?? "" },
+        routeContext.body.studentId,
+      );
+      if (!authorization.ok)
+        return jsonError(authorization.status, "Report export is not allowed");
+      const list = await context.services.reportExport.listReports(
+        authorization.studentId,
+      );
+      if (!list) return jsonError(404, "Student not found");
+      Object.assign(set.headers, privateHeaders);
+      return list;
+    },
+    { body },
+  );
+
   return app.post(
     "/reports/student/pdf",
     async ({ request, set, ...routeContext }) => {
@@ -80,9 +107,17 @@ export function registerReportExportRoutes(
         return jsonError(authorization.status, "Report export is not allowed");
       }
 
-      const pdf = await context.services.reportExport.generatePdf(
-        authorization.studentId,
-      );
+      let pdf: Uint8Array | null;
+      try {
+        pdf = await context.services.reportExport.generatePdf(
+          authorization.studentId,
+          routeContext.body.reportIds,
+        );
+      } catch (error) {
+        if (error instanceof ReportSelectionError)
+          return jsonError(409, error.message);
+        throw error;
+      }
       if (!pdf)
         return new Response(null, { status: 204, headers: privateHeaders });
 
@@ -101,6 +136,14 @@ export function registerReportExportRoutes(
         },
       });
     },
-    { body },
+    {
+      body: t.Object({
+        studentId: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+        reportIds: t.Array(
+          t.String({ pattern: "^(private|class):[0-9a-fA-F-]{36}$" }),
+          { minItems: 1, maxItems: 100, uniqueItems: true },
+        ),
+      }),
+    },
   );
 }

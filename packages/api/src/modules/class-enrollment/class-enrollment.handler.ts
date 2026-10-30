@@ -13,6 +13,8 @@ import {
   confirmAdminClassSessionCancellationInput,
   classEnrollmentCancellationInput,
   confirmClassEnrollmentCancellationInput,
+  changedSessionCancellationInput,
+  confirmChangedSessionCancellationInput,
   classEnrollmentIdInput,
   classEnrollmentTopUpPurchaseInput,
   classEnrollmentTopUpQuoteInput,
@@ -158,6 +160,36 @@ export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
     }) =>
       withDomainMap(
         () => service.confirmCancellation(context.session!.user.id, input),
+        mapClassEnrollmentError,
+      ),
+    quoteChangedSessionCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof changedSessionCancellationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.quoteChangedSessionCancellation(
+            context.session!.user.id,
+            input,
+          ),
+        mapClassEnrollmentError,
+      ),
+    confirmChangedSessionCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof confirmChangedSessionCancellationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.confirmChangedSessionCancellation(
+            context.session!.user.id,
+            input,
+          ),
         mapClassEnrollmentError,
       ),
     getMyClassEnrollments: async ({

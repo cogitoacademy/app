@@ -18,6 +18,7 @@ import type { CompetitionCatalogService } from "../competition-catalog";
 import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
 import {
   adminSaveV3EconomyInput,
+  adminActivateV3EconomyInput,
   adminPreviewV3EconomyInput,
 } from "./admin.types";
 import type { z } from "zod";
@@ -54,12 +55,6 @@ export interface DashboardAnalytics {
     activeLearners: number;
     newStudents: number;
     newTutors: number;
-    pricingSnapshotBreakdown: {
-      v3: number;
-      legacy: number;
-      other: number;
-      missing: number;
-    };
   };
   bookingTrend: Array<{
     date: string;
@@ -74,6 +69,26 @@ export interface DashboardAnalytics {
     bookings: number;
     completed: number;
   }>;
+  operationsSummary: {
+    delivered: {
+      privateMarks: number;
+      privateSessions: number;
+      academyMarks: number;
+      academySeatSessions: number;
+    };
+    upcoming: {
+      privateFundedMarks: number;
+      privateUnfundedMarks: number;
+      privateSeatSessions: number;
+      academyFundedMarks: number;
+      academyUnfundedMarks: number;
+      academySeatSessions: number;
+    };
+    tutorFees: { earnedIdr: number; paidIdr: number; unpaidIdr: number };
+    unavailablePrivateRates: number;
+    unavailablePaymentDates: number;
+    asOf: string;
+  };
   businessSummary: {
     totalAccounts: number;
     totalStudents: number;
@@ -88,9 +103,9 @@ export interface DashboardAnalytics {
     studentsWithMarksRate: number;
     payingStudents: number;
     paidConversionRate: number;
-    grossRevenueIdr: number;
+    grossReceiptsIdr: number;
     refundedIdr: number;
-    netRevenueIdr: number;
+    netReceiptsIdr: number;
   };
 }
 
@@ -222,14 +237,6 @@ export interface GetTutorPayoutReportInput {
   dateTo?: string;
 }
 
-export interface UpdateEconomySettingsInput {
-  expectedVersion: number;
-  onlineCogitoBaseIdr: number;
-  onlineCogitoIncrementIdr: number;
-  offlineCogitoBaseIdr: number;
-  offlineCogitoIncrementIdr: number;
-}
-
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
@@ -295,7 +302,7 @@ export function createAdminService(deps: {
     );
     const studentsWithWalletState = studentsWithMarks + studentsWithoutMarks;
     const payingStudents = toNumber(raw.paymentSummary.payingStudents);
-    const grossRevenueIdr = toNumber(raw.paymentSummary.grossRevenueIdr);
+    const grossReceiptsIdr = toNumber(raw.paymentSummary.grossReceiptsIdr);
     const refundedIdr = toNumber(raw.refundSummary.refundedIdr);
     const dateKeys = buildPeriodDateKeys(periodStart, periodEnd);
     const bookingTrendByDate = new Map(
@@ -320,12 +327,6 @@ export function createAdminService(deps: {
         activeLearners: toNumber(bookingSummary.activeLearners),
         newStudents: toNumber(userSummary.newStudents),
         newTutors: toNumber(userSummary.newTutors),
-        pricingSnapshotBreakdown: {
-          v3: toNumber(bookingSummary.v3SnapshotCount),
-          legacy: toNumber(bookingSummary.legacySnapshotCount),
-          other: toNumber(bookingSummary.otherSnapshotCount),
-          missing: toNumber(bookingSummary.missingSnapshotCount),
-        },
       },
       bookingTrend: dateKeys.map((date) => {
         const row = bookingTrendByDate.get(date);
@@ -356,6 +357,48 @@ export function createAdminService(deps: {
         bookings: toNumber(row.bookings),
         completed: toNumber(row.completed),
       })),
+      operationsSummary: {
+        delivered: {
+          privateMarks: toNumber(raw.operationsSummary.privateMarks),
+          privateSessions: toNumber(raw.operationsSummary.privateSessions),
+          academyMarks: toNumber(raw.operationsSummary.academyMarks),
+          academySeatSessions: toNumber(
+            raw.operationsSummary.academySeatSessions,
+          ),
+        },
+        upcoming: {
+          privateFundedMarks: toNumber(
+            raw.operationsSummary.privateFundedMarks,
+          ),
+          privateUnfundedMarks: toNumber(
+            raw.operationsSummary.privateUnfundedMarks,
+          ),
+          privateSeatSessions: toNumber(
+            raw.operationsSummary.privateSeatSessions,
+          ),
+          academyFundedMarks: toNumber(
+            raw.operationsSummary.academyFundedMarks,
+          ),
+          academyUnfundedMarks: toNumber(
+            raw.operationsSummary.academyUnfundedMarks,
+          ),
+          academySeatSessions: toNumber(
+            raw.operationsSummary.academyUpcomingSeatSessions,
+          ),
+        },
+        tutorFees: {
+          earnedIdr: toNumber(raw.operationsSummary.earnedIdr),
+          paidIdr: toNumber(raw.operationsSummary.paidIdr),
+          unpaidIdr: toNumber(raw.operationsSummary.unpaidIdr),
+        },
+        unavailablePrivateRates: toNumber(
+          raw.operationsSummary.unavailablePrivateRates,
+        ),
+        unavailablePaymentDates: toNumber(
+          raw.operationsSummary.unavailablePaymentDates,
+        ),
+        asOf: now.toISOString(),
+      },
       businessSummary: {
         totalAccounts: toNumber(raw.accountSummary.totalAccounts),
         totalStudents,
@@ -380,9 +423,9 @@ export function createAdminService(deps: {
           totalStudents > 0
             ? Math.round((payingStudents / totalStudents) * 1000) / 10
             : 0,
-        grossRevenueIdr,
+        grossReceiptsIdr,
         refundedIdr,
-        netRevenueIdr: grossRevenueIdr - refundedIdr,
+        netReceiptsIdr: grossReceiptsIdr - refundedIdr,
       },
     };
   }
@@ -623,21 +666,18 @@ export function createAdminService(deps: {
     return payout.setTutorTaxRateOverride(adminId, input);
   }
 
-  async function getEconomySettings() {
-    if (!economy) throw new Error("Economy service is not configured");
-    return economy.getConfig(db);
-  }
-
   async function getV3EconomySettings() {
     if (!economy) throw new Error("Economy service is not configured");
     if (!deps.competitionCatalog)
       throw new Error("Competition catalog service is not configured");
-    const [settings, parents] = await Promise.all([
+    const [settings, parents, active] = await Promise.all([
       economy.getV3Config(db),
       deps.competitionCatalog.listParents(db),
+      economy.getActiveV3Config(db),
     ]);
     return {
       ...settings,
+      activeRevision: active?.version ?? null,
       competitions: parents.map((parent) => ({
         id: parent.id,
         slug: parent.slug,
@@ -697,69 +737,46 @@ export function createAdminService(deps: {
     });
   }
 
-  async function updateEconomySettings(
+  async function activateV3EconomySettings(
     adminId: string,
-    input: UpdateEconomySettingsInput,
+    input: z.infer<typeof adminActivateV3EconomyInput>,
   ) {
-    if (!economy) throw new Error("Economy service is not configured");
-
-    const updated = await db.transaction(async (tx) => {
-      const before = await economy.getConfig(tx);
-      if (before.version !== input.expectedVersion) {
-        throw new EconomyConfigConflictError(input.expectedVersion);
+    if (!economy || !deps.competitionCatalog)
+      throw new Error("Economy services are not configured");
+    const catalog = deps.competitionCatalog;
+    const parsed = adminActivateV3EconomyInput.parse(input);
+    return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      const revision = await economy.getV3ConfigByVersion(parsed.version, tx);
+      if (!revision) throw new EconomyConfigConflictError(parsed.version);
+      const parents = await catalog.listParents(tx);
+      const slugs = new Set(parents.map((parent) => parent.slug));
+      for (const slug of Object.keys(revision.values.competitionRates)) {
+        if (!slugs.has(slug))
+          throw new EconomyCompetitionNotInCatalogError(slug);
       }
-
-      const nextValues = {
-        onlineCogitoBaseIdr: input.onlineCogitoBaseIdr,
-        onlineCogitoIncrementIdr: input.onlineCogitoIncrementIdr,
-        offlineCogitoBaseIdr: input.offlineCogitoBaseIdr,
-        offlineCogitoIncrementIdr: input.offlineCogitoIncrementIdr,
-      };
-
-      const hasChanges = Object.entries(nextValues).some(
-        ([key, value]) => value !== before[key as keyof typeof nextValues],
-      );
-      if (!hasChanges) return before;
-
-      const result = await economy.updateConfig(tx, {
-        expectedVersion: input.expectedVersion,
+      const result = await economy.activateV3Config(tx, {
+        ...parsed,
         updatedBy: adminId,
-        values: nextValues,
       });
-      if (!result) {
-        throw new EconomyConfigConflictError(input.expectedVersion);
-      }
-
+      if (!result) throw new EconomyConfigConflictError(parsed.version);
       await auditPort.record({
         db: tx,
         actorId: adminId,
         actorType: USER_ROLE.ADMIN,
-        action: "economy_config_updated",
-        targetId: result.id,
-        targetType: "economy_config",
-        beforeState: {
-          onlineCogitoBaseIdr: before.onlineCogitoBaseIdr,
-          onlineCogitoIncrementIdr: before.onlineCogitoIncrementIdr,
-          offlineCogitoBaseIdr: before.offlineCogitoBaseIdr,
-          offlineCogitoIncrementIdr: before.offlineCogitoIncrementIdr,
-          version: before.version,
-        },
-        afterState: {
-          onlineCogitoBaseIdr: result.onlineCogitoBaseIdr,
-          onlineCogitoIncrementIdr: result.onlineCogitoIncrementIdr,
-          offlineCogitoBaseIdr: result.offlineCogitoBaseIdr,
-          offlineCogitoIncrementIdr: result.offlineCogitoIncrementIdr,
-          version: result.version,
-        },
+        action: "economy_v3_revision_activated",
+        targetType: "economy_v3_revision",
+        targetId: String(parsed.version),
+        beforeState: { activeRevision: parsed.expectedActiveRevision },
+        afterState: { activeRevision: parsed.version },
+        details: { reason: parsed.reason },
       });
-
-      return result;
+      return { activeRevision: parsed.version };
     });
-
-    return updated;
   }
 
   return {
+    activateV3EconomySettings,
     listUsers,
     searchUsers,
     getDashboardAnalytics,
@@ -778,11 +795,9 @@ export function createAdminService(deps: {
     getTutorTaxConfig,
     updateTutorTaxConfig,
     setTutorTaxRateOverride,
-    getEconomySettings,
     getV3EconomySettings,
     previewV3EconomySettings,
     saveV3EconomySettings,
-    updateEconomySettings,
   };
 }
 

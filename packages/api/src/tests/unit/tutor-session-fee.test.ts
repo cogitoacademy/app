@@ -21,45 +21,23 @@ const legacySnapshot: BookingPriceSnapshot = {
 };
 
 describe("tutor session fee contract", () => {
-  test("uses stable booking identity and the legacy snapshot rate", () => {
-    const record = buildTutorSessionFeeRecord({
-      bookingId: "booking-1",
-      bookingSessionId: null,
-      tutorId: "tutor-1",
-      scheduledStartAt,
-      earnedAt,
-      priceSnapshot: legacySnapshot,
-    });
-
-    expect(record).toMatchObject({
-      bookingId: "booking-1",
-      bookingSessionId: null,
-      tutorId: "tutor-1",
-      scheduledStartAt,
-      earnedAt,
-      eventKey: "tutor-session-fee:booking:booking-1",
-      grossHonorariumIdr: 210_000,
-      priceSnapshot: legacySnapshot,
-    });
-    expect(tutorSessionFeeEventKey("booking-1", null)).toBe(record.eventKey);
-  });
-
-  test("keeps the pinned legacy IDR snapshot instead of recalculating it", () => {
-    const snapshot: BookingPriceSnapshot = {
-      ...legacySnapshot,
-      tutorHonorariumIdr: 185_000,
-    };
-
-    const record = buildTutorSessionFeeRecord({
-      bookingId: "booking-2",
-      bookingSessionId: null,
-      tutorId: "tutor-1",
-      scheduledStartAt,
-      earnedAt,
-      priceSnapshot: snapshot,
-    });
-
-    expect(record.grossHonorariumIdr).toBe(185_000);
+  test("rejects old Marks and IDR snapshot formats", () => {
+    for (const priceSnapshot of [
+      legacySnapshot,
+      { ...legacySnapshot, tutorHonorariumIdr: 185_000 },
+      null,
+    ]) {
+      expect(() =>
+        buildTutorSessionFeeRecord({
+          bookingId: "booking-old",
+          bookingSessionId: null,
+          tutorId: "tutor-1",
+          scheduledStartAt,
+          earnedAt,
+          priceSnapshot,
+        }),
+      ).toThrow("A V3 price snapshot is required");
+    }
   });
 
   test("uses the V3 honorarium snapshot, not the Marks amount", () => {
@@ -160,23 +138,5 @@ describe("tutor session fee contract", () => {
       priceSnapshot: zeroSnapshot,
     });
     expect(zeroFee.grossHonorariumIdr).toBe(0);
-  });
-
-  test("rejects a non-whole or negative honorarium amount", () => {
-    const invalidSnapshot: BookingPriceSnapshot = {
-      ...legacySnapshot,
-      tutorHonorariumIdr: -1,
-    };
-
-    expect(() =>
-      buildTutorSessionFeeRecord({
-        bookingId: "booking-4",
-        bookingSessionId: null,
-        tutorId: "tutor-1",
-        scheduledStartAt,
-        earnedAt,
-        priceSnapshot: invalidSnapshot,
-      }),
-    ).toThrow("Tutor honorarium must be a non-negative whole IDR amount");
   });
 });

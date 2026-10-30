@@ -2,11 +2,7 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { lockTutorForBooking, lockTutorForPayout } from "../../lib/locks";
 import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
-import {
-  ONBOARDING_STATUS,
-  MODALITY,
-  ACTOR_TYPE,
-} from "../../shared/constants";
+import { ONBOARDING_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
@@ -138,8 +134,8 @@ function utcDateKey(date: Date) {
 export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
-  pricingPort: TutorPricingPort,
-  v3PricingActive = false,
+  _pricingPort: TutorPricingPort,
+  _v3PricingActive = true,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
@@ -149,37 +145,11 @@ export function validateUpdateInput(
     (input.prices && hasChangedValues(profile.prices, input.prices)) ||
     (input.baseRatesIdr &&
       hasChangedValues(profile.baseRatesIdr, input.baseRatesIdr));
-  if (v3PricingActive && hasLegacyRateChange) {
+  if (hasLegacyRateChange) {
     throw new InvalidTutorPricingError(
       profile.id,
-      "Tutor fee tables are read-only while V3 pricing is active",
+      "Tutor fee tables are read-only; rates are set by Cogito admins",
     );
-  }
-
-  if (input.prices && !v3PricingActive) {
-    const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
-      | "online"
-      | "offline"
-      | "both";
-    const error = pricingPort.validatePrices(input.prices, modality);
-    if (error) {
-      throw new InvalidTutorPricingError(profile.id, error);
-    }
-  }
-  if (input.baseRatesIdr && !v3PricingActive) {
-    const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
-      | "online"
-      | "offline"
-      | "both";
-    const error = pricingPort.validateBaseRates
-      ? pricingPort.validateBaseRates(
-          input.baseRatesIdr as Record<string, number>,
-          modality,
-        )
-      : "IDR pricing is not configured";
-    if (error) {
-      throw new InvalidTutorPricingError(profile.id, error);
-    }
   }
 }
 
@@ -195,10 +165,10 @@ export function validateUpdateInput(
  */
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
-  pricingPort: TutorPricingPort,
+  _pricingPort: TutorPricingPort,
   profileImageUrl?: string | null,
   acceptTerms = false,
-  v3PricingActive = false,
+  _v3PricingActive = true,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
@@ -238,14 +208,6 @@ export function validateSubmitForReview(
       key: "bankTransferDisclaimerAccepted",
       value: profile.bankTransferDisclaimerAccepted,
     },
-    ...(!v3PricingActive
-      ? [
-          {
-            key: "baseRatesIdr",
-            value: profile.baseRatesIdr ?? profile.prices,
-          },
-        ]
-      : []),
   ];
   const missingFields = requiredFields
     .filter((f) => !f.value)
@@ -265,35 +227,6 @@ export function validateSubmitForReview(
   if (!hasSelectableSubject) {
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
-
-  if (!v3PricingActive && profile.baseRatesIdr) {
-    const modality = (profile.modality ?? MODALITY.ONLINE) as
-      | "online"
-      | "offline"
-      | "both";
-    const error = pricingPort.validateBaseRates
-      ? pricingPort.validateBaseRates(
-          profile.baseRatesIdr as Record<string, number>,
-          modality,
-        )
-      : "IDR pricing is not configured";
-    if (error) {
-      throw new InvalidTutorPricingError(profile.id, error);
-    }
-  } else if (!v3PricingActive && profile.prices) {
-    const modality = (profile.modality ?? MODALITY.ONLINE) as
-      | "online"
-      | "offline"
-      | "both";
-    const error = pricingPort.validatePrices(
-      profile.prices as Record<string, number>,
-      modality,
-    );
-    if (error) {
-      throw new InvalidTutorPricingError(profile.id, error);
-    }
-  }
-
   if (!profile.termsOfServiceAcceptedAt && !acceptTerms) {
     throw new TutorTermsNotAcceptedError(
       profile.id,
@@ -352,7 +285,7 @@ export function createTutorService(deps: {
       const profile = await tutorRepo.getByUserId(tx, userId);
       const activeV3Config =
         (await pricingPort.getActiveV3Config?.(tx)) ?? null;
-      validateUpdateInput(profile, input, pricingPort, activeV3Config !== null);
+      validateUpdateInput(profile, input, pricingPort, true);
       const { version, displayName, subjectIds, profileImageUrl, ...data } =
         input;
       const isPublished =
@@ -390,10 +323,8 @@ export function createTutorService(deps: {
         profileEditStatus?: string;
         profileEditAdminNote?: null;
       } = { ...data };
-      if (activeV3Config) {
-        delete directData.baseRatesIdr;
-        delete directData.prices;
-      }
+      delete directData.baseRatesIdr;
+      delete directData.prices;
       const displayNameChanged =
         displayName !== undefined && displayName !== profile!.user?.name;
 
@@ -401,26 +332,11 @@ export function createTutorService(deps: {
         const pendingProfileChanges = {
           ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
         };
-        // Tutor honoraria are effective immediately for future bookings. Older
-        // versions routed this field through profile review; promote any such
-        // leftover proposal to the live rate and remove it from the review
-        // payload so an admin cannot later overwrite a newer tutor-set fee.
-        const pendingBaseRatesIdr = pendingProfileChanges.baseRatesIdr;
         const hadPendingBaseRatesIdr = Object.prototype.hasOwnProperty.call(
           pendingProfileChanges,
           "baseRatesIdr",
         );
         delete pendingProfileChanges.baseRatesIdr;
-        if (
-          !activeV3Config &&
-          data.baseRatesIdr === undefined &&
-          pendingBaseRatesIdr !== undefined
-        ) {
-          directData.baseRatesIdr = pendingBaseRatesIdr as Partial<{
-            online: number;
-            offline: number;
-          }>;
-        }
         for (const field of protectedFields) {
           if (data[field] !== undefined) {
             if (
@@ -538,8 +454,6 @@ export function createTutorService(deps: {
     return db.transaction(async (tx) => {
       await lockTutorForBooking(tx, userId);
       const profile = await tutorRepo.getByUserId(tx, userId);
-      const activeV3Config =
-        (await pricingPort.getActiveV3Config?.(tx)) ?? null;
       const acceptsTermsForFirstSubmission =
         input.acceptTerms === true && !profile?.termsOfServiceAcceptedAt;
       validateSubmitForReview(
@@ -547,7 +461,7 @@ export function createTutorService(deps: {
         pricingPort,
         (profile as TutorProfileWithSubjectRelations | undefined)?.user?.image,
         acceptsTermsForFirstSubmission,
-        activeV3Config !== null,
+        true,
       );
 
       const row = await tutorRepo.updateStatus(

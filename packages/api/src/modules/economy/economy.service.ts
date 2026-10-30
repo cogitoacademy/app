@@ -109,6 +109,7 @@ export function createEconomyService(deps: { db: DbType; repo?: EconomyRepo }) {
     getActiveV3Config,
     previewV3Config,
     saveV3Config,
+    activateV3Config: repo.activateV3Revision,
   };
 }
 

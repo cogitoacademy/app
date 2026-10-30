@@ -1,5 +1,7 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 
@@ -35,7 +37,6 @@ import {
   IconLockOpen,
   IconShoppingCart,
   IconUsers,
-  IconLoader2,
   IconArrowDown,
   IconArrowUp,
   IconArrowsExchange,
@@ -97,37 +98,23 @@ function formatIdr(amount: number) {
 
 export function BalancePage() {
   const queryClient = useQueryClient();
-  const [selectedPackageCode, setSelectedPackageCode] = useState<string | null>(
-    null,
-  );
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [customMarks, setCustomMarks] = useState(100);
   const [topUpQuote, setTopUpQuote] = useState<TopUpQuote | null>(null);
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
   );
-  const { data: packagesData, isLoading: packagesLoading } = useQuery(
-    orpc.wallet.listPackages.queryOptions(),
-  );
   const { data: paymentConfig } = useQuery(
     orpc.payment.getConfig.queryOptions(),
   );
-  const { data: topUpCatalog, isLoading: topUpCatalogLoading } = useQuery(
-    orpc.payment.getTopUpCatalog.queryOptions(),
-  );
-  const packages = packagesData?.packages ?? [];
+  const {
+    data: topUpCatalog,
+    isLoading: topUpCatalogLoading,
+    isError: topUpCatalogError,
+    refetch: reloadTopUpCatalog,
+  } = useQuery(orpc.payment.getTopUpCatalog.queryOptions());
   const v3Active = topUpCatalog?.active === true;
-  const displayPackages = v3Active
-    ? topUpCatalog.packages
-    : packages.map((pkg) => ({
-        code: pkg.code,
-        label: pkg.name,
-        marks: pkg.marks,
-        priceIdr: pkg.priceIdr,
-      }));
-  const selectedPackage = packages.find(
-    (pkg) => pkg.code === selectedPackageCode,
-  );
+  const displayPackages = v3Active ? topUpCatalog.packages : [];
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -135,40 +122,10 @@ export function BalancePage() {
     | { items: LedgerEntry[]; nextCursor: string | null }
     | undefined;
 
-  const purchase = useMutation(
-    orpc.payment.createPurchase.mutationOptions({
-      onSuccess: async (res) => {
-        if (res.checkoutUrl) {
-          window.location.assign(res.checkoutUrl);
-          return;
-        }
-        toastManager.add({
-          title: "Checkout status is being confirmed",
-          description:
-            "Your payment request is saved. Check back shortly before starting another top-up.",
-          type: "warning",
-        });
-        await queryClient.invalidateQueries({
-          queryKey: orpc.wallet.get.queryKey(),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: orpc.wallet.listLedger.key(),
-        });
-      },
-      onError: (error: Error) =>
-        toastManager.add({
-          title: "Purchase could not be completed",
-          description: getUserFacingError(error),
-          type: "error",
-        }),
-    }),
-  );
-
   const quoteTopUp = useMutation(
     orpc.payment.createTopUpQuote.mutationOptions({
       onSuccess: (quote) => {
         setTopUpQuote(quote);
-        setSelectedPackageCode(null);
         setPaymentDrawerOpen(true);
       },
       onError: (error: Error) =>
@@ -321,13 +278,27 @@ export function BalancePage() {
           </CardTitle>
         </CardHeader>
         <CardBody>
-          {packagesLoading || topUpCatalogLoading ? (
-            <Text className="text-muted">Loading packages...</Text>
+          {topUpCatalogLoading ? (
+            <Loader />
           ) : displayPackages.length === 0 ? (
             <EmptyState
               icon={<IconShoppingCart />}
-              title="No Marks packages available"
-              description="Top-up packages will appear here when they are available."
+              title={
+                topUpCatalogError
+                  ? "Top-up packages could not be loaded"
+                  : "Top-up is unavailable"
+              }
+              description="Please try again later."
+              action={
+                topUpCatalogError ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => void reloadTopUpCatalog()}
+                  >
+                    Try again
+                  </Button>
+                ) : undefined
+              }
               tone="secondary"
               size="compact"
               className="rounded-lg border border-border"
@@ -367,17 +338,10 @@ export function BalancePage() {
                     <Button
                       block
                       onClick={() => {
-                        purchase.reset();
-                        if (v3Active) {
-                          quoteTopUp.mutate({
-                            requestKey: crypto.randomUUID(),
-                            marks: pkg.marks,
-                          });
-                        } else {
-                          setTopUpQuote(null);
-                          setSelectedPackageCode(pkg.code);
-                          setPaymentDrawerOpen(true);
-                        }
+                        quoteTopUp.mutate({
+                          requestKey: crypto.randomUUID(),
+                          marks: pkg.marks,
+                        });
                       }}
                       disabled={quoteTopUp.isPending}
                     >
@@ -424,7 +388,6 @@ export function BalancePage() {
                   }
                   progress={quoteTopUp.isPending}
                   onClick={() => {
-                    purchase.reset();
                     quoteTopUp.mutate({
                       requestKey: crypto.randomUUID(),
                       marks: customMarks,
@@ -442,7 +405,7 @@ export function BalancePage() {
       <Drawer
         open={paymentDrawerOpen}
         onOpenChange={(open) => {
-          if (!purchase.isPending) setPaymentDrawerOpen(open);
+          if (!purchaseFromQuote.isPending) setPaymentDrawerOpen(open);
         }}
         swipeDirection="down"
       >
@@ -488,7 +451,7 @@ export function BalancePage() {
                   </div>
                 ) : null}
                 <Text className="text-xs text-dimmed">
-                  Price version {topUpQuote.revision} · valid until{" "}
+                  Quote valid until{" "}
                   {new Intl.DateTimeFormat("en-GB", {
                     day: "numeric",
                     month: "short",
@@ -498,41 +461,7 @@ export function BalancePage() {
                 </Text>
               </div>
             ) : null}
-            {selectedPackage ? (
-              <div className="rounded-lg border border-item-border bg-item p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <Text className="font-semibold">
-                      {selectedPackage.name}
-                    </Text>
-                    <Text className="text-dimmed text-sm">
-                      <CogitoMarks value={selectedPackage.marks} size="3" />
-                    </Text>
-                  </div>
-                  <Text className="font-semibold">
-                    {formatIdr(selectedPackage.priceIdr)}
-                  </Text>
-                </div>
-              </div>
-            ) : null}
           </DrawerBody>
-          {selectedPackage ? (
-            <DrawerFooter>
-              <Button
-                block
-                progress={purchase.isPending}
-                disabled={purchase.isPending}
-                onClick={() =>
-                  purchase.mutate({ packageCode: selectedPackage.code })
-                }
-              >
-                {purchase.isPending ? (
-                  <IconLoader2 className="animate-spin" />
-                ) : null}
-                Continue payment · {formatIdr(selectedPackage.priceIdr)}
-              </Button>
-            </DrawerFooter>
-          ) : null}
           {topUpQuote ? (
             <DrawerFooter className="flex-col">
               {topUpQuote.exactPackage ? (
@@ -602,7 +531,7 @@ export function BalancePage() {
         </CardHeader>
         <CardBody className="min-w-0 overflow-hidden">
           {ledgerLoading ? (
-            <Text className="text-muted">Loading transaction history...</Text>
+            <Loader />
           ) : !ledger?.items.length ? (
             <EmptyState
               icon={<IconArrowsExchange />}

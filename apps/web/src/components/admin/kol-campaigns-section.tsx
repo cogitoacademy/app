@@ -1,5 +1,10 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+
+import { IconSpeakerphone } from "@tabler/icons-react";
+import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -197,7 +202,7 @@ export function KolCampaignsSection() {
             Refresh campaigns
           </Button>
           {query.isPending ? (
-            <Text role="status">Loading KOL campaigns…</Text>
+            <Loader />
           ) : query.isError ? (
             <div className="space-y-3">
               <Text role="alert">We couldn't load KOL campaigns.</Text>
@@ -206,10 +211,20 @@ export function KolCampaignsSection() {
               </Button>
             </div>
           ) : !query.data?.length ? (
-            <Text>
-              No KOL campaigns yet. Create a campaign to share a registration
-              code.
-            </Text>
+            <EmptyState
+              icon={<IconSpeakerphone />}
+              title="No KOL campaigns yet."
+              description="Create a campaign to give your partner a registration code and saved commission terms."
+              size="compact"
+              tone="secondary"
+              action={
+                !open ? (
+                  <Button variant="secondary" onClick={() => setOpen(true)}>
+                    Create your first campaign
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <ul className="space-y-4" aria-label="Saved KOL campaigns">
               {query.data.map((campaign) => (

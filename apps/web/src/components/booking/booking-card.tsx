@@ -29,7 +29,10 @@ import {
   getCompetitionPaletteStyle,
   type CompetitionPalette,
 } from "@/lib/competition-colors";
-import { getTotalHonorariumIdr } from "./booking-pricing";
+import {
+  getTotalHonorariumIdr,
+  getPerSessionHonorariumIdr,
+} from "./booking-pricing";
 
 import {
   BOOKING_ACTION_STATES,
@@ -61,8 +64,8 @@ export type BookingCardData = {
   timezone: string;
   originalMarks: number;
   priceSnapshot: {
-    perStudent?: number;
-    tutorShare?: number;
+    engine?: "v3";
+    perStudentMarks?: number;
     tutorHonorariumIdr?: number;
   } | null;
   tutor: BookingCardPerson | null;
@@ -539,46 +542,66 @@ function BookingFinancialInfo({
   booking: BookingCardData;
   viewerRole: string;
 }) {
-  const total = booking.originalMarks;
-  const tutorShare = booking.priceSnapshot?.tutorShare ?? 0;
-  const studentPay =
-    booking.type === "group"
-      ? (booking.priceSnapshot?.perStudent ?? total)
-      : total;
-
+  const studentPrice =
+    booking.priceSnapshot?.engine === "v3"
+      ? (booking.priceSnapshot.perStudentMarks ?? null)
+      : null;
+  const perSession = getPerSessionHonorariumIdr(booking.priceSnapshot);
+  const totalFee = getTotalHonorariumIdr(booking);
+  const displayedFee = totalFee ?? perSession;
+  const feeLabel =
+    booking.type === "series" ? "Honorarium / session" : "Honorarium";
+  const feeValue =
+    displayedFee === null
+      ? "Unavailable"
+      : `Rp${displayedFee.toLocaleString("id-ID")}`;
   if (viewerRole === "tutor") {
-    const honorariumIdr = getTotalHonorariumIdr(booking);
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
-        <span className="text-muted">Honorarium</span>
-        <span>
-          Rp
-          {honorariumIdr.toLocaleString("id-ID")}
-        </span>
+        <span className="text-muted">{feeLabel}</span>
+        <span>{feeValue}</span>
       </span>
     );
   }
-
   if (viewerRole === "admin") {
     return (
       <div className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium">
-        <FinancialValue label="Total" value={total} />
+        <FinancialValue
+          label={booking.type === "series" ? "Marks / session" : "Student"}
+          value={studentPrice}
+        />
         <span className="text-dimmed" aria-hidden="true">
           ·
         </span>
-        <FinancialValue label="Tutor" value={tutorShare} />
+        <span>
+          {feeLabel}: {feeValue}
+        </span>
       </div>
     );
   }
-
-  return <FinancialValue label="You pay" value={studentPay} />;
+  return (
+    <FinancialValue
+      label={booking.type === "series" ? "Per session" : "You pay"}
+      value={studentPrice}
+    />
+  );
 }
 
-function FinancialValue({ label, value }: { label: string; value: number }) {
+function FinancialValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null;
+}) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span className="text-muted">{label}</span>
-      <CogitoMarks value={value} size="3" />
+      {value === null ? (
+        <span>Unavailable</span>
+      ) : (
+        <CogitoMarks value={value} size="3" />
+      )}
     </span>
   );
 }

@@ -171,7 +171,7 @@ describe("Tutor Service", () => {
           { baseRatesIdr: { online: 175_000 }, version: 1 },
           idrPricingPort,
         ),
-      ).not.toThrow();
+      ).toThrow(InvalidTutorPricingError);
       expect(() =>
         validateUpdateInput(
           makeProfile(),
@@ -184,7 +184,7 @@ describe("Tutor Service", () => {
       ).toThrow(InvalidTutorPricingError);
     });
 
-    test("rejects changed legacy rates only while V3 pricing is active", () => {
+    test("rejects changed rates even without active V3 pricing", () => {
       const profile = makeProfile({
         baseRatesIdr: { online: 175_000 },
         prices: { "1": 50 },
@@ -219,7 +219,7 @@ describe("Tutor Service", () => {
           { baseRatesIdr: { online: 180_000 } },
           idrPricingPort,
         ),
-      ).not.toThrow();
+      ).toThrow(InvalidTutorPricingError);
     });
   });
 
@@ -389,13 +389,13 @@ describe("Tutor Service", () => {
             validateBaseRates: () => "Base rate is too low",
           },
         ),
-      ).toThrow(InvalidTutorPricingError);
+      ).not.toThrow();
     });
 
     test("validates legacy Marks prices during review submission", () => {
       expect(() =>
         validateSubmitForReview(makeProfile(), failPricingPort),
-      ).toThrow(InvalidTutorPricingError);
+      ).not.toThrow();
     });
 
     test("does not require or validate legacy rates while V3 pricing is active", () => {
@@ -542,7 +542,7 @@ describe("Tutor Service", () => {
       expect(updateProfileWithVersion).not.toHaveBeenCalled();
     });
 
-    test("activation-null keeps legacy base-rate writes available", async () => {
+    test("activation-null rejects tutor rate writes", async () => {
       const profile = makeProfile({ baseRatesIdr: { online: 175_000 } });
       const updateProfileWithVersion = mock(async () => [profile]);
       const deps = makeDeps({
@@ -558,17 +558,13 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
 
-      await service.updateMyProfile("u1", {
-        version: 1,
-        baseRatesIdr: { online: 180_000 },
-      });
-
-      expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        expect.anything(),
-        "u1",
-        1,
-        expect.objectContaining({ baseRatesIdr: { online: 180_000 } }),
-      );
+      await expect(
+        service.updateMyProfile("u1", {
+          version: 1,
+          baseRatesIdr: { online: 200_000 },
+        }),
+      ).rejects.toThrow(InvalidTutorPricingError);
+      expect(updateProfileWithVersion).not.toHaveBeenCalled();
     });
 
     test("getMyProfileHistory returns audit rows for the tutor profile", async () => {
@@ -1184,7 +1180,7 @@ describe("Tutor Service", () => {
       expect(updateArgs.experiences).toBeUndefined();
     });
 
-    test("published profile applies a changed IDR base honorarium immediately", async () => {
+    test("published profile rejects a changed honorarium", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",
         baseRatesIdr: { online: 175_000 },
@@ -1201,19 +1197,13 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
 
-      await service.updateMyProfile("u1", {
-        version: 1,
-        baseRatesIdr: { online: 200_000 },
-      });
-
-      expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        expect.anything(),
-        "u1",
-        1,
-        {
+      await expect(
+        service.updateMyProfile("u1", {
+          version: 1,
           baseRatesIdr: { online: 200_000 },
-        },
-      );
+        }),
+      ).rejects.toThrow(InvalidTutorPricingError);
+      expect(updateProfileWithVersion).not.toHaveBeenCalled();
     });
 
     test("published profile clears a legacy pending honorarium proposal", async () => {
@@ -1242,7 +1232,6 @@ describe("Tutor Service", () => {
         "u1",
         1,
         {
-          baseRatesIdr: { online: 190_000 },
           pendingProfileChanges: null,
           profileEditStatus: "none",
           profileEditAdminNote: null,
@@ -1333,12 +1322,12 @@ describe("Tutor Service", () => {
         id: "tp1",
       });
 
-      expect(getActiveV3Config).toHaveBeenCalledTimes(1);
-      expect(getActiveV3Config.mock.calls[0]?.[0]).toHaveProperty("execute");
+      expect(getActiveV3Config).not.toHaveBeenCalled();
+
       expect(updateStatus).toHaveBeenCalledTimes(1);
     });
 
-    test("submitForReview still requires legacy rates when activation is null", async () => {
+    test("submitForReview does not require legacy rates when activation is null", async () => {
       const profile = makeProfile({ baseRatesIdr: null, prices: null });
       const updateStatus = mock(async () => profile);
       const getActiveV3Config = mock(async () => null);
@@ -1352,11 +1341,8 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
 
-      await expect(service.submitForReview("u1", {})).rejects.toThrow(
-        TutorProfileIncompleteError,
-      );
-      expect(getActiveV3Config).toHaveBeenCalledTimes(1);
-      expect(updateStatus).not.toHaveBeenCalled();
+      await service.submitForReview("u1", {});
+      expect(updateStatus).toHaveBeenCalled();
     });
 
     test("submitForReview audits the existing profile when status update returns no row", async () => {

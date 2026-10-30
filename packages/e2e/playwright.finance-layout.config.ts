@@ -25,6 +25,8 @@ export default defineConfig({
     timeout: 120000,
     env: {
       NODE_ENV: "test",
+      VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: "",
+      VITE_PUBLIC_POSTHOG_HOST: "",
       WEB_PORT: webPort,
       VITE_SERVER_URL: `http://localhost:${apiPort}`,
     },

@@ -19,13 +19,17 @@ export function createContentAdminRepo(db: DbType, audit: AuditPort) {
   async function list(kind: ContentKind, activeOnly = false) {
     if (kind === "resource")
       return db
-        .select()
+        .select({ resource: kbResource, fileName: kbFile.fileName })
         .from(kbResource)
+        .innerJoin(kbFile, eq(kbResource.fileId, kbFile.id))
         .where(activeOnly ? eq(kbResource.isActive, true) : undefined)
         .orderBy(
           asc(kbResource.sortOrder),
           asc(kbResource.title),
           asc(kbResource.id),
+        )
+        .then((rows) =>
+          rows.map(({ resource, fileName }) => ({ ...resource, fileName })),
         );
     const rows = await db
       .select()

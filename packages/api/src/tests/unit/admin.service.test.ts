@@ -9,9 +9,26 @@ import {
   LastAdminError,
   WalletNotFoundError,
   InvalidLedgerFilterError,
-  EconomyConfigConflictError,
   TutorPayoutNotAvailableError,
 } from "../../modules/admin/admin.errors";
+
+const emptyOperations = {
+  privateMarks: 0,
+  privateSessions: 0,
+  academyMarks: 0,
+  academySeatSessions: 0,
+  privateFundedMarks: 0,
+  privateUnfundedMarks: 0,
+  privateSeatSessions: 0,
+  academyFundedMarks: 0,
+  academyUnfundedMarks: 0,
+  academyUpcomingSeatSessions: 0,
+  earnedIdr: 0,
+  paidIdr: 0,
+  unpaidIdr: 0,
+  unavailablePrivateRates: 0,
+  unavailablePaymentDates: 0,
+};
 
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
   return { id: "u1", role: "student", ...overrides };
@@ -27,10 +44,6 @@ describe("Admin Service", () => {
             completed: "2",
             exceptions: "1",
             activeLearners: "3",
-            v3SnapshotCount: "1",
-            legacySnapshotCount: "2",
-            otherSnapshotCount: "0",
-            missingSnapshotCount: "1",
           },
           userSummary: { newStudents: "3", newTutors: "1" },
           bookingTrend: [
@@ -62,9 +75,26 @@ describe("Admin Service", () => {
           },
           paymentSummary: {
             payingStudents: "6",
-            grossRevenueIdr: "1250000",
+            grossReceiptsIdr: "1250000",
           },
           refundSummary: { refundedIdr: "100000" },
+          operationsSummary: {
+            privateMarks: "84",
+            privateSessions: "2",
+            academyMarks: "20",
+            academySeatSessions: "1",
+            privateFundedMarks: "100",
+            privateUnfundedMarks: "20",
+            privateSeatSessions: "3",
+            academyFundedMarks: "40",
+            academyUnfundedMarks: "22",
+            academyUpcomingSeatSessions: "3",
+            earnedIdr: "600000",
+            paidIdr: "400000",
+            unpaidIdr: "200000",
+            unavailablePrivateRates: "1",
+            unavailablePaymentDates: "2",
+          },
         })),
       };
       const service = createAdminService({
@@ -77,6 +107,26 @@ describe("Admin Service", () => {
 
       const result = await service.getDashboardAnalytics({ period: "7d" });
 
+      expect(result.operationsSummary).toEqual({
+        delivered: {
+          privateMarks: 84,
+          privateSessions: 2,
+          academyMarks: 20,
+          academySeatSessions: 1,
+        },
+        upcoming: {
+          privateFundedMarks: 100,
+          privateUnfundedMarks: 20,
+          privateSeatSessions: 3,
+          academyFundedMarks: 40,
+          academyUnfundedMarks: 22,
+          academySeatSessions: 3,
+        },
+        tutorFees: { earnedIdr: 600000, paidIdr: 400000, unpaidIdr: 200000 },
+        unavailablePrivateRates: 1,
+        unavailablePaymentDates: 2,
+        asOf: expect.any(String),
+      });
       expect(result.period).toBe("7d");
       expect(result.bookingTrend).toHaveLength(7);
       expect(result.bookingTrend.at(-1)).toEqual({
@@ -92,12 +142,6 @@ describe("Admin Service", () => {
         activeLearners: 3,
         newStudents: 3,
         newTutors: 1,
-        pricingSnapshotBreakdown: {
-          v3: 1,
-          legacy: 2,
-          other: 0,
-          missing: 1,
-        },
       });
       expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
       expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);
@@ -115,9 +159,9 @@ describe("Admin Service", () => {
         studentsWithMarksRate: 56.3,
         payingStudents: 6,
         paidConversionRate: 37.5,
-        grossRevenueIdr: 1_250_000,
+        grossReceiptsIdr: 1_250_000,
         refundedIdr: 100_000,
-        netRevenueIdr: 1_150_000,
+        netReceiptsIdr: 1_150_000,
       });
       expect(repo.getDashboardAnalytics).toHaveBeenCalledWith(
         expect.anything(),
@@ -145,6 +189,7 @@ describe("Admin Service", () => {
           marksSummary: {},
           paymentSummary: {},
           refundSummary: {},
+          operationsSummary: emptyOperations,
         })),
       };
       const service = createAdminService({
@@ -176,6 +221,7 @@ describe("Admin Service", () => {
           marksSummary: {},
           paymentSummary: {},
           refundSummary: {},
+          operationsSummary: emptyOperations,
         })),
       };
       const service = createAdminService({
@@ -589,7 +635,7 @@ describe("Admin Service", () => {
     });
   });
 
-  describe("payouts and economy settings", () => {
+  describe("payout filters and economy API", () => {
     test("rejects invalid tutor payout dateFrom and dateTo filters", async () => {
       const payout = { getTutorPayouts: mock(async () => []) };
       const service = createAdminService({
@@ -608,89 +654,18 @@ describe("Admin Service", () => {
       ).rejects.toThrow(InvalidLedgerFilterError);
     });
 
-    test("maps a failed economy update to a conflict", async () => {
-      const economy = {
-        getConfig: mock(async () => ({
-          id: "default",
-          version: 1,
-          onlineCogitoBaseIdr: 50_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-        updateConfig: mock(async () => null),
-      };
-      const db = { transaction: mock(async (fn: any) => fn({})) };
+    test("exposes V3 settings without obsolete take-schedule methods", () => {
       const service = createAdminService({
         adminRepo: {} as any,
-        auditPort: { record: mock(async () => {}) },
-        db: db as any,
+        auditPort: {} as any,
+        db: {} as any,
         wallet: {} as any,
         payout: {} as any,
-        economy: economy as any,
       });
-
-      await expect(
-        service.updateEconomySettings("admin1", {
-          expectedVersion: 1,
-          onlineCogitoBaseIdr: 55_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        }),
-      ).rejects.toThrow(EconomyConfigConflictError);
-    });
-
-    test("economy updates do not fan out tutor notifications", async () => {
-      const economy = {
-        getConfig: mock(async () => ({
-          id: "default",
-          version: 1,
-          onlineCogitoBaseIdr: 50_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-        updateConfig: mock(async () => ({
-          id: "default",
-          version: 2,
-          onlineCogitoBaseIdr: 55_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-      };
-      const adminRepo = {
-        listUserIdsByRole: mock(async () => ["t1", "t2"]),
-      };
-      const tx = { isTx: true };
-      const db = { transaction: mock(async (fn: any) => fn(tx)) };
-      const auditPort = { record: mock(async () => {}) };
-      const notification = {
-        write: mock(async () => {
-          throw new Error("notification bus down");
-        }),
-      };
-      const service = createAdminService({
-        adminRepo: adminRepo as any,
-        auditPort,
-        db: db as any,
-        wallet: {} as any,
-        payout: {} as any,
-        economy: economy as any,
-      });
-
-      const updated = await service.updateEconomySettings("admin1", {
-        expectedVersion: 1,
-        onlineCogitoBaseIdr: 55_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
-      });
-      expect(updated.version).toBe(2);
-      expect(auditPort.record).toHaveBeenCalledTimes(1);
-      expect(adminRepo.listUserIdsByRole).not.toHaveBeenCalled();
-      expect(notification.write).not.toHaveBeenCalled();
+      expect(service).not.toHaveProperty("getEconomySettings");
+      expect(service).not.toHaveProperty("updateEconomySettings");
+      expect(service.getV3EconomySettings).toBeFunction();
+      expect(service.saveV3EconomySettings).toBeFunction();
     });
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -14,6 +14,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import {
+  Drawer,
+  DrawerPopup,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerBody,
+  DrawerFooter,
+} from "@cogito-app/ui/components/selia/drawer";
 import { Radio, RadioGroup } from "@cogito-app/ui/components/selia/radio";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
@@ -86,6 +95,18 @@ export function ClassEnrollmentPanel({
     kind === "cohort" ? "full" : "masterclass",
   );
   const [selectedSessionId, setSelectedSessionId] = useState("");
+  const [changedSessionQuote, setChangedSessionQuote] = useState<{
+    enrollmentId: string;
+    sessionId: string;
+    quote: {
+      scheduleChangeVersion: number;
+      exitUntil: Date | string;
+      refundableMarks: number;
+      fundingState: "funded" | "unfunded";
+      quoteVersion: string;
+    };
+  } | null>(null);
+  const [clientNow, setClientNow] = useState(0);
   const [topUpContext, setTopUpContext] = useState<{
     enrollmentId: string;
     ordinal: 1 | 2;
@@ -106,6 +127,26 @@ export function ClassEnrollmentPanel({
     ...orpc.wallet.get.queryOptions(),
     enabled: isStudent,
   });
+  useEffect(() => {
+    if (!changedSessionQuote) return;
+    const refreshClock = () => setClientNow(Date.now());
+    refreshClock();
+    const timer = window.setInterval(refreshClock, 1000);
+    return () => window.clearInterval(timer);
+  }, [changedSessionQuote]);
+  useEffect(() => {
+    if (!isStudent) return;
+    const refresh = () => {
+      void queryClient.invalidateQueries({
+        queryKey: orpc.wallet.get.queryKey(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: orpc.classes.getMyEnrollments.key(),
+      });
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [isStudent, queryClient]);
   const enrollmentsData = enrollmentsQuery.data;
   const eligible = enrollmentsData?.eligibleSessions ?? [];
   const openSessions = eligible.filter((session) => !session.alreadyEntitled);
@@ -322,7 +363,7 @@ export function ClassEnrollmentPanel({
     orpc.classes.purchaseTopUp.mutationOptions({
       onSuccess: async (purchase) => {
         if (purchase.checkoutUrl) {
-          window.location.assign(purchase.checkoutUrl);
+          window.open(purchase.checkoutUrl, "cogito-class-payment", "noopener");
           return;
         }
         toastManager.add({
@@ -339,6 +380,52 @@ export function ClassEnrollmentPanel({
           description: getUserFacingError(error),
           type: "error",
         }),
+    }),
+  );
+
+  const quoteChangedCancellation = useMutation(
+    orpc.classes.quoteChangedSessionCancellation.mutationOptions({
+      onSuccess: (quote, input) =>
+        setChangedSessionQuote({
+          enrollmentId: input.enrollmentId,
+          sessionId: input.sessionId,
+          quote,
+        }),
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Schedule-change exit is unavailable",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const confirmChangedCancellation = useMutation(
+    orpc.classes.confirmChangedSessionCancellation.mutationOptions({
+      onSuccess: async () => {
+        setChangedSessionQuote(null);
+        await refreshEnrollmentState();
+        toastManager.add({
+          title: "Session seat released",
+          description:
+            "The server has released the seat and returned eligible Marks.",
+          type: "success",
+        });
+      },
+      onError: (error: Error) => {
+        const selected = changedSessionQuote;
+        if (selected) {
+          quoteChangedCancellation.mutate({
+            enrollmentId: selected.enrollmentId,
+            sessionId: selected.sessionId,
+            scheduleChangeVersion: selected.quote.scheduleChangeVersion,
+          });
+        }
+        toastManager.add({
+          title: "Session seat could not be released",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
     }),
   );
 
@@ -546,16 +633,79 @@ export function ClassEnrollmentPanel({
                         </Text>
                       ) : null}
                       {enrollment.allocations.length > 0 ? (
-                        <Text className="text-sm text-muted">
-                          {
-                            enrollment.allocations.filter(
-                              (allocation) => allocation.state !== "released",
-                            ).length
-                          }{" "}
-                          reserved session seats. Paid Marks are held until each
-                          session is completed. Unpaid seats are reserved until
-                          the payment deadline.
-                        </Text>
+                        <div className="space-y-2">
+                          <Text className="text-sm text-muted">
+                            {
+                              enrollment.allocations.filter(
+                                (allocation) => allocation.state !== "released",
+                              ).length
+                            }{" "}
+                            reserved session seats. Paid Marks are held until
+                            each session is completed. Unpaid seats are reserved
+                            until the payment deadline.
+                          </Text>
+                          {enrollment.allocations
+                            .filter(
+                              (allocation) =>
+                                allocation.state !== "released" &&
+                                allocation.scheduleChangeVersion != null &&
+                                allocation.scheduleChangeExitUntil != null,
+                            )
+                            .map((allocation) => {
+                              const session = sessions.find(
+                                (item) => item.id === allocation.sessionId,
+                              );
+                              const exitOpen =
+                                new Date(
+                                  allocation.scheduleChangeExitUntil!,
+                                ).getTime() > Date.now();
+                              return (
+                                <div
+                                  key={allocation.sessionId}
+                                  className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                                >
+                                  <div className="min-w-0">
+                                    <Text className="font-medium">
+                                      Schedule changed ·{" "}
+                                      {session?.titleEn ?? "Class session"}
+                                    </Text>
+                                    <Text className="text-sm text-muted">
+                                      Penalty-free review until{" "}
+                                      {formatDate(
+                                        allocation.scheduleChangeExitUntil!,
+                                      )}{" "}
+                                      WIB
+                                    </Text>
+                                  </div>
+                                  {exitOpen ? (
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      disabled={
+                                        quoteChangedCancellation.isPending ||
+                                        confirmChangedCancellation.isPending
+                                      }
+                                      onClick={() =>
+                                        quoteChangedCancellation.mutate({
+                                          enrollmentId: enrollment.id,
+                                          sessionId: allocation.sessionId,
+                                          scheduleChangeVersion:
+                                            allocation.scheduleChangeVersion!,
+                                        })
+                                      }
+                                    >
+                                      Review seat cancellation
+                                    </Button>
+                                  ) : (
+                                    <Text className="text-sm text-muted">
+                                      Exit window closed
+                                    </Text>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
                       ) : null}
                     </div>
                     {enrollment.state === "checkout_pending" && first ? (
@@ -590,6 +740,67 @@ export function ClassEnrollmentPanel({
                           </>
                         )}
                       </div>
+                    ) : null}
+                    {changedSessionQuote?.enrollmentId === enrollment.id ? (
+                      <section
+                        className="space-y-3 rounded-md border border-border p-3"
+                        aria-label="Schedule-change seat cancellation quote"
+                      >
+                        <Heading level={4} size="sm">
+                          Cancel changed session seat?
+                        </Heading>
+                        <Text className="text-sm text-muted">
+                          {sessions.find(
+                            (item) => item.id === changedSessionQuote.sessionId,
+                          )?.titleEn ?? "This session"}{" "}
+                          · penalty-free until{" "}
+                          {formatDate(changedSessionQuote.quote.exitUntil)} WIB.
+                        </Text>
+                        <Text>
+                          {changedSessionQuote.quote.fundingState === "funded"
+                            ? "Return"
+                            : "Release"}{" "}
+                          <CogitoMarks
+                            value={changedSessionQuote.quote.refundableMarks}
+                          />{" "}
+                          to your available balance.
+                        </Text>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setChangedSessionQuote(null)}
+                          >
+                            Keep this seat
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            progress={confirmChangedCancellation.isPending}
+                            disabled={
+                              quoteChangedCancellation.isPending ||
+                              confirmChangedCancellation.isPending ||
+                              new Date(
+                                changedSessionQuote.quote.exitUntil,
+                              ).getTime() <= clientNow
+                            }
+                            onClick={() =>
+                              confirmChangedCancellation.mutate({
+                                enrollmentId: changedSessionQuote.enrollmentId,
+                                sessionId: changedSessionQuote.sessionId,
+                                scheduleChangeVersion:
+                                  changedSessionQuote.quote
+                                    .scheduleChangeVersion,
+                                requestKey: crypto.randomUUID(),
+                                quoteVersion:
+                                  changedSessionQuote.quote.quoteVersion,
+                              })
+                            }
+                          >
+                            Confirm seat cancellation
+                          </Button>
+                        </div>
+                      </section>
                     ) : null}
                     {enrollment.state === "active" &&
                     second?.state === "pending" ? (
@@ -834,75 +1045,102 @@ export function ClassEnrollmentPanel({
           ) : null}
 
           {topUpContext ? (
-            <section className="space-y-3 border-t border-border pt-4">
-              <div className="space-y-1">
-                <Heading level={3} size="sm">
-                  Top up the quoted shortfall
-                </Heading>
-                <Text className="text-sm text-muted">
-                  Add {topUpContext.quote.requestedMarks} Marks for payment{" "}
-                  {topUpContext.ordinal}.
-                </Text>
-              </div>
-              <div className="space-y-3">
-                {topUpContext.quote.exactPackage ? (
+            <Drawer
+              open
+              onOpenChange={(open) => {
+                if (!open) setTopUpContext(null);
+              }}
+            >
+              <DrawerPopup>
+                <DrawerHeader>
+                  <DrawerTitle>
+                    Top up {topUpContext.quote.requestedMarks} Marks?
+                  </DrawerTitle>
+                  <DrawerDescription>
+                    Complete payment in the payment tab, then return here to
+                    continue your class checkout.
+                  </DrawerDescription>
+                </DrawerHeader>
+                <DrawerBody className="space-y-3">
+                  {topUpContext.quote.exactPackage ? (
+                    <Button
+                      variant="secondary"
+                      progress={purchaseTopUp.isPending}
+                      disabled={purchaseTopUp.isPending}
+                      onClick={() =>
+                        purchaseTopUp.mutate({
+                          attemptId: topUpContext.quote.attemptId,
+                          choice: "package",
+                        })
+                      }
+                    >
+                      {topUpContext.quote.exactPackage.label} · Rp
+                      {topUpContext.quote.exactPackage.priceIdr.toLocaleString(
+                        "id-ID",
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      progress={purchaseTopUp.isPending}
+                      disabled={purchaseTopUp.isPending}
+                      onClick={() =>
+                        purchaseTopUp.mutate({
+                          attemptId: topUpContext.quote.attemptId,
+                          choice: "custom",
+                        })
+                      }
+                    >
+                      Buy exact Marks · Rp
+                      {topUpContext.quote.customAmountIdr.toLocaleString(
+                        "id-ID",
+                      )}
+                    </Button>
+                  )}
+                  {topUpContext.quote.recommendedPackage ? (
+                    <Button
+                      variant="plain"
+                      progress={purchaseTopUp.isPending}
+                      disabled={purchaseTopUp.isPending}
+                      onClick={() =>
+                        purchaseTopUp.mutate({
+                          attemptId: topUpContext.quote.attemptId,
+                          choice: "recommended",
+                        })
+                      }
+                    >
+                      Recommended ·{" "}
+                      {topUpContext.quote.recommendedPackage.label} · Rp
+                      {topUpContext.quote.recommendedPackage.priceIdr.toLocaleString(
+                        "id-ID",
+                      )}
+                    </Button>
+                  ) : null}
+                  <Text className="text-sm text-muted">
+                    A completed top-up credits your wallet. If this class
+                    checkout expires first, its seat reservation is released.
+                  </Text>
+                </DrawerBody>
+                <DrawerFooter>
                   <Button
                     variant="secondary"
-                    progress={purchaseTopUp.isPending}
-                    disabled={purchaseTopUp.isPending}
-                    onClick={() =>
-                      purchaseTopUp.mutate({
-                        attemptId: topUpContext.quote.attemptId,
-                        choice: "package",
-                      })
-                    }
+                    onClick={() => {
+                      void refreshEnrollmentState();
+                    }}
                   >
-                    {topUpContext.quote.exactPackage.label} · Rp
-                    {topUpContext.quote.exactPackage.priceIdr.toLocaleString(
-                      "id-ID",
-                    )}
+                    Check balance
                   </Button>
-                ) : (
                   <Button
-                    variant="secondary"
-                    progress={purchaseTopUp.isPending}
-                    disabled={purchaseTopUp.isPending}
-                    onClick={() =>
-                      purchaseTopUp.mutate({
-                        attemptId: topUpContext.quote.attemptId,
-                        choice: "custom",
-                      })
-                    }
+                    onClick={async () => {
+                      await refreshEnrollmentState();
+                      setTopUpContext(null);
+                    }}
                   >
-                    Buy exact Marks · Rp
-                    {topUpContext.quote.customAmountIdr.toLocaleString("id-ID")}
+                    Continue class checkout
                   </Button>
-                )}
-                {topUpContext.quote.recommendedPackage ? (
-                  <Button
-                    variant="plain"
-                    progress={purchaseTopUp.isPending}
-                    disabled={purchaseTopUp.isPending}
-                    onClick={() =>
-                      purchaseTopUp.mutate({
-                        attemptId: topUpContext.quote.attemptId,
-                        choice: "recommended",
-                      })
-                    }
-                  >
-                    Recommended · {topUpContext.quote.recommendedPackage.label}{" "}
-                    · Rp
-                    {topUpContext.quote.recommendedPackage.priceIdr.toLocaleString(
-                      "id-ID",
-                    )}
-                  </Button>
-                ) : null}
-                <Text className="text-sm text-muted">
-                  A completed top-up credits your wallet. If this class checkout
-                  expires first, its seat reservation is released.
-                </Text>
-              </div>
-            </section>
+                </DrawerFooter>
+              </DrawerPopup>
+            </Drawer>
           ) : null}
         </CardBody>
         {allowedPlans.length > 0 ? (

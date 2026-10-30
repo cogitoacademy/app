@@ -126,9 +126,7 @@ export function ClassesPage() {
       <section aria-label="Class catalog" className="min-w-0 space-y-4">
         {classes.isPending ? (
           <div aria-busy="true">
-            <Text className="text-sm text-muted" role="status">
-              Loading classes…
-            </Text>
+            <Loader />
             <Loader />
           </div>
         ) : classes.isError ? (

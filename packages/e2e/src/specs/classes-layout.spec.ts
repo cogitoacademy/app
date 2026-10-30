@@ -6,6 +6,15 @@ const future = new Date(Date.now() + 14 * 86400000).toISOString();
 const futureEnd = new Date(Date.now() + 14 * 86400000 + 5400000).toISOString();
 const past = new Date(Date.now() - 86400000).toISOString();
 const pastEnd = new Date(Date.now() - 86400000 + 5400000).toISOString();
+const reportCatalog = Array.from({ length: 12 }, (_, index) => ({
+  id: `class:44444444-4444-4444-8444-${String(index + 1).padStart(12, "0")}`,
+  reference: `CLS-123-S${index + 1}`,
+  title: `Synthetic report ${index + 1}`,
+  type: "cohort",
+  scheduledStartAt: past,
+  metadata: [{ label: "Tutor", value: "Alexandra Putri" }],
+  sections: [{ label: "Session discussion", bullets: ["Reviewed a proof"] }],
+}));
 const competition = {
   id: "competition-fixture",
   name: "Mathematics",
@@ -158,13 +167,14 @@ async function mockClasses(page: Page, role: "student" | "tutor" | "admin") {
     else if (procedure === "booking/list") data = { items: [], total: 0 };
     return route.fulfill({ json: { json: data, meta: [] } });
   });
-  await page.route("**/reports/student/summary", (route) =>
+  await page.route("**/reports/student/list", (route) =>
     route.fulfill({
       json: {
-        reportCount: 1,
+        studentName: "Export Student",
+        generatedAt: new Date().toISOString(),
         periodStart: past,
-        generatedAt: past,
         timezone: "Asia/Jakarta",
+        reports: reportCatalog,
       },
     }),
   );
@@ -198,24 +208,35 @@ for (const role of ["student", "admin"] as const) {
     await page.goto("/class-reports", { waitUntil: "domcontentloaded" });
     if (role === "admin") {
       await expect(
-        page.getByRole("button", { name: "Download PDF", exact: true }),
+        page.getByRole("button", {
+          name: "Download Selected (2)",
+          exact: true,
+        }),
       ).toHaveCount(0);
-      await page.getByLabel("Choose a student").fill("Export");
+      await page
+        .getByRole("textbox", { name: "Search students by name or email" })
+        .fill("Export");
       await page
         .getByRole("group", { name: "Student search results" })
         .getByRole("button", { name: /Export Student/ })
         .click();
     }
+    const checkboxes = page
+      .getByRole("table", { name: "Student reports" })
+      .getByRole("checkbox");
+    await checkboxes.nth(1).check();
+    await checkboxes.nth(2).check();
     const downloading = page.waitForEvent("download");
     await page
-      .getByRole("button", { name: "Download PDF", exact: true })
+      .getByRole("button", { name: "Download Selected (2)", exact: true })
       .click();
     expect((await downloading).suggestedFilename()).toMatch(
-      /^student-session-reports-\d{4}-\d{2}-\d{2}\.pdf$/,
+      /^student-reports-\d{4}-\d{2}-\d{2}\.pdf$/,
     );
-    expect(requested).toEqual(
-      role === "admin" ? { studentId: "export-student" } : {},
-    );
+    expect(requested).toEqual({
+      ...(role === "admin" ? { studentId: "export-student" } : {}),
+      reportIds: reportCatalog.slice(0, 2).map((report) => report.id),
+    });
     expect(errors).toEqual([]);
   });
 }
@@ -223,30 +244,34 @@ test("student sees an explicit empty report state and tutors have no export cont
   page,
 }) => {
   const errors = await mockClasses(page, "student");
-  await page.route("**/reports/student/summary", (route) =>
+  await page.route("**/reports/student/list", (route) =>
     route.fulfill({
       json: {
-        reportCount: 0,
+        studentName: "Student",
         periodStart: past,
         generatedAt: past,
+        reports: [],
         timezone: "Asia/Jakarta",
       },
     }),
   );
   await page.goto("/class-reports");
   await expect(
-    page.getByText("No eligible reports in the last three calendar months", {
+    page.getByText("No downloadable reports yet", {
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Download PDF", exact: true }),
+    page.getByRole("button", { name: "Download Selected (2)", exact: true }),
   ).toHaveCount(0);
   expect(errors).toEqual([]);
   await mockClasses(page, "tutor");
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Session reports", exact: true }),
+    page.getByRole("heading", {
+      name: "Follow up on each delivered session",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("Download student report PDF", { exact: true }),
@@ -329,16 +354,33 @@ for (const role of ["student", "tutor", "admin"] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     const errors = await mockClasses(page, role);
     await page.goto("/class-reports");
+    if (role === "student") {
+      await page
+        .getByRole("button", {
+          name: "View CLS-123-S1: Synthetic report 1",
+          exact: true,
+        })
+        .click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(
+        page.getByRole("dialog").getByText("Reviewed a proof"),
+      ).toBeVisible();
+      await assertFits(page);
+      expect(errors).toEqual([]);
+      return;
+    }
+    if (role === "admin")
+      await page
+        .getByRole("tab", { name: "Session Reporting", exact: true })
+        .click();
     const row = page.getByTestId("session-report-row-session-1");
     await row.getByRole("button").click();
     const panel = page.getByRole("region", {
-      name:
-        role === "student"
-          ? "Selected session report"
-          : "Selected session report editor",
+      name: "Selected session report editor",
       exact: true,
     });
-    await expect(panel).toBeFocused();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(panel).toBeVisible();
     await expect(
       panel.getByText("Session 2: Problem solving workshop 2", {
         exact: false,
@@ -1129,6 +1171,249 @@ for (const width of [320, 1440]) {
       await page.screenshot({
         path: test.info().outputPath(`booking-summary-radio-${width}.png`),
         fullPage: true,
+      });
+  });
+}
+
+for (const width of [320, 1440]) {
+  test(`bulk report selection survives pages and filters at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await mockClasses(page, "admin");
+    await page.goto("/class-reports");
+    await page
+      .getByRole("textbox", { name: "Search students by name or email" })
+      .fill("Export");
+    await page
+      .getByRole("group", { name: "Student search results" })
+      .getByRole("button")
+      .click();
+    await page
+      .getByRole("checkbox", {
+        name: "Select reports on this page",
+        exact: true,
+      })
+      .check();
+    await expect(
+      page.getByRole("button", { name: "Download Selected (10)", exact: true }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page
+      .getByRole("checkbox", {
+        name: "Select CLS-123-S11: Synthetic report 11",
+        exact: true,
+      })
+      .check();
+    await expect(
+      page.getByRole("checkbox", {
+        name: "Select reports on this page",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-checked", "mixed");
+    await page
+      .getByRole("textbox", { name: "Search reports by reference or session" })
+      .fill("nothing matches");
+    await expect(
+      page.getByRole("heading", {
+        name: "No reports match these filters",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Download Selected (11)", exact: true }),
+    ).toBeEnabled();
+    await assertFits(page);
+    await page
+      .getByRole("button", { name: "Change student", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "Search students by name or email" })
+      .fill("Export");
+    await page
+      .getByRole("group", { name: "Student search results" })
+      .getByRole("button")
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Download Selected (0)", exact: true }),
+    ).toBeDisabled();
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const role of ["tutor", "admin"] as const) {
+  test(`${role} finds private and class reports in one workspace`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const errors = await mockClasses(page, role);
+    await page.route("**/rpc/booking/listReportSessions**", (route) =>
+      route.fulfill({
+        json: {
+          json: [
+            {
+              id: "private:private-child",
+              bookingId: "private-booking",
+              sessionId: "private-child",
+              reference: "BKG-42-S3",
+              title: "Private algebra",
+              bookingType: "series",
+              startAt: past,
+              endAt: pastEnd,
+              mode: "online",
+              reportId: "private-report",
+              reportVersion: 2,
+              canRecord: false,
+              canEdit: role === "admin",
+            },
+          ],
+          meta: [],
+        },
+      }),
+    );
+    await page.route("**/rpc/booking/listCompletionFeedback**", (route) =>
+      route.fulfill({
+        json: {
+          json: [
+            {
+              sessionId: "private-child",
+              version: 2,
+              discussion: ["Discussed equations"],
+              strengths: ["Careful reasoning"],
+              improvements: ["Practise fractions"],
+            },
+          ],
+          meta: [],
+        },
+      }),
+    );
+    await page.goto("/class-reports?workspace=sessions");
+    await expect(
+      page.getByRole("table", { name: "Sessions for reporting" }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("session-report-row-session-1"),
+    ).toBeVisible();
+    await page.getByRole("textbox", { name: "Search sessions" }).fill("BKG-42");
+    await expect(page.getByTestId("session-report-row-session-1")).toHaveCount(
+      0,
+    );
+    await page
+      .getByRole("button", {
+        name: `${role === "admin" ? "Edit" : "View"} report: BKG-42-S3`,
+      })
+      .click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    if (role === "tutor") {
+      await expect(
+        drawer.getByText("Discussed equations", { exact: true }),
+      ).toBeVisible();
+      await expect(drawer.getByRole("textbox")).toHaveCount(0);
+    } else {
+      await expect(
+        drawer.getByRole("textbox", {
+          name: "Session discussion",
+          exact: true,
+        }),
+      ).toHaveValue(/Discussed equations/);
+    }
+    await assertFits(page);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const role of ["tutor", "admin"] as const) {
+  test(`${role} submits the selected private series child report`, async ({
+    page,
+  }) => {
+    await mockClasses(page, role);
+    let submitted: any;
+    const report = {
+      sessionId: "private-child",
+      version: 2,
+      discussion: ["Discussed equations"],
+      strengths: ["Careful reasoning"],
+      improvements: ["Practise fractions"],
+    };
+    await page.route("**/rpc/booking/listReportSessions**", (route) =>
+      route.fulfill({
+        json: {
+          json: [
+            {
+              id: "private:private-child",
+              bookingId: "private-booking",
+              sessionId: "private-child",
+              reference: "BKG-42-S3",
+              title: "Private algebra",
+              bookingType: "series",
+              startAt: past,
+              endAt: pastEnd,
+              mode: "online",
+              reportId: role === "admin" ? "private-report" : null,
+              reportVersion: role === "admin" ? 2 : null,
+              canRecord: role === "tutor",
+              canEdit: role === "admin",
+            },
+          ],
+          meta: [],
+        },
+      }),
+    );
+    await page.route("**/rpc/booking/listCompletionFeedback**", (route) =>
+      route.fulfill({
+        json: { json: role === "admin" || submitted ? [report] : [], meta: [] },
+      }),
+    );
+    await page.route(
+      `**/rpc/${role === "admin" ? "booking/submitAdminCompletionReport" : "tutorActions/completeSession"}`,
+      (route) => {
+        submitted = route.request().postDataJSON().json;
+        return route.fulfill({ json: { json: {}, meta: [] } });
+      },
+    );
+    await page.goto(
+      "/class-reports?workspace=sessions&report=private:private-child",
+    );
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await drawer
+      .getByRole("textbox", { name: "Session discussion", exact: true })
+      .fill("Discussed equations");
+    await drawer
+      .getByRole("textbox", { name: "Strengths observed", exact: true })
+      .fill("Careful reasoning");
+    await drawer
+      .getByRole("textbox", { name: "Areas for improvement", exact: true })
+      .fill("Practise fractions");
+    if (role === "admin") {
+      await drawer.getByRole("checkbox").check();
+      await drawer
+        .getByRole("textbox", { name: "Audit reason", exact: true })
+        .fill("Correcting tutor notes");
+    }
+    await drawer
+      .getByRole("button", {
+        name: role === "admin" ? "Save correction" : "Record report",
+        exact: true,
+      })
+      .click();
+    await expect.poll(() => submitted).toBeTruthy();
+    expect(submitted).toMatchObject({
+      bookingId: "private-booking",
+      sessionId: "private-child",
+      feedback: {
+        discussion: ["Discussed equations"],
+        strengths: ["Careful reasoning"],
+        improvements: ["Practise fractions"],
+      },
+    });
+    expect(submitted.requestKey).toMatch(/^[0-9a-f-]{36}$/);
+    if (role === "admin")
+      expect(submitted).toMatchObject({
+        expectedVersion: 2,
+        deliveryConfirmed: true,
+        reason: "Correcting tutor notes",
       });
   });
 }

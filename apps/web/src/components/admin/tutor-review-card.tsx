@@ -36,10 +36,9 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconAlertTriangle, IconInbox } from "@tabler/icons-react";
+import { IconInbox } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
 import {
   competitionPaletteClassName,
@@ -69,22 +68,6 @@ import {
   type TutorReviewDiff,
 } from "@/components/admin/tutor-review-diff";
 
-const FLOOR_ONLINE: Record<string, number> = {
-  "1": 42,
-  "2": 35,
-  "3": 28,
-  "4": 24,
-  "5": 21,
-  "6": 19,
-};
-const FLOOR_OFFLINE: Record<string, number> = {
-  "1": 50,
-  "2": 45,
-  "3": 40,
-  "4": 35,
-  "5": 30,
-  "6": 27,
-};
 const STATUS_BADGE: Record<
   string,
   {
@@ -150,8 +133,6 @@ interface TutorReviewCardProps {
     bankAccountOpeningCity: string | null;
     bankAccountOwnership: "self" | "trusted_person" | null;
     bankTransferDisclaimerAccepted: boolean | null;
-    prices: Record<string, number> | null;
-    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
@@ -281,7 +262,6 @@ const REVIEW_SECTION_FIELDS = {
   teaching: ["modality", "subjectIds", "expertise"],
   credentials: ["education", "achievements", "experiences"],
   proofs: ["achievementProofUrls", "experienceProofUrls", "proofUrls"],
-  marks: ["prices", "baseRatesIdr"],
   photo: ["profileImageUrl"],
   payout: [
     "bankName",
@@ -692,11 +672,6 @@ export function TutorReviewCard({
           label: profile.onboardingStatus,
           variant: "secondary" as const,
         });
-  const floorPrices =
-    profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
-  const priceEntries = Object.entries(profile.prices ?? {}).toSorted(
-    ([a], [b]) => Number(a) - Number(b),
-  );
   const reviewAction = reviewMutation.variables?.action;
   const isPending = reviewMutation.isPending;
   const currentProfileImageUrl = profile.user?.image ?? null;
@@ -705,7 +680,9 @@ export function TutorReviewCard({
   );
   const pendingChangesWithoutPhoto = Object.entries(
     profile.pendingProfileChanges ?? {},
-  ).filter(([field]) => field !== "profileImageUrl");
+  ).filter(
+    ([field]) => !["profileImageUrl", "prices", "baseRatesIdr"].includes(field),
+  );
   const currentSpecializationItems = (profile.subjects ?? [])
     .map((entry) => ({
       id: entry.subject.id,
@@ -750,8 +727,6 @@ export function TutorReviewCard({
     achievements: profile.achievements,
     experiences: profile.experiences,
     modality: profile.modality,
-    baseRatesIdr: profile.baseRatesIdr,
-    prices: profile.prices,
     bankName: profile.bankName,
     bankAccountNumber: profile.bankAccountNumber,
     bankAccountHolderName: profile.bankAccountHolderName,
@@ -830,11 +805,6 @@ export function TutorReviewCard({
       REVIEW_SECTION_FIELDS.proofs,
       diffEntries,
       proofRows.length === 0,
-    ),
-    marks: getReviewSectionStatus(
-      REVIEW_SECTION_FIELDS.marks,
-      diffEntries,
-      priceEntries.length === 0,
     ),
     photo:
       pendingProfileImageUrl &&
@@ -1078,69 +1048,6 @@ export function TutorReviewCard({
                 description="Achievement and experience evidence links are empty."
               />
             )}
-          </ReviewSection>
-
-          <ReviewSection
-            title="Marks per student"
-            status={sectionStatuses.marks}
-            showStatus={showSectionStatus("marks")}
-          >
-            {priceEntries.length ? (
-              <div className="overflow-hidden rounded-lg border border-item-border">
-                <Table className="text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="py-2!">Group size</TableHead>
-                      <TableHead className="py-2! text-right">Marks</TableHead>
-                      <TableHead className="py-2! text-right">
-                        Minimum
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {priceEntries.map(([size, price]) => {
-                      const floor = floorPrices[size];
-                      const belowFloor = floor !== undefined && price < floor;
-                      return (
-                        <TableRow key={size}>
-                          <TableCell className="py-2!">
-                            {size} {size === "1" ? "student" : "students"}
-                          </TableCell>
-                          <TableCell className="py-2! text-right font-medium">
-                            <span className="inline-flex items-center justify-end gap-1.5">
-                              <CogitoMarks value={price} size="4" />
-                              {belowFloor ? (
-                                <Badge variant="danger" size="sm" pill>
-                                  Below min
-                                </Badge>
-                              ) : null}
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-2! text-right text-muted">
-                            {floor ?? "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <ReviewEmptyState
-                title="No price list provided"
-                description="The tutor has not added a Marks price list yet."
-              />
-            )}
-            {priceEntries.some(([size, price]) => {
-              const floor = floorPrices[size];
-              return floor !== undefined && price < floor;
-            }) ? (
-              <Text className="mt-2 flex items-center gap-1 text-xs text-danger">
-                <IconAlertTriangle className="size-3" />
-                One or more sizes fall below the modality minimum. Confirm
-                before approving.
-              </Text>
-            ) : null}
           </ReviewSection>
 
           <ReviewSection

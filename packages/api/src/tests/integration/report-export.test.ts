@@ -535,9 +535,14 @@ describe("student report export eligibility PostgreSQL [REQ-REPORT-04/Q06]", () 
     const summary = await reportService.getSummary(targetStudentId);
     expect(summary?.reportCount).toBe(7);
     expect(summary?.generatedAt).toEqual(GENERATED_AT);
-    expect(await reportService.generatePdf(targetStudentId)).toEqual(
-      new Uint8Array(),
-    );
+    const catalog = await reportService.listReports(targetStudentId);
+    expect(catalog?.reports).toHaveLength(7);
+    expect(
+      await reportService.generatePdf(
+        targetStudentId,
+        catalog!.reports.map((report) => report.id),
+      ),
+    ).toEqual(new Uint8Array());
 
     expect(captured?.studentName).toBe("Live export student");
     expect(
@@ -593,5 +598,25 @@ describe("student report export eligibility PostgreSQL [REQ-REPORT-04/Q06]", () 
     expect(includedMarkers).not.toContain("excluded-class-released");
     expect(includedMarkers).not.toContain("excluded-class-unfunded");
     expect(includedMarkers).not.toContain("excluded-class-nonowner");
+    await reportService.generatePdf(targetStudentId, [
+      `class:${masterclass.reportId}`,
+      `class:${cohort.reportId}`,
+    ]);
+    expect(captured?.reports.map((report) => report.id)).toEqual([
+      cohort.reportId,
+      masterclass.reportId,
+    ]);
+    expect(captured?.reports[0]?.metadata).toContainEqual({
+      label: "Reference",
+      value: catalog!.reports.find(
+        (report) => report.id === `class:${cohort.reportId}`,
+      )!.reference,
+    });
+    await expect(
+      reportService.generatePdf(targetStudentId, [
+        `class:${cohort.reportId}`,
+        `class:${crypto.randomUUID()}`,
+      ]),
+    ).rejects.toThrow("Some selected reports are no longer available");
   });
 });

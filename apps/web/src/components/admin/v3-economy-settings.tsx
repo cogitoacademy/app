@@ -1,5 +1,7 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
 
 import { useState } from "react";
@@ -158,6 +160,23 @@ export function V3EconomySettings() {
     }),
   );
 
+  const activate = useMutation(
+    orpc.admin.activateV3EconomySettings.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries();
+        setReason("");
+        setError(null);
+        toastManager.add({
+          title: "Pricing activated",
+          description:
+            "New purchases and bookings use this revision. Existing agreements keep their prices.",
+          type: "success",
+        });
+      },
+      onError: (failure) => setError(failure.message),
+    }),
+  );
+
   function update(change: (next: V3EconomyConfig) => void) {
     if (!draft || save.isPending) return;
     const next = structuredClone(draft.values);
@@ -197,7 +216,7 @@ export function V3EconomySettings() {
     setError(null);
   }
 
-  if (settings.isPending) return <Text role="status">Loading V3 draft…</Text>;
+  if (settings.isPending) return <Loader />;
   if (settings.isError || !values)
     return (
       <Card>
@@ -210,13 +229,21 @@ export function V3EconomySettings() {
       </Card>
     );
   const disabled = !draft || save.isPending;
+  const viewingActive =
+    !draft && settings.data?.activeRevision === settings.data?.version;
 
   return (
-    <Stack direction="column" spacing="lg" className="w-full min-w-0">
-      <Card className="w-full min-w-0">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card className="">
         <CardHeader>
           <CardTitle>V3 rate card</CardTitle>
-          <Badge variant="warning">Draft · not active</Badge>
+          <Badge variant={viewingActive ? "success" : "warning"}>
+            {draft
+              ? "Unsaved draft"
+              : viewingActive
+                ? "Active"
+                : "Draft · not active"}
+          </Badge>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <Text>
@@ -227,9 +254,41 @@ export function V3EconomySettings() {
           <Text className="text-sm text-muted">
             Saved revision: {settings.data?.version ?? 0}
           </Text>
+          {!draft && !viewingActive && settings.data.version > 0 ? (
+            <Field>
+              <FieldLabel htmlFor="v3-activation-reason">
+                Reason for activating pricing
+              </FieldLabel>
+              <Input
+                id="v3-activation-reason"
+                value={reason}
+                maxLength={2000}
+                disabled={activate.isPending}
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <Text>
+                Activation applies this saved revision to new purchases and
+                bookings. Existing quotes and bookings keep their agreed prices.
+              </Text>
+              <Button
+                disabled={!reason.trim() || activate.isPending}
+                progress={activate.isPending}
+                onClick={() =>
+                  activate.mutate({
+                    version: settings.data.version,
+                    expectedActiveRevision: settings.data.activeRevision,
+                    reason,
+                  })
+                }
+              >
+                Activate saved pricing
+              </Button>
+            </Field>
+          ) : null}
           {!draft ? (
             <Button
               variant="tertiary"
+              disabled={activate.isPending}
               onClick={() => {
                 beginEdit();
               }}
@@ -452,7 +511,7 @@ export function V3EconomySettings() {
         </CardBody>
       </Card>
 
-      <Card className="w-full min-w-0">
+      <Card className="h-fit">
         <CardHeader>
           <CardTitle>V3 price preview</CardTitle>
         </CardHeader>
@@ -563,6 +622,6 @@ export function V3EconomySettings() {
           )}
         </CardBody>
       </Card>
-    </Stack>
+    </div>
   );
 }

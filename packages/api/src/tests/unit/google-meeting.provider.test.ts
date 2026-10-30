@@ -2101,12 +2101,61 @@ describe("createGoogleMeetingProvider academy class events", () => {
       expect.objectContaining({
         calendarId: "primary",
         eventId: "class-calendar-event-42",
+        sendUpdates: "none",
         requestBody: expect.objectContaining({
           summary: currentEvent.summary,
           attendees: currentEvent.attendees,
           conferenceData: currentEvent.conferenceData,
           start: { dateTime: startAt.toISOString() },
           end: { dateTime: endAt.toISOString() },
+        }),
+      }),
+    );
+  });
+
+  test("replacement updates the same event and replaces its tutor attendee", async () => {
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsUpdate.mockReset();
+    const currentEvent = {
+      id: "class-calendar-event-replacement",
+      summary: "Cogito class: debate",
+      attendees: [{ email: "old-tutor@example.com", displayName: "Old tutor" }],
+      conferenceData: {
+        entryPoints: [
+          { entryPointType: "video", uri: "https://meet.google.com/kept" },
+        ],
+      },
+      start: { dateTime: "2035-02-01T10:00:00.000Z" },
+      end: { dateTime: "2035-02-01T11:00:00.000Z" },
+    };
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: currentEvent,
+    }));
+    const provider = createGoogleMeetingProvider(
+      { ...config, sendUpdates: "all" },
+      {} as never,
+    );
+
+    await provider.updateAcademyClassEvent!(
+      "class-calendar-event-replacement",
+      "session-replacement",
+      new Date("2035-02-01T10:00:00.000Z"),
+      new Date("2035-02-01T11:00:00.000Z"),
+      { email: "new-tutor@example.com", name: "New tutor" },
+    );
+
+    expect(mockCalendarEventsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        calendarId: "primary",
+        eventId: "class-calendar-event-replacement",
+        sendUpdates: "all",
+        requestBody: expect.objectContaining({
+          attendees: [
+            { email: "new-tutor@example.com", displayName: "New tutor" },
+          ],
+          conferenceData: currentEvent.conferenceData,
+          start: currentEvent.start,
+          end: currentEvent.end,
         }),
       }),
     );
@@ -2135,7 +2184,7 @@ describe("createGoogleMeetingProvider academy class events", () => {
     ).rejects.toThrow("temporarily unavailable");
   });
 
-  test("OAuth class update PUTs the supplied external event ID and new times", async () => {
+  test("OAuth class replacement PUTs the supplied event ID and replaces its tutor", async () => {
     const currentEvent = {
       id: "oauth-class-event",
       summary: "Cogito class: debate",
@@ -2179,6 +2228,7 @@ describe("createGoogleMeetingProvider academy class events", () => {
         clientId: "synthetic-client",
         clientSecret: "synthetic-secret",
         refreshToken: "synthetic-refresh-token",
+        sendUpdates: "all",
       },
       { select } as never,
     );
@@ -2190,15 +2240,17 @@ describe("createGoogleMeetingProvider academy class events", () => {
       "session-oauth",
       startAt,
       endAt,
+      { email: "new-tutor@example.com", name: "New tutor" },
     );
 
     expect(select).not.toHaveBeenCalled();
     expect(calls.map(({ method }) => method)).toEqual(["POST", "GET", "PUT"]);
     expect(calls[1]?.url).toContain("/events/oauth-class-event");
     expect(calls[2]?.url).toContain("/events/oauth-class-event?");
+    expect(calls[2]?.url).toContain("sendUpdates=all");
     expect(JSON.parse(calls[2]?.body ?? "{}")).toMatchObject({
       summary: currentEvent.summary,
-      attendees: currentEvent.attendees,
+      attendees: [{ email: "new-tutor@example.com", displayName: "New tutor" }],
       conferenceData: currentEvent.conferenceData,
       start: { dateTime: startAt.toISOString() },
       end: { dateTime: endAt.toISOString() },

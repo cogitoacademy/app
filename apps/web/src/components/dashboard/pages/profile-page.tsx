@@ -1,5 +1,8 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+
 import type { CogitoUser } from "@cogito-app/auth";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -233,7 +236,7 @@ export function ProfilePage({
     return (
       <Card className="mx-auto w-full">
         <CardBody>
-          <Text className="text-muted">Loading your profile...</Text>
+          <Loader />
         </CardBody>
       </Card>
     );

@@ -1,16 +1,21 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+
+import {
+  IconSearch,
+  IconUsers,
+  IconChevronRight,
+  IconX,
+} from "@tabler/icons-react";
+import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -32,6 +37,15 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { FilterTabBar } from "@/components/filter-tab-bar";
+import {
+  Drawer,
+  DrawerPopup,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerBody,
+  DrawerClose,
+} from "@cogito-app/ui/components/selia/drawer";
 import { orpc } from "@/utils/orpc";
 import { KolCampaignsSection } from "./kol-campaigns-section";
 import { referralUsageStatus } from "./referral-usage-status";
@@ -47,10 +61,12 @@ function date(value: string | Date | null) {
 }
 
 export function AdminReferralsPage() {
+  const [view, setView] = useState<"activity" | "campaigns">("activity");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | "friend" | "kol" | "none">("all");
   const [page, setPage] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const query = useQuery(
     orpc.adminReferral.listUsage.queryOptions({
@@ -60,36 +76,45 @@ export function AdminReferralsPage() {
   const data = query.data;
   const selected = data?.items.find((row) => row.id === selectedId);
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack direction="column" spacing="lg" className="min-w-0 flex-nowrap">
       <div>
         <Heading level={1} size="md">
-          See how referrals turn into rewards
+          Referrals
         </Heading>
         <Text className="max-w-full text-muted">
           Track each referral from signup to its outcome: welcome credit after a
           first paid completion, or commission for KOL referrals.
         </Text>
       </div>
-      <KolCampaignsSection />
-      <div className="grid items-start gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <FilterTabBar
+        label="Referral sections"
+        tabs={[
+          { value: "activity", label: "Activity" },
+          { value: "campaigns", label: "KOL campaigns" },
+        ]}
+        activeTab={view}
+        onChange={setView}
+      />
+      <div hidden={view !== "campaigns"} className="min-w-0">
+        <KolCampaignsSection />
+      </div>
+      <div hidden={view !== "activity"} className="min-w-0 space-y-6">
         <aside className="space-y-4" aria-label="Referral summary">
           {data ? (
             <>
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
+              <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
                 {[
                   ["Saved choices", data.summary.signups],
                   ["Codes used", data.summary.codesUsed],
                   ["Welcome Marks credited", data.summary.welcomeMarks],
                   ["Friend Marks credited", data.summary.friendMarks],
                 ].map(([label, value]) => (
-                  <Card key={label}>
-                    <CardBody>
-                      <Text className="text-muted">{label}</Text>
-                      <Text className="mt-2 text-xl font-semibold tabular-nums">
-                        {value}
-                      </Text>
-                    </CardBody>
-                  </Card>
+                  <div key={label}>
+                    <Text className="text-muted">{label}</Text>
+                    <Text className="mt-2 text-xl font-semibold tabular-nums">
+                      {value}
+                    </Text>
+                  </div>
                 ))}
               </div>
               <Text className="text-sm text-muted">
@@ -103,11 +128,14 @@ export function AdminReferralsPage() {
             </Text>
           )}
         </aside>
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle level={2}>Referral activity</CardTitle>
-          </CardHeader>
-          <CardBody className="flex flex-col gap-4">
+        <section
+          className="min-w-0 space-y-4"
+          aria-labelledby="referral-activity-heading"
+        >
+          <Heading id="referral-activity-heading" level={2} size="sm">
+            Referral activity
+          </Heading>
+          <div className="flex flex-col gap-4">
             <form
               className="flex flex-wrap gap-3"
               onSubmit={(event) => {
@@ -140,7 +168,10 @@ export function AdminReferralsPage() {
                   }
                 }}
               >
-                <SelectTrigger aria-label="Referral type">
+                <SelectTrigger
+                  aria-label="Referral type"
+                  className="w-auto min-w-36"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -162,7 +193,7 @@ export function AdminReferralsPage() {
               </Button>
             </form>
             {query.isPending ? (
-              <Text role="status">Loading referral usage…</Text>
+              <Loader />
             ) : query.isError ? (
               <Card>
                 <CardBody>
@@ -182,91 +213,63 @@ export function AdminReferralsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {[
-                            "Code / owner",
-                            "Student",
-                            "Chosen at",
-                            "Welcome",
-                            "Outcome",
-                            "Details",
-                          ].map((label) => (
-                            <TableHead key={label}>{label}</TableHead>
-                          ))}
+                          <TableHead>Student</TableHead>
+                          <TableHead>Referral source</TableHead>
+                          <TableHead>Saved on</TableHead>
+                          <TableHead>Outcome</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">
+                            Welcome credit
+                          </TableHead>
+                          <TableHead>
+                            <span className="sr-only">Open referral</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {data.items.map((row) => (
                           <TableRow key={row.id}>
-                            <TableCell>
-                              <Stack direction="column" spacing="sm">
-                                <div>
-                                  <Badge variant="secondary">{row.kind}</Badge>{" "}
-                                  <span className="font-mono">
-                                    {row.code ?? "No code"}
-                                  </span>
-                                </div>
-                                <Text>
-                                  {row.referrerName ?? row.campaignName ?? "—"}
-                                </Text>
-                                {row.referrerEmail ? (
-                                  <Text className="text-sm text-muted">
-                                    {row.referrerEmail}
-                                  </Text>
-                                ) : null}
-                              </Stack>
+                            <TableCell className="py-2 align-middle whitespace-nowrap">
+                              <span
+                                className="font-medium"
+                                title={row.studentEmail}
+                              >
+                                {row.studentName}
+                              </span>
                             </TableCell>
-                            <TableCell>
-                              <Text>{row.studentName}</Text>
-                              <Text className="text-sm text-muted">
-                                {row.studentEmail}
-                              </Text>
-                              <Text className="text-sm text-muted">
-                                {row.emailVerified
-                                  ? "Email verified"
-                                  : "Email unverified"}
-                              </Text>
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {date(row.decidedAt)}
-                            </TableCell>
-                            <TableCell>
-                              {row.welcomeCreditedMarks ?? 0} Marks
-                            </TableCell>
-                            <TableCell>
-                              <Text>{referralUsageStatus(row)}</Text>
-                              {row.kind === "friend" && row.friendDecisionId ? (
-                                <Text className="text-sm text-muted">
-                                  {row.friendCreditedMarks ?? 0} /{" "}
-                                  {row.friendRewardMarksSnapshot ?? 0} Marks
-                                </Text>
-                              ) : null}
-                              {row.kind === "kol" && row.kolDecisionId ? (
-                                <Text className="text-sm text-muted">
-                                  {new Intl.NumberFormat("id-ID", {
-                                    style: "currency",
-                                    currency: "IDR",
-                                    maximumFractionDigits: 0,
-                                  }).format(row.commissionIdr ?? 0)}{" "}
-                                  decision · settlement separate
-                                </Text>
-                              ) : null}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="plain"
-                                size="sm"
-                                aria-expanded={selectedId === row.id}
-                                onClick={() =>
-                                  setSelectedId(
-                                    selectedId === row.id ? null : row.id,
-                                  )
+                            <TableCell className="py-2 align-middle whitespace-nowrap">
+                              <span
+                                className="font-mono"
+                                title={
+                                  row.referrerName ??
+                                  row.campaignName ??
+                                  "Direct signup"
                                 }
                               >
-                                View details
-                                <span className="sr-only">
-                                  {" "}
-                                  for {row.studentName}
-                                </span>
+                                {row.code ?? "No code"}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-2 align-middle whitespace-nowrap text-muted">
+                              {date(row.decidedAt)}
+                            </TableCell>
+                            <TableCell className="py-2 align-middle whitespace-nowrap">
+                              {referralUsageStatus(row)}
+                            </TableCell>
+                            <TableCell className="py-2 align-middle text-right whitespace-nowrap tabular-nums">
+                              {row.welcomeCreditedMarks ?? 0} Marks
+                            </TableCell>
+                            <TableCell className="py-2 align-middle text-right">
+                              <Button
+                                variant="plain"
+                                size="icon"
+                                className="size-8"
+                                aria-label={`View details for ${row.studentName}`}
+                                aria-haspopup="dialog"
+                                onClick={() => {
+                                  setSelectedId(row.id);
+                                  setDrawerOpen(true);
+                                }}
+                              >
+                                <IconChevronRight />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -275,11 +278,38 @@ export function AdminReferralsPage() {
                     </Table>
                   </TableContainer>
                 ) : (
-                  <Card>
-                    <CardBody>
-                      <Text>No referral choices match these filters.</Text>
-                    </CardBody>
-                  </Card>
+                  <EmptyState
+                    icon={
+                      search || kind !== "all" ? <IconSearch /> : <IconUsers />
+                    }
+                    title={
+                      search || kind !== "all"
+                        ? "No matching referrals"
+                        : "No referral activity yet"
+                    }
+                    description={
+                      search || kind !== "all"
+                        ? "No referral choices match these filters. Try a different name or code, or clear your filters."
+                        : "Saved signup choices will appear here, along with the code used and any rewards credited."
+                    }
+                    tone="secondary"
+                    action={
+                      search || kind !== "all" ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setDraft("");
+                            setSearch("");
+                            setKind("all");
+                            setPage(0);
+                            setSelectedId(null);
+                          }}
+                        >
+                          Clear filters
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 )}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <Text className="text-sm text-muted">
@@ -311,80 +341,231 @@ export function AdminReferralsPage() {
                     </Button>
                   </div>
                 </div>
-                {selected ? (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>
-                        Usage details · {selected.studentName}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardBody>
-                      <dl className="grid gap-4 sm:grid-cols-2">
-                        {[
-                          ["Choice ID", selected.id],
-                          ["Student ID", selected.studentId],
-                          ["Settings version", selected.settingsVersion],
-                          [
-                            "Welcome terms",
-                            `${selected.welcomeMarksSnapshot} Marks`,
-                          ],
-                          ["Welcome ledger", selected.welcomeLedgerId],
-                          ["Friend decision", selected.friendDecisionId],
-                          ["Friend reward ledger", selected.friendLedgerId],
-                          [
-                            "First eligible completion",
-                            selected.completionId
-                              ? `${selected.completionType} · ${selected.completionId}`
-                              : null,
-                          ],
-                          ["Completed at", date(selected.completedAt)],
-                          ["Reward semester", selected.semesterKey],
-                          [
-                            "Semester cap at decision",
-                            selected.semesterCapMarks === null
-                              ? null
-                              : `${selected.semesterCapMarks} Marks`,
-                          ],
-                          ["KOL decision", selected.kolDecisionId],
-                          ["Payment ID", selected.paymentId],
-                          ["Payment state", selected.paymentStatus],
-                          ["Provider time state", selected.providerTimeState],
-                          ["Refund review", selected.refundState],
-                          [
-                            "Attribution expires",
-                            date(selected.attributionExpiresAt),
-                          ],
-                        ].map(([label, value]) => (
-                          <div key={label}>
-                            <dt className="text-sm text-muted">{label}</dt>
-                            <dd className="mt-1 break-words text-sm">
-                              {value ?? "—"}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                      {selected.kind === "kol" ? (
-                        <Button
-                          className="mt-5"
-                          variant="secondary"
-                          render={
-                            <Link
-                              to="/admin-kol-commissions"
-                              aria-label="Open KOL reconciliation"
-                            />
-                          }
-                          nativeButton={false}
-                        >
-                          Open KOL reconciliation
-                        </Button>
-                      ) : null}
-                    </CardBody>
-                  </Card>
-                ) : null}
+                <Drawer
+                  open={drawerOpen && Boolean(selected)}
+                  onOpenChange={setDrawerOpen}
+                >
+                  <DrawerPopup className="sm:max-w-xl">
+                    {selected ? (
+                      <>
+                        <DrawerHeader className="justify-between">
+                          <DrawerTitle>Referral details</DrawerTitle>
+                          <DrawerClose aria-label="Close usage details">
+                            <IconX className="size-4" />
+                          </DrawerClose>
+                        </DrawerHeader>
+                        <DrawerBody className="space-y-6">
+                          <section
+                            className="space-y-4 border-b border-border pb-6"
+                            aria-label="Student and referral source"
+                          >
+                            <div className="space-y-1">
+                              <Heading level={2} size="sm">
+                                {selected.studentName}
+                              </Heading>
+                              <Text className="text-muted break-all">
+                                {selected.studentEmail}
+                              </Text>
+                              <Badge
+                                variant={
+                                  selected.emailVerified ? "success" : "warning"
+                                }
+                              >
+                                {selected.emailVerified
+                                  ? "Email verified"
+                                  : "Email unverified"}
+                              </Badge>
+                            </div>
+                            <dl className="space-y-3">
+                              {[
+                                ["Referral code", selected.code ?? "No code"],
+                                [
+                                  "Source",
+                                  selected.referrerName ??
+                                    selected.campaignName ??
+                                    "Direct signup",
+                                ],
+                                ["Referrer email", selected.referrerEmail],
+                                ["Saved on", date(selected.decidedAt)],
+                              ]
+                                .filter(([, value]) => value != null)
+                                .map(([label, value]) => (
+                                  <div
+                                    key={label}
+                                    className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4"
+                                  >
+                                    <dt className="text-sm text-muted">
+                                      {label}
+                                    </dt>
+                                    <dd className="break-words text-sm">
+                                      {value}
+                                    </dd>
+                                  </div>
+                                ))}
+                            </dl>
+                          </section>
+                          <section
+                            className="space-y-4 border-b border-border py-6"
+                            aria-label="Referral outcome"
+                          >
+                            <Heading level={2} size="sm">
+                              Rewards and outcome
+                            </Heading>
+                            <Text className="font-medium">
+                              {referralUsageStatus(selected)}
+                            </Text>
+                            <dl className="space-y-3">
+                              {[
+                                [
+                                  "Welcome credit",
+                                  `${selected.welcomeCreditedMarks ?? 0} Marks`,
+                                ],
+                                ...(selected.kind === "friend"
+                                  ? [
+                                      [
+                                        "Friend reward",
+                                        selected.friendDecisionId
+                                          ? `${selected.friendCreditedMarks ?? 0} / ${selected.friendRewardMarksSnapshot ?? 0} Marks`
+                                          : "Awaiting paid completion",
+                                      ],
+                                      [
+                                        "Completed on",
+                                        date(selected.completedAt),
+                                      ],
+                                      [
+                                        "Reward semester",
+                                        selected.semesterKey ?? "Not assigned",
+                                      ],
+                                    ]
+                                  : []),
+                                ...(selected.kind === "kol"
+                                  ? [
+                                      [
+                                        "Commission",
+                                        selected.kolDecisionId
+                                          ? new Intl.NumberFormat("id-ID", {
+                                              style: "currency",
+                                              currency: "IDR",
+                                              maximumFractionDigits: 0,
+                                            }).format(
+                                              selected.commissionIdr ?? 0,
+                                            )
+                                          : "Awaiting eligible top-up",
+                                      ],
+                                      [
+                                        "Payment status",
+                                        selected.paymentStatus ??
+                                          "Not available",
+                                      ],
+                                      [
+                                        "Attribution ends",
+                                        date(selected.attributionExpiresAt),
+                                      ],
+                                    ]
+                                  : []),
+                              ].map(([label, value]) => (
+                                <div
+                                  key={label}
+                                  className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4"
+                                >
+                                  <dt className="text-sm text-muted">
+                                    {label}
+                                  </dt>
+                                  <dd className="break-words text-sm font-medium">
+                                    {value}
+                                  </dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </section>
+                          <details>
+                            <summary className="mb-4 cursor-pointer font-medium">
+                              Technical details and saved terms
+                            </summary>
+                            <dl className="divide-y divide-border">
+                              {[
+                                ["Choice ID", selected.id],
+                                ["Student ID", selected.studentId],
+                                ["Settings version", selected.settingsVersion],
+                                [
+                                  "Welcome terms",
+                                  `${selected.welcomeMarksSnapshot} Marks`,
+                                ],
+                                ["Welcome ledger", selected.welcomeLedgerId],
+                                ["Friend decision", selected.friendDecisionId],
+                                [
+                                  "Friend reward ledger",
+                                  selected.friendLedgerId,
+                                ],
+                                [
+                                  "First eligible completion",
+                                  selected.completionId
+                                    ? `${selected.completionType} · ${selected.completionId}`
+                                    : null,
+                                ],
+                                ["Completed at", date(selected.completedAt)],
+                                ["Reward semester", selected.semesterKey],
+                                [
+                                  "Semester cap at decision",
+                                  selected.semesterCapMarks === null
+                                    ? null
+                                    : `${selected.semesterCapMarks} Marks`,
+                                ],
+                                ["KOL decision", selected.kolDecisionId],
+                                ["Payment ID", selected.paymentId],
+                                ["Payment state", selected.paymentStatus],
+                                [
+                                  "Provider time state",
+                                  selected.providerTimeState,
+                                ],
+                                ["Refund review", selected.refundState],
+                                [
+                                  "Attribution expires",
+                                  date(selected.attributionExpiresAt),
+                                ],
+                              ]
+                                .filter(
+                                  ([, value]) => value != null && value !== "—",
+                                )
+                                .map(([label, value]) => (
+                                  <div
+                                    key={label}
+                                    className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 py-3"
+                                  >
+                                    <dt className="text-sm text-muted">
+                                      {label}
+                                    </dt>
+                                    <dd className="break-all font-mono text-sm">
+                                      {value ?? "—"}
+                                    </dd>
+                                  </div>
+                                ))}
+                            </dl>
+                          </details>
+                          {selected.kind === "kol" ? (
+                            <Button
+                              className="mt-5"
+                              variant="secondary"
+                              render={
+                                <Link
+                                  to="/admin-kol-commissions"
+                                  aria-label="Open KOL reconciliation"
+                                />
+                              }
+                              nativeButton={false}
+                            >
+                              Open KOL reconciliation
+                            </Button>
+                          ) : null}
+                        </DrawerBody>
+                      </>
+                    ) : null}
+                  </DrawerPopup>
+                </Drawer>
               </>
             ) : null}
-          </CardBody>
-        </Card>
+          </div>
+        </section>
       </div>
     </Stack>
   );

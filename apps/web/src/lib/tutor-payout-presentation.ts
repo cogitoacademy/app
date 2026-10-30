@@ -4,7 +4,7 @@ export function formatPayoutCoverageLabel(
 ) {
   return hasSavedSessionDetails
     ? `${coveredSessionCount} session(s)`
-    : "Legacy aggregate (session details unavailable)";
+    : "Session coverage unavailable";
 }
 
 export function formatTaxRateSnapshot(rateBps: number | null) {

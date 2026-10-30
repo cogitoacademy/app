@@ -27,9 +27,9 @@ import type {
   adminResolveTutorPayoutReconciliationInput,
   adminUpdateTutorTaxConfigInput,
   adminSetTutorTaxRateOverrideInput,
-  adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
+  adminActivateV3EconomyInput,
 } from "./admin.types";
 
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
@@ -50,9 +50,6 @@ type AdminGetPendingTutorPayoutsInputZod = z.infer<
 type AdminGetTutorPayoutAllocationsInputZod = z.infer<
   typeof adminGetTutorPayoutAllocationsInput
 >;
-type AdminUpdateEconomySettingsInputZod = z.infer<
-  typeof adminUpdateEconomySettingsInput
->;
 
 export type {
   ListUsersInput,
@@ -65,6 +62,21 @@ export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(adminService: AdminService) {
   return {
+    activateV3EconomySettings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminActivateV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.activateV3EconomySettings(
+            context.session!.user.id,
+            input,
+          ),
+        mapAdminError,
+      ),
     getV3EconomySettings: async () =>
       withDomainMap(() => adminService.getV3EconomySettings(), mapAdminError),
     previewV3EconomySettings: async ({
@@ -306,26 +318,5 @@ export function createAdminHandler(adminService: AdminService) {
           adminService.setTutorTaxRateOverride(context.session!.user.id, input),
         mapAdminError,
       ),
-
-    getEconomySettings: async ({ context: _context }: { context: Context }) => {
-      return withDomainMap(
-        () => adminService.getEconomySettings(),
-        mapAdminError,
-      );
-    },
-
-    updateEconomySettings: async ({
-      context,
-      input,
-    }: {
-      context: Context;
-      input: AdminUpdateEconomySettingsInputZod;
-    }) => {
-      return withDomainMap(
-        () =>
-          adminService.updateEconomySettings(context.session!.user.id, input),
-        mapAdminError,
-      );
-    },
   };
 }

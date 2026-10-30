@@ -18,7 +18,6 @@ import {
   wallet,
 } from "@cogito-app/db/schema";
 import { services } from "../../services";
-import { escapeHtml } from "../../lib/sanitize";
 import { BookingCompletionReportConflictError } from "../../modules/booking/booking.errors";
 import {
   createTestClient,
@@ -720,100 +719,46 @@ describe("on-demand booking report admin coverage (non-reset UUID fixtures)", ()
     expect(afterCorrections.fees).toEqual(beforeCorrections.fees);
   });
 
-  test("correcting a legacy report preserves its identity, content snapshot, and creation time", async () => {
+  test("rejects correction when report provenance is missing without synthesizing history", async () => {
     const fixture = await createScheduledBooking(tutorId, studentId, "solo", [
       { userId: studentId, role: "proposer", heldAmount: 0 },
     ]);
-    const legacyCreatedAt = new Date("2024-06-15T10:30:00.000Z");
-    const legacyDiscussion = `Legacy ${"text &amp; <tag> 'quoted' \"double\" ".repeat(35)}`;
-    const legacyStrength = "Legacy &amp; strength <with quotes>";
-    const legacyImprovement = "Older suggestion: 'keep' \"trying\"";
     await db
       .update(bookingTable)
-      .set({ currentState: "completed", completedAt: legacyCreatedAt })
+      .set({ currentState: "completed", completedAt: new Date() })
       .where(eq(bookingTable.id, fixture.booking.id));
-    const [legacyReport] = await db
-      .insert(sessionCompletionFeedback)
-      .values({
-        bookingId: fixture.booking.id,
-        sessionId: null,
-        authorId: tutorId,
-        discussion: [escapeHtml(legacyDiscussion)],
-        strengths: [escapeHtml(legacyStrength)],
-        improvements: [escapeHtml(legacyImprovement)],
-        createdAt: legacyCreatedAt,
-      })
-      .returning();
-
-    const legacyRead = await services.booking.listCompletionFeedback(
-      fixture.booking.id,
-      adminId,
-      "admin",
-    );
-    expect(legacyRead[0]).toMatchObject({
-      discussion: [legacyDiscussion],
-      strengths: [legacyStrength],
-      improvements: [legacyImprovement],
-    });
-    expect(legacyDiscussion.length).toBeGreaterThan(600);
-    const beforeCorrection = await financialSnapshot(fixture.booking.id);
-
-    await adminClient.booking.submitAdminCompletionReport({
+    await db.insert(sessionCompletionFeedback).values({
       bookingId: fixture.booking.id,
-      feedback: {
-        ...firstFeedback,
-        improvements: ["Updated future practice"],
-      },
-      deliveryConfirmed: true,
-      reason: "Clarify the historical feedback",
-      expectedVersion: 1,
-      requestKey: crypto.randomUUID(),
+      sessionId: null,
+      authorId: tutorId,
+      ...firstFeedback,
     });
-
-    const [updated] = await db
-      .select()
-      .from(sessionCompletionFeedback)
-      .where(eq(sessionCompletionFeedback.bookingId, fixture.booking.id));
+    const before = await financialSnapshot(fixture.booking.id);
+    await expect(
+      adminClient.booking.submitAdminCompletionReport({
+        bookingId: fixture.booking.id,
+        feedback: firstFeedback,
+        deliveryConfirmed: true,
+        reason: "Cannot invent the original report actor",
+        expectedVersion: 1,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("Report history is incomplete");
     const history = await db
       .select()
       .from(sessionCompletionFeedbackHistory)
-      .where(eq(sessionCompletionFeedbackHistory.bookingId, fixture.booking.id))
-      .orderBy(sessionCompletionFeedbackHistory.version);
-    expect(updated).toMatchObject({
-      id: legacyReport!.id,
-      authorId: tutorId,
-      version: 2,
-      createdAt: legacyCreatedAt,
-    });
-    expect(history).toHaveLength(2);
-    expect(history[0]).toMatchObject({
-      version: 1,
-      status: "legacy_snapshot",
-      actorId: null,
-      actorRole: "legacy",
-      discussion: [escapeHtml(legacyDiscussion)],
-      createdAt: legacyCreatedAt,
-    });
-    expect(history[1]).toMatchObject({
-      version: 2,
-      status: "corrected",
-      actorId: adminId,
-      actorRole: "admin",
-    });
-    const historyRead = await services.booking.listCompletionFeedbackHistory(
-      fixture.booking.id,
-      adminId,
-      "admin",
-    );
-    expect(historyRead[0]?.discussion).toEqual([legacyDiscussion]);
-    expect(historyRead[1]).toMatchObject({
-      discussion: firstFeedback.discussion,
-      strengths: firstFeedback.strengths,
-      improvements: ["Updated future practice"],
-    });
-    const afterCorrection = await financialSnapshot(fixture.booking.id);
-    expect(afterCorrection.ledger).toEqual(beforeCorrection.ledger);
-    expect(afterCorrection.fees).toEqual(beforeCorrection.fees);
+      .where(
+        eq(sessionCompletionFeedbackHistory.bookingId, fixture.booking.id),
+      );
+    expect(history).toHaveLength(0);
+    const [report] = await db
+      .select()
+      .from(sessionCompletionFeedback)
+      .where(eq(sessionCompletionFeedback.bookingId, fixture.booking.id));
+    expect(report!.version).toBe(1);
+    const after = await financialSnapshot(fixture.booking.id);
+    expect(after.ledger).toEqual(before.ledger);
+    expect(after.fees).toEqual(before.fees);
   });
 
   test("concurrent tutor and admin initial submit create one financial effect", async () => {

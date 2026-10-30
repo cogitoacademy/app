@@ -540,6 +540,48 @@
       "when": 1793327425722,
       "tag": "0076_academy_class_number",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793340000000,
+      "tag": "0077_activity_articles",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793340000001,
+      "tag": "0078_remove_superseded_competition_seeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793340000002,
+      "tag": "0079_v3_report_and_payout_contracts",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793360000000,
+      "tag": "0080_academy_tutor_absence",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793360000001,
+      "tag": "0081_academy_schedule_change_exit",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793360000002,
+      "tag": "0082_class_allocation_schedule_change_version",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Menu,
   MenuItem,
@@ -42,6 +41,7 @@ import {
   IconHome,
   IconUsers,
   IconHelp,
+  IconArticle,
   IconClock,
   IconBook2,
   IconLibrary,
@@ -63,7 +63,7 @@ import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 import { orpc } from "@/utils/orpc";
 
 const BOOKING_ACTION_QUERY_INPUT = {
-  limit: 100,
+  limit: 1,
   view: "action" as const,
 };
 
@@ -169,6 +169,7 @@ const adminNavGroups = [
         icon: IconShieldCheck,
       },
       { to: "/faq", label: "FAQ", icon: IconHelp },
+      { to: "/activities", label: "Activities", icon: IconArticle },
     ],
   },
 ] as const;
@@ -211,16 +212,9 @@ export function AppSidebar({
     ...orpc.booking.listMine.queryOptions({
       input: BOOKING_ACTION_QUERY_INPUT,
     }),
-    select: (data) => ({
-      count: data.items.length,
-      hasMore: Boolean(data.nextCursor),
-    }),
+    select: (data) => data.items.length > 0,
   });
-  const bookingActionCount = bookingActionQuery.data?.count ?? 0;
-  const bookingActionBadge =
-    bookingActionCount > 99 || bookingActionQuery.data?.hasMore
-      ? "99+"
-      : bookingActionCount;
+  const hasBookingAction = bookingActionQuery.data ?? false;
 
   const navigationGroups =
     role === "admin"
@@ -321,8 +315,8 @@ export function AppSidebar({
                                 preload="intent"
                                 aria-label={
                                   item.to === "/bookings" &&
-                                  bookingActionCount > 0
-                                    ? `${item.label}, ${bookingActionBadge} needs action`
+                                  hasBookingAction
+                                    ? `${item.label}, bookings need action`
                                     : item.label
                                 }
                               />
@@ -333,16 +327,11 @@ export function AppSidebar({
                               {item.label}
                             </span>
                             {item.to === "/bookings" &&
-                            bookingActionCount > 0 ? (
-                              <Badge
-                                variant="danger-solid"
-                                size="sm"
-                                pill
-                                aria-label={`${bookingActionBadge} bookings need action`}
-                                className="ml-auto min-w-5 shrink-0 justify-center tabular-nums text-[10px]"
-                              >
-                                {bookingActionBadge}
-                              </Badge>
+                            hasBookingAction ? (
+                              <span
+                                aria-hidden="true"
+                                className="ml-auto size-2 shrink-0 rounded-full bg-danger"
+                              />
                             ) : null}
                           </SidebarItemButton>
                         </SidebarItem>

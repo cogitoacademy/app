@@ -35,9 +35,19 @@ import {
   getSessionNotesInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+import { z } from "zod";
 
 export function createBookingRouter(handler: BookingHandler) {
   return {
+    listReportSessions: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/report-sessions",
+        tags: ["Bookings"],
+        summary: "List past private sessions for report authoring",
+      })
+      .input(z.object({}).strict())
+      .handler(handler.listReportSessions),
     createSolo: verifiedStudentProcedure
       .route({
         method: "POST",

@@ -19,6 +19,9 @@ import {
   confirmAdminClassSessionCancellationInput,
   classEnrollmentCancellationInput,
   confirmClassEnrollmentCancellationInput,
+  changedSessionCancellationInput,
+  confirmChangedSessionCancellationInput,
+  changedSessionCancellationOutput,
   classEnrollmentCancellationOutput,
   classEnrollmentIdInput,
   classEnrollmentTopUpPurchaseInput,
@@ -151,6 +154,26 @@ export function createClassEnrollmentRouter(handler: ClassEnrollmentHandler) {
       .input(confirmClassEnrollmentCancellationInput)
       .output(classEnrollmentCancellationOutput)
       .handler(handler.confirmCancellation),
+    quoteChangedSessionCancellation: studentProcedure
+      .route({
+        method: "POST",
+        path: "/classes/enrollments/changed-session-cancellation/quote",
+        tags: ["Classes", "Enrollment"],
+        summary: "Quote a penalty-free exit from a rescheduled session",
+      })
+      .input(changedSessionCancellationInput)
+      .output(changedSessionCancellationOutput)
+      .handler(handler.quoteChangedSessionCancellation),
+    confirmChangedSessionCancellation: studentProcedure
+      .route({
+        method: "POST",
+        path: "/classes/enrollments/changed-session-cancellation/confirm",
+        tags: ["Classes", "Enrollment"],
+        summary: "Cancel one changed session and return its funded Marks",
+      })
+      .input(confirmChangedSessionCancellationInput)
+      .output(changedSessionCancellationOutput)
+      .handler(handler.confirmChangedSessionCancellation),
     getMyEnrollments: studentProcedure
       .route({
         method: "POST",

@@ -18,8 +18,6 @@ type EmptyStateTone =
 const TONE_STYLES: Record<
   EmptyStateTone,
   {
-    glow: string;
-    wash: string;
     icon:
       | "primary-subtle"
       | "secondary-subtle"
@@ -30,33 +28,21 @@ const TONE_STYLES: Record<
   }
 > = {
   primary: {
-    glow: "bg-primary/15",
-    wash: "from-primary/8",
     icon: "primary-subtle",
   },
   secondary: {
-    glow: "bg-secondary/20",
-    wash: "from-secondary/10",
     icon: "secondary-subtle",
   },
   info: {
-    glow: "bg-info/15",
-    wash: "from-info/8",
     icon: "info-subtle",
   },
   success: {
-    glow: "bg-success/15",
-    wash: "from-success/8",
     icon: "success-subtle",
   },
   warning: {
-    glow: "bg-warning/15",
-    wash: "from-warning/8",
     icon: "warning-subtle",
   },
   danger: {
-    glow: "bg-danger/15",
-    wash: "from-danger/8",
     icon: "danger-subtle",
   },
 };
@@ -114,9 +100,8 @@ export function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        "relative isolate flex overflow-hidden bg-linear-to-b via-transparent to-transparent",
+        "relative isolate flex overflow-hidden",
         "flex-col items-center justify-center px-6 text-center",
-        styles.wash,
         sizeStyles.root,
         className,
       )}

@@ -5,7 +5,6 @@ import { NOTIFICATION_CATEGORY } from "../../shared/constants";
 import { NOTIFICATION_SEVERITY } from "../../shared/constants";
 import type { NotificationWriteParams } from "../notification/notification.service";
 import {
-  PackageNotFoundError,
   PaymentNotFoundError,
   PaymentProviderError,
   PaymentSimulationUnavailableError,
@@ -27,7 +26,6 @@ import {
   recordPaymentReconciliation,
 } from "../../lib/metrics";
 import type { PaymentRepo } from "./payment.repo";
-import { lockPaymentIntent } from "../../lib/locks";
 import type { EconomyService } from "../economy/economy.service";
 import { calculateV3TopUpPrice } from "../pricing/v3-rate-card";
 
@@ -530,239 +528,13 @@ export function createPaymentService(deps: {
     return topUpPurchaseResult(current);
   }
 
-  /**
-   * Creates a payment intent for a mark package purchase.
-   *
-   * A current PENDING attempt is reused so retrying the checkout remains
-   * idempotent. Once an attempt reaches a terminal state, the next purchase
-   * gets a new payment row and provider reference; earlier attempts stay as
-   * immutable payment history.
-   *
-   * @param userId - the purchasing student
-   * @param walletId - the student's wallet to credit on confirmation
-   * @param packageCode - the mark package code to purchase
-   * @returns the payment id, provider reference, and checkout URL
-   * @throws {PackageNotFoundError} if the package is missing or inactive
-   * @throws {PaymentProviderError} if the provider rejects intent creation
-   */
+  // Retired entry point: all purchases require an explicit V3 quote choice.
   async function createIntent(
-    userId: string,
-    walletId: string,
-    packageCode: string,
+    _userId: string,
+    _walletId: string,
+    _packageCode: string,
   ): Promise<CreateIntentResult> {
-    const activeV3 = economy ? await economy.getActiveV3Config(db) : null;
-    if (activeV3) {
-      const pending = await repo.findLatestPaymentByUserAndPackageCode(
-        userId,
-        packageCode,
-        providerName,
-      );
-      if (pending?.status === PAYMENT_STATUS.PENDING) {
-        return {
-          paymentId: pending.id,
-          providerReference: pending.providerReference,
-          checkoutUrl: pending.checkoutUrl,
-          status: pending.status as PaymentStatus,
-          recoveryRequired: !pending.checkoutUrl,
-        };
-      }
-      throw new V3PackagePurchaseDisabledError();
-    }
-    const pkg = await repo.findPackageByCode(packageCode);
-    if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
-
-    const pendingAttempt = await repo.findLatestPaymentByUserAndPackage(
-      userId,
-      pkg.id,
-      providerName,
-    );
-    if (
-      pendingAttempt?.status === PAYMENT_STATUS.PENDING &&
-      pendingAttempt.providerRequestId &&
-      provider.getPaymentRequestStatus
-    ) {
-      try {
-        await reconcilePurchase(pendingAttempt.id, userId);
-      } catch (error) {
-        // Provider availability is required to prove an attempt is terminal.
-        // On lookup failure, preserve idempotency and reuse the pending intent.
-        if (
-          !(error instanceof PaymentProviderError) &&
-          !(error instanceof PaymentNotFoundError)
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    const baseProviderReference = `${providerName}:${userId}:${packageCode}`;
-    // Keep the old reference fallback for rows created before repeat purchases
-    // were supported. New rows are selected by their relational keys so an
-    // earlier terminal attempt does not become a permanent package lock.
-    const outcome = await db.transaction(async (tx) => {
-      // B6: unique references prevent duplicate rows; this transaction lock
-      // also prevents concurrent callers from POSTing duplicate provider
-      // intents before either caller persists its checkout URL.
-      await lockPaymentIntent(tx, userId, pkg.id, providerName);
-
-      const existingByPackage = repo.findLatestPaymentByUserAndPackage
-        ? await repo.findLatestPaymentByUserAndPackage(
-            userId,
-            pkg.id,
-            providerName,
-            tx,
-          )
-        : null;
-      const existing =
-        existingByPackage ??
-        (await repo.findPaymentByProviderReference(baseProviderReference, tx));
-
-      if (
-        existing?.status !== PAYMENT_STATUS.PENDING &&
-        economy &&
-        (await economy.getActiveV3Config(tx))
-      ) {
-        throw new V3PackagePurchaseDisabledError();
-      }
-      const persistIntent = async (
-        paymentId: string,
-        providerReference: string,
-        amountIdr = pkg.priceIdr,
-      ) => {
-        const intent = await provider.createIntent({
-          paymentId,
-          amountIdr,
-          providerReference,
-        });
-        const update: {
-          status: string;
-          providerRequestId?: string;
-          checkoutUrl?: string | null;
-        } = {
-          status: PAYMENT_STATUS.PENDING,
-          checkoutUrl: intent.checkoutUrl,
-        };
-        if (intent.paymentRequestId) {
-          update.providerRequestId = intent.paymentRequestId;
-        }
-        await repo.updatePaymentStatus(paymentId, update, tx);
-        return {
-          paymentId,
-          providerReference,
-          checkoutUrl: intent.checkoutUrl,
-        };
-      };
-
-      if (existing?.status === PAYMENT_STATUS.PENDING) {
-        // H4: reuse persisted checkout URL; provider intents are not
-        // guaranteed idempotent.
-        if (existing.checkoutUrl) {
-          return {
-            ok: true as const,
-            value: {
-              paymentId: existing.id,
-              providerReference: existing.providerReference,
-              checkoutUrl: existing.checkoutUrl,
-            },
-          };
-        }
-        try {
-          return {
-            ok: true as const,
-            value: await persistIntent(
-              existing.id,
-              existing.providerReference,
-              existing.amountIdr ?? pkg.priceIdr,
-            ),
-          };
-        } catch (error) {
-          await repo.updatePaymentStatus(
-            existing.id,
-            { status: PAYMENT_STATUS.EXPIRED },
-            tx,
-          );
-          return { ok: false as const, error };
-        }
-      }
-
-      // PAID, SETTLED, FAILED, EXPIRED, and REFUNDED are historical outcomes,
-      // not package-level locks. Each retry gets independent webhook and
-      // wallet-credit idempotency history.
-      const paymentId = crypto.randomUUID();
-      const providerReference = existing
-        ? `${baseProviderReference}:${paymentId}`
-        : baseProviderReference;
-      const inserted = await repo.insertPayment(
-        {
-          id: paymentId,
-          userId,
-          walletId,
-          packageId: pkg.id,
-          provider: providerName,
-          providerReference,
-          amountIdr: pkg.priceIdr,
-          marks: pkg.marks,
-          status: PAYMENT_STATUS.PENDING,
-        },
-        tx,
-      );
-
-      // Keep conflict recovery for callers using older repository behavior.
-      if (inserted === null) {
-        const existingRow = await repo.findPaymentByProviderReference(
-          providerReference,
-          tx,
-        );
-        if (existingRow) {
-          if (existingRow.checkoutUrl) {
-            return {
-              ok: true as const,
-              value: {
-                paymentId: existingRow.id,
-                providerReference: existingRow.providerReference,
-                checkoutUrl: existingRow.checkoutUrl,
-              },
-            };
-          }
-          try {
-            return {
-              ok: true as const,
-              value: await persistIntent(
-                existingRow.id,
-                existingRow.providerReference,
-                existingRow.amountIdr ?? pkg.priceIdr,
-              ),
-            };
-          } catch (error) {
-            await repo.updatePaymentStatus(
-              existingRow.id,
-              { status: PAYMENT_STATUS.EXPIRED },
-              tx,
-            );
-            return { ok: false as const, error };
-          }
-        }
-      }
-
-      try {
-        return {
-          ok: true as const,
-          value: await persistIntent(paymentId, providerReference),
-        };
-      } catch (error) {
-        await repo.updatePaymentStatus(
-          paymentId,
-          { status: PAYMENT_STATUS.EXPIRED },
-          tx,
-        );
-        return { ok: false as const, error };
-      }
-    });
-
-    if (!outcome.ok) {
-      throw new PaymentProviderError(providerName, outcome.error);
-    }
-    return outcome.value;
+    throw new V3PackagePurchaseDisabledError();
   }
 
   async function simulatePurchase(paymentId: string, userId: string) {

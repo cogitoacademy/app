@@ -146,6 +146,7 @@ async function setup(page: Page) {
     },
   );
   await page.goto("/admin-referrals");
+  await page.getByRole("tab", { name: "KOL campaigns", exact: true }).click();
   return {
     payloads,
     conflict: () => {

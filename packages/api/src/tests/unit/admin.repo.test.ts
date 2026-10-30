@@ -57,10 +57,6 @@ describe("getDashboardAnalytics", () => {
       completed: 2,
       exceptions: 1,
       activeLearners: 3,
-      v3SnapshotCount: 1,
-      legacySnapshotCount: 2,
-      otherSnapshotCount: 0,
-      missingSnapshotCount: 1,
     };
     const select = makeSelectSequence([
       [bookingSummary],
@@ -83,10 +79,10 @@ describe("getDashboardAnalytics", () => {
         },
       ],
       [{ studentsWithMarks: 9, studentsWithoutMarks: 7 }],
-      [{ payingStudents: 6, grossRevenueIdr: 1_250_000 }],
+      [{ payingStudents: 6, grossReceiptsIdr: 1_250_000 }],
       [{ refundedIdr: 100_000 }],
     ]);
-    const conn: any = { select };
+    const conn: any = { select, execute: mock(async () => [{}]) };
 
     const result = await getDashboardAnalytics(conn, {
       periodStart: new Date("2026-08-01T00:00:00.000Z"),
@@ -104,7 +100,7 @@ describe("getDashboardAnalytics", () => {
     ]);
     expect(result.accountSummary.monthlyActiveUsers).toBe(8);
     expect(result.marksSummary.studentsWithMarks).toBe(9);
-    expect(result.paymentSummary.grossRevenueIdr).toBe(1_250_000);
+    expect(result.paymentSummary.grossReceiptsIdr).toBe(1_250_000);
     expect(result.refundSummary.refundedIdr).toBe(100_000);
   });
 });

@@ -751,7 +751,7 @@ export function KnowledgeBankAccessPage() {
                       note: event.target.value,
                     }))
                   }
-                  placeholder="Legacy membership / package purchased before launch"
+                  placeholder="Reason for granting access"
                   maxLength={500}
                 />
               </Field>

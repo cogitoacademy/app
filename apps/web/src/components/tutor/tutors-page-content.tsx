@@ -54,10 +54,6 @@ type PublishedTutor = {
   modality: string | null;
   onlineMaxClassSize: number;
   offlineMaxClassSize: number;
-  prices: Record<string, number> | null;
-  pricesByModality?: Partial<
-    Record<"online" | "offline", Record<string, number>>
-  > | null;
   pricesByCompetition?: Record<
     string,
     Partial<Record<"online" | "offline", Record<string, number>>>
@@ -149,11 +145,6 @@ export function TutorsPageContent() {
   const tutorListInput = useMemo(
     () => ({
       search: search.trim() || undefined,
-      // Keep the singular fields for rolling/stale API instances. The
-      // current API prefers the array fields, so multiple selections still
-      // use the complete multi-select contract after the server reloads.
-      categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
-      subjectId: subjectIds.length === 1 ? subjectIds[0] : undefined,
       categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
       subjectIds: subjectIds.length > 0 ? subjectIds : undefined,
       modality: (modality || undefined) as

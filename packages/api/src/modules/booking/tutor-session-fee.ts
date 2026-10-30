@@ -1,5 +1,4 @@
 import type { BookingPriceSnapshot } from "@cogito-app/db/schema";
-import { TUTOR_PAYOUT_RATE_IDR } from "../../shared/constants";
 
 export interface TutorSessionFeeRecordInput {
   bookingId: string;
@@ -27,17 +26,15 @@ export function buildTutorSessionFeeRecord({
   earnedAt,
   priceSnapshot,
 }: TutorSessionFeeRecordInput) {
-  const grossHonorariumIdr =
-    priceSnapshot?.engine === "v3"
-      ? priceSnapshot.tutorHonorariumIdr
-      : (priceSnapshot?.tutorHonorariumIdr ??
-        (priceSnapshot?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR);
-
+  if (priceSnapshot?.engine !== "v3") {
+    throw new RangeError(
+      "A V3 price snapshot is required for a tutor session fee",
+    );
+  }
+  const grossHonorariumIdr = priceSnapshot.tutorHonorariumIdr;
   if (!Number.isSafeInteger(grossHonorariumIdr) || grossHonorariumIdr < 0) {
     throw new RangeError(
-      priceSnapshot?.engine === "v3"
-        ? "V3 tutor honorarium must be a non-negative whole IDR amount"
-        : "Tutor honorarium must be a non-negative whole IDR amount",
+      "V3 tutor honorarium must be a non-negative whole IDR amount",
     );
   }
 

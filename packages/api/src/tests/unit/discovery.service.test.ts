@@ -84,7 +84,7 @@ describe("Discovery Service", () => {
       expect(result.affiliation).toBe("Mathematics, Cogito Academy");
       expect(result.experiences).toEqual([]);
       expect(result.modality).toBe("online");
-      expect(result.prices).toEqual({ "1": 50, "2": 40 });
+      expect(result.prices).toBeNull();
       expect(result.publishedAt).toEqual(new Date("2025-01-01"));
     });
 
@@ -191,8 +191,9 @@ describe("Discovery Service", () => {
       expect(result).toEqual([]);
     });
 
-    test("uses online as the default modality for IDR profiles without a modality", async () => {
+    test("uses online as the default modality for V3 profiles without a modality", async () => {
       const profile = makeProfile({
+        subjects: makeSubject("competition-debate"),
         modality: null as any,
         baseRatesIdr: { online: 175_000 },
       });
@@ -200,17 +201,26 @@ describe("Discovery Service", () => {
       const pricing = {
         ...createPricingService(),
         getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+        getActiveV3Config: mock(async () => ({
+          version: 1,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
       };
 
       const service = createDiscoveryService({ repo, pricing });
       const result = await service.listPublished();
 
-      expect(result[0]?.pricesByModality?.online).toBeDefined();
-      expect(result[0]?.pricesByModality?.offline).toBeUndefined();
+      expect(
+        result[0]?.pricesByCompetition?.["competition-debate"]?.online,
+      ).toBeDefined();
+      expect(
+        result[0]?.pricesByCompetition?.["competition-debate"]?.offline,
+      ).toBeUndefined();
     });
 
-    test("projects current Marks prices from IDR base rates and economy config", async () => {
+    test("projects Marks prices from active V3 competition rates", async () => {
       const profile = makeProfile({
+        subjects: makeSubject("competition-debate"),
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
       });
@@ -218,20 +228,31 @@ describe("Discovery Service", () => {
       const pricing = {
         ...createPricingService(),
         getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+        getActiveV3Config: mock(async () => ({
+          version: 1,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
       };
 
       const service = createDiscoveryService({ repo, pricing });
       const result = await service.listPublished();
 
-      expect(result[0]?.pricesByModality?.online?.["1"]).toBe(45);
-      expect(result[0]?.pricesByModality?.online?.["2"]).toBe(28);
-      expect(result[0]?.pricesByModality?.offline?.["1"]).toBe(63);
-      expect(result[0]?.prices).toEqual(result[0]?.pricesByModality?.online);
-      expect(pricing.getEconomyConfig).toHaveBeenCalledTimes(1);
+      expect(
+        result[0]?.pricesByCompetition?.["competition-debate"]?.online?.["1"],
+      ).toBe(44);
+      expect(
+        result[0]?.pricesByCompetition?.["competition-debate"]?.online?.["2"],
+      ).toBe(28);
+      expect(
+        result[0]?.pricesByCompetition?.["competition-debate"]?.offline?.["1"],
+      ).toBe(66);
+      expect(result[0]?.prices).toBeNull();
+      expect(pricing.getEconomyConfig).not.toHaveBeenCalled();
     });
 
     test("only publishes prices up to each modality's class capacity", async () => {
       const profile = makeProfile({
+        subjects: makeSubject("competition-debate"),
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
         onlineMaxClassSize: 3,
@@ -241,6 +262,10 @@ describe("Discovery Service", () => {
       const pricing = {
         ...createPricingService(),
         getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+        getActiveV3Config: mock(async () => ({
+          version: 1,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
       };
 
       const [result] = await createDiscoveryService({
@@ -248,12 +273,16 @@ describe("Discovery Service", () => {
         pricing,
       }).listPublished();
 
-      expect(Object.keys(result!.pricesByModality!.online!)).toEqual([
-        "1",
-        "2",
-        "3",
-      ]);
-      expect(Object.keys(result!.pricesByModality!.offline!)).toEqual(["1"]);
+      expect(
+        Object.keys(
+          result!.pricesByCompetition!["competition-debate"]!.online!,
+        ),
+      ).toEqual(["1", "2", "3"]);
+      expect(
+        Object.keys(
+          result!.pricesByCompetition!["competition-debate"]!.offline!,
+        ),
+      ).toEqual(["1"]);
     });
 
     test("uses active dynamic competition rates for selected catalog subjects", async () => {
@@ -304,10 +333,10 @@ describe("Discovery Service", () => {
 
       expect(result?.prices).toBeNull();
       expect(result?.pricesByModality).toBeNull();
-      expect(result?.pricesByCompetition).toEqual({});
+      expect(result?.pricesByCompetition).toBeNull();
     });
 
-    test("keeps the seven legacy parent prices while inactive V3 stays compatible", async () => {
+    test("does not price canonical parents when V3 is not configured", async () => {
       const profile = makeProfile({
         subjects: makeSubject("competition-debate"),
         baseRatesIdr: { online: 175_000 },
@@ -326,7 +355,7 @@ describe("Discovery Service", () => {
 
       expect(
         result?.pricesByCompetition?.["competition-debate"]?.online?.["1"],
-      ).toBe(45);
+      ).toBeUndefined();
       expect(result?.pricesByModality).toBeNull();
     });
   });
@@ -361,8 +390,9 @@ describe("Discovery Service", () => {
       expect(result.availabilitySlots).toEqual(availabilitySlots);
     });
 
-    test("projects economy prices for a profile loaded by id", async () => {
+    test("projects V3 competition prices for a profile loaded by id", async () => {
       const profile = makeProfile({
+        subjects: makeSubject("competition-debate"),
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
       });
@@ -373,13 +403,21 @@ describe("Discovery Service", () => {
       const pricing = {
         ...createPricingService(),
         getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+        getActiveV3Config: mock(async () => ({
+          version: 1,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
       };
 
       const service = createDiscoveryService({ repo, pricing });
       const result = await service.getProfile("tp1");
 
-      expect(result.pricesByModality?.online).toBeDefined();
-      expect(result.pricesByModality?.offline).toBeDefined();
+      expect(
+        result.pricesByCompetition?.["competition-debate"]?.online,
+      ).toBeDefined();
+      expect(
+        result.pricesByCompetition?.["competition-debate"]?.offline,
+      ).toBeDefined();
     });
 
     test("lists subject category groups", async () => {

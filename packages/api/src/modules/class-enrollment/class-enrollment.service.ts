@@ -7,13 +7,28 @@ import {
   createClassReportReminderRepo,
 } from "./class-enrollment.report-reminders";
 import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
+import { createHash, randomUUID } from "node:crypto";
 import {
   classEnrollmentCancellationOutput,
   type classEnrollmentCancellationInput,
   type confirmClassEnrollmentCancellationInput,
+  changedSessionCancellationOutput,
+  changedSessionCancellationInput,
+  confirmChangedSessionCancellationInput,
 } from "./class-enrollment.types";
-import { randomUUID } from "node:crypto";
-import { academyClassEnrollment } from "@cogito-app/db/schema";
+import {
+  academyClass,
+  academyClassEnrollment,
+  academyClassEnrollmentAllocation,
+  academyClassEnrollmentInstallment,
+  academyClassSession,
+  academyClassSessionReport,
+  auditLog,
+  tutorSessionFee,
+} from "@cogito-app/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { remainingAllocationMarks } from "./class-enrollment.funding";
+import { isScheduleChangeExitOpen } from "../academy-class/academy-class.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { log } from "../../lib/logger";
@@ -36,7 +51,7 @@ import type {
   classEnrollmentTopUpPurchaseInput,
   createClassEnrollmentInput,
 } from "./class-enrollment.types";
-import type { z } from "zod";
+import { z } from "zod";
 
 const CHECKOUT_TTL_MS = 15 * 60 * 1000;
 const ACTIVE_ALLOCATION_STATES = [
@@ -171,6 +186,28 @@ export function createClassEnrollmentService(deps: {
           fundedMarks: allocation.fundedMarks,
           spentMarks: allocation.spentMarks,
           releasedMarks: allocation.releasedMarks,
+          scheduleChangeVersion:
+            allocation.state !== "released" &&
+            allocation.scheduleChangeSessionState === "scheduled" &&
+            allocation.scheduleChangeNotifiedAt &&
+            allocation.scheduleChangeVersion ===
+              allocation.currentScheduleChangeVersion
+              ? allocation.scheduleChangeVersion
+              : null,
+          scheduleChangeNotifiedAt:
+            allocation.state !== "released" &&
+            allocation.scheduleChangeSessionState === "scheduled" &&
+            allocation.scheduleChangeVersion ===
+              allocation.currentScheduleChangeVersion
+              ? allocation.scheduleChangeNotifiedAt
+              : null,
+          scheduleChangeExitUntil:
+            allocation.state !== "released" &&
+            allocation.scheduleChangeSessionState === "scheduled" &&
+            allocation.scheduleChangeVersion ===
+              allocation.currentScheduleChangeVersion
+              ? allocation.scheduleChangeExitUntil
+              : null,
         })),
     }));
   }
@@ -823,6 +860,374 @@ export function createClassEnrollmentService(deps: {
         },
       });
       return quote;
+    });
+  }
+
+  async function buildChangedSessionCancellationQuote(
+    tx: DbOrTx,
+    studentId: string,
+    input: z.infer<typeof changedSessionCancellationInput>,
+    nowAt: Date,
+  ) {
+    const [session] = await tx
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, input.sessionId));
+    if (!session) throw new ClassEnrollmentNotFoundError();
+    const enrollment = await repo.findEnrollment(
+      tx,
+      studentId,
+      input.enrollmentId,
+      true,
+    );
+    if (
+      !enrollment ||
+      !["active", "checkout_pending"].includes(enrollment.state)
+    )
+      throw new ClassEnrollmentNotFoundError();
+    if (
+      session.classId !== enrollment.classId ||
+      session.scheduleChangeVersion !== input.scheduleChangeVersion ||
+      session.state !== "scheduled" ||
+      !session.scheduleChangeNotifiedAt ||
+      !session.scheduleChangeExitUntil ||
+      session.scheduleChangeNotifiedAt > nowAt ||
+      !isScheduleChangeExitOpen(nowAt, session.scheduleChangeExitUntil)
+    )
+      throw new ClassEnrollmentConflictError(
+        "The schedule-change cancellation window has expired or changed",
+      );
+    const [report] = await tx
+      .select({ id: academyClassSessionReport.id })
+      .from(academyClassSessionReport)
+      .where(eq(academyClassSessionReport.sessionId, session.id))
+      .limit(1);
+    const [fee] = await tx
+      .select({ id: tutorSessionFee.id })
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.academyClassSessionId, session.id))
+      .limit(1);
+    if (report || fee || session.startAt <= nowAt)
+      throw new ClassEnrollmentInvalidOperationError(
+        "A delivered, earned, or started session cannot be cancelled for a refund",
+      );
+    const [allocation] = await tx
+      .select()
+      .from(academyClassEnrollmentAllocation)
+      .where(
+        and(
+          eq(academyClassEnrollmentAllocation.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentAllocation.sessionId, session.id),
+          eq(academyClassEnrollmentAllocation.studentId, studentId),
+        ),
+      )
+      .for("update");
+    if (
+      !allocation ||
+      allocation.scheduleChangeVersion !== input.scheduleChangeVersion ||
+      !["unfunded_reserved", "funded"].includes(allocation.state)
+    )
+      throw new ClassEnrollmentInvalidOperationError(
+        "This seat was not active when the session time changed or was already released",
+      );
+    const refundableMarks =
+      allocation.state === "funded" ? remainingAllocationMarks(allocation) : 0;
+    return {
+      enrollmentId: enrollment.id,
+      sessionId: session.id,
+      scheduleChangeVersion: session.scheduleChangeVersion!,
+      notifiedAt: session.scheduleChangeNotifiedAt,
+      exitUntil: session.scheduleChangeExitUntil,
+      refundableMarks,
+      fundingState:
+        allocation.state === "funded"
+          ? ("funded" as const)
+          : ("unfunded" as const),
+      quoteVersion: createHash("sha256")
+        .update(
+          JSON.stringify({
+            enrollmentId: enrollment.id,
+            sessionId: session.id,
+            scheduleChangeVersion: session.scheduleChangeVersion,
+            notifiedAt: session.scheduleChangeNotifiedAt.toISOString(),
+            exitUntil: session.scheduleChangeExitUntil.toISOString(),
+            allocationId: allocation.id,
+            allocationState: allocation.state,
+            fundedMarks: allocation.fundedMarks,
+            spentMarks: allocation.spentMarks,
+            releasedMarks: allocation.releasedMarks,
+            refundableMarks,
+          }),
+        )
+        .digest("hex"),
+    };
+  }
+
+  async function quoteChangedSessionCancellation(
+    studentId: string,
+    input: z.infer<typeof changedSessionCancellationInput>,
+  ) {
+    const initial = await repo.findEnrollment(
+      deps.db,
+      studentId,
+      input.enrollmentId,
+    );
+    if (!initial) throw new ClassEnrollmentNotFoundError();
+    return deps.db.transaction(async (tx) => {
+      await tx
+        .select({ id: academyClass.id })
+        .from(academyClass)
+        .where(eq(academyClass.id, initial.classId))
+        .for("update");
+      await repo.lockSessions(tx, [input.sessionId]);
+      await repo.findInstallments(tx, initial.id, true);
+      await repo.findAllocations(tx, initial.id, true);
+      return buildChangedSessionCancellationQuote(
+        tx,
+        studentId,
+        input,
+        currentTime(),
+      );
+    });
+  }
+
+  async function confirmChangedSessionCancellation(
+    studentId: string,
+    input: z.infer<typeof confirmChangedSessionCancellationInput>,
+  ) {
+    const initial = await repo.findEnrollment(
+      deps.db,
+      studentId,
+      input.enrollmentId,
+    );
+    if (!initial) throw new ClassEnrollmentNotFoundError();
+    return deps.db.transaction(async (tx) => {
+      await tx
+        .select({ id: academyClass.id })
+        .from(academyClass)
+        .where(eq(academyClass.id, initial.classId))
+        .for("update");
+      await repo.lockSessions(tx, [input.sessionId]);
+      const enrollment = await repo.findEnrollment(
+        tx,
+        studentId,
+        initial.id,
+        true,
+      );
+      if (!enrollment) throw new ClassEnrollmentNotFoundError();
+      await repo.findInstallments(tx, enrollment.id, true);
+      const allocations = await repo.findAllocations(tx, enrollment.id, true);
+      const [receipt] = await tx
+        .select({ details: auditLog.details })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, enrollment.id),
+            eq(auditLog.action, "class_enrollment_changed_session_cancelled"),
+            sql`${auditLog.details}->>'requestKey' = ${input.requestKey}`,
+          ),
+        )
+        .limit(1);
+      if (receipt) {
+        const details = receipt.details as { quote?: unknown } | null;
+        const encoded = z
+          .object({
+            notifiedAt: z.coerce.date(),
+            exitUntil: z.coerce.date(),
+          })
+          .passthrough()
+          .safeParse(details?.quote);
+        const parsed = encoded.success
+          ? changedSessionCancellationOutput.safeParse(encoded.data)
+          : null;
+        const saved = parsed?.success ? parsed.data : null;
+        if (
+          !saved ||
+          saved.quoteVersion !== input.quoteVersion ||
+          saved.sessionId !== input.sessionId ||
+          saved.scheduleChangeVersion !== input.scheduleChangeVersion
+        )
+          throw new ClassEnrollmentConflictError(
+            "This request key was already used for another cancellation",
+          );
+        return saved;
+      }
+      const confirmedAt = currentTime();
+      const quote = await buildChangedSessionCancellationQuote(
+        tx,
+        studentId,
+        input,
+        confirmedAt,
+      );
+      if (quote.quoteVersion !== input.quoteVersion)
+        throw new ClassEnrollmentConflictError(
+          "The schedule or refund amount changed; review the current quote",
+        );
+      const allocation = allocations.find(
+        (item) => item.sessionId === quote.sessionId,
+      );
+      if (!allocation)
+        throw new ClassEnrollmentConflictError(
+          "The session allocation changed before confirmation",
+        );
+      if (quote.refundableMarks > 0) {
+        const wallet = await repo.getWalletByUser(tx, studentId, true);
+        if (!wallet)
+          throw new ClassEnrollmentConflictError(
+            "Enrollment wallet is unavailable",
+          );
+        await deps.wallet.release(tx, {
+          walletId: wallet.id,
+          amount: quote.refundableMarks,
+          sourceReference: allocation.fundingSourceReference,
+          actorType: "student",
+          reason: `Q04 schedule change: ${enrollment.id}, session ${quote.sessionId}`,
+          eventKey: `class-allocation:${allocation.id}:schedule-change:${quote.scheduleChangeVersion}:return`,
+        });
+      }
+      const nowAt = confirmedAt;
+      const changed = await tx
+        .update(academyClassEnrollmentAllocation)
+        .set({
+          state: "released",
+          releasedMarks: allocation.releasedMarks + quote.refundableMarks,
+          updatedAt: nowAt,
+        })
+        .where(
+          and(
+            eq(academyClassEnrollmentAllocation.id, allocation.id),
+            inArray(academyClassEnrollmentAllocation.state, [
+              "checkout_reserved",
+              "unfunded_reserved",
+              "funded",
+            ]),
+          ),
+        )
+        .returning({ id: academyClassEnrollmentAllocation.id });
+      if (!changed.length)
+        throw new ClassEnrollmentConflictError(
+          "The session allocation already changed",
+        );
+
+      const [installment] = await tx
+        .select()
+        .from(academyClassEnrollmentInstallment)
+        .where(
+          eq(academyClassEnrollmentInstallment.id, allocation.installmentId),
+        )
+        .for("update");
+      if (
+        installment &&
+        ["checkout_pending", "pending"].includes(installment.state)
+      ) {
+        const remaining = await tx
+          .select({
+            id: academyClassEnrollmentAllocation.id,
+            sessionId: academyClassEnrollmentAllocation.sessionId,
+            rateMarks: academyClassEnrollmentAllocation.rateMarks,
+          })
+          .from(academyClassEnrollmentAllocation)
+          .where(
+            and(
+              eq(
+                academyClassEnrollmentAllocation.installmentId,
+                installment.id,
+              ),
+              inArray(academyClassEnrollmentAllocation.state, [
+                "checkout_reserved",
+                "unfunded_reserved",
+              ]),
+            ),
+          );
+        if (!remaining.length) {
+          await tx
+            .update(academyClassEnrollmentInstallment)
+            .set({ state: "cancelled", updatedAt: nowAt })
+            .where(eq(academyClassEnrollmentInstallment.id, installment.id));
+        } else {
+          const amountMarks = remaining.reduce(
+            (total, item) => total + item.rateMarks,
+            0,
+          );
+          if (!Number.isSafeInteger(amountMarks))
+            throw new ClassEnrollmentConflictError(
+              "Installment amount exceeds the supported range",
+            );
+          let dueSessionId = installment.dueSessionId;
+          let dueAt = installment.dueAt;
+          if (dueSessionId === quote.sessionId) {
+            const remainingSessionIds = remaining.map((item) => item.sessionId);
+            const dates = await tx
+              .select({
+                id: academyClassSession.id,
+                startAt: academyClassSession.startAt,
+              })
+              .from(academyClassSession)
+              .where(inArray(academyClassSession.id, remainingSessionIds));
+            const next = dates.toSorted(
+              (a, b) => a.startAt.getTime() - b.startAt.getTime(),
+            )[0];
+            dueSessionId = next?.id ?? null;
+            dueAt = next?.startAt ?? null;
+          }
+          await tx
+            .update(academyClassEnrollmentInstallment)
+            .set({
+              sessionCount: remaining.length,
+              amountMarks,
+              dueSessionId,
+              dueAt,
+              updatedAt: nowAt,
+            })
+            .where(eq(academyClassEnrollmentInstallment.id, installment.id));
+        }
+      }
+      const [remainingActive] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(academyClassEnrollmentAllocation)
+        .where(
+          and(
+            eq(academyClassEnrollmentAllocation.enrollmentId, enrollment.id),
+            inArray(academyClassEnrollmentAllocation.state, [
+              "checkout_reserved",
+              "unfunded_reserved",
+              "funded",
+            ]),
+          ),
+        );
+      if (Number(remainingActive?.count ?? 0) === 0)
+        await tx
+          .update(academyClassEnrollment)
+          .set({ state: "cancelled", updatedAt: nowAt })
+          .where(eq(academyClassEnrollment.id, enrollment.id));
+      const output = { ...quote };
+      await tx.insert(auditLog).values({
+        actorId: studentId,
+        actorType: "student",
+        action: "class_enrollment_changed_session_cancelled",
+        targetId: enrollment.id,
+        targetType: "class_enrollment",
+        details: {
+          requestKey: input.requestKey,
+          quote: output,
+          allocationId: allocation.id,
+        },
+      });
+      await deps.notification.write({
+        db: tx,
+        userId: studentId,
+        category: "refund",
+        title: "Changed class session cancelled",
+        body: `${quote.refundableMarks} Marks returned to your available balance for the rescheduled session.`,
+        eventKey: `class-enrollment:${enrollment.id}:schedule-change:${quote.sessionId}:v${quote.scheduleChangeVersion}:cancelled`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          sessionId: quote.sessionId,
+          scheduleChangeVersion: quote.scheduleChangeVersion,
+          refundableMarks: quote.refundableMarks,
+        },
+      });
+      return output;
     });
   }
 
@@ -1603,6 +2008,8 @@ export function createClassEnrollmentService(deps: {
       studentId: string,
       input: z.infer<typeof confirmClassEnrollmentCancellationInput>,
     ) => cancelEnrollment(studentId, input, input),
+    quoteChangedSessionCancellation,
+    confirmChangedSessionCancellation,
     createEnrollment,
     completeCheckout,
     paySecondInstallment,

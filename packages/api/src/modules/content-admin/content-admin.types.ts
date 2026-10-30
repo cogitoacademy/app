@@ -19,7 +19,7 @@ export const resourceFields = z
     category: z.string().trim().min(1).max(100),
     fileId: z.string().min(1).max(200),
     isActive: z.boolean(),
-    sortOrder: z.number().int().min(0).max(100000),
+    sortOrder: z.number().int().min(0).max(100000).default(0),
   })
   .strict();
 export const eventFields = z
@@ -33,14 +33,14 @@ export const eventFields = z
       .array(z.string().min(1).max(200))
       .max(50)
       .refine((v) => new Set(v).size === v.length, "Duplicate category"),
-    educationLevels: z.array(z.string().trim().min(1).max(100)).max(30),
-    scale: optionalLabel,
+    educationLevels: z.array(z.enum(["sd", "smp", "sma", "mahasiswa"])).max(4),
+    scale: z.enum(["international", "national"]).nullable(),
     organizer: optionalLabel,
     registrationDeadline: instant.nullable(),
     registrationLink: link,
     socialMediaLink: link,
     isActive: z.boolean(),
-    sortOrder: z.number().int().min(0).max(100000),
+    sortOrder: z.number().int().min(0).max(100000).default(0),
   })
   .strict()
   .refine((v) => Date.parse(v.endDate) >= Date.parse(v.startDate), {
@@ -55,7 +55,10 @@ const payload = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("event"), values: eventFields }),
 ]);
 export const createContentInput = z
-  .object({ entry: payload, reason: z.string().trim().min(3).max(600) })
+  .object({
+    entry: payload,
+    reason: z.string().trim().min(3).max(600).optional(),
+  })
   .strict();
 export const updateContentInput = createContentInput.extend({
   id: z.string().min(1).max(200),
@@ -64,7 +67,7 @@ export const updateContentInput = createContentInput.extend({
 export const deleteContentInput = kindInput.extend({
   id: z.string().min(1).max(200),
   expectedVersion: z.number().int().positive(),
-  reason: z.string().trim().min(3).max(600),
+  reason: z.string().trim().min(3).max(600).optional(),
 });
 export const uploadPdfInput = z
   .object({

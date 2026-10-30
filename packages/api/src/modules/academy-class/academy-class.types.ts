@@ -121,3 +121,34 @@ export const retryAcademyClassMeetingsInput = z.object({
   id: z.string().uuid(),
   reason: z.string().trim().min(3).max(500),
 });
+
+export const reportTutorAbsenceInput = z.object({
+  sessionId: z.string().uuid(),
+  requestKey: z.string().uuid(),
+  reason: z.string().trim().min(3).max(1000),
+});
+
+export const replaceAbsentClassTutorInput = z.object({
+  sessionId: z.string().uuid(),
+  expectedVersion: z.number().int().positive(),
+  replacementTutorId: z.string().trim().min(1).max(128),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const rescheduleAcademyClassSessionInput = z
+  .object({
+    sessionId: z.string().uuid(),
+    expectedVersion: z.number().int().positive(),
+    startAt: z.coerce.date(),
+    endAt: z.coerce.date(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.endAt <= value.startAt)
+      ctx.addIssue({
+        code: "custom",
+        path: ["endAt"],
+        message: "Session end time must be after its start time",
+      });
+  });

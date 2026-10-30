@@ -214,8 +214,7 @@ async function findTutorProfile(
 
 /**
  * Resolves one immutable booking-topic snapshot from the tutor's approved
- * competition tracks. When no subject id is supplied, a single available
- * track can be selected automatically for backward-compatible callers.
+ * competition tracks using the caller's explicit specialization selection.
  */
 async function findTutorSubjectTopic(
   conn: DbOrTx,
@@ -260,35 +259,7 @@ async function findTutorSubjectTopic(
     });
   }
 
-  if (subjectId) {
-    return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
-  }
-  return topics.length === 1 ? topics[0]! : null;
-}
-
-/** Distinguishes legacy uncategorized tutors from archived catalog tracks. */
-async function getTutorSubjectAssignmentState(conn: DbOrTx, tutorId: string) {
-  const profile = await conn.query.tutorProfile.findFirst({
-    where: eq(tutorProfile.userId, tutorId),
-    columns: { id: true },
-    with: {
-      subjects: {
-        with: { subject: { with: { parent: true } } },
-      },
-    },
-  });
-  const subjects = profile?.subjects ?? [];
-  return {
-    hasAssignments: subjects.length > 0,
-    hasActiveAssignments: subjects.some(({ subject }) =>
-      Boolean(
-        subject?.isActive &&
-        subject.parentId &&
-        subject.parent?.isActive &&
-        subject.parent.parentId === null,
-      ),
-    ),
-  };
+  return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
 }
 
 /**
@@ -976,19 +947,6 @@ async function listCompletionFeedbackHistoryByBooking(
     );
 }
 
-async function listCompletionFeedbackHistoryStatesByBooking(
-  conn: DbOrTx,
-  bookingId: string,
-) {
-  return conn
-    .select({
-      feedbackId: sessionCompletionFeedbackHistory.feedbackId,
-      status: sessionCompletionFeedbackHistory.status,
-    })
-    .from(sessionCompletionFeedbackHistory)
-    .where(eq(sessionCompletionFeedbackHistory.bookingId, bookingId));
-}
-
 async function listCompletionFeedbackHistoryByFeedback(
   conn: DbOrTx,
   feedbackId: string,
@@ -1445,41 +1403,6 @@ async function listTutorSessionFeeEventKeysByBookings(
     .from(tutorSessionFee)
     .where(inArray(tutorSessionFee.bookingId, bookingIds));
   return rows.map((row) => row.eventKey);
-}
-
-async function findLatestLegacyTutorPayoutCutoff(
-  conn: DbOrTx,
-  tutorId: string,
-) {
-  const legacyAggregateRow = and(
-    isNull(tutorPayout.previewVersion),
-    isNull(tutorPayout.sourceKeys),
-    notExists(
-      conn
-        .select({ id: tutorPayoutAllocation.id })
-        .from(tutorPayoutAllocation)
-        .where(eq(tutorPayoutAllocation.payoutId, tutorPayout.id)),
-    ),
-  );
-  const [row] = await conn
-    .select({ ...getTableColumns(tutorPayout) })
-    .from(tutorPayout)
-    .where(
-      and(
-        eq(tutorPayout.tutorId, tutorId),
-        legacyAggregateRow,
-        or(
-          eq(tutorPayout.status, "paid"),
-          and(
-            eq(tutorPayout.status, "void"),
-            eq(tutorPayout.reconciliationStatus, "required"),
-          ),
-        ),
-      ),
-    )
-    .orderBy(desc(tutorPayout.cutoffAt))
-    .limit(1);
-  return row ?? null;
 }
 
 /**
@@ -2020,7 +1943,6 @@ export function createBookingRepo(db: DbType) {
     countBookingsForAccess,
     findTutorProfile,
     findTutorSubjectTopic,
-    getTutorSubjectAssignmentState,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,
     listActiveTutorAvailability,
@@ -2056,7 +1978,6 @@ export function createBookingRepo(db: DbType) {
     insertCompletionFeedbackHistory,
     findCompletionFeedbackHistoryByRequestKey,
     listCompletionFeedbackHistoryByBooking,
-    listCompletionFeedbackHistoryStatesByBooking,
     listCompletionFeedbackHistoryByFeedback,
     hasChargeableFeedbackEntitlement,
     listCompletionFeedbackByBooking,
@@ -2080,7 +2001,6 @@ export function createBookingRepo(db: DbType) {
     insertTutorPayoutAllocations,
     listTutorPayoutAllocationsByPayoutId,
     listTutorSessionFeeEventKeysByBookings,
-    findLatestLegacyTutorPayoutCutoff,
     listTutorPayoutProfiles,
     listTutorPayoutRecords,
     findTutorTaxConfig,

@@ -12,6 +12,8 @@ function fixture(results: unknown[][]) {
       if (!rows) throw new Error("Unexpected select");
       const query = {
         from: () => query,
+        innerJoin: () => query,
+        leftJoin: () => query,
         where: () => query,
         orderBy: () => query,
         limit: async () => rows,
@@ -40,6 +42,7 @@ test("getMine returns legacy code unchanged before querying the candidate namesp
     [{ role: "student", name: "Changed Name" }],
     [],
     [],
+    [],
     [{ code: "F1234567890ABCDEF" }],
   ]);
   expect((await f.service.getMine("student-id")).code).toBe(
@@ -52,6 +55,7 @@ test("getMine returns legacy code unchanged before querying the candidate namesp
 test("getMine uses account name and observes a concurrent owner's winner after conflict", async () => {
   const f = fixture([
     [{ role: "student", name: "Andi" }],
+    [],
     [],
     [],
     [],
@@ -86,6 +90,7 @@ test("full prefix rereads the owner before reporting exhaustion", async () => {
     [],
     [],
     [],
+    [],
     full,
     [{ code: "AND999" }],
   ]);
@@ -93,6 +98,7 @@ test("full prefix rereads the owner before reporting exhaustion", async () => {
   expect(raced.inserted).toEqual([]);
   const exhausted = fixture([
     [{ role: "student", name: "Andi" }],
+    [],
     [],
     [],
     [],

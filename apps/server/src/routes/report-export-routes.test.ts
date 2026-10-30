@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { Elysia } from "elysia";
 import { registerReportExportRoutes } from "./report-export-routes";
+import { ReportSelectionError } from "@cogito-app/api/modules/report-export/report-export.selection";
+
+const selectedReportIds = ["class:11111111-1111-4111-8111-111111111111"];
 
 function makeApp(
   actor: { id: string; role: string } | null,
@@ -16,15 +19,20 @@ function makeApp(
     void studentId;
     return summary;
   });
-  const generatePdf = mock(async (studentId: string) => {
+  const generatePdf = mock(async (studentId: string, reportIds: string[]) => {
     void studentId;
+    void reportIds;
     return pdf;
+  });
+  const listReports = mock(async (studentId: string) => {
+    void studentId;
+    return { ...summary, studentName: "Student", reports: [] };
   });
   const createContext = mock(
     async () =>
       ({
         session: actor ? { user: actor } : null,
-        services: { reportExport: { getSummary, generatePdf } },
+        services: { reportExport: { getSummary, listReports, generatePdf } },
       }) as never,
   );
   return {
@@ -33,6 +41,7 @@ function makeApp(
     }),
     getSummary,
     generatePdf,
+    listReports,
   };
 }
 
@@ -45,7 +54,11 @@ function post(
     new Request(`http://localhost${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(
+        path.endsWith("/pdf")
+          ? { reportIds: selectedReportIds, ...(body as object) }
+          : body,
+      ),
     }),
   );
 }
@@ -108,7 +121,10 @@ describe("private report export routes", () => {
     expect(response.headers.get("content-disposition")).toContain(
       "student-session-reports.pdf",
     );
-    expect(admin.generatePdf).toHaveBeenCalledWith("student-b");
+    expect(admin.generatePdf).toHaveBeenCalledWith(
+      "student-b",
+      selectedReportIds,
+    );
   });
 
   test("returns an explicit empty result when the authorized student has no reports", async () => {
@@ -127,6 +143,71 @@ describe("private report export routes", () => {
     expect(student.getSummary).toHaveBeenCalledWith("student-a");
     const pdf = await post(student.app, "/reports/student/pdf");
     expect(pdf.status).toBe(204);
-    expect(student.generatePdf).toHaveBeenCalledWith("student-a");
+    expect(student.generatePdf).toHaveBeenCalledWith(
+      "student-a",
+      selectedReportIds,
+    );
+  });
+
+  test("authorizes the catalog before reading student report data", async () => {
+    const anonymous = makeApp(null);
+    expect((await post(anonymous.app, "/reports/student/list")).status).toBe(
+      401,
+    );
+    const tutor = makeApp({ id: "tutor-a", role: "tutor" });
+    expect(
+      (
+        await post(tutor.app, "/reports/student/list", {
+          studentId: "student-a",
+        })
+      ).status,
+    ).toBe(403);
+    expect(tutor.listReports).not.toHaveBeenCalled();
+    const student = makeApp({ id: "student-a", role: "student" });
+    expect(
+      (
+        await post(student.app, "/reports/student/list", {
+          studentId: "student-b",
+        })
+      ).status,
+    ).toBe(403);
+    expect(student.listReports).not.toHaveBeenCalled();
+    const response = await post(student.app, "/reports/student/list");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(student.listReports).toHaveBeenCalledWith("student-a");
+    const admin = makeApp({ id: "admin-a", role: "admin" });
+    expect((await post(admin.app, "/reports/student/list")).status).toBe(400);
+    expect(
+      (
+        await post(admin.app, "/reports/student/list", {
+          studentId: "student-b",
+        })
+      ).status,
+    ).toBe(200);
+    expect(admin.listReports).toHaveBeenCalledWith("student-b");
+  });
+
+  test("rejects invalid bulk payloads and returns a conflict for stale selections", async () => {
+    const student = makeApp({ id: "student-a", role: "student" });
+    const invalidSelections = [
+      [],
+      ["invalid"],
+      [...selectedReportIds, ...selectedReportIds],
+      Array.from({ length: 101 }, () => selectedReportIds[0]),
+    ];
+    const responses = await Promise.all(
+      invalidSelections.map((reportIds) =>
+        post(student.app, "/reports/student/pdf", { reportIds }),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual([
+      422, 422, 422, 422,
+    ]);
+    expect(student.generatePdf).not.toHaveBeenCalled();
+    student.generatePdf.mockRejectedValueOnce(new ReportSelectionError());
+    const response = await post(student.app, "/reports/student/pdf");
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 });

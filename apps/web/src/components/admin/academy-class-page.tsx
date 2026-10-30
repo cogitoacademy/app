@@ -1,5 +1,9 @@
 "use client";
 
+import { IconInbox } from "@tabler/icons-react";
+import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
+
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
@@ -8,19 +12,26 @@ import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  IconCalendarPlus,
   IconDeviceFloppy,
   IconEdit,
   IconMapPin,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -151,6 +162,30 @@ function toLocalDateTime(value: Date | string | null) {
   if (Number.isNaN(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function toWibDateTimeInput(value: Date | string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Jakarta",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
+function fromWibDateTimeInput(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}:00+07:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function draftFromRecord(record: ClassRecord): DraftForm {
@@ -309,12 +344,22 @@ function TextareaField({
 export function AcademyClassPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DraftForm>(() => emptyDraft());
+  const [openSessions, setOpenSessions] = useState<number[]>([0]);
   const [workspace, setWorkspace] = useState("published");
   const [showDrafts, setShowDrafts] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [meetingRetryReasons, setMeetingRetryReasons] = useState<
     Record<string, string>
+  >({});
+  const [replacementTutorIds, setReplacementTutorIds] = useState<
+    Record<string, string>
+  >({});
+  const [replacementReasons, setReplacementReasons] = useState<
+    Record<string, string>
+  >({});
+  const [rescheduleValues, setRescheduleValues] = useState<
+    Record<string, { startAt: string; reason: string }>
   >({});
   const classesQuery = useQuery(
     orpc.admin.listAcademyClasses.queryOptions({ input: { state: "draft" } }),
@@ -426,6 +471,64 @@ export function AcademyClassPage() {
           type: "error",
         });
       },
+    }),
+  );
+  const replaceAbsentTutor = useMutation(
+    orpc.admin.replaceAbsentClassTutor.mutationOptions({
+      onSuccess: async () => {
+        await Promise.all(
+          ["published", "postponed"].map((state) =>
+            queryClient.invalidateQueries({
+              queryKey: orpc.admin.listAcademyClasses.key({
+                input: { state: state as "published" | "postponed" },
+              }),
+            }),
+          ),
+        );
+        toastManager.add({
+          title: "Tutor replaced",
+          description: "The session time and class fee stayed the same.",
+          type: "success",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Tutor replacement failed",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const rescheduleSession = useMutation(
+    orpc.admin.rescheduleClassSession.mutationOptions({
+      onSuccess: async (record) => {
+        await Promise.all(
+          ["published", "postponed"].map((state) =>
+            queryClient.invalidateQueries({
+              queryKey: orpc.admin.listAcademyClasses.key({
+                input: { state: state as "published" | "postponed" },
+              }),
+            }),
+          ),
+        );
+        setRescheduleValues((current) => {
+          const next = { ...current };
+          for (const session of record.sessions) delete next[session.id];
+          return next;
+        });
+        toastManager.add({
+          title: "Session time updated",
+          description:
+            "Enrolled students can review the schedule-change exit window.",
+          type: "success",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Session time could not be updated",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
     }),
   );
 
@@ -697,9 +800,9 @@ export function AcademyClassPage() {
         <TabsPanel value="published">
           <div className="grid min-w-0 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {publishedClassesQuery.isLoading ? (
-              <Text className="text-muted">Loading published classes…</Text>
+              <Loader />
             ) : postponedClassesQuery.isLoading ? (
-              <Text className="text-muted">Loading postponed classes…</Text>
+              <Loader />
             ) : publishedClassesQuery.isError ||
               postponedClassesQuery.isError ? (
               <Text className="text-danger-foreground">
@@ -720,6 +823,9 @@ export function AcademyClassPage() {
                 );
                 const createdMeetings = onlineSessions.filter(
                   (session) => session.meeting?.status === "created",
+                );
+                const absenceNotices = record.sessions.flatMap((session) =>
+                  session.tutorAbsences.map((notice) => ({ session, notice })),
                 );
                 const pendingMeetings =
                   onlineSessions.length -
@@ -862,6 +968,278 @@ export function AcademyClassPage() {
                         retried automatically.
                       </Text>
                     ) : null}
+                    {record.sessions.some(
+                      (session) => session.state === "scheduled",
+                    ) ? (
+                      <section
+                        className="mt-4 space-y-3"
+                        aria-label="Change scheduled session time"
+                      >
+                        <Heading level={3} size="sm">
+                          Change session time
+                        </Heading>
+                        {record.sessions
+                          .filter((session) => session.state === "scheduled")
+                          .map((session) => {
+                            const edit = rescheduleValues[session.id] ?? {
+                              startAt: toWibDateTimeInput(session.startAt),
+                              reason: "",
+                            };
+                            const duration =
+                              new Date(session.endAt).getTime() -
+                              new Date(session.startAt).getTime();
+                            const nextStart = fromWibDateTimeInput(
+                              edit.startAt,
+                            );
+                            const nextEnd =
+                              nextStart && !Number.isNaN(nextStart.getTime())
+                                ? new Date(nextStart.getTime() + duration)
+                                : null;
+                            return (
+                              <div
+                                key={session.id}
+                                className="grid min-w-0 gap-3 rounded-md border border-border p-3 sm:grid-cols-2"
+                              >
+                                <Text className="sm:col-span-2">
+                                  {session.titleEn} · currently{" "}
+                                  {new Intl.DateTimeFormat("en", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                    timeZone: "Asia/Jakarta",
+                                  }).format(new Date(session.startAt))}{" "}
+                                  WIB
+                                </Text>
+                                <Field className="sm:col-span-2">
+                                  <FieldLabel
+                                    htmlFor={`reschedule-${session.id}`}
+                                  >
+                                    New date and start time
+                                  </FieldLabel>
+                                  <CrossBrowserDateTimeInput
+                                    id={`reschedule-${session.id}`}
+                                    value={edit.startAt}
+                                    min={toWibDateTimeInput(new Date())}
+                                    onChange={(startAt) =>
+                                      setRescheduleValues((current) => ({
+                                        ...current,
+                                        [session.id]: { ...edit, startAt },
+                                      }))
+                                    }
+                                    disabled={rescheduleSession.isPending}
+                                  />
+                                  <FieldDescription>
+                                    Duration, tutor, room, mode, and class fee
+                                    stay the same.
+                                  </FieldDescription>
+                                </Field>
+                                <Field className="sm:col-span-2">
+                                  <FieldLabel
+                                    htmlFor={`reschedule-reason-${session.id}`}
+                                  >
+                                    Reason for students
+                                  </FieldLabel>
+                                  <Input
+                                    id={`reschedule-reason-${session.id}`}
+                                    maxLength={500}
+                                    value={edit.reason}
+                                    onChange={(event) =>
+                                      setRescheduleValues((current) => ({
+                                        ...current,
+                                        [session.id]: {
+                                          ...edit,
+                                          reason: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="sm:col-span-2"
+                                  disabled={
+                                    rescheduleSession.isPending ||
+                                    !edit.startAt ||
+                                    !nextEnd ||
+                                    nextStart?.getTime() ===
+                                      new Date(session.startAt).getTime() ||
+                                    edit.reason.trim().length < 3
+                                  }
+                                  onClick={() =>
+                                    nextStart &&
+                                    nextEnd &&
+                                    rescheduleSession.mutate({
+                                      sessionId: session.id,
+                                      expectedVersion: session.version,
+                                      startAt: nextStart.toISOString(),
+                                      endAt: nextEnd.toISOString(),
+                                      reason: edit.reason.trim(),
+                                    })
+                                  }
+                                >
+                                  {rescheduleSession.isPending
+                                    ? "Updating schedule…"
+                                    : "Update session time"}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                      </section>
+                    ) : null}
+                    {record.sessions.some(
+                      (session) => session.state === "scheduled",
+                    ) ? (
+                      <section
+                        className="mt-4 space-y-3"
+                        aria-label="Same-time tutor replacement"
+                      >
+                        <Heading level={3} size="sm">
+                          Same-time tutor replacement
+                        </Heading>
+                        {record.sessions
+                          .filter((session) => session.state === "scheduled")
+                          .map((session) => (
+                            <div
+                              key={session.id}
+                              className="grid min-w-0 gap-3 rounded-md border border-border p-3 sm:grid-cols-2"
+                            >
+                              <Text className="sm:col-span-2">
+                                {session.titleEn} ·{" "}
+                                {session.tutor?.name ?? "Current tutor"}
+                                {session.tutorAbsence
+                                  ? " · Absence reported"
+                                  : ""}
+                              </Text>
+                              <Field>
+                                <FieldLabel
+                                  htmlFor={`replacement-${session.id}`}
+                                >
+                                  Replacement tutor
+                                </FieldLabel>
+                                <Select
+                                  value={replacementTutorIds[session.id] ?? ""}
+                                  onValueChange={(value) =>
+                                    setReplacementTutorIds((current) => ({
+                                      ...current,
+                                      [session.id]: String(value ?? ""),
+                                    }))
+                                  }
+                                  items={tutors
+                                    .filter(
+                                      (tutor) =>
+                                        tutor.userId !== session.tutorId,
+                                    )
+                                    .map((tutor) => ({
+                                      value: tutor.userId,
+                                      label: tutor.user.name,
+                                    }))}
+                                >
+                                  <SelectTrigger
+                                    id={`replacement-${session.id}`}
+                                  >
+                                    <SelectValue placeholder="Choose a published tutor" />
+                                  </SelectTrigger>
+                                  <SelectPopup>
+                                    <SelectList>
+                                      {tutors
+                                        .filter(
+                                          (tutor) =>
+                                            tutor.userId !== session.tutorId,
+                                        )
+                                        .map((tutor) => (
+                                          <SelectItem
+                                            key={tutor.userId}
+                                            value={tutor.userId}
+                                          >
+                                            {tutor.user.name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectList>
+                                  </SelectPopup>
+                                </Select>
+                              </Field>
+                              <Field>
+                                <FieldLabel
+                                  htmlFor={`replacement-reason-${session.id}`}
+                                >
+                                  Admin reason
+                                </FieldLabel>
+                                <Input
+                                  id={`replacement-reason-${session.id}`}
+                                  maxLength={500}
+                                  value={replacementReasons[session.id] ?? ""}
+                                  onChange={(event) =>
+                                    setReplacementReasons((current) => ({
+                                      ...current,
+                                      [session.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                                <FieldDescription>
+                                  This keeps the session time, fee, and student
+                                  allocations unchanged. It does not create a
+                                  schedule-change exit window.
+                                </FieldDescription>
+                              </Field>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="sm:col-span-2"
+                                disabled={
+                                  replaceAbsentTutor.isPending ||
+                                  !replacementTutorIds[session.id] ||
+                                  (replacementReasons[session.id] ?? "").trim()
+                                    .length < 3
+                                }
+                                onClick={() =>
+                                  replaceAbsentTutor.mutate({
+                                    sessionId: session.id,
+                                    expectedVersion: session.version,
+                                    replacementTutorId:
+                                      replacementTutorIds[session.id]!,
+                                    reason:
+                                      replacementReasons[session.id]!.trim(),
+                                  })
+                                }
+                              >
+                                Replace tutor
+                              </Button>
+                            </div>
+                          ))}
+                      </section>
+                    ) : null}
+                    {absenceNotices.length > 0 ? (
+                      <section
+                        className="mt-4 space-y-2"
+                        aria-label="Tutor absence notices"
+                      >
+                        <Heading level={3} size="sm">
+                          Tutor absence history ({absenceNotices.length})
+                        </Heading>
+                        {absenceNotices.map(({ session, notice }) => (
+                          <div
+                            key={notice.id}
+                            className="rounded-md border border-warning-border bg-warning/10 p-3 text-sm"
+                          >
+                            <Text className="font-medium">
+                              {session.titleEn} · {notice.tutor.name ?? "Tutor"}
+                              {notice.late ? " · Late notice" : ""}
+                            </Text>
+                            <Text className="text-muted">
+                              Reported{" "}
+                              {new Intl.DateTimeFormat("en", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                                timeZone: "Asia/Jakarta",
+                              }).format(new Date(notice.reportedAt))}{" "}
+                              WIB · {notice.reason} ·{" "}
+                              {notice.tutorLateNoticeCount} late notice(s) for
+                              this tutor
+                            </Text>
+                          </div>
+                        ))}
+                      </section>
+                    ) : null}
                     <Drawer>
                       <DrawerTrigger
                         render={
@@ -956,13 +1334,18 @@ export function AcademyClassPage() {
                 <CardBody>
                   <Stack direction="column" spacing="sm">
                     {classesQuery.isLoading ? (
-                      <Text className="text-muted">Loading drafts…</Text>
+                      <Loader />
                     ) : classesQuery.isError ? (
                       <Text className="text-danger-foreground">
                         Draft classes could not be loaded. Refresh to try again.
                       </Text>
                     ) : classes.length === 0 ? (
-                      <Text className="text-muted">No class drafts yet.</Text>
+                      <EmptyState
+                        icon={<IconInbox />}
+                        title="No class drafts yet."
+                        description="Create a class draft to start planning your next class."
+                        size="compact"
+                      />
                     ) : (
                       classes.map((record) => (
                         <div
@@ -1159,12 +1542,11 @@ export function AcademyClassPage() {
                         label="Flat tutor fee per session (IDR)"
                         value={form.tutorFeeIdr}
                         onChange={(value) => updateForm("tutorFeeIdr", value)}
-                        readOnly
                         min={1}
                         max={2_000_000_000}
                         description={
                           form.kind === "cohort"
-                            ? "Default: Rp400,000 per session, for either delivery mode."
+                            ? "Default: Rp400,000. Set the agreed fee for this class; applies to every session in either delivery mode."
                             : "Default: Rp300,000 for the single masterclass session."
                         }
                       />
@@ -1242,250 +1624,296 @@ export function AcademyClassPage() {
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Sessions</CardTitle>
+                    <CardTitle id="class-sessions-heading">Sessions</CardTitle>
+                    <CardDescription>
+                      Each session has its own tutor, capacity, delivery mode,
+                      and schedule.
+                    </CardDescription>
                   </CardHeader>
-                  <CardBody>
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <Heading level={3}>Sessions</Heading>
-                          <Text className="text-muted text-sm">
-                            Each session has its own tutor, capacity, delivery
-                            mode, and schedule.
-                          </Text>
-                        </div>
-                        {form.kind === "cohort" ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() =>
-                              updateForm("sessions", [
-                                ...form.sessions,
-                                emptySession(),
-                              ])
-                            }
-                          >
-                            <IconCalendarPlus />
-                            Add session
-                          </Button>
-                        ) : null}
-                      </div>
+                  <CardBody className="space-y-5">
+                    <Accordion
+                      multiple
+                      value={openSessions}
+                      onValueChange={(values) =>
+                        setOpenSessions(
+                          values.filter(
+                            (value): value is number =>
+                              typeof value === "number",
+                          ),
+                        )
+                      }
+                      onInvalidCapture={() =>
+                        setOpenSessions(form.sessions.map((_, index) => index))
+                      }
+                    >
                       {form.sessions.map((session, index) => (
-                        <div
+                        <AccordionItem
                           key={session.id ?? `new-${index}`}
-                          className="space-y-4 rounded-lg border border-card-border bg-card p-4"
+                          value={index}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <Text className="font-medium">
-                              Session {index + 1}
-                            </Text>
-                            {form.kind === "cohort" &&
-                            form.sessions.length > 1 ? (
-                              <Button
-                                type="button"
-                                variant="plain"
-                                size="sm"
-                                aria-label={`Remove session ${index + 1}`}
-                                onClick={() =>
-                                  updateForm(
-                                    "sessions",
-                                    form.sessions.filter((_, i) => i !== index),
-                                  )
-                                }
-                              >
-                                <IconTrash />
-                                Remove
-                              </Button>
-                            ) : null}
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <TextField
-                              id={`session-${index}-title-en`}
-                              label="Session title (English)"
-                              value={session.titleEn}
-                              onChange={(value) =>
-                                updateSession(index, { titleEn: value })
-                              }
-                              required
-                              maxLength={200}
-                            />
-                            <TextField
-                              id={`session-${index}-title-id`}
-                              label="Session title (Indonesian, optional)"
-                              value={session.titleId}
-                              onChange={(value) =>
-                                updateSession(index, { titleId: value })
-                              }
-                              maxLength={200}
-                            />
-                          </div>
-                          {form.kind === "cohort" ? (
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <TextareaField
-                                id={`session-${index}-curriculum-en`}
-                                label="Curriculum description (English)"
-                                value={session.curriculumEn}
-                                onChange={(value) =>
-                                  updateSession(index, { curriculumEn: value })
-                                }
-                                required
-                                maxLength={5_000}
-                              />
-                              <TextareaField
-                                id={`session-${index}-curriculum-id`}
-                                label="Curriculum description (Indonesian, optional)"
-                                value={session.curriculumId}
-                                onChange={(value) =>
-                                  updateSession(index, { curriculumId: value })
-                                }
-                                maxLength={5_000}
-                              />
-                            </div>
-                          ) : null}
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <TextField
-                              id={`session-${index}-start`}
-                              label="Start"
-                              type="datetime-local"
-                              value={session.startAt}
-                              onChange={(value) =>
-                                updateSession(index, { startAt: value })
-                              }
-                              required
-                            />
-                            <NumberField
-                              id={`session-${index}-duration`}
-                              label="Duration (minutes)"
-                              description="End time is calculated from the start time and duration."
-                              value={session.durationMinutes}
-                              onChange={(value) =>
-                                updateSession(index, { durationMinutes: value })
-                              }
-                              required
-                            />
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <NumberField
-                              id={`session-${index}-capacity`}
-                              label="Session capacity"
-                              value={session.capacity}
-                              onChange={(value) =>
-                                updateSession(index, { capacity: value })
-                              }
-                            />
-                            <Field>
-                              <FieldLabel htmlFor={`session-${index}-mode`}>
-                                Delivery mode
-                              </FieldLabel>
-                              <Select
-                                value={session.mode}
-                                onValueChange={(value) =>
-                                  updateSession(index, {
-                                    mode: String(value) as SessionMode,
-                                    roomId:
-                                      String(value) === "in_person"
-                                        ? session.roomId
-                                        : "",
-                                  })
-                                }
-                                items={[
-                                  { value: "online", label: "Online" },
-                                  { value: "in_person", label: "In person" },
-                                ]}
-                              >
-                                <SelectTrigger id={`session-${index}-mode`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectPopup>
-                                  <SelectList>
-                                    <SelectItem value="online">
-                                      Online
-                                    </SelectItem>
-                                    <SelectItem value="in_person">
-                                      In person
-                                    </SelectItem>
-                                  </SelectList>
-                                </SelectPopup>
-                              </Select>
-                            </Field>
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <Field>
-                              <FieldLabel htmlFor={`session-${index}-tutor`}>
-                                Published tutor
-                              </FieldLabel>
-                              <Select
-                                value={session.tutorId}
-                                onValueChange={(value) =>
-                                  updateSession(index, {
-                                    tutorId: String(value ?? ""),
-                                  })
-                                }
-                                items={tutors.map((tutor) => ({
-                                  value: tutor.userId,
-                                  label: tutor.user.name,
-                                }))}
-                              >
-                                <SelectTrigger id={`session-${index}-tutor`}>
-                                  <SelectValue placeholder="Choose a tutor" />
-                                </SelectTrigger>
-                                <SelectPopup>
-                                  <SelectList>
-                                    {tutors.map((tutor) => (
-                                      <SelectItem
-                                        key={tutor.userId}
-                                        value={tutor.userId}
-                                      >
-                                        {tutor.user.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectList>
-                                </SelectPopup>
-                              </Select>
-                            </Field>
-                            {session.mode === "in_person" ? (
-                              <Field>
-                                <FieldLabel htmlFor={`session-${index}-room`}>
-                                  <span className="inline-flex items-center gap-1">
-                                    <IconMapPin className="size-4" />
-                                    Managed room
-                                  </span>
-                                </FieldLabel>
-                                <Select
-                                  value={session.roomId}
-                                  onValueChange={(value) =>
+                          <AccordionHeader render={<h3 />}>
+                            <AccordionTrigger type="button" className="py-2">
+                              <span className="flex size-9 shrink-0 items-center justify-center rounded bg-accent tabular-nums">
+                                <span className="sr-only">Session </span>
+                                {index + 1}
+                              </span>
+                              <span className="min-w-0 flex-1 wrap-anywhere font-semibold">
+                                {session.titleEn || `Session ${index + 1}`}
+                              </span>
+                            </AccordionTrigger>
+                          </AccordionHeader>
+                          <AccordionPanel keepMounted>
+                            <div className="space-y-4 px-0.5 pt-0.5 pb-3">
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <TextField
+                                  id={`session-${index}-title-en`}
+                                  label="Session title (English)"
+                                  value={session.titleEn}
+                                  onChange={(value) =>
+                                    updateSession(index, { titleEn: value })
+                                  }
+                                  required
+                                  maxLength={200}
+                                />
+                                <TextField
+                                  id={`session-${index}-title-id`}
+                                  label="Session title (Indonesian, optional)"
+                                  value={session.titleId}
+                                  onChange={(value) =>
+                                    updateSession(index, { titleId: value })
+                                  }
+                                  maxLength={200}
+                                />
+                              </div>
+                              {form.kind === "cohort" ? (
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  <TextareaField
+                                    id={`session-${index}-curriculum-en`}
+                                    label="Curriculum description (English)"
+                                    value={session.curriculumEn}
+                                    onChange={(value) =>
+                                      updateSession(index, {
+                                        curriculumEn: value,
+                                      })
+                                    }
+                                    required
+                                    maxLength={5_000}
+                                  />
+                                  <TextareaField
+                                    id={`session-${index}-curriculum-id`}
+                                    label="Curriculum description (Indonesian, optional)"
+                                    value={session.curriculumId}
+                                    onChange={(value) =>
+                                      updateSession(index, {
+                                        curriculumId: value,
+                                      })
+                                    }
+                                    maxLength={5_000}
+                                  />
+                                </div>
+                              ) : null}
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <TextField
+                                  id={`session-${index}-start`}
+                                  label="Start"
+                                  type="datetime-local"
+                                  value={session.startAt}
+                                  onChange={(value) =>
+                                    updateSession(index, { startAt: value })
+                                  }
+                                  required
+                                />
+                                <NumberField
+                                  id={`session-${index}-duration`}
+                                  label="Duration (minutes)"
+                                  description="End time is calculated from the start time and duration."
+                                  value={session.durationMinutes}
+                                  onChange={(value) =>
                                     updateSession(index, {
-                                      roomId: String(value ?? ""),
+                                      durationMinutes: value,
                                     })
                                   }
-                                  items={rooms.map((room) => ({
-                                    value: room.id,
-                                    label: `${room.name} · ${room.location}`,
-                                  }))}
-                                >
-                                  <SelectTrigger id={`session-${index}-room`}>
-                                    <SelectValue placeholder="Choose a room" />
-                                  </SelectTrigger>
-                                  <SelectPopup>
-                                    <SelectList>
-                                      {rooms.map((room) => (
-                                        <SelectItem
-                                          key={room.id}
-                                          value={room.id}
-                                        >
-                                          {room.name} · {room.location} ·
-                                          capacity {room.capacity}
+                                  required
+                                />
+                              </div>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <NumberField
+                                  id={`session-${index}-capacity`}
+                                  label="Session capacity"
+                                  value={session.capacity}
+                                  onChange={(value) =>
+                                    updateSession(index, { capacity: value })
+                                  }
+                                />
+                                <Field>
+                                  <FieldLabel htmlFor={`session-${index}-mode`}>
+                                    Delivery mode
+                                  </FieldLabel>
+                                  <Select
+                                    value={session.mode}
+                                    onValueChange={(value) =>
+                                      updateSession(index, {
+                                        mode: String(value) as SessionMode,
+                                        roomId:
+                                          String(value) === "in_person"
+                                            ? session.roomId
+                                            : "",
+                                      })
+                                    }
+                                    items={[
+                                      { value: "online", label: "Online" },
+                                      {
+                                        value: "in_person",
+                                        label: "In person",
+                                      },
+                                    ]}
+                                  >
+                                    <SelectTrigger id={`session-${index}-mode`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                      <SelectList>
+                                        <SelectItem value="online">
+                                          Online
                                         </SelectItem>
-                                      ))}
-                                    </SelectList>
-                                  </SelectPopup>
-                                </Select>
-                              </Field>
-                            ) : null}
-                          </div>
-                        </div>
+                                        <SelectItem value="in_person">
+                                          In person
+                                        </SelectItem>
+                                      </SelectList>
+                                    </SelectPopup>
+                                  </Select>
+                                </Field>
+                              </div>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <Field>
+                                  <FieldLabel
+                                    htmlFor={`session-${index}-tutor`}
+                                  >
+                                    Published tutor
+                                  </FieldLabel>
+                                  <Select
+                                    value={session.tutorId}
+                                    onValueChange={(value) =>
+                                      updateSession(index, {
+                                        tutorId: String(value ?? ""),
+                                      })
+                                    }
+                                    items={tutors.map((tutor) => ({
+                                      value: tutor.userId,
+                                      label: tutor.user.name,
+                                    }))}
+                                  >
+                                    <SelectTrigger
+                                      id={`session-${index}-tutor`}
+                                    >
+                                      <SelectValue placeholder="Choose a tutor" />
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                      <SelectList>
+                                        {tutors.map((tutor) => (
+                                          <SelectItem
+                                            key={tutor.userId}
+                                            value={tutor.userId}
+                                          >
+                                            {tutor.user.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectList>
+                                    </SelectPopup>
+                                  </Select>
+                                </Field>
+                                {session.mode === "in_person" ? (
+                                  <Field>
+                                    <FieldLabel
+                                      htmlFor={`session-${index}-room`}
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        <IconMapPin className="size-4" />
+                                        Managed room
+                                      </span>
+                                    </FieldLabel>
+                                    <Select
+                                      value={session.roomId}
+                                      onValueChange={(value) =>
+                                        updateSession(index, {
+                                          roomId: String(value ?? ""),
+                                        })
+                                      }
+                                      items={rooms.map((room) => ({
+                                        value: room.id,
+                                        label: `${room.name} · ${room.location}`,
+                                      }))}
+                                    >
+                                      <SelectTrigger
+                                        id={`session-${index}-room`}
+                                      >
+                                        <SelectValue placeholder="Choose a room" />
+                                      </SelectTrigger>
+                                      <SelectPopup>
+                                        <SelectList>
+                                          {rooms.map((room) => (
+                                            <SelectItem
+                                              key={room.id}
+                                              value={room.id}
+                                            >
+                                              {room.name} · {room.location} ·
+                                              capacity {room.capacity}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectList>
+                                      </SelectPopup>
+                                    </Select>
+                                  </Field>
+                                ) : null}
+                              </div>
+                              {form.kind === "cohort" ? (
+                                <div className="flex min-h-9 items-center justify-between gap-3">
+                                  {index === form.sessions.length - 1 ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setOpenSessions((current) => [
+                                          ...current,
+                                          form.sessions.length,
+                                        ]);
+                                        updateForm("sessions", [
+                                          ...form.sessions,
+                                          emptySession(),
+                                        ]);
+                                      }}
+                                    >
+                                      <IconPlus aria-hidden="true" />
+                                      Add session
+                                    </Button>
+                                  ) : (
+                                    <span aria-hidden="true" />
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="plain"
+                                    size="xs-icon"
+                                    disabled={form.sessions.length <= 1}
+                                    aria-label={`Remove session ${index + 1}`}
+                                    onClick={() =>
+                                      updateForm(
+                                        "sessions",
+                                        form.sessions.filter(
+                                          (_, i) => i !== index,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <IconTrash aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </AccordionPanel>
+                        </AccordionItem>
                       ))}
-                    </div>
+                    </Accordion>
 
                     <Field>
                       <FieldLabel htmlFor="class-audit-reason">
@@ -1506,54 +1934,53 @@ export function AcademyClassPage() {
                         Saved with the admin actor and before/after snapshot.
                       </FieldDescription>
                     </Field>
-
-                    <div className="flex flex-wrap justify-end gap-3">
-                      {form.id ? (
-                        <Button
-                          type="submit"
-                          name="class-action"
-                          value="publish"
-                          disabled={
-                            saveDraft.isPending ||
-                            publishClass.isPending ||
-                            coverUploading
-                          }
-                        >
-                          {publishClass.isPending
-                            ? "Publishing…"
-                            : "Publish class"}
-                        </Button>
-                      ) : null}
-                      {form.id ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={
-                            coverUploading ||
-                            saveDraft.isPending ||
-                            publishClass.isPending
-                          }
-                          onClick={() => {
-                            setForm(emptyDraft());
-                            setCoverPreviewUrl(null);
-                          }}
-                        >
-                          Cancel edit
-                        </Button>
-                      ) : null}
+                  </CardBody>
+                  <CardFooter className="flex-wrap justify-end gap-3">
+                    {form.id ? (
                       <Button
                         type="submit"
+                        name="class-action"
+                        value="publish"
                         disabled={
                           saveDraft.isPending ||
                           publishClass.isPending ||
                           coverUploading
                         }
                       >
-                        <IconDeviceFloppy />
-                        {saveDraft.isPending ? "Saving…" : "Save draft"}
+                        {publishClass.isPending
+                          ? "Publishing…"
+                          : "Publish class"}
                       </Button>
-                    </div>
-                  </CardBody>
+                    ) : null}
+                    {form.id ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={
+                          coverUploading ||
+                          saveDraft.isPending ||
+                          publishClass.isPending
+                        }
+                        onClick={() => {
+                          setForm(emptyDraft());
+                          setCoverPreviewUrl(null);
+                        }}
+                      >
+                        Cancel edit
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      disabled={
+                        saveDraft.isPending ||
+                        publishClass.isPending ||
+                        coverUploading
+                      }
+                    >
+                      <IconDeviceFloppy />
+                      {saveDraft.isPending ? "Saving…" : "Save draft"}
+                    </Button>
+                  </CardFooter>
                 </Card>
               </form>
             )}

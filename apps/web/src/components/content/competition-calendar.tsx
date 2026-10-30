@@ -14,6 +14,7 @@ import {
   IconArrowRight,
   IconCalendarCheck,
   IconChevronDown,
+  IconSettings,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
@@ -63,12 +64,14 @@ export interface CompetitionCalendarProps {
   events?: CalendarCompetition[];
   className?: string;
   initialView?: CalendarView;
+  onManage?: () => void;
 }
 
 export function CompetitionCalendar({
   events = EMPTY_EVENTS,
   className,
   initialView = "month",
+  onManage,
 }: CompetitionCalendarProps) {
   const [currentDate, setCurrentDate] = useState(() =>
     wibCalendarDate(new Date()),
@@ -181,7 +184,7 @@ export function CompetitionCalendar({
     <>
       <Card
         className={cn(
-          "flex h-[85svh] min-h-0 shrink-0 flex-col overflow-clip md:h-auto md:min-h-[70svh] md:max-h-fit md:flex-1",
+          "flex w-full max-w-full h-[85svh] min-h-0 shrink-0 flex-col overflow-clip md:h-auto md:min-h-[70svh] md:max-h-fit md:flex-1",
           className,
         )}
         style={calendarStyle}
@@ -232,7 +235,18 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <div className="relative ml-auto flex gap-2">
+          <div className="relative ml-auto flex items-center gap-2">
+            {onManage ? (
+              <Button
+                variant="secondary"
+                size="sm-icon"
+                aria-label="Manage calendar"
+                title="Manage calendar"
+                onClick={onManage}
+              >
+                <IconSettings aria-hidden="true" />
+              </Button>
+            ) : null}
             <Menu>
               <MenuTrigger
                 render={
@@ -294,7 +308,7 @@ export function CompetitionCalendar({
           </div>
         </CardHeader>
 
-        <CardBody className="min-h-0 basis-0 flex-1 overflow-auto overscroll-contain p-0!">
+        <CardBody className="min-h-0 w-full max-w-full basis-0 flex-1 overflow-auto overscroll-contain p-0!">
           {view === "month" ? (
             <CalendarMonthView
               currentDate={startOfMonth(currentDate)}

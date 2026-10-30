@@ -141,7 +141,6 @@ interface OnboardingFormProps {
       }>;
     } | null;
     modality: string | null;
-    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     onlineMaxClassSize: number;
     offlineMaxClassSize: number;
     bankName: string | null;
@@ -155,7 +154,6 @@ interface OnboardingFormProps {
     npwp: string | null;
     termsOfServiceAcceptedAt: string | Date | null;
     termsOfServiceVersion: string | null;
-    prices: Record<string, number> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Partial<{
@@ -168,8 +166,6 @@ interface OnboardingFormProps {
       experiences: TutorExperience[];
       subjectIds: string[];
       modality: Modality;
-      baseRatesIdr: Partial<{ online: number; offline: number }>;
-      prices: Record<string, number>;
     }> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
@@ -200,7 +196,6 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   npwp: "NPWP",
   termsOfService: "Tutor Terms of Service",
   subjects: "Specializations",
-  baseRatesIdr: "Base honorarium",
   education: "Education",
   achievementProofUrls: "Achievement proof links",
   experienceProofUrls: "Experience proof links",
@@ -222,10 +217,6 @@ function isExternalHttpUrl(value: string) {
 function mapServerFieldKey(field: string) {
   if (field === "subjectIds" || field.startsWith("subjectIds.")) {
     return "subjects";
-  }
-  if (field === "prices") return "baseRatesIdr";
-  if (field.startsWith("prices.")) {
-    return `baseRatesIdr.${field.slice("prices.".length)}`;
   }
   return field;
 }
@@ -263,11 +254,6 @@ function getTutorFieldLabel(field: string) {
       description: "Description",
     };
     return `Experience ${Number(index) + 1}: ${labels[name] ?? name}`;
-  }
-
-  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
-  if (rateField) {
-    return `${rateField[1] === "online" ? "Online" : "Offline"} base rate`;
   }
 
   const proofField = field.match(/^(achievement|experience)ProofUrls\.(\d+)$/);
@@ -323,8 +309,6 @@ function getTutorErrorFocusTarget(
     }-${experienceField[2]}`;
   }
 
-  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
-  if (rateField) return `tutor-base-rate-${rateField[1]}`;
   if (field === "subjects") return "tutor-subject-category";
   if (field === "education") return "tutor-achievements-university-0";
   if (field === "achievements") {
@@ -411,16 +395,6 @@ function readServerFieldErrors(error: unknown) {
     }
   }
 
-  if (typeof data.pricingError === "string") {
-    const normalized = data.pricingError.toLowerCase();
-    const field = normalized.includes("offline")
-      ? "baseRatesIdr.offline"
-      : normalized.includes("online")
-        ? "baseRatesIdr.online"
-        : "baseRatesIdr";
-    fieldErrors[field] = data.pricingError;
-  }
-
   if (
     typeof data.reason === "string" &&
     ["required", "too_many", "duplicate", "not_child", "inactive"].includes(
@@ -462,14 +436,14 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const navigate = useNavigate();
   const posthog = usePostHog();
   const pending = profile.pendingProfileChanges ?? {};
-  const legacySubjectIds = new Set(
+  const archivedSubjectIds = new Set(
     profile.subjects
       ?.filter((subject) => subject.isSelectable === false)
       .map((subject) => subject.id) ?? [],
   );
   const initialSubjectIds =
     pending.subjectIds?.filter(
-      (subjectId) => !legacySubjectIds.has(subjectId),
+      (subjectId) => !archivedSubjectIds.has(subjectId),
     ) ??
     profile.subjects
       ?.filter((subject) => subject.isSelectable !== false)
@@ -489,11 +463,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     experiences: pending.experiences ?? profile.experiences ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
-    baseRatesIdr: pending.baseRatesIdr ??
-      profile.baseRatesIdr ?? {
-        online: 175_000,
-        offline: 225_000,
-      },
     maxClassSize: {
       online: profile.onlineMaxClassSize ?? 6,
       offline: profile.offlineMaxClassSize ?? 6,
@@ -630,7 +599,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       experiences?: TutorExperience[];
       subjectIds?: string[];
       modality?: Modality;
-      baseRatesIdr?: Partial<{ online: number; offline: number }>;
       onlineMaxClassSize?: number;
       offlineMaxClassSize?: number;
       bankName?: string;
@@ -642,7 +610,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       taxLegalName?: string | null;
       nik?: string | null;
       npwp?: string | null;
-      prices?: Record<string, number>;
     } = { version: profile.version };
     const displayName = name.trim();
     payload.displayName = displayName;
@@ -684,7 +651,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const subjectIds = getTutorSubjectIdsForSave(
       form.subjectIds,
       initialSubjectIds,
-      [...legacySubjectIds],
+      [...archivedSubjectIds],
     );
     if (subjectIds) payload.subjectIds = subjectIds;
     if (form.modality) payload.modality = form.modality;
@@ -703,21 +670,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     payload.npwp = npwp || null;
     payload.onlineMaxClassSize = form.maxClassSize.online;
     payload.offlineMaxClassSize = form.maxClassSize.offline;
-    if (
-      !profile.v3FeeProjection &&
-      form.baseRatesIdr &&
-      Object.keys(form.baseRatesIdr).length > 0
-    ) {
-      const cleanBaseRates = Object.fromEntries(
-        Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
-      );
-      if (Object.keys(cleanBaseRates).length > 0) {
-        payload.baseRatesIdr = cleanBaseRates as Partial<{
-          online: number;
-          offline: number;
-        }>;
-      }
-    }
     return payload;
   }
 
@@ -876,36 +828,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         isPublished: profile.onboardingStatus === "published",
         selectedSubjectIds: form.subjectIds,
         initialSubjectIds,
-        preservedArchivedSubjectIds: [...legacySubjectIds],
+        preservedArchivedSubjectIds: [...archivedSubjectIds],
       })
     ) {
       addError("subjects", "Select at least one specialization.");
-    }
-
-    const ratesToCheck = profile.v3FeeProjection
-      ? ([] as const)
-      : form.modality === "both"
-        ? (["online", "offline"] as const)
-        : form.modality === "online" || form.modality === "offline"
-          ? ([form.modality] as const)
-          : ([] as const);
-    for (const key of ratesToCheck) {
-      const value = form.baseRatesIdr[key];
-      if (typeof value !== "number") {
-        if (requireComplete) {
-          addError(
-            `baseRatesIdr.${key}`,
-            `Add a valid ${key} IDR base honorarium.`,
-          );
-        }
-        continue;
-      }
-      if (!Number.isInteger(value) || value < 50_000 || value % 5_000 !== 0) {
-        addError(
-          `baseRatesIdr.${key}`,
-          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp50,000 in Rp5,000 increments.`,
-        );
-      }
     }
 
     return validationErrors;
@@ -1606,14 +1532,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     />
                     <TutorPricingFields
                       modality={form.modality}
-                      baseRatesIdr={form.baseRatesIdr}
                       v3FeeProjection={profile.v3FeeProjection}
-                      maxClassSize={form.maxClassSize}
-                      onChange={(baseRatesIdr) => {
-                        setForm((current) => ({ ...current, baseRatesIdr }));
-                        clearError("baseRatesIdr");
-                      }}
-                      errors={errors}
                     />
                   </div>
                 ) : (

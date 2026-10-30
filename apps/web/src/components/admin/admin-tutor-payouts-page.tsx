@@ -1,5 +1,7 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { percentToBasisPoints } from "./tax-rate-input";
 
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
@@ -571,216 +573,223 @@ export function AdminTutorPayoutsPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div>
-            <CardTitle>Default tax rates</CardTitle>
-            <Text className="mt-1 text-sm text-muted">
-              Choose the percentage deducted from tutor fees. Changes apply to
-              new payout calculations.
-            </Text>
-          </div>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {(
-              [
-                ["nikNpwpRateBps", "NIK + NPWP"],
-                ["nikOnlyRateBps", "NIK only"],
-                ["missingRateBps", "Missing identity"],
-              ] as const
-            ).map(([key, label]) => (
-              <Field key={key}>
-                <FieldLabel htmlFor={`tax-rate-${key}`}>{label} (%)</FieldLabel>
-                <SeliaNumberField
-                  id={`tax-rate-${key}`}
-                  allowOutOfRange
-                  format={{ useGrouping: false, maximumFractionDigits: 2 }}
-                  min={0}
-                  max={100}
-                  step={0.01}
-                  smallStep={0.01}
-                  value={
-                    taxRateDraftValues[key] === ""
-                      ? null
-                      : Number(taxRateDraftValues[key]) / 100
-                  }
-                  onValueChange={(nextValue) => {
-                    const value =
-                      nextValue === null
-                        ? ""
-                        : String(percentToBasisPoints(nextValue));
-                    setTaxRateDraft((current) => ({
-                      ...(taxRateDraftDirty ? current : taxRateDraftValues),
-                      [key]: value,
-                    }));
-                    setTaxRateDraftDirty(true);
-                  }}
-                />
-                <FieldDescription>
-                  {taxRateDraftValues[key] === ""
-                    ? "Enter a percentage from 0% to 100%."
-                    : `Tax on ${formatIdr(400_000)} in tutor fees: ${formatIdr((400_000 * Number(taxRateDraftValues[key])) / 10_000)}.`}
-                </FieldDescription>
-              </Field>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <Field className="min-w-64 flex-1">
-              <FieldLabel htmlFor="tax-config-reason">Change reason</FieldLabel>
-              <Input
-                id="tax-config-reason"
-                maxLength={2000}
-                value={taxConfigReason}
-                onChange={(event) => setTaxConfigReason(event.target.value)}
-                placeholder="Why are these defaults changing?"
-              />
-            </Field>
-            <Button
-              disabled={
-                taxConfigMutation.isPending ||
-                !taxConfigReason.trim() ||
-                !taxConfigQuery.data ||
-                Object.values(taxRateDraftValues).some(
-                  (value) => !/^\d+$/.test(value) || Number(value) > 10000,
-                )
-              }
-              progress={taxConfigMutation.isPending}
-              onClick={() => {
-                const config = taxConfigQuery.data;
-                if (!config) return;
-                taxConfigMutation.mutate({
-                  expectedVersion: config.version,
-                  nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
-                  nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
-                  missingRateBps: Number(taxRateDraftValues.missingRateBps),
-                  reason: taxConfigReason.trim(),
-                });
-              }}
-            >
-              Save default rates
-            </Button>
-          </div>
-          {taxConfigQuery.isError ? (
-            <FieldError>Tax defaults could not be loaded.</FieldError>
-          ) : null}
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div>
-            <CardTitle>Payout filters</CardTitle>
-            <Text className="mt-1 text-sm text-muted">
-              Paid and void history follows the selected dates in Asia/Jakarta.
-              Current unpaid sessions remain visible.
-            </Text>
-          </div>
-        </CardHeader>
-        <CardBody className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Field>
-              <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
-              <DatePicker
-                id="payout-report-from"
-                value={draftFrom}
-                onChange={setDraftFrom}
-                maxDate={draftTo}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
-              <DatePicker
-                id="payout-report-to"
-                value={draftTo}
-                onChange={setDraftTo}
-                minDate={draftFrom}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Status</FieldLabel>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as StatusFilter)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="pending">Unpaid sessions</SelectItem>
-                    <SelectItem value="prepared">Prepared</SelectItem>
-                    <SelectItem value="paid">Recorded transfer</SelectItem>
-                    <SelectItem value="void">Void / reconcile</SelectItem>
-                    <SelectItem value="all">All statuses</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel>Sort by</FieldLabel>
-              <Select
-                value={sortOption}
-                onValueChange={(value) => setSortOption(value as SortOption)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select sort order" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="priority">Action priority</SelectItem>
-                    <SelectItem value="amount">Highest net amount</SelectItem>
-                    <SelectItem value="name">Tutor name</SelectItem>
-                    <SelectItem value="latest">Latest transfer</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-card-separator pt-5">
-            <div className="flex flex-wrap gap-2">
-              {QUICK_RANGE_DAYS.map((days) => (
-                <Button
-                  key={days}
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    const to = toWibDateKey(new Date());
-                    const from = shiftDateKey(to, -(days - 1));
-                    setDraftFrom(from);
-                    setDraftTo(to);
-                    setAppliedRange({ from, to });
-                  }}
-                >
-                  {days} days
-                </Button>
+      <div className="xl:grid-cols-[1.4fr_2fr] xl:grid xl:gap-4">
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Default tax rates</CardTitle>
+              <Text className="mt-1 text-sm text-muted">
+                Choose the percentage deducted from tutor fees. Changes apply to
+                new payout calculations.
+              </Text>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(
+                [
+                  ["nikNpwpRateBps", "NIK + NPWP"],
+                  ["nikOnlyRateBps", "NIK only"],
+                  ["missingRateBps", "Missing identity"],
+                ] as const
+              ).map(([key, label]) => (
+                <Field key={key}>
+                  <FieldLabel htmlFor={`tax-rate-${key}`}>
+                    {label} (%)
+                  </FieldLabel>
+                  <SeliaNumberField
+                    id={`tax-rate-${key}`}
+                    allowOutOfRange
+                    format={{ useGrouping: false, maximumFractionDigits: 2 }}
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    smallStep={0.01}
+                    value={
+                      taxRateDraftValues[key] === ""
+                        ? null
+                        : Number(taxRateDraftValues[key]) / 100
+                    }
+                    onValueChange={(nextValue) => {
+                      const value =
+                        nextValue === null
+                          ? ""
+                          : String(percentToBasisPoints(nextValue));
+                      setTaxRateDraft((current) => ({
+                        ...(taxRateDraftDirty ? current : taxRateDraftValues),
+                        [key]: value,
+                      }));
+                      setTaxRateDraftDirty(true);
+                    }}
+                  />
+                  <FieldDescription>
+                    {taxRateDraftValues[key] === ""
+                      ? "Enter a percentage from 0% to 100%."
+                      : `Tax on ${formatIdr(400_000)} in tutor fees: ${formatIdr((400_000 * Number(taxRateDraftValues[key])) / 10_000)}.`}
+                  </FieldDescription>
+                </Field>
               ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <Field className="min-w-64 flex-1">
+                <FieldLabel htmlFor="tax-config-reason">
+                  Change reason
+                </FieldLabel>
+                <Input
+                  id="tax-config-reason"
+                  maxLength={2000}
+                  value={taxConfigReason}
+                  onChange={(event) => setTaxConfigReason(event.target.value)}
+                  placeholder="Why are these defaults changing?"
+                />
+              </Field>
               <Button
-                disabled={Boolean(dateRangeError)}
-                onClick={() =>
-                  setAppliedRange({ from: draftFrom, to: draftTo })
+                disabled={
+                  taxConfigMutation.isPending ||
+                  !taxConfigReason.trim() ||
+                  !taxConfigQuery.data ||
+                  Object.values(taxRateDraftValues).some(
+                    (value) => !/^\d+$/.test(value) || Number(value) > 10000,
+                  )
                 }
+                progress={taxConfigMutation.isPending}
+                onClick={() => {
+                  const config = taxConfigQuery.data;
+                  if (!config) return;
+                  taxConfigMutation.mutate({
+                    expectedVersion: config.version,
+                    nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
+                    nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
+                    missingRateBps: Number(taxRateDraftValues.missingRateBps),
+                    reason: taxConfigReason.trim(),
+                  });
+                }}
               >
-                Apply date range
+                Save default rates
               </Button>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleDownload}
-              disabled={reportQuery.isPending || reportQuery.isError}
-            >
-              <IconDownload />
-              Download monthly CSV
-            </Button>
-          </div>
-          {dateRangeError ? (
-            <Text className="text-sm text-danger">{dateRangeError}</Text>
-          ) : null}
-        </CardBody>
-      </Card>
+            {taxConfigQuery.isError ? (
+              <FieldError>Tax defaults could not be loaded.</FieldError>
+            ) : null}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Payout filters</CardTitle>
+              <Text className="mt-1 text-sm text-muted">
+                Paid and void history follows the selected dates in
+                Asia/Jakarta. Current unpaid sessions remain visible.
+              </Text>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Field>
+                <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
+                <DatePicker
+                  id="payout-report-from"
+                  value={draftFrom}
+                  onChange={setDraftFrom}
+                  maxDate={draftTo}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
+                <DatePicker
+                  id="payout-report-to"
+                  value={draftTo}
+                  onChange={setDraftTo}
+                  minDate={draftFrom}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Status</FieldLabel>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) =>
+                    setStatusFilter(value as StatusFilter)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="pending">Unpaid sessions</SelectItem>
+                      <SelectItem value="prepared">Prepared</SelectItem>
+                      <SelectItem value="paid">Recorded transfer</SelectItem>
+                      <SelectItem value="void">Void / reconcile</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Sort by</FieldLabel>
+                <Select
+                  value={sortOption}
+                  onValueChange={(value) => setSortOption(value as SortOption)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sort order" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="priority">Action priority</SelectItem>
+                      <SelectItem value="amount">Highest net amount</SelectItem>
+                      <SelectItem value="name">Tutor name</SelectItem>
+                      <SelectItem value="latest">Latest transfer</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+            </div>
+            <div className="flex flex-wrap items-end justify-between gap-4 border-t border-card-separator pt-5">
+              <div className="flex flex-wrap gap-2">
+                {QUICK_RANGE_DAYS.map((days) => (
+                  <Button
+                    key={days}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const to = toWibDateKey(new Date());
+                      const from = shiftDateKey(to, -(days - 1));
+                      setDraftFrom(from);
+                      setDraftTo(to);
+                      setAppliedRange({ from, to });
+                    }}
+                  >
+                    {days} days
+                  </Button>
+                ))}
+                <Button
+                  disabled={Boolean(dateRangeError)}
+                  size="sm"
+                  onClick={() =>
+                    setAppliedRange({ from: draftFrom, to: draftTo })
+                  }
+                >
+                  Apply date range
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                variant="tertiary"
+                onClick={handleDownload}
+                disabled={reportQuery.isPending || reportQuery.isError}
+              >
+                <IconDownload />
+                Download monthly CSV
+              </Button>
+            </div>
+            {dateRangeError ? (
+              <Text className="text-sm text-danger">{dateRangeError}</Text>
+            ) : null}
+          </CardBody>
+        </Card>
+      </div>
 
       <Card id="admin-tutor-payouts" className="scroll-mt-4">
         <CardHeader>
@@ -804,9 +813,7 @@ export function AdminTutorPayoutsPage() {
             </div>
           ) : reportQuery.isPending ? (
             <div>
-              <Text className="text-sm text-muted">
-                Loading payout records…
-              </Text>
+              <Loader />
             </div>
           ) : visibleRows.length === 0 ? (
             <div>
@@ -980,7 +987,7 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Tax status"
-                      value={selectedRow.taxStatus ?? "Legacy record"}
+                      value={selectedRow.taxStatus ?? "Not recorded"}
                     />
                     <PayoutDetail
                       label="Tax rate"
@@ -1086,9 +1093,7 @@ export function AdminTutorPayoutsPage() {
                       </Button>
                     </div>
                     {pendingQuery.isPending ? (
-                      <Text className="text-sm text-muted">
-                        Loading unpaid sessions…
-                      </Text>
+                      <Loader />
                     ) : pendingQuery.isError ? (
                       <FieldError>
                         Unpaid sessions could not be loaded.
@@ -1244,9 +1249,7 @@ export function AdminTutorPayoutsPage() {
                       )}
                     </Text>
                     {allocationQuery.isPending ? (
-                      <Text className="text-sm text-muted">
-                        Loading saved session rows…
-                      </Text>
+                      <Loader />
                     ) : selectedItems.length === 0 ? (
                       <Text className="text-sm text-muted">
                         No session-level allocation was stored for this

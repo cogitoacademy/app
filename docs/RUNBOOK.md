@@ -1,5 +1,77 @@
 # Cogito Runbook
 
+## Q15 business insights implementation — 30 October 2026
+
+Dashboard analytics separates top-up receipts (IDR), delivered services (Marks/session counts), current future commitments (funded/unfunded Marks and seat-sessions), and earned tutor costs (IDR allocated paid/unpaid as of now). Marks are never converted into estimated booking IDR value or profit. The endpoint remains admin-only /rpc/admin/getDashboardAnalytics with the normal JSON envelope.
+
+The response adds operationsSummary.delivered/upcoming/tutorFees/asOf and source-quality counts unavailablePrivateRates/unavailablePaymentDates. businessSummary exposes grossReceiptsIdr/netReceiptsIdr/refundedIdr. Cash receipts use providerSuccessAt and include subsequently REFUNDED successful purchases in gross; recorded refunds use their own event dates. Missing payment success dates are excluded from dated totals with an explicit dashboard notice, never guessed from updatedAt.
+
+Delivery is counted from authoritative completion deductions for completed sessions; cancellation/no-show penalties are not counted as delivered service. Upcoming commitments are a current snapshot independent of selected-period filters. Tutor paid/unpaid measures the current payment allocation of fees earned during the selected period; paid is gross honorarium allocation, not bank net transfer or transfer cashflow during the period. Missing future private rates are excluded from amount totals with a visible notice.
+
+The dashboard reuses existing Selia patterns and presents new operational facts in semantic sections. No migration, seed or provider call is required by analytics reads. Live acceptance fixtures must be scoped and cleaned up; no reset is required. Verification is recorded in the active readiness plan.
+
+## Readiness acceptance follow-up — 30 October 2026
+
+Real dev pricing activation passed with original pointer restoration and temporary fixture cleanup (`bun run verify:pricing-activation`; tmp/v3-only-dev/pricing-activation-live.json). The booking unit suite now uses explicit subjects, V3 revisions/snapshots and fee-event payout expectations: 319 tests passed; no compatibility runtime was restored. Friend-code query fixtures now include the current friends-list joins.
+
+Class enrollment integration supports an explicit non-resetting dev acceptance mode: CLASS_ENROLLMENT_DEV_ACCEPTANCE=true, NODE_ENV=development, exact loopback:6767/cogito-app, reset flags absent, and zero existing Academy classes/enrollments. Normal mode still requires test loopback:6769/cogito-test. Never combine it with reset-oriented Academy suites. Private env copies must disable external payment/email delivery and be removed after the run. Scoped fixture cleanup preserves unrelated bookings. The suite uses controlled providers for race tests; real Google acceptance remains the separate verify:academy-meet harness with event cleanup.
+
+45 PostgreSQL enrollment tests passed (362 assertions): full/half/single, installment/expiry, cancellation/refund/races, minimum/postponement, reports, class fee and payout preparation, plus a masterclass 5-Mark enrollment→report→single Rp250,000 earned fee journey. Cleanup left zero Academy fixtures and preserved four private bookings. Evidence: tmp/v3-only-dev/enrollment-acceptance.json and enrollment-acceptance.log. Payment checkout/webhooks, email delivery, recorded class payout transfer and browser acceptance remain separate gates.
+
+REQ-CLASS-05 tutor absence and same-time replacement are implemented. Migration `0080_academy_tutor_absence.sql` is applied to authorized dev `localhost:6767/cogito-app`. Same-time replacement preserves schedule, fee and allocations, updates the existing Google event attendee, and creates no exit window. Ordinary schedule changes use the versioned admin reschedule and student Q04 quote/confirm RPCs.
+
+Migrations `0081_academy_schedule_change_exit.sql` and `0082_class_allocation_schedule_change_version.sql` are additive and applied to the authorized dev database. For deployment, preflight the exact database target and apply the normal forward migration runner (`bun run db:migrate`); do not reset or reseed. The deadline is `min(server notification time +24h, new session start)`, and confirmation is accepted strictly before it. Only funded/unfunded active allocations snapshotted at notification are eligible. Funded remaining Marks return once; an unfunded seat receives no credit and only its own unpaid installment obligation is reduced. Delivery/report/earned state is rechecked during quote and confirmation. Meet updates are queued transactionally and processed after commit; retry the durable class meeting job if provider work fails. Minimum-enrollment postponement retains its separate 72-hour window.
+
+## Live Academy publish verification — 30 October 2026
+
+Run `bun run verify:academy-meet` from the repository root for explicit live acceptance against authorized development `localhost:6767/cogito-app`. The script refuses other DB targets, reads Google OAuth credentials from apps/server/.env, creates temporary online masterclass/cohort drafts, publishes through the real Academy service and database with real Google Meet, and verifies custom fees, stale-version rejection, published-edit rejection and no duplicate meeting work. Google attendee notifications are disabled; payment/email providers are not exercised.
+
+A finally block deletes Google events by stable session identity (including after partial creation), then deletes only the created class fixtures and their scoped notifications/audits; session/meeting rows cascade. Cleanup failure fails the command and retains fixture identities in tmp/v3-only-dev/academy-meet-live.json for follow-up. This explicit provider check is separate from fast mocked unit/synthetic suites. It does not reset or reseed the database.
+
+Live result: masterclass Rp250,000 and cohort Rp500,000 both published with matching session snapshots and real Meet URLs; repeat processing created nothing; stale publish and edits after publication were rejected. Google events and all temporary DB fixtures were removed. Evidence: tmp/v3-only-dev/academy-meet-live.json. This verifies the service/database/provider journey, not browser UI or joining a call.
+
+## Per-class tutor fee — 30 October 2026
+
+Admin sets the agreed flat IDR tutor fee per class. New cohort/masterclass forms start at Rp400,000/Rp300,000; these are editable defaults, not publication limits. Draft save accepts a positive whole IDR amount up to Rp2,000,000,000 and copies it to each session. Publication validates that session fees match the class fee. Published pricing remains governed by existing draft/lifecycle restrictions; no global Economy setting or data migration is added.
+
+## Admin pricing activation — 30 October 2026
+
+Admin-only `POST /rpc/admin/activateV3EconomySettings` accepts `{json:{version,expectedActiveRevision,reason}}`. It activates only the latest saved revision, checks the previously observed active revision, validates saved pricing/catalog slugs, and writes the pointer plus audit in one transaction. Draft saving and activation share the revision advisory lock; catalog changes are locked too. Stale input returns a conflict. Existing quotes/bookings remain pinned. Economy UI requires an activation reason and distinguishes saved drafts from active pricing. No migration or automatic activation is needed; review and explicitly activate the saved pricing in admin settings.
+
+## V3 frontend cleanup — 30 October 2026
+
+After migration, seed initializes defaults and an initial active V3 revision when absent. Existing active configuration is preserved. Admin draft saves do not activate pricing: the missing activation workflow is tracked in plans/active/V3-UI-CLEANUP-AND-READINESS.md. Do not interpret a saved draft or mocked UI check as live pricing/provider acceptance.
+
+## V3 report and settings cleanup — 30 October 2026
+
+This completes the report-provenance, payout-source and old settings cleanup left by the pricing cutover. Admin `getEconomySettings` and `updateEconomySettings` are removed from router, handler, service and request schema. Use `getV3EconomySettings`, `previewV3EconomySettings` and `saveV3EconomySettings`; saving a draft still does not activate it.
+
+Report text is canonical plaintext on writes and reads. Entity-decoding and legacy-version PDF detection are removed. History statuses are `submitted`/`corrected`, with `admin`/`tutor` actors only. A correction requires the existing report version's history event; missing provenance returns a conflict instead of synthesizing an unknown legacy actor. Admin history UI shows the recorded role/actor. PDF exports retain normal continuation pages for long content, without a legacy flag or label.
+
+Payout allocations accept only `fee_event` and require a non-null `tutor_session_fee_id`. Migration 0079_v3_report_and_payout_contracts validates these rules without rewriting or deleting existing financial/report history. Invalid old rows cause migration failure and require explicit cleanup. Unused repository reads for old report-format detection, uncategorized tutor fallback and aggregate payout cutoff were removed.
+
+Migration 0079 was applied to authorized dev `localhost:6767/cogito-app` without another reset. Preflight found zero invalid history/allocation rows. Real PostgreSQL tests rejected both legacy report values, both legacy payout source types and null fee IDs. A current admin correction and request replay preserved report identity, literal entity text, ledger and fee rows. An invalid-provenance fixture was rejected without new history/fees and then removed. Current report listing/PDF export passed. A new V3 quote-to-payment-to-booking-to-report-to-fee-to-payout service journey also passed after 0079, using stub payments/manual meetings and a local simulated transfer record only.
+
+Evidence: `tmp/v3-only-dev/cleanup-verification.json` and `current-report.pdf`. Focused tests and server/E2E typechecks are recorded in the current handoff; full legacy-oriented suites and browser/provider acceptance were not run. Web typecheck remains blocked by the existing Accordion callback mismatch in academy-class-page.tsx. No test or production database was reset or migrated in this cleanup.
+
+## V3-only pricing cutover — 30 October 2026
+
+Current pricing behavior supersedes earlier activation-null compatibility notes:
+
+- New booking requests require an explicit `subjectId` and an active V3 revision. Missing configuration blocks creation before wallet holds; tutor `prices`/`baseRatesIdr` and old economy settings are never fallback inputs.
+- Discovery exposes competition-derived V3 prices only. With no active revision it exposes no prices, including for the seven canonical categories.
+- Booking repricing reads the booking's pinned immutable V3 revision, independently of the current activation pointer. Old snapshot formats are rejected by pricing and on-demand fee creation.
+- The old package-code purchase entry point always rejects; purchases use V3 quotes and an explicit package/custom/recommended choice. Webhook, quote and report replay protections remain.
+- Tutor payout aggregation reads immutable session fee events and source allocations only. Booking-snapshot fallback and historical aggregate cutoffs no longer determine payable earnings.
+- `/admin-economy` presents the V3 rate card and preview only; the obsolete Cogito take schedule panel has been removed. The old take-schedule APIs have since been removed by the report/settings cleanup below.
+- The temporary runtime filter for migration-0027 catalog IDs is removed: migration 0078 handles obsolete rows and fresh migrations insert no catalog data. Seed supplies the seven current parents and 34 children.
+
+Dev execution was explicitly authorized for `localhost:6767/cogito-app`, NODE_ENV=development. Its public/drizzle schemas were reset and migrations through 0078 applied. Before seed, catalog/package/old-economy row counts were all zero. Seed created canonical catalog, PRD packages and active revision 1; rerunning seed preserved existing records. No test/payout-test/production database was reset.
+
+Verified with real dev PostgreSQL service calls: 140-Mark custom quote recommends 150 Marks/Rp975000; stub payment replay credits once; a newly created solo booking reaches tutor acceptance, report, one fee event, payout preview, one allocation and simulated transfer-record replay. A partial group reprices N3 to N2 (21 to 25 Marks each for the seeded Essay category) from revision 1 even while the active pointer is temporarily null; reconfirmation and tutor acceptance succeed. Fixture timestamps were advanced in SQL to exercise report completion. Payment/email/Meet providers used stub/manual behavior; the payout transfer was a local record labelled DEV-SIMULATION-NO-BANK-TRANSFER, with no bank operation.
+
+Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts`. Focused V3/discovery/fee tests and selected booking tests passed; server typecheck passed. Web typecheck remains blocked by the unrelated Accordion callback type mismatch in academy-class-page.tsx. Full legacy-oriented test suites and browser/provider acceptance were not run. The later report/settings cleanup removes the legacy history/actor values, allocation source enum values and old settings APIs. Unused pricing utility methods remain separate from this cleanup.
+
 ## Linux acceptance and coverage blocker (28 October 2026)
 
 Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 assertions, 88 reset-free fixture tests / 774 assertions, 11 payout tests / 105 assertions, and 156 server tests / 409 assertions. A separate guarded T05 rollback test passes 1 / 7. Four typecheck tasks, lint baseline and both build tasks pass; build uses real Node 24.22.1 and bounded memory, with one cached task. The Redis helper test now respects REDIS_URL; new tests cover private PDF storage failures/validation, admin content actor/version/redaction, and real PostgreSQL referral usage pagination/filter totals/literal wildcard search. Unrelated local Activities/client work remains outside this scope.
@@ -1064,7 +1136,7 @@ managed-room conflicts are checked. Pending installment due dates and reminder
 markers follow the replacement schedule. Students can still see the postponed
 cohort and their own enrollment, while `createEnrollment` rejects new
 enrollments. Whole-enrollment withdrawal is fee-free through the inclusive
-deadline; ordinary later rescheduling stays out of scope.
+deadline. Ordinary schedule changes separately carry 24 hours from notification for the affected undelivered session, refunded as Marks; whether replacement can start before that window ends remains open. This implementation does not perform ordinary rescheduling.
 
 The existing meeting worker updates a class event using its stored Google event
 ID, preserves event metadata, and retries transient provider errors such as 503.
@@ -1866,6 +1938,10 @@ Free disk space and start Docker before database verification; C: had ~250 MB.
 
 ## V3 rate-card groundwork (2026-10-18)
 
+The admin V3 rate editor and competition catalog omit superseded migration 0027
+seed rows; current catalog parents drive rate editing and preview. Confirm the
+seven canonical migration 0029 parents remain present in the V3 editor.
+
 Run `bun test packages/api/src/tests/unit/v3-rate-card.test.ts packages/api/src/tests/unit/pricing.service.test.ts`
 for the V3 default matrices/top-up boundaries and existing pricing regression.
 This slice requires no database, secrets, migration or environment changes.
@@ -2342,28 +2418,9 @@ As a signed-in student or tutor, open `/notifications` and confirm the list show
 
 ### Economy rate-control smoke check
 
-As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,
-and online/offline Cogito take schedule are visible and read-only by default. Select
-**Edit schedule**, confirm the editing badge and cancel action appear, then change a Cogito base or increment
-either by typing an IDR amount or using the Rp5,000 stepper controls, confirm the
-shared class-size pricing table preview updates by a valid Rp5,000 step, then save,
-reload, and verify the version increments and the
-preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
-only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
-After a successful change, verify no `Cogito rate updated` in-app notification appears
-for tutors. Re-saving the same values should not increment the version, add an audit
-row, or create another notification.
-As a student or tutor, opening `/admin-economy` must redirect away and direct
-`admin.getEconomySettings`/update calls must return FORBIDDEN.
+As an admin, open `/admin-economy` and confirm only the V3 rate card and price preview are present. Select **Edit V3 draft**, edit a competition solo Marks/IDR pair or group/offline adjustments, and inspect the 1–6-student preview. Enter a revision reason and save. Confirm immutable draft versioning, stale-version rejection and draft persistence after reload; saving a draft does not activate it or change existing snapshots. Fresh seed initializes active V3 defaults. Verify negative or incomplete rates block save. The obsolete Cogito take schedule controls must not appear.
 
-The tutor profile at `/profile` should show IDR base honorarium fields (online/offline), enforce the
-Rp50,000 minimum and Rp5,000 steps, show one combined six-row preview matrix for the
-selected modalities, and must not describe Marks as cash-out. Student
-tutor discovery and booking previews should show computed Marks per student for the
-selected modality; legacy profiles without `baseRatesIdr` remain readable. Change a
-published tutor's base honorarium, confirm it is available for a new booking, and
-verify a booking created before the change still pays out using its original
-`priceSnapshot` honorarium.
+Students/tutors must be redirected away from `/admin-economy`; V3 admin RPCs must deny their access. The removed get/update take-schedule RPCs must not be registered. Tutor profiles display projected IDR fees by assigned competition and cannot mutate their own rates. Discovery/booking prices require active V3 configuration and an explicit specialization.
 
 The tutor payout form must collect bank name, account number, account-holder name,
 account-opening city/regency, account ownership (the tutor's own account or a
@@ -4021,6 +4078,26 @@ The production app can run provider Test Mode first. The switch to Live Mode hap
 6. **Refund path:** confirm `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL; no provider cash refund is issued (PRD §677).
 7. **Emergency stop:** set `PAYMENT_PROVIDER=stub` only after confirming no real checkout can be created. In-flight Midtrans payments require status reconciliation before or after the stop.
 
+### Local V3 Sandbox and email acceptance harnesses
+
+Run the Midtrans scripts from the repository root. They read `apps/server/.env`, refuse any DB target except development `localhost:6767/cogito-app` with `MIDTRANS_MODE=test`, and blank Resend/Google Meet integrations. The checkout harness uses a Midtrans Sandbox test card and leaves its captured Sandbox transaction in provider history; it removes only its UUID-scoped local fixtures and verifies existing bookings and the pricing pointer remain unchanged. The second command consumes the first command's ignored evidence, reads the authenticated Sandbox status, and sends that signed status twice to the in-process local webhook to check idempotency.
+
+```sh
+bun run scripts/verify-midtrans-sandbox.ts
+bun run scripts/verify-midtrans-sandbox-webhook.ts
+```
+
+These commands do not prove external Midtrans notification delivery or the browser return/balance-refresh journey.
+
+For a one-off Resend delivery test, run from `apps/server` so Bun loads that directory's `.env` and the harness writes its ignored metadata under the repository's `tmp/`:
+
+```sh
+cd apps/server
+bun run ../../scripts/verify-resend-email.ts
+```
+
+The harness sends only to its fixed approved test recipient and refuses a repeat when prior metadata shows an accepted, in-progress or outcome-unknown send. Resend provider acceptance does not prove inbox arrival or OTP signup delivery.
+
 ### Google Meet refresh-token acquisition (X3)
 
 The repeatable setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md). Use the OAuth refresh-token path for a normal Gmail account; use the service-account path only with Workspace domain-wide delegation.
@@ -4517,12 +4594,99 @@ Student referrals: `/rpc/referral/getMine` now includes `friends` scoped to the 
 
 Classes layout checks can use installed Edge with PLAYWRIGHT_CHANNEL=msedge. Set PLAYWRIGHT_NO_ARTIFACTS=1 to disable traces and screenshots on constrained disks. Run node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.classes-layout.config.ts from the repository root. These use synthetic auth/RPC responses, without database seeds or provider calls.
 
-
 ### Tutor honorarium in booking detail (2026-10-29)
 
 Admin booking honorarium display requires existing tutor session fee and payout allocation tables; no new migration or environment configuration. Historical aggregate-only payouts without source allocation cannot establish payment for an individual fee.
 
-
 Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
 
 Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.
+
+Tutor pricing (V3 only): Cogito admins own all honorarium rates. Tutor profile updates reject changed `prices` or `baseRatesIdr` even before an economy revision is active. Tutor onboarding does not require legacy rates; without active pricing, the UI shows an admin-configuration message instead of editable inputs. Configure pricing through admin economy settings before new sales.
+
+## Referral layout refresh (30 October 2026)
+
+No migrations, environment changes or API restart required. The synthetic referral UI workflow is `KOL_BROWSER_CHANNEL=msedge node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts` (set the environment variable with PowerShell syntax on Windows). It uses an isolated Vite server and mocked RPC/auth; no database or providers. Covers admin search/pagination/drawer and campaigns plus student pending/completed/zero-reward layouts at 390 and 1440px. Live reward persistence and provider acceptance are separate gates.
+
+Validation: web typecheck and focused oxlint passed; 13/13 installed-Edge synthetic browser cases passed in 1.3 minutes. Reviewed student 390/1440px and admin 390px screenshots; fixed admin intrinsic-width clipping found during visual inspection. No live DB/provider acceptance was run.
+
+Navigation query caching: fresh query data is reused for 60 seconds on remount; stale or invalidated queries still refetch. First visits still fetch from the API. Live navigation latency has not yet been measured.
+
+Referral empty-state validation (30 October): focused oxlint and web typecheck pass. Two installed-Edge synthetic cases pass at 390/1440px, covering student empty invite, admin filtered-empty recovery, and first-campaign action; desktop student and mobile admin screenshots inspected. Full workspace typecheck stops at unrelated unused MODALITY import in tutor.service.ts. No DB/provider validation.
+
+Admin referral table/drawer validation (30 October): web typecheck and focused oxlint pass. Seven synthetic installed-Edge cases pass (33.7s), including drawer open/exit lifecycle, search/pagination, responsive layouts and empty recovery. Drawer keeps selected evidence during exit; null technical fields are omitted and business results are grouped separately. Workspace typecheck remains blocked by unrelated unused MODALITY import in tutor.service.ts. No live DB/provider checks.
+
+## Bulk student report exports (30 October 2026)
+
+Restart the API for POST /reports/student/list and selected-ID PDF payload support, then reload web. No new migration/environment variable is introduced by bulk export; existing academy class-number migration must already be applied to the exact target. An admin chooses one student; a student is scoped to self; tutors use Session Reporting and cannot export student PDFs. Select up to 100 reports, across filters/pages, and download one PDF. A 409 means selection eligibility changed: reload/reselect; never substitute an all-report download. Report list and PDFs remain private, no-store and use the existing reportExport rate-limit category.
+
+Verification for this slice: route/selection/access/window/PDF-layout tests pass 19 cases / 71 assertions; focused lint and web typecheck pass. Server typecheck is blocked by the existing unused MODALITY import in tutor.service.ts. Eight synthetic Edge journeys pass: exact selected-ID payloads, empty states, mobile report drawers/editors, and selection retained across filters/pages at 320/1440px. E2E typecheck passes. The guarded DB integration fixture now checks exact subset rendering and unknown-ID rejection but was not run. Live DB/auth, end-to-end selected PDF content and accessibility acceptance remain open.
+
+Compact admin referral rows (30 October): web typecheck, focused lint and two synthetic Edge desktop/mobile workflows pass. Browser assertion limits each fixture row to 52px; desktop screenshot inspected. Extra identity/reward evidence remains in drawer. No DB/provider checks.
+
+Latest shared-checkout typecheck (30 October 2026): web passed before concurrent changes; the final rerun is blocked by academy-class-page.tsx:1274 (Accordion onValueChange unknown[] versus number[]). Server check remains blocked by the unrelated unused MODALITY import in tutor.service.ts. No errors from the bulk-report files were reported. Focused lint, formatting, route/selection/PDF tests and the eight synthetic Edge journeys passed; these do not prove live API/database acceptance.
+
+### Unified session reporting deployment
+
+Restart the API after deploying `booking.listReportSessions`; a frontend-only reload cannot register the new RPC. No database migration or seed is needed for this workspace change. Smoke-test tutor ownership, ended private series children, admin correction/version conflicts, class report recording, and Student Reports selected PDF download. Synthetic browser coverage uses mocked RPC responses and does not establish live settlement behavior.
+
+## Others article cutover (2026-10-30)
+
+Apply migration 0077 before deploying the API/website. Local preflight confirmed
+`localhost:6767/cogito-app` at migration 0076; only 0077 was applied, without reset.
+Admin editor is `/activities`; published articles appear at marketing
+`/en/activities` and `/id/activities` using server `COGITO_APP_API_URL`.
+Cover is an HTTP(S) image URL; use an image reachable from the website browser.
+Registration links go inside rich text; no separate CTA field is retained.
+The local example has id `e7da3184-ec78-4ebf-9611-7d444842e82b` and English title
+Example: Ideas into Action; it is demonstration content, not a real event.
+Only the local DB was changed. Production rollout remains unperformed.
+
+Verification: 4 validator tests / 8 expectations pass. Direct oRPC/real-local-DB
+acceptance verifies anonymous and student admin denial, draft exclusion,
+publishing, stale update conflict, localized public content and private field
+exclusion. Live HTTP public read returns the example, anonymous admin list 401.
+App Vite and marketing production builds pass. App/server typechecks remain
+blocked by unrelated dirty `academy-class-page.tsx` Accordion typing and
+`tutor.service.ts` unused MODALITY; changed activity files have no reported
+TypeScript errors. These checks do not establish real admin-browser acceptance.
+Final Others checks: live website public example/modal/body registration link
+passes in EN/ID at 1280/390/320px with no page errors or horizontal overflow.
+A temporary local fixture verified automatic Completed status and versioned
+admin deletion; the fixture was deleted and the published example retained.
+Marketing standalone tsc and scoped lint pass. App/server unrelated type errors
+remain as recorded above; real authenticated admin-browser editing was not run.
+
+Competition types directory hides superseded migration-0027 seed records without database cleanup. Expand a competition row to inspect specializations; Edit opens the existing drawer. No migration is required for this presentation change.
+
+Others article layout follow-up (2026-10-30): at desktop widths (1024px+),
+the detail modal places cover/title/schedule/location in the left column and
+rich article content in the right column. Narrower screens stack metadata
+above the body. No data/API change. Scoped lint and marketing tsc pass.
+
+Activities admin editor layout correction (2026-10-30): the owner intended
+the cogito-app authoring form. At 1024px+, metadata/publication occupies the
+left column and English/optional Indonesian rich-text editors occupy the right
+column, with a larger desktop editing area. Mobile stacks fields above editors.
+Save/cancel remain in the same form. Scoped lint passes; whole-app typecheck
+still reports the pre-existing academy-class-page Accordion type error.
+
+### KB/calendar management controls (2026-10-30)
+
+Admin resource and event lists use tables. Calendar education levels are `sd`, `smp`, `sma`, `mahasiswa`; scale is `international` or `national`, validated by the authoring API. Dates use the shared date picker in WIB, preserving existing times. Manual order is hidden; new entries default to zero and edits retain stored order. Resource categories render verbatim. Admin-only `/rpc/adminContent/previewPdf` accepts `{ "json": { "fileId": "..." } }` and returns a base64 PDF plus its filename, including archived/unattached files; authoring must be enabled. The browser renders a temporary PDF blob and revokes its URL when closed/replaced. Web CSP permits blob frames; deploy the updated nginx configuration with the web app. No database migration is required.
+
+KB/calendar management refinement: compact rows, shared TablePagination (10 records per page over the loaded admin collection), search resets pagination, no active/archive filter or manual reload control. Existing TanStack Query refresh and mutation invalidation remain. Calendar create/update/delete accept an omitted reason and generate an operation-specific audit reason; Knowledge Bank changes still require a reason. Deploy matching API and web changes together; no environment or database migration changes.
+
+### Booking exact top-up (2026-10-30)
+
+Private booking summaries now quote the current Marks shortfall using the existing payment quote and purchase RPCs. A drawer confirms the exact IDR price and opens hosted payment in a separate tab so booking selections remain available. Returning to the booking tab refreshes the wallet; Check balance also refreshes it. Continue booking becomes available when the wallet has sufficient available Marks. Booking submission still validates current availability and price; payment does not reserve a slot. Same-tab redirect restoration and automatic booking submission are not implemented. Provider/browser acceptance remains pending.
+
+Classes exact top-up now uses a confirmation drawer and opens hosted payment in a separate tab. Returning refreshes wallet and enrollment state. Check balance and Continue class checkout allow explicit refresh and return to the existing installment funding controls. Payment still does not extend seat reservation expiry; funding continues through existing server validation. Browser/provider acceptance is pending.
+
+Migration 0078_remove_superseded_competition_seeds removes only the seven parent and 21 specialization seed IDs from migration 0027. It aborts atomically if pending tutor selections, booking snapshots/topics, economy revisions or foreign-key references still use them; clean up those references explicitly before retrying. Canonical migration 0029 rows and audit history remain. Migration authored but not applied or database-tested.
+
+Seed competition taxonomy: seed.ts now inserts the seven canonical parent competitions and 34 specializations (including Law Debate), with migration-0056 parent palettes, before assigning review tutor subjects. Missing rows are inserted by slug in one transaction; existing catalog edits and archive status are preserved. Seed code updated only; database seed not executed.
+
+Initial data ownership (2026-10-30): migration 0027/0028 retain schema creation only; 0029/0041/0047 retain no-op journal slots. Competition taxonomy (7 parents, 34 specializations including Law Debate), Marks packages and default economy config are inserted only by apps/server/src/seed/seed.ts. Non-test seed preserves existing config/catalog values; test seed retains its explicit economy reset. Existing databases are not retroactively changed by editing these migrations; 0078 remains the cleanup for obsolete 0027 seeds. Migration 0056/0057 palette backfills remain for existing rows; they create no records. For a fresh database, run schema migrations then the server seed. No migration or seed was executed for this change.
+
+V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive package defaults from DEFAULT_V3_ECONOMY_CONFIG (50/350000, 150/975000, 250/1500000, 500/2750000). After canonical taxonomy and review admin creation, server seed transactionally initializes and activates a new PRD-default V3 revision only when no revision is active; it preserves and validates an existing active revision and does not activate an unrelated saved draft. Review tutor seed no longer writes legacy prices/baseRatesIdr and clears those fields on its existing demo profile. New presentation bookings use an assigned active specialization, active V3 revision, V3 snapshots and quote-derived Marks holds. Existing legacy presentation bookings cause an explicit reset-required error. This supersedes earlier notes describing seedEconomyConfig and legacy seed pricing. Runtime compatibility removal is still pending. No database migrate, seed or reset was executed. Focused package-default test passed (1 test, 4 assertions); server typecheck remains blocked by the existing unused MODALITY import in tutor.service.ts; live seeding is unverified.

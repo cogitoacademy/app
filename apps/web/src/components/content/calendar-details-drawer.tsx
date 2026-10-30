@@ -151,7 +151,11 @@ function EventDetailsContent({ event }: { event: CalendarCompetition }) {
         </DrawerTitle>
         <DrawerClose
           render={
-            <Button variant="plain" size="icon" aria-label="Close competition details">
+            <Button
+              variant="plain"
+              size="icon"
+              aria-label="Close competition details"
+            >
               <IconX />
             </Button>
           }

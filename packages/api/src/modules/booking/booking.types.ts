@@ -12,7 +12,7 @@ const futureStart = z.coerce
   .refine((date) => date > new Date(), "Must be in the future");
 
 const learningGoal = z.string().trim().max(2000).default("");
-const subjectId = z.string().min(1).max(100).optional();
+const subjectId = z.string().min(1).max(100);
 
 export const createSoloInput = z
   .object({

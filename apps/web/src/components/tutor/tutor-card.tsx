@@ -57,10 +57,6 @@ export type TutorSummaryData = {
   affiliation: string | null;
   subjects?: TutorSubject[] | null;
   modality: string | null;
-  prices?: Record<string, number> | null;
-  pricesByModality?: Partial<
-    Record<"online" | "offline", Record<string, number>>
-  > | null;
   pricesByCompetition?: Record<
     string,
     Partial<Record<"online" | "offline", Record<string, number>>>
@@ -74,20 +70,13 @@ type TutorCardProps = {
   onClick: () => void;
 };
 
-function hasCompetitionPricing(tutor: TutorSummaryData) {
-  return tutor.pricesByCompetition != null || tutor.pricingRevision != null;
-}
-
 function getStartingPrice(tutor: TutorSummaryData) {
-  if (hasCompetitionPricing(tutor)) return null;
-  const allPrices = tutor.pricesByModality
-    ? Object.values(tutor.pricesByModality).flatMap((prices) =>
-        prices ? Object.values(prices) : [],
-      )
-    : tutor.prices
-      ? Object.values(tutor.prices)
-      : [];
-  return allPrices.length > 0 ? Math.min(...allPrices) : null;
+  const prices = Object.values(tutor.pricesByCompetition ?? {})
+    .flatMap((modalities) =>
+      Object.values(modalities).flatMap((rates) => Object.values(rates ?? {})),
+    )
+    .filter((price) => Number.isSafeInteger(price) && price > 0);
+  return prices.length ? Math.min(...prices) : null;
 }
 
 function getTutorSubjectLabels(
@@ -295,12 +284,8 @@ function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
         <div className="ml-auto flex items-center gap-1 font-semibold tabular-nums">
           {startingPrice !== null ? (
             <CogitoMarks value={startingPrice} size="3" />
-          ) : hasCompetitionPricing(tutor) ? (
-            <Text className="text-xs text-muted">
-              Choose a competition to see pricing
-            </Text>
           ) : (
-            <Text className="text-sm text-muted">View pricing</Text>
+            <Text className="text-xs text-muted">Pricing unavailable</Text>
           )}
           <IconChevronRight className="size-4 text-dimmed" />
         </div>

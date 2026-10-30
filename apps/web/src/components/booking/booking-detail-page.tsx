@@ -106,8 +106,8 @@ import {
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 
-const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import {
+  getPerSessionHonorariumIdr,
   getSeriesSessionCount,
   getTotalHonorariumIdr,
 } from "./booking-pricing";
@@ -517,7 +517,7 @@ export function BookingDetailPage({
     perStudentMarks:
       booking.priceSnapshot?.engine === "v3"
         ? booking.priceSnapshot.perStudentMarks
-        : booking.priceSnapshot?.perStudent,
+        : undefined,
     activeProposalId: activeRescheduleProposal?.id,
     isRescheduleProposer: activeRescheduleProposal?.proposedBy === viewerId,
     viewerRescheduleDecision,
@@ -534,12 +534,9 @@ export function BookingDetailPage({
   const seriesSessions = sessionsQuery.data ?? undefined;
   const totalHonorariumIdr = getTotalHonorariumIdr(booking, seriesSessions);
   const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
-  const perSessionHonorariumIdr =
-    booking.priceSnapshot?.tutorHonorariumIdr ??
-    (booking.priceSnapshot?.engine === "v3"
-      ? 0
-      : (booking.priceSnapshot?.tutorShare ?? 0)) *
-      LEGACY_TUTOR_PAYOUT_RATE_IDR;
+  const perSessionHonorariumIdr = getPerSessionHonorariumIdr(
+    booking.priceSnapshot,
+  );
   const completionFeedbacks = feedbackQuery.data ?? [];
   const singleSessionFeedback =
     completionFeedbacks.find((entry) => entry.sessionId === null) ?? null;
@@ -1021,6 +1018,26 @@ export function BookingDetailPage({
                   />
                 </>
               ) : null}
+              {(isTutor || isAdmin) &&
+              booking.type !== "series" &&
+              sessionHasEnded ? (
+                <Button
+                  variant="plain"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/class-reports"
+                      aria-label="Open Session Reporting"
+                      search={{
+                        workspace: "sessions",
+                        report: `private:${bookingId}`,
+                      }}
+                    />
+                  }
+                >
+                  Open Session Reporting
+                </Button>
+              ) : null}
             </CardBody>
           </Card>
 
@@ -1053,7 +1070,7 @@ export function BookingDetailPage({
               </CardHeader>
               <CardBody className="grid gap-3">
                 {sessionsQuery.isPending ? (
-                  <Text className="text-muted">Loading series sessions…</Text>
+                  <Loader />
                 ) : sessionsQuery.isError ? (
                   <EmptyState
                     icon={<IconCalendarEvent />}
@@ -1164,6 +1181,25 @@ export function BookingDetailPage({
                                 : "Record report"}
                             </Button>
                           ) : null}
+                          {(isTutor || isAdmin) && sessionEnded ? (
+                            <Button
+                              variant="plain"
+                              size="sm"
+                              nativeButton={false}
+                              render={
+                                <Link
+                                  to="/class-reports"
+                                  aria-label="Open Session Reporting"
+                                  search={{
+                                    workspace: "sessions",
+                                    report: `private:${session.id}`,
+                                  }}
+                                />
+                              }
+                            >
+                              Open Session Reporting
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -1261,17 +1297,31 @@ export function BookingDetailPage({
                   isSeriesBooking ? (
                     <Stack className="m-0!" direction="column" spacing="sm">
                       <SummaryRow
-                        label={`Total honorarium (${seriesSessionCount} sessions)`}
-                        value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
+                        label={
+                          seriesSessionCount === null
+                            ? "Total honorarium"
+                            : `Total honorarium (${seriesSessionCount} sessions)`
+                        }
+                        value={
+                          totalHonorariumIdr === null
+                            ? "Unavailable"
+                            : `Rp${totalHonorariumIdr.toLocaleString("id-ID")}`
+                        }
                       />
                       <Text className="text-sm text-muted">
-                        {`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
+                        {perSessionHonorariumIdr === null
+                          ? "Honorarium unavailable"
+                          : `Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
                       </Text>
                     </Stack>
                   ) : (
                     <SummaryRow
                       label="Session honorarium"
-                      value={`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`}
+                      value={
+                        perSessionHonorariumIdr === null
+                          ? "Unavailable"
+                          : `Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`
+                      }
                     />
                   )
                 ) : (
@@ -1294,16 +1344,12 @@ export function BookingDetailPage({
                         <CogitoMarks value={booking.refundedAmount} size="4" />
                       }
                     />
-                    {booking.priceSnapshot ? (
+                    {booking.priceSnapshot?.engine === "v3" ? (
                       <SummaryRow
                         label="Per participant"
                         value={
                           <CogitoMarks
-                            value={
-                              booking.priceSnapshot.engine === "v3"
-                                ? booking.priceSnapshot.perStudentMarks
-                                : booking.priceSnapshot.perStudent
-                            }
+                            value={booking.priceSnapshot.perStudentMarks}
                             size="4"
                           />
                         }

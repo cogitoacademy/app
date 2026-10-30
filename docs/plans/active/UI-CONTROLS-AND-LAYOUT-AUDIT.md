@@ -202,3 +202,50 @@ Implemented: admin booking tutor participant details use gross IDR session honor
 Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
 
 Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.
+
+## Referral layout refresh (30 October 2026)
+
+Implemented: student invitation panel, inline semester summary and full-width friends table; admin Activity/KOL campaigns tabs, inline totals and usage-detail drawer. Existing RPCs and financial rules retained. Responsive synthetic browser validation is tracked in RUNBOOK; live DB and provider acceptance remains a separate gate.
+
+Referral empty states (30 October): reuse the shared EmptyState with contextual icons and copy. Student invites offer a copy-message action; filtered admin results offer Clear filters; unfiltered activity explains when records appear; an empty KOL list opens the existing create form. No new API or reward rules.
+
+Admin referral detail refinement (30 October): table prioritizes student identity, source, split date/time, outcome and right-aligned welcome credit. Compact chevron actions have student-specific accessible labels. Drawer remains mounted with selected content retained during closing so Selia enter/exit transitions can run. Detail sections separate identity/source, rewards/outcome, and collapsible technical evidence; null technical fields are omitted. No RPC or reward-rule changes.
+
+## Session Reports bulk workflow (30 October 2026)
+
+Implemented: one student/report search field, eligible private/cohort/masterclass table, source-qualified report keys and searchable session references, page/all-visible checkboxes with indeterminate state, selections retained across filters/pages, clear selection on student change, 100-report cap, exact-selection PDF download and read-only detail drawer. Admin Student Reports / Session Reporting tabs preserve class report authoring; tutor authoring stays available. Pending sessions are handled in Session Reporting. Focused route/selection/access/window/PDF checks pass (19 tests / 71 assertions), as do web/E2E typechecks and focused lint. Eight synthetic Edge journeys pass, including selection retention at 320/1440px and exact PDF request payloads. Live DB/auth and end-to-end selected PDF content/accessibility checks remain pending.
+
+Admin referral density (30 October): activity records now use a single text line with centered alignment and compact vertical padding. Student email, source owner, reward breakdown and verification remain in the detail drawer; date/time is inline. No API or business-rule changes.
+
+Latest shared-checkout typecheck (30 October 2026): web passed before concurrent changes; the final rerun is blocked by academy-class-page.tsx:1274 (Accordion onValueChange unknown[] versus number[]). Server check remains blocked by the unrelated unused MODALITY import in tutor.service.ts. No errors from the bulk-report files were reported. Focused lint, formatting, route/selection/PDF tests and the eight synthetic Edge journeys passed; these do not prove live API/database acceptance.
+
+Competition types: implemented compact expandable Selia table and exclusion of superseded catalog seed rows. Browser acceptance remains pending; web typecheck is blocked by the existing academy-class-page Accordion value type mismatch.
+
+Competition catalog empty-state refinement (2026-10-30): reuse shared
+EmptyState with the search icon and existing Clear filters action; add mt-6
+above it. No query/filter/API changes. Scoped diff check passes; file lint
+reports existing React Compiler memoization errors at line 303, outside this
+empty-state change.
+
+
+### KB/calendar management controls (2026-10-30)
+
+Admin resource and event lists use tables. Calendar education levels are `sd`, `smp`, `sma`, `mahasiswa`; scale is `international` or `national`, validated by the authoring API. Dates use the shared date picker in WIB, preserving existing times. Manual order is hidden; new entries default to zero and edits retain stored order. Resource categories render verbatim. Admin-only `/rpc/adminContent/previewPdf` accepts `{ "json": { "fileId": "..." } }` and returns a base64 PDF plus its filename, including archived/unattached files; authoring must be enabled. The browser renders a temporary PDF blob and revokes its URL when closed/replaced. Web CSP permits blob frames; deploy the updated nginx configuration with the web app. No database migration is required.
+
+
+KB/calendar management now follows the FAQ page composition: header add action, status filter, list plus sticky desktop editor, and right-side drawer on smaller screens. Tables remain the record list; opening another entry or closing the editor confirms draft discard.
+
+
+KB/calendar management refinement: compact rows, shared TablePagination (10 records per page over the loaded admin collection), search resets pagination, no active/archive filter or manual reload control. Existing TanStack Query refresh and mutation invalidation remain. Calendar create/update/delete accept an omitted reason and generate an operation-specific audit reason; Knowledge Bank changes still require a reason. Deploy matching API and web changes together; no environment or database migration changes.
+
+
+KB/calendar editor confirmation uses Selia Dialog for discarding drafts and deleting entries. Discard confirmation appears only when field values differ from the opened draft; closing an unchanged editor proceeds immediately.
+
+
+Calendar toolbar: admin management is an accessible gear-only button immediately before Filter inside CompetitionCalendar, including empty calendars. Calendar page/panel widths are constrained to their parent so the 720px month grid scrolls horizontally inside the panel on narrow screens. Focused mocked browser checks cover scroll movement, toolbar placement, manage navigation, and reader visibility; they do not prove live API/data behavior.
+
+
+Competition types directory toolbar now places search, an icon-only status filter, and an icon-only Add competition action in one row. Both actions retain accessible labels and title hints. The table keeps a 48rem minimum width and nonwrapping records, scrolling horizontally inside its focusable labeled container on narrow screens.
+
+
+Competition types result metadata is compact (`N groups`). Color inheritance guidance is available through the shared InfoPreview popover beside the count, supporting tap, hover and keyboard access.

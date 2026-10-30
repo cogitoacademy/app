@@ -1,4 +1,8 @@
-import { adminProcedure, publicProcedure } from "../../procedures";
+import {
+  adminProcedure,
+  publicProcedure,
+  tutorProcedure,
+} from "../../procedures";
 import type { AcademyClassHandler } from "./academy-class.handler";
 import {
   getAcademyClassInput,
@@ -6,6 +10,9 @@ import {
   publishAcademyClassInput,
   retryAcademyClassMeetingsInput,
   saveAcademyClassDraftInput,
+  reportTutorAbsenceInput,
+  replaceAbsentClassTutorInput,
+  rescheduleAcademyClassSessionInput,
 } from "./academy-class.types";
 
 export function createAcademyClassRouter(handler: AcademyClassHandler) {
@@ -55,6 +62,34 @@ export function createAcademyClassRouter(handler: AcademyClassHandler) {
       })
       .input(retryAcademyClassMeetingsInput)
       .handler(handler.retryAcademyClassMeetings),
+    replaceAbsentClassTutor: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/replace-absent-tutor",
+        tags: ["Admin", "Classes"],
+        summary:
+          "Replace the tutor for an absent published session at its current time",
+      })
+      .input(replaceAbsentClassTutorInput)
+      .handler(handler.replaceAbsentClassTutor),
+    rescheduleClassSession: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/session/reschedule",
+        tags: ["Admin", "Classes"],
+        summary: "Reschedule one published Academy session",
+      })
+      .input(rescheduleAcademyClassSessionInput)
+      .handler(handler.rescheduleClassSession),
+    reportTutorAbsence: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/classes/report-absence",
+        tags: ["Tutor", "Classes"],
+        summary: "Report absence from an assigned scheduled class session",
+      })
+      .input(reportTutorAbsenceInput)
+      .handler(handler.reportTutorAbsence),
   };
 }
 

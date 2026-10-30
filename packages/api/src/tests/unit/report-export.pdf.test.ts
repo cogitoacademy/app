@@ -6,14 +6,11 @@ import {
   type StudentReportPdfEntry,
 } from "../../modules/report-export/report-export.pdf";
 
-function makeEntry(
-  bullets: {
-    discussion: string[];
-    strengths: string[];
-    improvements: string[];
-  },
-  isLegacy = false,
-): StudentReportPdfEntry {
+function makeEntry(bullets: {
+  discussion: string[];
+  strengths: string[];
+  improvements: string[];
+}): StudentReportPdfEntry {
   return {
     id: "report-1",
     scheduledStartAt: new Date("2026-10-20T02:00:00.000Z"),
@@ -33,7 +30,6 @@ function makeEntry(
       { label: "Strengths observed", bullets: bullets.strengths },
       { label: "Areas for improvement", bullets: bullets.improvements },
     ],
-    isLegacy,
   };
 }
 
@@ -136,29 +132,22 @@ describe("student report PDF layout", () => {
     expect(geometry.glyphCount).toBeGreaterThanOrEqual(1800);
   });
 
-  test("keeps each bullet separate and paginates both legacy and current dense feedback", async () => {
+  test("keeps each bullet separate and paginates dense current feedback", async () => {
     const bullets = Array.from({ length: 80 }, () => "word");
     expect(bullets[0]!.length * bullets.length + bullets.length - 1).toBe(399);
-
-    const makeModel = (isLegacy: boolean) => ({
+    const bytes = await createStudentReportPdf({
       studentName: "Student Name",
       generatedAt: new Date("2026-10-22T04:30:00.000Z"),
       reports: [
-        makeEntry(
-          {
-            discussion: bullets,
-            strengths: bullets,
-            improvements: bullets,
-          },
-          isLegacy,
-        ),
+        makeEntry({
+          discussion: bullets,
+          strengths: bullets,
+          improvements: bullets,
+        }),
       ],
     });
-    const legacyBytes = await createStudentReportPdf(makeModel(true));
-    const currentBytes = await createStudentReportPdf(makeModel(false));
-
-    expect(await pageCount(legacyBytes)).toBeGreaterThan(1);
-    expect(await pageCount(currentBytes)).toBeGreaterThan(1);
+    expect(await pageCount(bytes)).toBeGreaterThan(1);
+    expect((await textGeometry(bytes)).glyphCount).toBeGreaterThanOrEqual(960);
   });
 
   test("paginates 5,000-character metadata without clipping or truncating it", async () => {
@@ -185,7 +174,7 @@ describe("student report PDF layout", () => {
     ).toBe(true);
   });
 
-  test("keeps long legacy text across continuation pages and accepts Unicode/newlines", async () => {
+  test("keeps overflow text across continuation pages and accepts Unicode/newlines", async () => {
     const bytes = await createStudentReportPdf({
       studentName: "Siti Nurhaliza 😀",
       generatedAt: new Date("2026-10-22T04:30:00.000Z"),

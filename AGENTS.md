@@ -208,3 +208,7 @@ Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 10. Reference selia.earth docs for component API details
 11. **Docs follow code — always.** Every PR that changes behavior must update the affected docs in the same PR: `docs/CONTEXT.md` (architecture, modules, known bugs, plans table), `docs/API-REFERENCE.md` (endpoints, inputs, outputs), `docs/MODULE-REFERENCE.md` (services, event keys, business rules), `docs/RUNBOOK.md` (ops/env), and the relevant plan in `docs/plans/active/` (keep statuses accurate; completed one-shot plans are deleted on merge — the PR + CONTEXT are the record). A PR whose docs are stale is not done.
 12. **RPC facts to remember:** HTTP paths are the oRPC procedure keys with slashes (`/rpc/auth/getProfile`), NOT dotted names; request bodies must be wrapped in the `{"json": <input>}` envelope; responses come back as `{"json": <data>, "meta": [...]}`.
+
+## Pre-release scope
+
+This app has not launched and has no existing user data to preserve. Implement the V3 product directly; substantial changes and removal of superseded pre-V3 behavior are acceptable. Do not retain legacy compatibility paths solely for hypothetical users or data. Preserve unrelated workspace changes and verify the exact target before destructive database operations.

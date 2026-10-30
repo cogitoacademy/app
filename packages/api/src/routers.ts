@@ -1,3 +1,4 @@
+import { activityRouter } from "./modules/activity/activity.router";
 import { createContentAdminRouter } from "./modules/content-admin/content-admin.router";
 import type { RouterClient } from "@orpc/server";
 
@@ -68,6 +69,7 @@ const contactRouter = createContactRouter(handlers.contact);
 const faqRouter = createFaqRouter(handlers.faq);
 const referralRouter = createReferralRouter(handlers.referral);
 const publicContentRouter = {
+  activities: { list: activityRouter.list },
   ...createPublicContentRouter(handlers.publicContent),
   ...faqRouter.publicContent,
 };
@@ -96,6 +98,7 @@ export const appRouter = {
   adminKnowledgeBank: adminKnowledgeBankRouter,
   adminContent: createContentAdminRouter(handlers.contentAdmin),
   adminFaq: faqRouter.adminFaq,
+  adminActivities: activityRouter.admin,
   tutor: tutorRouter,
   tutors: discoveryRouter,
   invite: inviteRouter,

@@ -120,9 +120,7 @@ export function SessionCompletionFeedbackCard({
                           >
                             <Text className="text-xs font-medium text-foreground">
                               Version {entry.version} · {entry.status} ·{" "}
-                              {entry.actorRole === "legacy"
-                                ? "Original actor not recorded"
-                                : `${entry.actorRole} (${entry.actorId ?? "unknown actor"})`}
+                              {`${entry.actorRole} (${entry.actorId ?? "unknown actor"})`}
                               {" · "}
                               {formatBookingDate(entry.createdAt, timezone)}
                             </Text>
@@ -154,7 +152,7 @@ export function SessionCompletionFeedbackCard({
                       </ol>
                     ) : (
                       <Text className="mt-2 text-sm text-muted">
-                        No version history is recorded for this legacy report.
+                        Report history is unavailable.
                       </Text>
                     )}
                   </details>

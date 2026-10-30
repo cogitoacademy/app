@@ -545,7 +545,7 @@ const tutorContent: GuideContent = {
           id: "tutor-profile",
           title: "Complete your teaching profile",
           summary:
-            "Add your bio, specializations, prices, proof, teaching formats, and availability before asking for review.",
+            "Add your bio, specializations, proof, teaching formats, and availability before asking for review.",
           actor: "You",
           icon: IconNotes,
           details: [
@@ -773,7 +773,7 @@ const adminContent: GuideContent = {
           id: "admin-review-tutor",
           title: "Review and publish tutor profiles",
           summary:
-            "Check the tutor's profile, subjects, prices, and proof before students can find them.",
+            "Check the tutor's profile, specializations, and proof before students can find them.",
           actor: "Admin",
           icon: IconShieldCheck,
           details: [
@@ -974,11 +974,11 @@ const adminContent: GuideContent = {
           actor: "Admin",
           icon: IconCoins,
           details: [
-            "These settings control prices, tutor honorarium, and Cogito's share for future bookings.",
-            "Changes must follow the allowed IDR minimums and increments.",
-            "Existing bookings keep the amount they already showed; new bookings use the updated settings.",
+            "Draft settings define Marks packages, competition prices, and tutor honorarium.",
+            "Preview solo, group, online, and offline prices before saving a draft revision.",
+            "Saving a draft does not activate it. Existing bookings keep their saved price revision.",
           ],
-          statuses: [{ label: "Active configuration", variant: "info" }],
+          statuses: [{ label: "Pricing draft", variant: "info" }],
           cta: { label: "Open economy settings", to: "/admin-economy" },
         },
       ],

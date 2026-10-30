@@ -1,8 +1,20 @@
 "use client";
 
+import {
+  Table,
+  TableContainer,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@cogito-app/ui/components/selia/table";
+
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
 
-import { useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -11,6 +23,8 @@ import {
 } from "@tanstack/react-query";
 import {
   IconArchive,
+  IconAdjustmentsHorizontal,
+  IconPlus,
   IconCheck,
   IconChevronRight,
   IconCirclePlus,
@@ -24,12 +38,7 @@ import {
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardHeaderAction,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import {
   Dialog,
   DialogBody,
@@ -220,6 +229,7 @@ function formatRatio(ratio: number) {
 
 export function CompetitionCatalogPage() {
   const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -721,8 +731,8 @@ export function CompetitionCatalogPage() {
     );
 
   return (
-    <Stack spacing="lg" className="mx-auto w-full min-w-0 max-w-6xl">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <Stack spacing="md" className="mx-auto w-full min-w-0 max-w-6xl">
+      <div className="flex flex-wrap items-start justify-between">
         <div>
           <Heading level={1} size="md">
             Competition types
@@ -732,162 +742,240 @@ export function CompetitionCatalogPage() {
             Select any entry to manage its details.
           </Text>
         </div>
-        <Button onClick={startCreateParent}>
-          <IconCirclePlus /> Add competition
-        </Button>
       </div>
-      <Card>
-        <CardBody>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
-            <div className="relative min-w-0">
-              <IconSearch
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
-              />
-              <Input
-                aria-label="Search competition catalog"
-                className="pl-9"
-                placeholder="Find a competition or specialization…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => setStatusFilter(String(value))}
-              items={[
-                { value: "all", label: "All statuses" },
-                { value: "ready", label: "Selectable" },
-                { value: "draft", label: "Needs rates" },
-                { value: "archived", label: "Archived" },
-              ]}
-            >
-              <SelectTrigger aria-label="Filter catalog status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="ready">Selectable</SelectItem>
-                  <SelectItem value="draft">Needs rates</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectList>
-              </SelectPopup>
-            </Select>
+      <div>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <IconSearch
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            />
+            <Input
+              aria-label="Search competition catalog"
+              className="pl-9"
+              placeholder="Find a competition or specialization…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
           </div>
-          <Text className="mt-3 text-sm text-muted" role="status">
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(String(value))}
+            items={[
+              { value: "all", label: "All statuses" },
+              { value: "ready", label: "Selectable" },
+              { value: "draft", label: "Needs rates" },
+              { value: "archived", label: "Archived" },
+            ]}
+          >
+            <SelectTrigger
+              aria-label="Filter catalog status"
+              title="Filter catalog status"
+              className="w-9.5 shrink-0 justify-center px-0 [&>span:last-child]:hidden"
+            >
+              <IconAdjustmentsHorizontal
+                aria-hidden="true"
+                className="size-4"
+              />
+              <SelectValue className="sr-only" />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="ready">Selectable</SelectItem>
+                <SelectItem value="draft">Needs rates</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          <Button
+            onClick={startCreateParent}
+            size="icon"
+            aria-label="Add competition"
+            title="Add competition"
+            className="shrink-0"
+          >
+            <IconPlus aria-hidden="true" />
+          </Button>
+        </div>
+        <div className="mt-2 flex items-center gap-1.5">
+          <Text className="text-sm text-muted" role="status">
             {listQuery.isFetching
-              ? "Updating results…"
-              : `${groups.length} competition groups shown · Specializations inherit their competition’s colors.`}
+              ? "Updating…"
+              : `${groups.length} ${groups.length === 1 ? "group" : "groups"}`}
           </Text>
-        </CardBody>
-      </Card>
-      <div className="space-y-4" aria-label="Competition groups">
-        {groups.map(({ parent, types }) => {
-          const status = getStatus(parent);
-          const colors = ownPalette(parent);
-          return (
-            <Card key={parent.id}>
-              <CardHeader>
-                <div className="flex min-w-0 items-center gap-3">
-                  <div
-                    className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-accent text-foreground"
-                    style={
-                      colors
-                        ? {
-                            backgroundColor: colors.lightBackgroundColor,
-                            color: colors.lightTextColor,
-                          }
-                        : undefined
-                    }
-                    aria-hidden="true"
-                  >
-                    <IconPalette className="size-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <Button
-                      variant="plain"
-                      className="h-auto justify-start whitespace-normal px-0 text-left text-lg font-semibold"
-                      onClick={() => selectEntry(parent)}
-                      aria-label={`Edit competition ${parent.name}`}
+          <InfoPreview
+            title="Competition colors"
+            label="About competition colors"
+            description="Specializations inherit their competition’s colors."
+          />
+        </div>
+      </div>
+      <div aria-label="Competition groups" className="min-w-0 max-w-full">
+        <TableContainer
+          className="max-w-full"
+          role="region"
+          aria-label="Competition types table"
+          tabIndex={0}
+        >
+          <Table className="min-w-3xl whitespace-nowrap">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Competition / specialization</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.map(({ parent, types }) => {
+                const status = getStatus(parent);
+                const open = expanded.has(parent.id) || Boolean(search.trim());
+                return (
+                  <Fragment key={parent.id}>
+                    <TableRow
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
+                      aria-controls={`types-${parent.id}`}
+                      className="cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-primary"
+                      onClick={() =>
+                        setExpanded((previous) => {
+                          const next = new Set(previous);
+                          if (next.has(parent.id)) next.delete(parent.id);
+                          else next.add(parent.id);
+                          return next;
+                        })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setExpanded((previous) => {
+                            const next = new Set(previous);
+                            if (next.has(parent.id)) next.delete(parent.id);
+                            else next.add(parent.id);
+                            return next;
+                          });
+                        }
+                      }}
                     >
-                      {parent.name}
-                      <IconChevronRight className="size-4 shrink-0" />
-                    </Button>
-                    <Text className="text-sm text-muted">
-                      {types.length} specialization
-                      {types.length === 1 ? "" : "s"}
-                      {parent.nameId ? ` · ${parent.nameId}` : ""}
-                    </Text>
-                  </div>
-                </div>
-                <CardHeaderAction>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => startCreateSpecialization(parent.id)}
-                      aria-label={`Add specialization to ${parent.name}`}
+                      <TableCell className="py-2">
+                        <span className="inline-flex items-center gap-2.5 font-medium">
+                          <IconChevronRight
+                            className={`size-4 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+                          />
+                          {parent.name}
+                          <span className="font-normal text-muted">
+                            ({types.length})
+                          </span>
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <Badge variant={status.variant}>{status.label}</Badge>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="plain"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectEntry(parent);
+                            }}
+                            aria-label={`Edit competition ${parent.name}`}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startCreateSpecialization(parent.id);
+                            }}
+                            aria-label={`Add specialization to ${parent.name}`}
+                          >
+                            <IconCirclePlus /> Add type
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow
+                      id={`types-${parent.id}`}
+                      aria-hidden={!open}
+                      inert={!open}
                     >
-                      <IconCirclePlus /> Add type
-                    </Button>
-                  </div>
-                </CardHeaderAction>
-              </CardHeader>
-              <CardBody className="py-2">
-                {types.filter(matchesStatus).length ? (
-                  <div className="divide-y divide-border">
-                    {types.filter(matchesStatus).map((child) => {
-                      const childStatus = getStatus(child);
-                      return (
-                        <Button
-                          key={child.id}
-                          variant="plain"
-                          onClick={() => selectEntry(child)}
-                          aria-label={`Edit specialization ${child.name} ${child.slug}`}
-                          className="h-auto min-h-16 w-full flex-wrap justify-between gap-3 whitespace-normal py-3 text-left"
+                      <TableCell colSpan={3} className="p-0">
+                        <div
+                          className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
                         >
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-medium break-words">
-                              {child.name}
-                            </span>
-                            <span className="mt-1 block text-sm font-normal text-muted break-all">
-                              {child.nameId || child.slug}
-                            </span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <Badge variant={childStatus.variant} size="sm">
-                              {childStatus.label === "Selectable"
-                                ? "Active"
-                                : childStatus.label}
-                            </Badge>
-                            <IconChevronRight className="size-4 text-muted" />
-                          </span>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-3">
-                    <Text className="text-sm text-muted">
-                      {types.length
-                        ? "No specializations match this status."
-                        : "No specializations yet. Add the types students can choose within this competition."}
-                    </Text>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          );
-        })}
+                          <div className="min-h-0 overflow-hidden">
+                            <Table
+                              aria-label={`${parent.name} specializations`}
+                            >
+                              <TableBody>
+                                {types.filter(matchesStatus).map((child) => {
+                                  const childStatus = getStatus(child);
+                                  return (
+                                    <TableRow key={child.id}>
+                                      <TableCell className="py-1 pl-10">
+                                        <Button
+                                          variant="plain"
+                                          size="sm"
+                                          onClick={() => selectEntry(child)}
+                                          aria-label={`Edit specialization ${child.name} ${child.slug}`}
+                                        >
+                                          {child.name}
+                                        </Button>
+                                      </TableCell>
+                                      <TableCell className="py-1">
+                                        <Badge
+                                          variant={childStatus.variant}
+                                          size="sm"
+                                        >
+                                          {childStatus.label}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="py-1 text-right">
+                                        <Button
+                                          variant="plain"
+                                          size="sm"
+                                          onClick={() => selectEntry(child)}
+                                        >
+                                          Edit
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                {!types.filter(matchesStatus).length && (
+                                  <TableRow>
+                                    <TableCell className="py-2 pl-10 text-muted">
+                                      No specializations match this status.
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
         {!groups.length ? (
-          <Card>
-            <CardBody className="space-y-3 py-10 text-center">
-              <Heading level={2}>No competitions found</Heading>
-              <Text className="text-muted">
-                Try another name or reset your filters.
-              </Text>
+          <EmptyState
+            className="mt-6"
+            icon={<IconSearch />}
+            title="No competitions found"
+            description="Try another name or reset your filters."
+            action={
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -897,8 +985,8 @@ export function CompetitionCatalogPage() {
               >
                 Clear filters
               </Button>
-            </CardBody>
-          </Card>
+            }
+          />
         ) : null}
       </div>
       <Drawer
@@ -1416,7 +1504,7 @@ export function CompetitionCatalogPage() {
           </DialogHeader>
           <DialogBody>
             {impactQuery.isPending ? (
-              <Text className="text-muted">Loading reference impact…</Text>
+              <Loader />
             ) : impactQuery.isError ? (
               <Text role="alert" className="text-danger">
                 Impact preview failed. Retry before continuing.
