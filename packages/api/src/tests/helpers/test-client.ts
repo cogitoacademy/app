@@ -5,9 +5,12 @@ import {
   economyV3Activation,
   economyV3Revision,
   markPackage,
+  subjectCategory,
+  tutorProfile,
+  tutorProfileSubject,
   user,
 } from "@cogito-app/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 import { appRouter } from "../../routers";
@@ -43,7 +46,89 @@ export async function createTestContext(sessionCookie?: string) {
 export function createTestClient(
   context: Awaited<ReturnType<typeof createTestContext>>,
 ) {
-  return createRouterClient(appRouter, { context });
+  const client = createRouterClient(appRouter, { context });
+  const creationMethods = new Set([
+    "createSolo",
+    "createGroup",
+    "createSeries",
+    "createGroupSeries",
+  ]);
+
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "booking" || !value) return value;
+      return new Proxy(value, {
+        get(bookingTarget, bookingProperty, bookingReceiver) {
+          const method = Reflect.get(
+            bookingTarget,
+            bookingProperty,
+            bookingReceiver,
+          );
+          if (
+            typeof method !== "function" ||
+            !creationMethods.has(String(bookingProperty))
+          ) {
+            return method;
+          }
+          return async (input: Record<string, unknown>) => {
+            if (input.subjectId || typeof input.tutorId !== "string") {
+              return method(input);
+            }
+            const subjectId = await ensureTutorSubject(input.tutorId);
+            return method({ ...input, subjectId });
+          };
+        },
+      });
+    },
+  }) as typeof client;
+}
+
+async function ensureTutorSubject(tutorId: string) {
+  const profile = await db.query.tutorProfile.findFirst({
+    columns: { id: true },
+    where: eq(tutorProfile.userId, tutorId),
+  });
+
+  let assigned: { subjectId: string }[] = [];
+  if (profile) {
+    assigned = await db
+      .select({ subjectId: tutorProfileSubject.subjectId })
+      .from(tutorProfileSubject)
+      .innerJoin(
+        subjectCategory,
+        eq(tutorProfileSubject.subjectId, subjectCategory.id),
+      )
+      .where(
+        and(
+          eq(tutorProfileSubject.tutorProfileId, profile.id),
+          eq(subjectCategory.isActive, true),
+          isNotNull(subjectCategory.parentId),
+        ),
+      )
+      .limit(1);
+  }
+  if (assigned[0]) return assigned[0].subjectId;
+
+  const [subject] = await db
+    .select({ id: subjectCategory.id })
+    .from(subjectCategory)
+    .where(
+      and(
+        eq(subjectCategory.isActive, true),
+        isNotNull(subjectCategory.parentId),
+      ),
+    )
+    .limit(1);
+  if (!subject) throw new Error("V3 test specialization seed is missing");
+
+  if (!profile) return subject.id;
+
+  await db
+    .insert(tutorProfileSubject)
+    .values({ tutorProfileId: profile.id, subjectId: subject.id })
+    .onConflictDoNothing();
+  return subject.id;
 }
 
 export async function signUpAndSignIn(

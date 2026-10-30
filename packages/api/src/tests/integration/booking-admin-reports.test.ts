@@ -60,15 +60,14 @@ const ownedBookingIds = new Set<string>();
 const ownedUserIds = new Set<string>();
 const now = () => new Date(Date.now() - 3 * 60_000);
 const feeSnapshot = {
-  perStudent: 50,
-  baseline: 50,
-  tutorShare: 40,
-  cogitoTake: 10,
-  baselineCogitoTake: 10,
-  baselineTutorShare: 40,
-  extraTotal: 0,
-  cogitoExtraTake: 0,
-  tutorExtraShare: 0,
+  engine: "v3" as const,
+  v3Revision: 1,
+  competition: "competition-debate",
+  modality: "online" as const,
+  headcount: 1,
+  perStudentMarks: 50,
+  collectedMarks: 50,
+  tutorHonorariumIdr: 40_000,
 };
 const firstFeedback = {
   discussion: ["Reviewed the learner's approach"],
@@ -389,7 +388,7 @@ describe("on-demand booking report admin coverage (non-reset UUID fixtures)", ()
     const input = {
       bookingId: fixture.booking.id,
       feedback: firstFeedback,
-      deliveryConfirmed: true,
+      deliveryConfirmed: true as const,
       reason: "Confirmed tutor delivery despite student absence",
       requestKey: crypto.randomUUID(),
     };

@@ -21,9 +21,27 @@ import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
 import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
+import type { PaymentService } from "../../modules/payment/payment.service";
 import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
 import { createWalletService } from "../../modules/wallet/wallet.service";
+
+async function createV3PackagePurchase(
+  payment: PaymentService,
+  userId: string,
+  walletId: string,
+) {
+  const quote = await payment.createTopUpQuote(userId, {
+    requestKey: crypto.randomUUID(),
+    marks: 50,
+  });
+  return payment.createPurchaseFromTopUpQuote(
+    userId,
+    walletId,
+    quote.quoteId,
+    "package",
+  );
+}
 
 describe("PaymentService", () => {
   beforeAll(async () => {
@@ -34,10 +52,10 @@ describe("PaymentService", () => {
     const user = await createTestUser("tc03@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
     expect(intent.providerReference).toContain("stub:");
 
@@ -65,10 +83,10 @@ describe("PaymentService", () => {
   test("TC-04: duplicate webhook is idempotent", async () => {
     const user = await createTestUser("tc04@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "learner",
     );
 
     await services.payment.confirmFromWebhook({
@@ -97,10 +115,10 @@ describe("PaymentService", () => {
   test("TC-04 negative: failed payment does not credit", async () => {
     const user = await createTestUser("tc04f@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     await services.payment.confirmFromWebhook({
@@ -134,10 +152,10 @@ describe("PaymentService", () => {
     const user = await createTestUser(`b6.${Date.now()}@cogito.test`);
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     // Simulate the check-then-insert race: a second writer inserts the same
@@ -166,10 +184,10 @@ describe("PaymentService", () => {
     const user = await createTestUser("rerepurchase@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const first = await services.payment.createIntent(
+    const first = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     await services.payment.confirmFromWebhook({
@@ -180,15 +198,15 @@ describe("PaymentService", () => {
       failureReason: "declined",
     });
 
-    const retry = await services.payment.createIntent(
+    const retry = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     expect(retry.paymentId).not.toBe(first.paymentId);
     expect(retry.providerReference).not.toBe(first.providerReference);
-    expect(retry.providerReference).toContain(first.providerReference);
+    expect(retry.providerReference).toContain("stub:v3:");
     expect(retry.checkoutUrl).toBeDefined();
 
     const [firstRecord] = await db
@@ -220,10 +238,10 @@ describe("PaymentService", () => {
     const user = await createTestUser("rerepurchase-paid@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const first = await services.payment.createIntent(
+    const first = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -232,10 +250,10 @@ describe("PaymentService", () => {
       status: "PAID",
     });
 
-    const retry = await services.payment.createIntent(
+    const retry = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     expect(retry.paymentId).not.toBe(first.paymentId);
@@ -264,10 +282,10 @@ describe("PaymentService", () => {
     const user = await createTestUser("paynotif@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     await services.payment.confirmFromWebhook({
@@ -298,10 +316,10 @@ describe("PaymentService", () => {
     const user = await createTestUser("refundnotif@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       walletRow.id,
-      "starter",
     );
 
     await services.payment.confirmFromWebhook({
@@ -387,10 +405,10 @@ describe("PaymentService", () => {
       const user = await createTestUser("mc01@cogito.test");
       const walletRow = await midtransWallet.getOrCreate(user.id);
 
-      const intent = await midtransPayment.createIntent(
+      const intent = await createV3PackagePurchase(
+        midtransPayment,
         user.id,
         walletRow.id,
-        "starter",
       );
       expect(intent.providerReference).toContain("midtrans:");
       expect(intent.checkoutUrl).toContain("app.sandbox.midtrans.com");
@@ -426,10 +444,22 @@ describe("PaymentService", () => {
         );
       }) as never;
 
-      const [first, second] = await Promise.all([
-        midtransPayment.createIntent(user.id, walletRow.id, "starter"),
-        midtransPayment.createIntent(user.id, walletRow.id, "starter"),
-      ]);
+      const quote = await midtransPayment.createTopUpQuote(user.id, {
+        requestKey: crypto.randomUUID(),
+        marks: 50,
+      });
+      const outcomes = await Promise.all(
+        Array.from({ length: 2 }, () =>
+          midtransPayment.createPurchaseFromTopUpQuote(
+            user.id,
+            walletRow.id,
+            quote.quoteId,
+            "package",
+          ),
+        ),
+      );
+      const first = outcomes[0]!;
+      const second = outcomes[1]!;
 
       expect(fetchCalls).toBe(1);
       expect(second.paymentId).toBe(first.paymentId);
@@ -446,10 +476,10 @@ describe("PaymentService", () => {
       const user = await createTestUser("mc02@cogito.test");
       const walletRow = await midtransWallet.getOrCreate(user.id);
 
-      const intent = await midtransPayment.createIntent(
+      const intent = await createV3PackagePurchase(
+        midtransPayment,
         user.id,
         walletRow.id,
-        "starter",
       );
 
       await midtransPayment.confirmFromWebhook({
@@ -479,10 +509,10 @@ describe("PaymentService", () => {
       const user = await createTestUser("mc03@cogito.test");
       const walletRow = await midtransWallet.getOrCreate(user.id);
 
-      const intent = await midtransPayment.createIntent(
+      const intent = await createV3PackagePurchase(
+        midtransPayment,
         user.id,
         walletRow.id,
-        "starter",
       );
 
       await midtransPayment.confirmFromWebhook({
@@ -507,10 +537,10 @@ describe("PaymentService", () => {
       const user = await createTestUser("mc04@cogito.test");
       const walletRow = await midtransWallet.getOrCreate(user.id);
 
-      const intent = await midtransPayment.createIntent(
+      const intent = await createV3PackagePurchase(
+        midtransPayment,
         user.id,
         walletRow.id,
-        "starter",
       );
 
       globalThis.fetch = mock(() =>
@@ -520,7 +550,7 @@ describe("PaymentService", () => {
             transaction_id: "txn_mc04",
             order_id: intent.paymentId,
             fraud_status: "accept",
-            gross_amount: "312500.00",
+            gross_amount: "350000.00",
             currency: "IDR",
           }),
         ),
