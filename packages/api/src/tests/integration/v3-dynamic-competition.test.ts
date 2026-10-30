@@ -73,7 +73,7 @@ describe("dynamic competition rate configuration", () => {
       .select({ activeRevision: economyV3Activation.activeRevision })
       .from(economyV3Activation)
       .where(eq(economyV3Activation.id, "default"));
-    expect(activation?.activeRevision ?? null).toBeNull();
+    expect(activation?.activeRevision ?? null).toBe(1);
     expect(revision.values.competitionRates).toMatchObject(
       DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
     );

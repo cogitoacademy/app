@@ -966,6 +966,10 @@ export async function seed() {
   const admin = await ensureSeedAdmin(adminPassword);
   await seedV3Economy(admin.id);
 
+  // CI's API coverage database needs only canonical business defaults. Avoid
+  // creating demo users, bookings, and other fixtures that can affect tests.
+  if (process.argv.includes("--defaults-only")) return;
+
   const tutorEmail =
     process.env.SEED_REVIEW_TUTOR_EMAIL?.trim().toLowerCase() ||
     DEFAULT_SEED_TUTOR.email;

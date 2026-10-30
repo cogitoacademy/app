@@ -1,16 +1,11 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import {
-  economyV3Activation,
-  economyV3TopUpQuote,
-  paymentRecord,
-} from "@cogito-app/db/schema";
+import { economyV3TopUpQuote, paymentRecord } from "@cogito-app/db/schema";
 import { services } from "../../services";
 import { createEconomyService } from "../../modules/economy/economy.service";
 import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createPaymentService } from "../../modules/payment/payment.service";
-import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 import {
   createTestContext,
   resetDatabase,
@@ -18,12 +13,6 @@ import {
 } from "../helpers/test-client";
 
 describe("V3 top-up PostgreSQL transaction boundaries", () => {
-  afterAll(async () => {
-    await db
-      .update(economyV3Activation)
-      .set({ activeRevision: null })
-      .where(eq(economyV3Activation.id, "default"));
-  });
   let userId: string;
   let walletId: string;
   const provider = {
@@ -50,18 +39,7 @@ describe("V3 top-up PostgreSQL transaction boundaries", () => {
     );
     userId = (await createTestContext(account.cookie)).session!.user.id;
     walletId = (await services.wallet.getOrCreate(userId)).id;
-    expect(await economy.getActiveV3Config()).toBeNull();
-    const revision = await economy.saveV3Config(db, {
-      expectedVersion: 0,
-      values: DEFAULT_V3_ECONOMY_CONFIG,
-      reason: "Isolated top-up integration fixture",
-      createdBy: userId,
-    });
-    if (!revision) throw new Error("Fixture revision was not saved");
-    // Test DB only. No application activation endpoint exists yet.
-    await db
-      .insert(economyV3Activation)
-      .values({ id: "default", activeRevision: revision.version });
+    expect(await economy.getActiveV3Config()).not.toBeNull();
   });
 
   test("concurrent quote requests and purchases persist one offer and one provider POST", async () => {

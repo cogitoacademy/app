@@ -76,18 +76,18 @@ describe("Economy settings role safety", () => {
   test("V3 concurrent saves create one immutable revision and audit", async () => {
     const [activeBefore] = await db.select().from(economyV3Activation);
     const initial = await adminClient.admin.getV3EconomySettings();
-    expect(initial.version).toBe(0);
+    expect(initial.version).toBe(1);
     const first = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
     const second = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
     second.competitionRates["competition-debate"].soloMarks = 46;
     const outcomes = await Promise.allSettled([
       adminClient.admin.saveV3EconomySettings({
-        expectedVersion: 0,
+        expectedVersion: 1,
         reason: "First admin rates",
         values: first,
       }),
       adminClient.admin.saveV3EconomySettings({
-        expectedVersion: 0,
+        expectedVersion: 1,
         reason: "Concurrent admin rates",
         values: second,
       }),
@@ -101,7 +101,7 @@ describe("Economy settings role safety", () => {
     const [revisionOne] = await db
       .select()
       .from(economyV3Revision)
-      .where(eq(economyV3Revision.version, 1));
+      .where(eq(economyV3Revision.version, 2));
     expect(revisionOne).toBeDefined();
     const audits = await db
       .select()
@@ -110,16 +110,16 @@ describe("Economy settings role safety", () => {
     expect(audits).toHaveLength(1);
     expect(audits[0]!.actorId).toBe(adminId);
     await adminClient.admin.saveV3EconomySettings({
-      expectedVersion: 1,
+      expectedVersion: 2,
       reason: "Second revision",
       values: first,
     });
     const [preserved] = await db
       .select()
       .from(economyV3Revision)
-      .where(eq(economyV3Revision.version, 1));
+      .where(eq(economyV3Revision.version, 2));
     expect(preserved).toEqual(revisionOne);
-    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(2);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(3);
     const [activeAfter] = await db.select().from(economyV3Activation);
     expect(activeAfter).toEqual(activeBefore);
   });
@@ -137,7 +137,7 @@ describe("Economy settings role safety", () => {
     } as Parameters<typeof createAdminService>[0]);
     await expect(
       service.saveV3EconomySettings(adminId, {
-        expectedVersion: 2,
+        expectedVersion: 3,
         reason: "Must roll back",
         values: DEFAULT_V3_ECONOMY_CONFIG,
       }),
@@ -146,9 +146,9 @@ describe("Economy settings role safety", () => {
       await db
         .select()
         .from(economyV3Revision)
-        .where(eq(economyV3Revision.version, 3)),
+        .where(eq(economyV3Revision.version, 4)),
     ).toHaveLength(0);
-    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(2);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(3);
   });
 
   test("stale V3 saves are rejected", async () => {
@@ -166,7 +166,7 @@ describe("Economy settings role safety", () => {
       await expect(client.admin.getV3EconomySettings()).rejects.toThrow();
       await expect(
         client.admin.saveV3EconomySettings({
-          expectedVersion: 2,
+          expectedVersion: 3,
           values: DEFAULT_V3_ECONOMY_CONFIG,
           reason: "Unauthorized save",
         }),

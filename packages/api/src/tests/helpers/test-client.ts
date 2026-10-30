@@ -1,9 +1,15 @@
 import { createRouterClient } from "@orpc/server";
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
-import { economyConfig, user } from "@cogito-app/db/schema";
+import {
+  economyV3Activation,
+  economyV3Revision,
+  markPackage,
+  user,
+} from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 import { appRouter } from "../../routers";
 import { services } from "../../services";
 import {
@@ -141,34 +147,35 @@ export async function resetDatabase() {
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );
   await seedMarkPackages();
-  await db.update(economyConfig).set({
-    markValueIdr: 5_000,
-    minTutorBaseRateIdr: 50_000,
-    onlineTutorIncrementIdr: 30_000,
-    offlineTutorIncrementIdr: 40_000,
-    onlineCogitoBaseIdr: 50_000,
-    onlineCogitoIncrementIdr: 20_000,
-    offlineCogitoBaseIdr: 90_000,
-    offlineCogitoIncrementIdr: 40_000,
+  await db.insert(economyV3Revision).values({
     version: 1,
+    values: DEFAULT_V3_ECONOMY_CONFIG,
+    reason: "Reset V3 economy defaults for isolated tests",
+    createdBy: null,
+  });
+  await db.insert(economyV3Activation).values({
+    id: "default",
+    activeRevision: 1,
     updatedBy: null,
   });
 }
 
 async function seedMarkPackages() {
-  const { markPackage } = await import("@cogito-app/db/schema");
+  const packageNames: Record<string, string> = {
+    starter: "Starter Pack",
+    learner: "Learner Pack",
+    explorer: "Explorer Pack",
+    pioneer: "Pioneer Pack",
+  };
   await db
     .insert(markPackage)
-    .values([
-      { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 312500 },
-      { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 690000 },
-      {
-        code: "explorer",
-        name: "Explorer Pack",
-        marks: 200,
-        priceIdr: 1070000,
-      },
-      { code: "pioneer", name: "Pioneer Pack", marks: 400, priceIdr: 2000000 },
-    ])
+    .values(
+      DEFAULT_V3_ECONOMY_CONFIG.packages.map((pkg) => ({
+        code: pkg.code,
+        marks: pkg.marks,
+        priceIdr: pkg.priceIdr,
+        name: packageNames[pkg.code] ?? pkg.code,
+      })),
+    )
     .onConflictDoNothing({ target: markPackage.code });
 }

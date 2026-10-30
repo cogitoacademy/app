@@ -279,6 +279,11 @@ jobs:
           echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
+      - name: Seed V3 defaults for API coverage
+        run: bun run seed --defaults-only
+        working-directory: apps/server
+        env:
+          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Create payout integration Drizzle env
         run: |
           echo "DATABASE_URL=${{ env.PAYOUT_DATABASE_URL }}" > apps/server/.env.test-payout
