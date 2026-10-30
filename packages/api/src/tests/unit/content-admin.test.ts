@@ -7,8 +7,17 @@ import type { Context } from "../../context";
 import { createContentAdminService } from "../../modules/content-admin/content-admin.service";
 import { createContentAdminHandler } from "../../modules/content-admin/content-admin.handler";
 import { createContentAdminRouter } from "../../modules/content-admin/content-admin.router";
-import type { ContentAdminRepo } from "../../modules/content-admin/content-admin.repo";
-import { ContentConflictError } from "../../modules/content-admin/content-admin.errors";
+import {
+  createContentAdminRepo,
+  type ContentAdminRepo,
+} from "../../modules/content-admin/content-admin.repo";
+import type { DbType } from "../../lib/db";
+import {
+  ContentConflictError,
+  ContentInvalidError,
+  mapContentAdminError,
+} from "../../modules/content-admin/content-admin.errors";
+import { DomainError } from "../../lib/domain-errors";
 import {
   resourceFields,
   eventFields,
@@ -42,6 +51,9 @@ const event = {
   isActive: true,
   sortOrder: 0,
 };
+class OtherContentError extends DomainError {
+  readonly domain = "content-admin";
+}
 const storage = () => ({
   put: mock(async () => {}),
   read: mock(async () => new Uint8Array()),
@@ -53,7 +65,36 @@ function service(overrides: Partial<ContentAdminRepo> = {}, enabled = true) {
     enabled: () => enabled,
   });
 }
+function fakeQueryBuilder(result: unknown[]) {
+  const query: any = Promise.resolve(result);
+  Object.assign(query, {
+    from: () => query,
+    where: () => query,
+    for: async () => result,
+    set: () => query,
+    returning: async () => result,
+  });
+  return query;
+}
 describe("content admin boundaries", () => {
+  test("maps content domain errors to conflict, bad request, and internal error", () => {
+    expect(mapContentAdminError(new ContentConflictError())).toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("changed or was removed"),
+    });
+    expect(
+      mapContentAdminError(new ContentInvalidError("Invalid entry")),
+    ).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Invalid entry",
+    });
+    expect(
+      mapContentAdminError(new OtherContentError("UNKNOWN", "Unexpected")),
+    ).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unexpected",
+    });
+  });
   test("single text value accepts any language and rejects locale pairs", () => {
     expect(resourceFields.parse(resource).title).toBe("Panduan");
     expect(
@@ -109,6 +150,37 @@ describe("content admin boundaries", () => {
       expectedVersion: 4,
     });
   });
+  test("resource update detects a concurrent missing row after the version check", async () => {
+    const before = {
+      id: "resource-1",
+      ...resource,
+      version: 1,
+      sourceId: null,
+      sourceHash: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const selectResults: unknown[][] = [[before], [{ id: resource.fileId }]];
+    const tx = {
+      execute: async () => undefined,
+      select: () => fakeQueryBuilder(selectResults.shift() ?? []),
+      update: () => fakeQueryBuilder([]),
+    };
+    const db = {
+      transaction: (run: (transaction: typeof tx) => Promise<unknown>) =>
+        run(tx),
+    } as unknown as DbType;
+    const repo = createContentAdminRepo(db, { record: async () => {} });
+
+    await expect(
+      repo.save(
+        { kind: "resource", values: resource },
+        "admin",
+        "Concurrent delete",
+        { id: before.id, expectedVersion: before.version },
+      ),
+    ).rejects.toBeInstanceOf(ContentConflictError);
+  });
   test("every admin procedure rejects anonymous, student and tutor before service", async () => {
     const list = mock(async () => []);
     const router = createContentAdminRouter(
@@ -160,9 +232,11 @@ describe("content admin boundaries", () => {
     await expect(
       s.uploadPdf({ fileName: "x.pdf", base64: btoa("not a PDF") }),
     ).rejects.toThrow("PDF");
-    const result = await s.uploadPdf({
-      fileName: "x.pdf",
-      base64: btoa("%PDF-test"),
+    const result = await createContentAdminHandler(s).uploadPdf({
+      input: {
+        fileName: "x.pdf",
+        base64: btoa("%PDF-test"),
+      },
     });
     expect(Object.keys(result).toSorted()).toEqual([
       "bytes",

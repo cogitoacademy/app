@@ -1705,6 +1705,173 @@ describe("createGoogleMeetingProvider academy class events", () => {
     calendarId: "primary",
   };
 
+  test("updateEvent skips empty changes before reading the booking event", async () => {
+    const select = mock(() => {
+      throw new Error("Empty changes must not read the booking event");
+    });
+    const provider = createGoogleMeetingProvider(config, { select } as never);
+
+    await provider.updateEvent("booking-1", {});
+
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  test("class update treats a cancelled service-account event as missing", async () => {
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: { id: "cancelled-class-event", status: "cancelled" },
+    }));
+    const provider = createGoogleMeetingProvider(config, {} as never);
+
+    await expect(
+      provider.updateAcademyClassEvent!(
+        "cancelled-class-event",
+        "session-cancelled",
+        new Date("2035-02-01T10:00:00.000Z"),
+        new Date("2035-02-01T11:00:00.000Z"),
+      ),
+    ).rejects.toMatchObject({ code: 410, missingClassEvent: true });
+  });
+
+  test("OAuth class update treats a cancelled event as missing", async () => {
+    globalThis.fetch = mock(async (input: unknown) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token")
+        return new Response(
+          JSON.stringify({ access_token: "class-update-token" }),
+          { status: 200 },
+        );
+      return new Response(
+        JSON.stringify({ id: "oauth-cancelled-class", status: "cancelled" }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const provider = createGoogleMeetingProvider(
+      {
+        authType: "oauth_refresh_token",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        refreshToken: "refresh-token",
+        calendarId: "primary",
+      },
+      {} as never,
+    );
+
+    await expect(
+      provider.updateAcademyClassEvent!(
+        "oauth-cancelled-class",
+        "session-oauth-cancelled",
+        new Date("2035-02-01T10:00:00.000Z"),
+        new Date("2035-02-01T11:00:00.000Z"),
+      ),
+    ).rejects.toMatchObject({ code: 410, missingClassEvent: true });
+  });
+
+  test("resumes a cancelled OAuth class event as a missing event", async () => {
+    globalThis.fetch = mock(async (input: unknown) => {
+      if (String(input) === "https://oauth2.googleapis.com/token")
+        return new Response(
+          JSON.stringify({ access_token: "class-resume-token" }),
+          { status: 200 },
+        );
+      return new Response(
+        JSON.stringify({ id: "cancelled-resume-event", status: "cancelled" }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const provider = createGoogleMeetingProvider(
+      {
+        authType: "oauth_refresh_token",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        refreshToken: "refresh-token",
+        calendarId: "primary",
+      },
+      {} as never,
+    );
+
+    const result = await provider.createAcademyClassEvent!(
+      "session-resume-cancelled",
+      new Date("2035-02-01T10:00:00.000Z"),
+      new Date("2035-02-01T11:00:00.000Z"),
+      undefined,
+      {
+        title: "Resume cancelled class event",
+        externalEventId: "cancelled-resume-event",
+        creationGeneration: 2,
+      },
+    );
+
+    expect(result).toMatchObject({ status: "failed", missingEvent: true });
+  });
+
+  test.each([
+    ["cancelled tombstone", 200, { id: "existing", status: "cancelled" }, true],
+    ["temporary lookup failure", 503, { error: "unavailable" }, false],
+  ] as const)(
+    "OAuth idempotent class insert handles a %s lookup",
+    async (_label, lookupStatus, lookupPayload, missingEvent) => {
+      const sessionId = `session-oauth-idempotent-${lookupStatus}`;
+      const idempotencyKey = `academy-class-session:${sessionId}:generation:2`;
+      const providerEventId = `cogito${createHash("sha256")
+        .update(idempotencyKey)
+        .digest("hex")}`;
+      const calls: Array<{ url: string; method: string }> = [];
+      globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        calls.push({ url, method });
+        if (url === "https://oauth2.googleapis.com/token")
+          return new Response(
+            JSON.stringify({ access_token: "idempotent-class-token" }),
+            { status: 200 },
+          );
+        if (method === "POST")
+          return new Response(JSON.stringify({ error: "already exists" }), {
+            status: 409,
+          });
+        return new Response(JSON.stringify(lookupPayload), {
+          status: lookupStatus,
+        });
+      }) as typeof fetch;
+      const provider = createGoogleMeetingProvider(
+        {
+          authType: "oauth_refresh_token",
+          clientId: "client-id",
+          clientSecret: "client-secret",
+          refreshToken: "refresh-token",
+          calendarId: "primary",
+        },
+        {} as never,
+      );
+
+      const result = await provider.createAcademyClassEvent!(
+        sessionId,
+        new Date("2035-02-01T10:00:00.000Z"),
+        new Date("2035-02-01T11:00:00.000Z"),
+        undefined,
+        { title: "Retry class event", creationGeneration: 2 },
+      );
+
+      expect(calls.map(({ method }) => method)).toEqual([
+        "POST",
+        "POST",
+        "GET",
+      ]);
+      expect(calls.at(-1)?.url).toContain(encodeURIComponent(providerEventId));
+      expect(result.status).toBe("failed");
+      expect(result.missingEvent ?? false).toBe(missingEvent);
+    },
+  );
+
+  test("class cancellation requires an event or session identity", async () => {
+    const provider = createGoogleMeetingProvider(config, {} as never);
+
+    await expect(provider.cancelAcademyClassEvent!(null)).rejects.toThrow(
+      "Class event cancellation requires a provider or session identity",
+    );
+  });
+
   test("reuses a stable Google event ID after an ambiguous successful insert", async () => {
     mockCalendarEventsInsert.mockReset();
     mockCalendarEventsGet.mockReset();
@@ -1737,21 +1904,21 @@ describe("createGoogleMeetingProvider academy class events", () => {
     const localInsert = mock(() => ({
       values: mock(() => ({ returning: mock(async () => []) })),
     }));
-    const provider = createGoogleMeetingProvider(config, {
+    const provider = createGoogleMeetingProviderWithFallback(config, {
       insert: localInsert,
     } as any);
     const sessionId = "class-session-retry";
     const startAt = new Date("2035-02-01T10:00:00.000Z");
     const endAt = new Date("2035-02-01T11:00:00.000Z");
 
-    const first = await provider.createAcademyClassEvent(
+    const first = await provider.createAcademyClassEvent!(
       sessionId,
       startAt,
       endAt,
       { email: "tutor@example.com", name: "Test Tutor" },
       { title: "Cogito class retry" },
     );
-    const retry = await provider.createAcademyClassEvent(
+    const retry = await provider.createAcademyClassEvent!(
       sessionId,
       startAt,
       endAt,
@@ -2211,7 +2378,7 @@ describe("createGoogleMeetingProvider academy class events", () => {
         url,
         body: typeof init?.body === "string" ? init.body : undefined,
       });
-      if (url.includes("oauth2.googleapis.com"))
+      if (url === "https://oauth2.googleapis.com/token")
         return new Response(
           JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
           { status: 200 },
@@ -2319,7 +2486,7 @@ describe("durable class event deletion", () => {
     ) => {
       const url = String(input);
       calls.push(`${init?.method} ${url}`);
-      if (url.includes("oauth2.googleapis.com"))
+      if (url === "https://oauth2.googleapis.com/token")
         return new Response(
           JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
           { status: 200 },

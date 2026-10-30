@@ -50,11 +50,6 @@ export function calculateTutorTaxIdr(grossIdr: number, taxRateBps: number) {
   }
 
   const roundedTax = (BigInt(grossIdr) * BigInt(taxRateBps) + 5_000n) / 10_000n;
-  if (roundedTax > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new TutorPayoutCalculationError(
-      "Tax amount exceeds the safe IDR range",
-    );
-  }
   return Number(roundedTax);
 }
 

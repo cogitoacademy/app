@@ -38,6 +38,24 @@ afterEach(() => {
 });
 
 describe("createFallbackMeetingProvider", () => {
+  test("class meeting setup remains failed until a provider is configured", async () => {
+    const provider = createFallbackMeetingProvider({} as any);
+    expect(
+      await provider.createAcademyClassEvent!(
+        "session1",
+        new Date(),
+        new Date(),
+      ),
+    ).toMatchObject({
+      provider: "manual",
+      status: "failed",
+      externalEventId: null,
+      meetingUrl: null,
+    });
+    await expect(provider.cancelAcademyClassEvent!("event1")).rejects.toThrow(
+      "Google Calendar cancellation is unavailable",
+    );
+  });
   test("createEvent inserts manual meeting and returns result", async () => {
     const insertedRow = {
       id: "me1",

@@ -1,5 +1,6 @@
-import { describe, test, expect, mock } from "bun:test";
+import { describe, test, expect, mock, spyOn } from "bun:test";
 import { auth } from "@cogito-app/auth";
+import { db } from "@cogito-app/db";
 import { createContext, refreshSessionUser } from "../../context";
 
 describe("refreshSessionUser (N4)", () => {
@@ -150,6 +151,44 @@ describe("createContext (N4 wiring)", () => {
       expect(getSession).toHaveBeenCalledTimes(1);
     } finally {
       (auth.api as any).getSession = originalGetSession;
+    }
+  });
+
+  test("uses the default database connection when refreshing the session user", async () => {
+    const findFirst = spyOn(db.query.user, "findFirst").mockResolvedValue({
+      role: "admin",
+      emailVerified: true,
+      referralChoicePending: false,
+    } as never);
+    const getSession = mock(async () => ({
+      user: {
+        id: "u1",
+        email: "student@cogito.test",
+        name: "Student",
+        role: "student",
+        emailVerified: false,
+        referralChoicePending: true,
+      },
+    }));
+
+    try {
+      const ctx = await createContext(
+        {
+          context: {
+            request: new Request("http://localhost/rpc/auth.getSession"),
+          },
+        } as any,
+        { getSession } as any,
+      );
+
+      expect(findFirst).toHaveBeenCalledTimes(1);
+      expect(ctx.session!.user).toMatchObject({
+        role: "admin",
+        emailVerified: true,
+        referralChoicePending: false,
+      });
+    } finally {
+      findFirst.mockRestore();
     }
   });
 });

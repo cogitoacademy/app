@@ -344,9 +344,13 @@ export function createAdminClassSessionCancellation(deps: {
         .filter((row) => row.state === "checkout_pending")
         .map((row) => row.id);
       for (const enrollmentId of activeCheckoutIds) {
+        const firstInstallment = installments.find(
+          (row) => row.enrollmentId === enrollmentId && row.ordinal === 1,
+        );
         const checkoutAllocations = allocations.filter(
           (row) =>
             row.enrollmentId === enrollmentId &&
+            row.installmentId === firstInstallment?.id &&
             row.state === "checkout_reserved" &&
             row.sessionId !== session.id,
         );

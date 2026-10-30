@@ -456,6 +456,19 @@ describe("Tutor Service", () => {
       };
     }
 
+    test("payout finance requires the port and forwards the tutor identity", async () => {
+      await expect(
+        createTutorService(makeDeps() as any).getMyPayoutFinance("tutor1"),
+      ).rejects.toMatchObject({ code: "TUTOR_PAYOUT_FINANCE_UNAVAILABLE" });
+      const finance = { tutorId: "tutor1" };
+      const getTutorPayoutFinance = mock(async () => finance);
+      const service = createTutorService(
+        makeDeps({ payout: { getTutorPayoutFinance } }) as any,
+      );
+      expect(await service.getMyPayoutFinance("tutor1")).toBe(finance);
+      expect(getTutorPayoutFinance).toHaveBeenCalledWith("tutor1");
+    });
+
     test("getMyProfile throws TutorProfileNotFoundError when not found", async () => {
       const deps = makeDeps({
         tutorRepo: {

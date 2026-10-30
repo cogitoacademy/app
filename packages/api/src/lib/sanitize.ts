@@ -72,7 +72,7 @@ function sanitizeAttributeValue(prefix: string, rawValue: string): string {
   return prefix + rawValue;
 }
 
-function sanitizeTag(raw: string, tagName: string): string {
+function sanitizeTag(raw: string): string {
   const stripped = raw.replace(
     /\s+on[a-zA-Z][a-zA-Z0-9]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi,
     "",
@@ -82,7 +82,6 @@ function sanitizeTag(raw: string, tagName: string): string {
     (_match, prefix: string, value: string) =>
       sanitizeAttributeValue(prefix, value),
   );
-  if (!ALLOWED_TAGS.has(tagName)) return "";
   return cleaned;
 }
 
@@ -158,7 +157,7 @@ export function sanitizeHtml(input: string): string {
     if (raw.trimStart().startsWith("</")) {
       result += `</${tagName}>`;
     } else {
-      result += sanitizeTag(raw, tagName);
+      result += sanitizeTag(raw);
     }
     index = close + 1;
   }

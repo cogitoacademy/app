@@ -8,6 +8,7 @@ import {
 import { PAYMENT_STATUS } from "../../shared/constants";
 import type { PaymentRepo } from "../../modules/payment/payment.repo";
 import type { PaymentStatus } from "../../modules/payment/payment.service";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 
 function makeProvider() {
   return {
@@ -84,7 +85,578 @@ function makeDb() {
   } as any;
 }
 
+function makeTopUpQuote(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "quote-1",
+    userId: "user1",
+    requestKey: "request-1",
+    revision: 3,
+    requestedMarks: 50,
+    termsSnapshot: {
+      packages: [{ code: "starter", marks: 50, priceIdr: 350_000 }],
+      exactSurchargeIdr: 250,
+      exactPackageCode: "starter",
+      customAmountIdr: 350_000,
+      recommendation: null,
+    },
+    expiresAt: new Date("2026-11-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
 describe("PaymentService", () => {
+  describe("V3 top-ups", () => {
+    test("returns disabled and active catalog responses", async () => {
+      const disabled = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo(),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(disabled.getTopUpCatalog()).resolves.toEqual({
+        active: false,
+        revision: null,
+        packages: [],
+        exactSurchargeIdr: 0,
+        quoteTtlSeconds: 900,
+      });
+
+      const economy = {
+        getActiveV3Config: mock(async () => ({
+          version: 7,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
+      };
+      const active = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo(),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      await expect(active.getTopUpCatalog()).resolves.toMatchObject({
+        active: true,
+        revision: 7,
+        packages: expect.arrayContaining([
+          {
+            code: "starter",
+            label: "Starter package",
+            marks: 50,
+            priceIdr: 350_000,
+          },
+        ]),
+        exactSurchargeIdr: 250,
+        quoteTtlSeconds: 900,
+      });
+    });
+
+    test("creates a quote from active pricing and reuses an identical request", async () => {
+      const economy = {
+        getActiveV3Config: mock(async () => ({
+          version: 7,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
+      };
+      const inserted: any[] = [];
+      const repo = makeRepo({
+        findTopUpQuoteByRequestKey: mock(async () => null) as any,
+        insertTopUpQuote: mock(async (values: any) => {
+          const row = { ...values, id: "quote-created" };
+          inserted.push(row);
+          return row;
+        }) as any,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const created = await service.createTopUpQuote("user1", {
+        requestKey: "request-1",
+        marks: 50,
+      });
+      expect(created).toMatchObject({
+        quoteId: "quote-created",
+        revision: 7,
+        marks: 50,
+        exactPackage: {
+          code: "starter",
+          label: "Starter package",
+          marks: 50,
+          priceIdr: 350_000,
+        },
+      });
+      expect(inserted).toHaveLength(1);
+
+      const existing = makeTopUpQuote();
+      const idempotentService = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => existing) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        idempotentService.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).resolves.toMatchObject({ quoteId: "quote-1", marks: 50 });
+    });
+
+    test("returns an idempotent winner after a concurrent quote insert", async () => {
+      const economy = {
+        getActiveV3Config: mock(async () => ({
+          version: 7,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+        })),
+      };
+      let lookups = 0;
+      const winner = makeTopUpQuote();
+      const service = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => {
+            lookups += 1;
+            return lookups === 1 ? null : winner;
+          }) as any,
+          insertTopUpQuote: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      await expect(
+        service.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).resolves.toMatchObject({ quoteId: "quote-1", marks: 50 });
+
+      let conflictingLookups = 0;
+      const conflictingWinner = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => {
+            conflictingLookups += 1;
+            return conflictingLookups === 1
+              ? null
+              : makeTopUpQuote({ requestedMarks: 60 });
+          }) as any,
+          insertTopUpQuote: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        conflictingWinner.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).rejects.toThrow(
+        "This request key was already used for different top-up terms",
+      );
+
+      let missingWinnerLookups = 0;
+      const missingWinner = createPaymentService({
+        db: makeDb(),
+        economy: economy as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => {
+            missingWinnerLookups += 1;
+            return null;
+          }) as any,
+          insertTopUpQuote: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        missingWinner.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).rejects.toThrow("Top-up quote could not be saved");
+      expect(missingWinnerLookups).toBe(2);
+    });
+
+    test("rejects unavailable, conflicting, and out-of-range quotes", async () => {
+      const unavailable = createPaymentService({
+        db: makeDb(),
+        economy: { getActiveV3Config: mock(async () => null) } as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        unavailable.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).rejects.toThrow("V3 top-ups are not active");
+
+      const conflict = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () =>
+            makeTopUpQuote({ requestedMarks: 60 }),
+          ) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        conflict.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).rejects.toThrow(
+        "This request key was already used for different top-up terms",
+      );
+
+      const outOfRange = createPaymentService({
+        db: makeDb(),
+        economy: {
+          getActiveV3Config: mock(async () => ({
+            version: 7,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+        } as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        outOfRange.createTopUpQuote("user1", {
+          requestKey: "request-large",
+          marks: 1_000_000,
+        }),
+      ).rejects.toThrow("Choose a smaller top-up amount");
+    });
+
+    test.each([
+      ["package", { exactPackageCode: null, recommendation: null }],
+      ["package", { exactPackageCode: "missing", recommendation: null }],
+      ["custom", { exactPackageCode: "starter", recommendation: null }],
+      ["recommended", { exactPackageCode: null, recommendation: null }],
+    ] as const)("rejects unavailable %s choices", async (choice, terms) => {
+      const quote = makeTopUpQuote({
+        termsSnapshot: {
+          ...(makeTopUpQuote().termsSnapshot as object),
+          ...terms,
+        },
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteById: mock(async () => quote) as any,
+          findPaymentByQuote: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      await expect(
+        service.createPurchaseFromTopUpQuote(
+          "user1",
+          "wallet1",
+          "quote-1",
+          choice,
+        ),
+      ).rejects.toThrow("That top-up choice is not available for this quote");
+    });
+
+    test.each([
+      ["package", makeTopUpQuote(), "midtrans"],
+      [
+        "custom",
+        makeTopUpQuote({
+          requestedMarks: 73,
+          termsSnapshot: {
+            packages: [{ code: "starter", marks: 50, priceIdr: 350_000 }],
+            exactSurchargeIdr: 250,
+            exactPackageCode: null,
+            customAmountIdr: 511_000,
+            recommendation: null,
+          },
+        }),
+        "stub",
+      ],
+      [
+        "recommended",
+        makeTopUpQuote({
+          requestedMarks: 73,
+          termsSnapshot: {
+            packages: [{ code: "learner", marks: 150, priceIdr: 975_000 }],
+            exactSurchargeIdr: 250,
+            exactPackageCode: null,
+            customAmountIdr: 511_000,
+            recommendation: { code: "learner", marks: 150, priceIdr: 975_000 },
+          },
+        }),
+        "stub",
+      ],
+    ] as const)(
+      "creates a %s top-up purchase",
+      async (choice, quote, providerName) => {
+        let savedPayment: any;
+        const repo = makeRepo({
+          findTopUpQuoteById: mock(async () => quote) as any,
+          findPaymentByQuote: mock(async () => null) as any,
+          insertPayment: mock(async (values: any) => {
+            savedPayment = { ...values, checkoutUrl: null };
+            return savedPayment;
+          }) as any,
+          updatePaymentIntent: mock(async (_id: string, update: any) => {
+            savedPayment = { ...savedPayment, ...update };
+          }) as any,
+          findPaymentById: mock(async () => ({
+            ...savedPayment,
+            purchaseLabel: null,
+          })) as any,
+        });
+        const provider = makeProvider();
+        provider.createIntent = mock(async () => ({
+          checkoutUrl: "https://checkout.test/top-up",
+        }));
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: makeWallet() as any,
+          repo,
+          provider: provider as any,
+          providerName,
+        });
+
+        await expect(
+          service.createPurchaseFromTopUpQuote(
+            "user1",
+            "wallet1",
+            "quote-1",
+            choice,
+          ),
+        ).resolves.toMatchObject({
+          paymentId: expect.any(String),
+          checkoutUrl: "https://checkout.test/top-up",
+          status: PAYMENT_STATUS.PENDING,
+          recoveryRequired: false,
+          quoteId: "quote-1",
+          choice,
+          purchaseLabel: expect.any(String),
+        });
+        expect(provider.createIntent).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    test("keeps a top-up recoverable when provider creation and status lookup fail", async () => {
+      const quote = makeTopUpQuote();
+      const payment: any = {
+        id: "payment-new",
+        userId: "user1",
+        walletId: "wallet1",
+        provider: "midtrans",
+        providerReference: "midtrans:v3:payment-new",
+        providerRequestId: "payment-new",
+        amountIdr: 350_000,
+        marks: 50,
+        status: PAYMENT_STATUS.PENDING,
+        quoteId: quote.id,
+        quoteChoice: "package",
+        checkoutUrl: null,
+      };
+      const repo = makeRepo({
+        findTopUpQuoteById: mock(async () => quote) as any,
+        findPaymentByQuote: mock(async () => null) as any,
+        insertPayment: mock(async () => payment) as any,
+        updatePaymentIntent: mock(async () => undefined) as any,
+        findPaymentById: mock(async () => payment) as any,
+      });
+      const provider = makeProvider();
+      provider.createIntent = mock(async () => {
+        throw new Error("provider timed out");
+      });
+      provider.getPaymentRequestStatus = mock(async () => {
+        throw new Error("status lookup unavailable");
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "midtrans",
+      });
+
+      await expect(
+        service.createPurchaseFromTopUpQuote(
+          "user1",
+          "wallet1",
+          quote.id,
+          "package",
+        ),
+      ).resolves.toMatchObject({
+        paymentId: payment.id,
+        status: PAYMENT_STATUS.PENDING,
+        checkoutUrl: null,
+        recoveryRequired: true,
+      });
+      expect(repo.updatePaymentIntent).toHaveBeenCalledWith(payment.id, {
+        providerIntentState: "UNCERTAIN",
+      });
+    });
+
+    test("rejects an existing quote payment with a different choice", async () => {
+      const quote = makeTopUpQuote();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteById: mock(async () => quote) as any,
+          findPaymentByQuote: mock(async () => ({
+            id: "payment-existing",
+            quoteId: quote.id,
+            quoteChoice: "custom",
+          })) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      await expect(
+        service.createPurchaseFromTopUpQuote(
+          "user1",
+          "wallet1",
+          quote.id,
+          "package",
+        ),
+      ).rejects.toThrow(
+        "This quote already has a payment for a different top-up choice",
+      );
+    });
+
+    test.each([
+      ["missing", null],
+      [
+        "expired",
+        makeTopUpQuote({ expiresAt: new Date("2020-01-01T00:00:00Z") }),
+      ],
+    ] as const)("rejects a %s top-up quote", async (_, quote) => {
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteById: mock(async () => quote) as any,
+          findPaymentByQuote: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const request = service.createPurchaseFromTopUpQuote(
+        "user1",
+        "wallet1",
+        "quote-1",
+        "package",
+      );
+      if (quote === null) {
+        await expect(request).rejects.toThrow("Top-up quote not found");
+      } else {
+        await expect(request).rejects.toThrow("This top-up quote has expired");
+      }
+    });
+
+    test("returns an existing recoverable payment after reconciliation fails", async () => {
+      const quote = makeTopUpQuote();
+      const payment: any = {
+        id: "payment-existing",
+        userId: "user1",
+        providerReference: "midtrans:v3:payment-existing",
+        providerRequestId: "provider-request-1",
+        amountIdr: 350_000,
+        marks: 50,
+        status: PAYMENT_STATUS.PENDING,
+        checkoutUrl: null,
+        quoteId: quote.id,
+        quoteChoice: "package",
+        purchaseLabel: null,
+      };
+      const provider = makeProvider();
+      provider.getPaymentRequestStatus = mock(async () => {
+        throw new Error("status lookup unavailable");
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteById: mock(async () => quote) as any,
+          findPaymentByQuote: mock(async () => payment) as any,
+          findPaymentById: mock(async () => payment) as any,
+        }),
+        provider: provider as any,
+        providerName: "midtrans",
+      });
+
+      await expect(
+        service.createPurchaseFromTopUpQuote(
+          "user1",
+          "wallet1",
+          quote.id,
+          "package",
+        ),
+      ).resolves.toMatchObject({
+        paymentId: payment.id,
+        status: PAYMENT_STATUS.PENDING,
+        checkoutUrl: null,
+        recoveryRequired: true,
+        purchaseLabel: "Top-up · 50 Marks",
+      });
+      expect(provider.createIntent).not.toHaveBeenCalled();
+    });
+
+    test("disables the legacy package flow after V3 pricing activates", async () => {
+      const service = createPaymentService({
+        db: makeDb(),
+        economy: {
+          getActiveV3Config: mock(async () => ({
+            version: 7,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+        } as any,
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findLatestPaymentByUserAndPackageCode: mock(async () => null) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      await expect(
+        service.createIntent("user1", "wallet1", "starter"),
+      ).rejects.toThrow("New top-ups must use the active quoted pricing flow");
+    });
+  });
+
   describe("retired createIntent", () => {
     test("requires the current V3 quoted pricing flow", async () => {
       const service = createPaymentService({
@@ -745,6 +1317,81 @@ describe("PaymentService", () => {
         }),
       ).rejects.toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
     });
+
+    test.each(["missing-amount", "missing-currency"] as const)(
+      "Midtrans refund status rejects %s",
+      async (scenario) => {
+        const repo = makeRepo({
+          findPaymentByProviderReference: mock(async () => ({
+            id: "pay1",
+            status: PAYMENT_STATUS.PAID,
+            provider: "midtrans",
+            amountIdr: 50000,
+            providerReference: "midtrans:user1:pkg1",
+          })),
+        });
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: makeWallet() as any,
+          repo,
+          provider: makeProvider() as any,
+          providerName: "midtrans",
+        });
+        const { amountIdr, currency } = {
+          amountIdr: scenario === "missing-amount" ? undefined : 50000,
+          currency: scenario === "missing-currency" ? undefined : "IDR",
+        };
+
+        await expect(
+          service.confirmFromWebhook({
+            provider: "midtrans",
+            providerReference: "midtrans:user1:pkg1",
+            status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+            amountIdr,
+            currency,
+          }),
+        ).rejects.toMatchObject({
+          code: "PAYMENT_WEBHOOK_MISMATCH",
+          message: "Payment refund status is missing its amount or currency",
+        });
+      },
+    );
+
+    test.each([1.5, 50001])(
+      "rejects a refund amount outside the charge: %s",
+      async (refundAmountIdr) => {
+        const repo = makeRepo({
+          findPaymentByProviderReference: mock(async () => ({
+            id: "pay1",
+            status: PAYMENT_STATUS.PAID,
+            provider: "midtrans",
+            amountIdr: 50000,
+            providerReference: "midtrans:user1:pkg1",
+          })),
+        });
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: makeWallet() as any,
+          repo,
+          provider: makeProvider() as any,
+          providerName: "midtrans",
+        });
+
+        await expect(
+          service.confirmFromWebhook({
+            provider: "midtrans",
+            providerReference: "midtrans:user1:pkg1",
+            status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+            amountIdr: 50000,
+            refundAmountIdr,
+            currency: "IDR",
+          }),
+        ).rejects.toMatchObject({
+          code: "PAYMENT_WEBHOOK_MISMATCH",
+          message: "Payment refund amount mismatch",
+        });
+      },
+    );
 
     test("amount mismatch error carries expected/received amounts for diagnosis", async () => {
       const repo = makeRepo({

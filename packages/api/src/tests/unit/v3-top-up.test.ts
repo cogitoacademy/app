@@ -10,6 +10,8 @@ function setup() {
   };
   const quotes: any[] = [];
   const payments: any[] = [];
+  let quoteInsertRace: "insert" | "same" | "conflict" | "missing" = "insert";
+  let paymentInsertRace: "insert" | "same" | "conflict" | "missing" = "insert";
   const wallet = { credit: mock(async () => ({})) };
   const provider = {
     createIntent: mock(async (_input: any): Promise<any> => ({
@@ -20,6 +22,17 @@ function setup() {
     findTopUpQuoteByRequestKey: async (userId: string, key: string) =>
       quotes.find((q) => q.userId === userId && q.requestKey === key) ?? null,
     insertTopUpQuote: async (q: any) => {
+      if (quoteInsertRace !== "insert") {
+        if (quoteInsertRace !== "missing") {
+          quotes.push({
+            ...q,
+            ...(quoteInsertRace === "conflict"
+              ? { requestedMarks: q.requestedMarks + 1 }
+              : {}),
+          });
+        }
+        return null;
+      }
       quotes.push(q);
       return q;
     },
@@ -28,6 +41,21 @@ function setup() {
     findPaymentByQuote: async (id: string) =>
       payments.find((p) => p.quoteId === id) ?? null,
     insertPayment: async (p: any) => {
+      if (paymentInsertRace !== "insert") {
+        if (paymentInsertRace !== "missing") {
+          payments.push({
+            checkoutUrl: "https://checkout.test/raced",
+            ...p,
+            ...(paymentInsertRace === "conflict"
+              ? {
+                  quoteChoice:
+                    p.quoteChoice === "custom" ? "package" : "custom",
+                }
+              : {}),
+          });
+        }
+        return null;
+      }
       const row = { checkoutUrl: null, ...p };
       payments.push(row);
       return row;
@@ -67,6 +95,12 @@ function setup() {
     payments,
     setActive: (value: any) => {
       active = value;
+    },
+    setQuoteInsertRace: (value: typeof quoteInsertRace) => {
+      quoteInsertRace = value;
+    },
+    setPaymentInsertRace: (value: typeof paymentInsertRace) => {
+      paymentInsertRace = value;
     },
   };
 }
@@ -129,6 +163,175 @@ describe("V3 durable top-up offers", () => {
       h.service.createTopUpQuote("student", { ...input, marks: 441 }),
     ).rejects.toThrow();
     expect(h.quotes).toHaveLength(1);
+  });
+
+  test("package checkout is available only for an exact package quote", async () => {
+    const h = setup();
+    const quote = await h.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 50,
+    });
+    expect(quote.exactPackage).toMatchObject({
+      code: "starter",
+      marks: 50,
+      priceIdr: 350_000,
+    });
+
+    const purchase = await h.service.createPurchaseFromTopUpQuote(
+      "student",
+      "wallet",
+      quote.quoteId,
+      "package",
+    );
+    expect(purchase.choice).toBe("package");
+    expect(h.payments[0]).toMatchObject({ marks: 50, amountIdr: 350_000 });
+    await expect(
+      h.service.createPurchaseFromTopUpQuote(
+        "student",
+        "wallet",
+        quote.quoteId,
+        "custom",
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("package checkout rejects a quote without an exact package", async () => {
+    const h = setup();
+    const quote = await h.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 51,
+    });
+    expect(quote.exactPackage).toBeNull();
+    await expect(
+      h.service.createPurchaseFromTopUpQuote(
+        "student",
+        "wallet",
+        quote.quoteId,
+        "package",
+      ),
+    ).rejects.toThrow();
+    expect(h.payments).toHaveLength(0);
+  });
+
+  test.each([
+    null,
+    { packages: "invalid" },
+    { packages: [], exactSurchargeIdr: "invalid" },
+    { packages: [], exactSurchargeIdr: 0, customAmountIdr: "invalid" },
+    {
+      packages: [],
+      exactSurchargeIdr: 0,
+      customAmountIdr: 1,
+      exactPackageCode: 1,
+    },
+    {
+      packages: [],
+      exactSurchargeIdr: 0,
+      customAmountIdr: 1,
+      exactPackageCode: null,
+      recommendation: "invalid",
+    },
+  ])("rejects malformed immutable quote terms: %j", async (termsSnapshot) => {
+    const h = setup();
+    const quote = await h.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 60,
+    });
+    h.quotes[0].termsSnapshot = termsSnapshot;
+
+    await expect(
+      h.service.createPurchaseFromTopUpQuote(
+        "student",
+        "wallet",
+        quote.quoteId,
+        "custom",
+      ),
+    ).rejects.toThrow("Stored V3 top-up quote terms are invalid");
+    expect(h.payments).toHaveLength(0);
+  });
+
+  test.each([
+    ["same", "same"],
+    ["conflict", "conflicting"],
+  ] as const)(
+    "top-up quote insertion race returns a %s immutable winner",
+    async (race, outcome) => {
+      const h = setup();
+      h.setQuoteInsertRace(race);
+
+      const request = {
+        requestKey: crypto.randomUUID(),
+        marks: 60,
+      };
+      if (outcome === "conflicting") {
+        await expect(
+          h.service.createTopUpQuote("student", request),
+        ).rejects.toThrow();
+        return;
+      }
+
+      const winner = await h.service.createTopUpQuote("student", request);
+      expect(winner.marks).toBe(request.marks);
+      expect(h.quotes).toHaveLength(1);
+    },
+  );
+
+  test("fails closed when quote or payment insert races have no winner", async () => {
+    const quoteRace = setup();
+    quoteRace.setQuoteInsertRace("missing");
+    await expect(
+      quoteRace.service.createTopUpQuote("student", {
+        requestKey: crypto.randomUUID(),
+        marks: 60,
+      }),
+    ).rejects.toThrow("Top-up quote could not be saved");
+
+    const paymentRace = setup();
+    paymentRace.setPaymentInsertRace("missing");
+    const quote = await paymentRace.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 50,
+    });
+    await expect(
+      paymentRace.service.createPurchaseFromTopUpQuote(
+        "student",
+        "wallet",
+        quote.quoteId,
+        "package",
+      ),
+    ).rejects.toThrow("Top-up payment could not be saved");
+  });
+
+  test("payment insertion races reuse the same choice and reject a different one", async () => {
+    const same = setup();
+    same.setPaymentInsertRace("same");
+    const sameQuote = await same.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 50,
+    });
+    const reused = await same.service.createPurchaseFromTopUpQuote(
+      "student",
+      "wallet",
+      sameQuote.quoteId,
+      "package",
+    );
+    expect(reused.checkoutUrl).toBe("https://checkout.test/raced");
+    expect(same.provider.createIntent).not.toHaveBeenCalled();
+
+    const conflict = setup();
+    conflict.setPaymentInsertRace("conflict");
+    const conflictQuote = await conflict.service.createTopUpQuote("student", {
+      requestKey: crypto.randomUUID(),
+      marks: 50,
+    });
+    await expect(
+      conflict.service.createPurchaseFromTopUpQuote(
+        "student",
+        "wallet",
+        conflictQuote.quoteId,
+        "package",
+      ),
+    ).rejects.toThrow();
   });
 
   test.each(["custom", "recommended"] as const)(

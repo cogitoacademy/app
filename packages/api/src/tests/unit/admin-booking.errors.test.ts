@@ -7,8 +7,11 @@ import {
   BookingOverrideConflictError,
   OverrideMarksParticipantsRequiredError,
   OverrideParticipantNotInBookingError,
+  RefundSpendExhaustedError,
   mapAdminBookingError,
 } from "../../modules/admin-booking/admin-booking.errors";
+import { BookingNotEditableError } from "../../modules/booking/booking.errors";
+import { BookingStateTransitionError } from "../../modules/booking/booking.errors";
 
 class TestDomainError extends DomainError {
   readonly domain = "test";
@@ -124,6 +127,28 @@ describe("admin-booking.errors", () => {
         new InvalidRefundStateError("bk_1", "cancelled"),
       );
       expect(result.status).toBe(400);
+    });
+    it("should map RefundSpendExhaustedError to BAD_REQUEST", () => {
+      const result = mapAdminBookingError(
+        new RefundSpendExhaustedError("bk_1"),
+      );
+      expect(result.status).toBe(400);
+    });
+    it("should map BookingOverrideConflictError to CONFLICT", () => {
+      const result = mapAdminBookingError(
+        new BookingOverrideConflictError("bk_1"),
+      );
+      expect(result.status).toBe(409);
+    });
+    it("should map BookingNotEditableError to BAD_REQUEST", () => {
+      const result = mapAdminBookingError(new BookingNotEditableError("bk_1"));
+      expect(result.status).toBe(400);
+    });
+    it("should map BookingStateTransitionError to CONFLICT", () => {
+      const result = mapAdminBookingError(
+        new BookingStateTransitionError("pending", "confirm", "confirmed"),
+      );
+      expect(result.status).toBe(409);
     });
     it("should map OverrideMarksParticipantsRequiredError to BAD_REQUEST", () => {
       const result = mapAdminBookingError(

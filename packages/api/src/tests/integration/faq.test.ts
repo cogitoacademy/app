@@ -126,6 +126,16 @@ describe("FAQ Postgres integration", () => {
     });
     fixtureIds.push(inactive.id);
 
+    const adminFaqs = await clients.adminClient.adminFaq.list({});
+    expect(
+      adminFaqs
+        .filter((entry) => fixtureIds.includes(entry.id))
+        .map((entry) => entry.id),
+    ).toEqual([inactive.id, landing.id, later.id]);
+    expect(adminFaqs.find((entry) => entry.id === inactive.id)?.isActive).toBe(
+      false,
+    );
+
     const fullFaqs = await clients.publicClient.publicContent.faq.list({
       locale: "en",
       surface: "full",

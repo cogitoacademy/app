@@ -11,6 +11,7 @@ import {
   InvalidLedgerFilterError,
   TutorPayoutNotAvailableError,
 } from "../../modules/admin/admin.errors";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 
 const emptyOperations = {
   privateMarks: 0,
@@ -257,6 +258,128 @@ describe("Admin Service", () => {
         payout,
       }),
       auditPort,
+    });
+
+    test("rejects tax and settlement operations when their payout port is unavailable", async () => {
+      const { service } = makeService({});
+      const reason = { payoutId: "payout-1", reason: "Correct settlement" };
+      await Promise.all(
+        [
+          service.getTutorTaxConfig(),
+          service.updateTutorTaxConfig("admin1", {
+            expectedVersion: 0,
+            nikNpwpRateBps: 100,
+            nikOnlyRateBps: 200,
+            missingRateBps: 300,
+            reason: "Update policy",
+          }),
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "t1",
+            rateBps: null,
+            reason: "Clear override",
+          }),
+          service.voidTutorPayout("admin1", reason),
+          service.resolveTutorPayoutReconciliation("admin1", reason),
+          service.previewTutorPayout({ tutorId: "t1", sourceKeys: [] }),
+          service.recordTutorPayoutTransfer("admin1", {
+            payoutId: "payout-1",
+            previewVersion: "v1",
+            actualAmountIdr: 1000,
+            paidAt: "2026-10-28T00:00:00Z",
+          }),
+        ].map((pending) =>
+          expect(pending).rejects.toBeInstanceOf(TutorPayoutNotAvailableError),
+        ),
+      );
+    });
+
+    test("forwards admin identity and tax policy inputs to the payout service", async () => {
+      const config = {
+        version: 1,
+        nikNpwpRateBps: 100,
+        nikOnlyRateBps: 200,
+        missingRateBps: 300,
+      };
+      const payout = {
+        getTutorTaxConfig: mock(async () => config),
+        updateTutorTaxConfig: mock(async () => config),
+        setTutorTaxRateOverride: mock(async () => ({
+          tutorId: "t1",
+          taxRateOverrideBps: null,
+        })),
+      };
+      const { service } = makeService(payout);
+      const update = { expectedVersion: 0, ...config, reason: "Update policy" };
+      const override = {
+        tutorId: "t1",
+        rateBps: null,
+        reason: "Clear override",
+      };
+      expect(await service.getTutorTaxConfig()).toBe(config);
+      expect(await service.updateTutorTaxConfig("admin1", update)).toBe(config);
+      expect(payout.updateTutorTaxConfig).toHaveBeenCalledWith(
+        "admin1",
+        update,
+      );
+      expect(await service.setTutorTaxRateOverride("admin1", override)).toEqual(
+        { tutorId: "t1", taxRateOverrideBps: null },
+      );
+      expect(payout.setTutorTaxRateOverride).toHaveBeenCalledWith(
+        "admin1",
+        override,
+      );
+    });
+
+    test("economy previews validate their input and require configured services", async () => {
+      const previewV3Config = mock(() => ({ exactCostIdr: 100000 }));
+      const base = {
+        adminRepo: {} as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      };
+      const missing = createAdminService(base);
+      const save = {
+        expectedVersion: 0,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+        reason: "Update policy",
+      };
+      await expect(
+        missing.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Economy service is not configured");
+      await expect(missing.getV3EconomySettings()).rejects.toThrow(
+        "Economy service is not configured",
+      );
+      expect(() =>
+        missing.previewV3EconomySettings({ values: DEFAULT_V3_ECONOMY_CONFIG }),
+      ).toThrow("Economy service is not configured");
+      const service = createAdminService({
+        ...base,
+        economy: { previewV3Config } as any,
+      });
+      await expect(service.getV3EconomySettings()).rejects.toThrow(
+        "Competition catalog service is not configured",
+      );
+      await expect(
+        service.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Competition catalog service is not configured");
+      expect(() =>
+        service.previewV3EconomySettings({
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+          exactMarks: 0,
+        }),
+      ).toThrow();
+      expect(
+        service.previewV3EconomySettings({
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+          exactMarks: 42,
+        }),
+      ).toEqual({ exactCostIdr: 100000 });
+      expect(previewV3Config).toHaveBeenCalledWith(
+        DEFAULT_V3_ECONOMY_CONFIG,
+        42,
+      );
     });
 
     test("returns pending payout data and rejects an unavailable port", async () => {
@@ -692,6 +815,20 @@ describe("Admin Service", () => {
       });
       return { service, adminRepo, auditPort, tx };
     }
+
+    test("a concurrent role change fails before recording an audit event", async () => {
+      const { service, auditPort } = makeSetRoleService({
+        updateRoleWithExpected: mock(async () => []),
+      });
+      await expect(
+        service.setRole("admin1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        }),
+      ).rejects.toMatchObject({ code: "OPTIMISTIC_LOCK" });
+      expect(auditPort.record).not.toHaveBeenCalled();
+    });
 
     test("locks admin rows and validates the count inside the transaction (H6)", async () => {
       const { service, adminRepo } = makeSetRoleService();

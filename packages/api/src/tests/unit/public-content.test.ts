@@ -98,6 +98,67 @@ function makeSensitiveRow() {
 }
 
 describe("public content tutor projection", () => {
+  test("catalog subjects sort by competition before specialization", () => {
+    const row = makeSensitiveRow();
+    const subject = row.subjects[0]!.subject!;
+    row.subjects = [
+      {
+        subjectId: "z",
+        subject: {
+          ...subject,
+          id: "z",
+          slug: "z",
+          parent: { ...subject.parent!, slug: "a-parent" },
+        },
+      },
+      {
+        subjectId: "b",
+        subject: {
+          ...subject,
+          id: "b",
+          slug: "b",
+          parent: { ...subject.parent!, slug: "z-parent" },
+        },
+      },
+      {
+        subjectId: "a",
+        subject: {
+          ...subject,
+          id: "a",
+          slug: "a",
+          parent: { ...subject.parent!, slug: "a-parent" },
+        },
+      },
+    ];
+    expect(toPublicTutorDto(row).subjects.map((entry) => entry.id)).toEqual([
+      "a",
+      "z",
+      "b",
+    ]);
+  });
+
+  test("malformed profile JSON and unresolved subjects are omitted from public data", () => {
+    const row = {
+      ...makeSensitiveRow(),
+      education: { private: true },
+      achievements: null,
+      experiences: "invalid",
+      subjects: [
+        { subject: null },
+        { subject: { isActive: true, parent: null } },
+      ],
+      modality: "unknown",
+    } as unknown as PublicTutorRow;
+    expect(toPublicTutorDto(row)).toMatchObject({
+      education: [],
+      achievements: [],
+      experiences: [],
+      subjects: [],
+      modality: null,
+    });
+    row.user = null;
+    expect(() => toPublicTutorDto(row)).toThrow("has no account");
+  });
   test("uses a positive selection allowlist for every queried table", async () => {
     const findMany = mock(async (_query: unknown) => []);
     const db = {
@@ -226,6 +287,30 @@ describe("public content tutor projection", () => {
     const nestedParent = makeSensitiveRow();
     nestedParent.subjects[0]!.subject!.parent!.parentId = "grandparent-id";
     expect(toPublicTutorDto(nestedParent).subjects).toEqual([]);
+  });
+
+  test("drops malformed nested profile data without exposing it", () => {
+    const row = {
+      ...makeSensitiveRow(),
+      education: [null, { university: "University", degree: 42 }],
+      achievements: [
+        { competitionName: "Competition", year: 2025.5, awards: [] },
+      ],
+      experiences: [
+        {
+          role: "Tutor",
+          organization: "School",
+          startYear: 2022.5,
+          endYear: null,
+          description: "Experience",
+        },
+      ],
+    } as unknown as PublicTutorRow;
+
+    const tutor = toPublicTutorDto(row);
+    expect(tutor.education).toEqual([]);
+    expect(tutor.achievements).toEqual([]);
+    expect(tutor.experiences).toEqual([]);
   });
 
   test("returns an empty array unchanged when there are no published profiles", async () => {

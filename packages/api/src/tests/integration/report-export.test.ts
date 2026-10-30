@@ -13,6 +13,7 @@ import {
   bookingSession,
   ledgerEntry,
   sessionCompletionFeedback,
+  sessionCompletionFeedbackHistory,
   subjectCategory,
   user,
   wallet,
@@ -425,12 +426,33 @@ describe("student report export eligibility PostgreSQL [REQ-REPORT-04/Q06]", () 
     await createWallet(otherStudentId);
 
     const windowStart = reportDateWindow(GENERATED_AT).startAt;
-    await addPrivateReport({
+    const privateSolo = await addPrivateReport({
       type: "solo",
       startAt: new Date("2026-10-19T02:30:00.000Z"),
       marker: "private-solo",
       participants: [targetStudentId],
       chargedUsers: [targetStudentId],
+    });
+    const [privateSoloFeedback] = await db
+      .select({ id: sessionCompletionFeedback.id })
+      .from(sessionCompletionFeedback)
+      .where(eq(sessionCompletionFeedback.bookingId, privateSolo.id));
+    if (!privateSoloFeedback) throw new Error("Expected private solo feedback");
+    await db.insert(sessionCompletionFeedbackHistory).values({
+      feedbackId: privateSoloFeedback.id,
+      bookingId: privateSolo.id,
+      sessionId: null,
+      version: 1,
+      status: "submitted",
+      actorId: tutorId,
+      actorRole: "tutor",
+      reason: null,
+      deliveryConfirmed: true,
+      discussion: ["private-solo"],
+      strengths: ["private-solo strength"],
+      improvements: ["private-solo next step"],
+      requestKey: null,
+      requestPayload: null,
     });
     await addPrivateReport({
       type: "group",
@@ -618,5 +640,16 @@ describe("student report export eligibility PostgreSQL [REQ-REPORT-04/Q06]", () 
         `class:${crypto.randomUUID()}`,
       ]),
     ).rejects.toThrow("Some selected reports are no longer available");
+    const requestedAt = Date.now();
+    const currentSummary = await createReportExportService({ db }).getSummary(
+      targetStudentId,
+    );
+    expect(currentSummary?.generatedAt.getTime()).toBeGreaterThanOrEqual(
+      requestedAt,
+    );
+    expect(currentSummary?.generatedAt.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
+    expect(currentSummary?.timezone).toBe("Asia/Jakarta");
   });
 });

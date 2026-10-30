@@ -1,4 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
+import * as fsPromises from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   GetObjectCommand,
   PutObjectCommand,
@@ -94,5 +98,78 @@ test("private bucket rejects invalid configuration and uploads before contacting
     expect(send).not.toHaveBeenCalled();
   } finally {
     send.mockRestore();
+  }
+});
+
+test("defaults to separate development directories without creating them", () => {
+  const store = createPrivateKbStorage({ NODE_ENV: "test" });
+
+  expect(store.put).toBeTypeOf("function");
+  expect(store.read).toBeTypeOf("function");
+});
+
+test("rejects local PDF reads through a symlink", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-symlink-"));
+  const privateDir = join(root, "private");
+  const targetPath = join(root, "outside.pdf");
+  const keyPath = join(privateDir, key);
+  try {
+    await mkdir(privateDir);
+    await writeFile(targetPath, pdf);
+    try {
+      await symlink(targetPath, keyPath);
+    } catch (error) {
+      if (
+        process.platform === "win32" &&
+        (error as NodeJS.ErrnoException).code === "EPERM"
+      ) {
+        return;
+      }
+      throw error;
+    }
+
+    const store = createPrivateKbStorage({
+      KB_PRIVATE_DIR: privateDir,
+      UPLOAD_DIR: join(root, "public"),
+    });
+    await expect(store.read(key)).rejects.toThrow("symlinks are forbidden");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("local PDF writes accept identical retries and reject a hash collision", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-idempotent-write-"));
+  const store = createPrivateKbStorage({
+    KB_PRIVATE_DIR: join(root, "private"),
+    UPLOAD_DIR: join(root, "public"),
+  });
+  try {
+    await store.put(key, pdf);
+    await expect(store.put(key, pdf)).resolves.toBeUndefined();
+    await expect(
+      store.put(key, new TextEncoder().encode("%PDF-different")),
+    ).rejects.toThrow("Private file hash collision");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rethrows unexpected local PDF write errors", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cogito-kb-write-error-"));
+  const writeError = Object.assign(new Error("synthetic disk failure"), {
+    code: "EIO",
+  });
+  const write = spyOn(fsPromises, "writeFile").mockRejectedValue(writeError);
+  try {
+    const store = createPrivateKbStorage({
+      KB_PRIVATE_DIR: join(root, "private"),
+      UPLOAD_DIR: join(root, "public"),
+    });
+
+    await expect(store.put(key, pdf)).rejects.toBe(writeError);
+  } finally {
+    write.mockRestore();
+    await rm(root, { recursive: true, force: true });
   }
 });

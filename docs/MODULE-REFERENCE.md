@@ -1,5 +1,9 @@
 # Cogito Module Reference
 
+## Integrated release branch validation (30 October 2026)
+
+Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
+
 ## Q15 business insights implementation — 30 October 2026
 
 Dashboard analytics separates top-up receipts (IDR), delivered services (Marks/session counts), current future commitments (funded/unfunded Marks and seat-sessions), and earned tutor costs (IDR allocated paid/unpaid as of now). Marks are never converted into estimated booking IDR value or profit. The endpoint remains admin-only /rpc/admin/getDashboardAnalytics with the normal JSON envelope.
@@ -69,6 +73,14 @@ Dev execution was explicitly authorized for `localhost:6767/cogito-app`, NODE_EN
 Verified with real dev PostgreSQL service calls: 140-Mark custom quote recommends 150 Marks/Rp975000; stub payment replay credits once; a newly created solo booking reaches tutor acceptance, report, one fee event, payout preview, one allocation and simulated transfer-record replay. A partial group reprices N3 to N2 (21 to 25 Marks each for the seeded Essay category) from revision 1 even while the active pointer is temporarily null; reconfirmation and tutor acceptance succeed. Fixture timestamps were advanced in SQL to exercise report completion. Payment/email/Meet providers used stub/manual behavior; the payout transfer was a local record labelled DEV-SIMULATION-NO-BANK-TRANSFER, with no bank operation.
 
 Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts`. Focused V3/discovery/fee tests and selected booking tests passed; server typecheck passed. Web typecheck remains blocked by the unrelated Accordion callback type mismatch in academy-class-page.tsx. Full legacy-oriented test suites and browser/provider acceptance were not run. The later report/settings cleanup removes the legacy history/actor values, allocation source enum values and old settings APIs. Unused pricing utility methods remain separate from this cleanup.
+
+## Coverage collection module (PR #332, 28 October 2026)
+
+`.github/scripts/coverage-sources.ts` builds the fixed source inventory for API, auth, DB and env; test files, declaration files and declarative DB schema files are excluded. This retains every source in the prior merged report and includes previously unloaded source files. `coverage-instrument.ts` injects Istanbul counters only into test processes started with its explicit preload; query-suffixed module imports share source identities, and test cleanup runs before the counters flush. Unloaded or mocked modules keep their zero baseline.
+
+`coverage-runner.ts` runs the existing resettable, reset-free fixture and payout partitions serially. Inputs are NODE_ENV=test, exact loopback DATABASE_URL=6769/cogito-test, PAYOUT_DATABASE_URL=6770/cogito-test-payout and COVERAGE_DB_RESET_WINDOW=confirmed, with ambient reset overrides absent. Only resettable/payout children receive matching reset flags; the fixture child receives KB_DB_TEST_WINDOW=confirmed. Failed partitions remain failures even if a report can be generated.
+
+`coverage-report.ts` verifies source hashes, complete source/function/statement/branch identities and nonnegative integer counters before merging. It emits named LCOV functions using declaration positions, preserves real branch counters, and delegates final LCOV validation to `merge-lcov.ts`. Missing/stale/malformed data cannot reuse a previous successful report. `coverage-comment.ts` continues to enforce 100% API lines, overall lines, functions and branches. No service endpoint, domain event or financial rule is changed by these CI modules.
 
 ## Competition catalog UI composition (26 October 2026)
 
@@ -709,10 +721,14 @@ and confirmation lock the class, target session, affected enrollments,
 installments, allocations and wallets, and require the exact class/session
 versions, audited reason, stable request UUID and SHA-256 quote. Only one future
 scheduled session is cancelled. The transaction returns unspent funded Marks for
-allocations on that session and releases only its reserved seat; other session
+allocations on that session and releases its reserved seat. Other funded session
 allocations and original enrollment prices/session count do not move. Affected
 unpaid installments are reduced to remaining reserved sessions, with the next
 due session/date updated, or cancelled when no reserved sessions remain.
+For a pending checkout, only remaining first-installment reservations keep it
+payable. If none remain, cancellation cancels the enrollment and all unpaid
+installments and releases the other unfunded reservations without wallet or
+ledger changes; second-installment reservations cannot keep it pending.
 Ongoing, past, completed or reported sessions cannot be cancelled. Past delivery
 holds, reports and earned tutor fees remain intact. Audit, student/tutor
 notification outboxes and durable calendar cleanup use existing services.

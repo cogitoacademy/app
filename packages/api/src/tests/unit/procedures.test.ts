@@ -83,6 +83,17 @@ describe("procedures", () => {
     });
   });
 
+  test("requireReferralChoiceSaved rejects an unauthenticated request", async () => {
+    const { requireReferralChoiceSaved } = await import("../../procedures");
+
+    await expect(
+      (requireReferralChoiceSaved as any)({
+        context: { session: null, services: {} },
+        next: async () => "should not reach",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
   test("referral choice gate does not block non-student accounts", async () => {
     const { requireReferralChoiceSaved } = await import("../../procedures");
     let nextCalled = false;

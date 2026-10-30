@@ -89,14 +89,24 @@ const studentResourceFileQuery = defineQuery(`
   }
 `);
 
-export function createSanityClient(): SanityClient {
+export function createSanityClient(
+  configuration: Pick<
+    typeof env,
+    | "SANITY_PROJECT_ID"
+    | "SANITY_DATASET"
+    | "SANITY_API_VERSION"
+    | "SANITY_API_TOKEN"
+  > = env,
+): SanityClient {
   return createClient({
-    projectId: env.SANITY_PROJECT_ID,
-    dataset: env.SANITY_DATASET,
-    apiVersion: env.SANITY_API_VERSION,
+    projectId: configuration.SANITY_PROJECT_ID,
+    dataset: configuration.SANITY_DATASET,
+    apiVersion: configuration.SANITY_API_VERSION,
     useCdn: true,
     perspective: "published",
-    ...(env.SANITY_API_TOKEN ? { token: env.SANITY_API_TOKEN } : {}),
+    ...(configuration.SANITY_API_TOKEN
+      ? { token: configuration.SANITY_API_TOKEN }
+      : {}),
   });
 }
 
@@ -176,15 +186,13 @@ export function createContentService(deps: {
             category !== null,
         )
         .map((category) => {
-          const { key, slug } = getSanityCompetitionCategoryLookup(
+          const { key } = getSanityCompetitionCategoryLookup(
             category.coreCategory,
           );
           return {
             ...category,
             coreCategory: category.coreCategory ?? "",
-            parentColors:
-              paletteBySlug.get(slugsByCategory.get(key) ?? slug) ??
-              neutralCompetitionPalette,
+            parentColors: paletteBySlug.get(slugsByCategory.get(key)!)!,
           };
         }),
     }));

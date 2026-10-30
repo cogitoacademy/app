@@ -8,12 +8,17 @@ import {
   academyClassEnrollment,
   academyClassEnrollmentAllocation,
   academyClassEnrollmentInstallment,
+  academyClassEnrollmentTopUpAttempt,
   academyClassSession,
   academyClassSessionReport,
   academyClassSessionReportRevision,
+  economyV3Revision,
+  economyV3TopUpQuote,
   ledgerEntry,
   notification,
   notificationDispatch,
+  paymentRecord,
+  room,
   subjectCategory,
   tutorInvite,
   tutorPayout,
@@ -28,6 +33,7 @@ import { services } from "../../services";
 import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
 import type { MeetingPort } from "../../modules/meeting/meeting.types";
 import { createClassEnrollmentService } from "../../modules/class-enrollment/class-enrollment.service";
+import { createClassMinimumLifecycle } from "../../modules/class-enrollment/class-enrollment.minimum";
 import {
   classReportReminderEventKey,
   createClassReportReminderProcessor,
@@ -105,6 +111,10 @@ const ownedClassIds = new Set<string>();
 const ownedPayoutIds = new Set<string>();
 const ownedUserIds = new Set<string>();
 const ownedReminderEventKeys = new Set<string>();
+const ownedEconomyRevisionVersions = new Set<number>();
+const ownedTopUpQuoteIds = new Set<string>();
+const ownedPaymentIds = new Set<string>();
+const ownedRoomIds = new Set<string>();
 
 type Fixture = {
   classId: string;
@@ -119,23 +129,30 @@ type Fixture = {
   service: ReturnType<typeof createClassEnrollmentService>;
 };
 
+type EnrollmentPaymentPort = Parameters<
+  typeof createClassEnrollmentService
+>[0]["payment"];
+
 function makeService(
   now: () => Date,
   notifications: Array<Record<string, unknown>>,
   walletPort: typeof services.wallet = services.wallet,
   notificationWrite?: (input: Record<string, unknown>) => Promise<void>,
+  paymentPort?: EnrollmentPaymentPort,
 ) {
   return createClassEnrollmentService({
     db,
     wallet: walletPort,
-    payment: {
-      createTopUpQuote: async () => {
-        throw new Error("Provider-backed top-up is outside this DB fixture");
-      },
-      createPurchaseFromTopUpQuote: async () => {
-        throw new Error("Provider-backed top-up is outside this DB fixture");
-      },
-    } as never,
+    payment:
+      paymentPort ??
+      ({
+        createTopUpQuote: async () => {
+          throw new Error("Provider-backed top-up is outside this DB fixture");
+        },
+        createPurchaseFromTopUpQuote: async () => {
+          throw new Error("Provider-backed top-up is outside this DB fixture");
+        },
+      } as never),
     notification: {
       write: async (input: Record<string, unknown>) => {
         notifications.push(input);
@@ -288,6 +305,7 @@ async function createFixture(options: {
   startsInDays?: number[];
   walletPort?: typeof services.wallet;
   notificationWrite?: (input: Record<string, unknown>) => Promise<void>;
+  paymentPort?: EnrollmentPaymentPort;
 }): Promise<Fixture> {
   const kind = options.kind ?? "cohort";
   const tutorFeeIdr =
@@ -411,6 +429,7 @@ async function createFixture(options: {
       notifications,
       options.walletPort,
       options.notificationWrite,
+      options.paymentPort,
     ),
   };
 }
@@ -482,6 +501,47 @@ async function makeEnrollment(
     requestKey,
     ...(sessionId ? { sessionId } : {}),
   });
+}
+
+async function persistTopUpQuoteFixture(input: {
+  id: string;
+  userId: string;
+  requestKey: string;
+  marks: number;
+}) {
+  const version =
+    Number.parseInt(input.id.replaceAll("-", "").slice(0, 7), 16) + 1;
+  const [createdRevision] = await db
+    .insert(economyV3Revision)
+    .values({
+      version,
+      values: {},
+      reason: "Class enrollment top-up test fixture",
+      createdBy: input.userId,
+    })
+    .onConflictDoNothing()
+    .returning({ version: economyV3Revision.version });
+  if (createdRevision) ownedEconomyRevisionVersions.add(version);
+
+  await db
+    .insert(economyV3TopUpQuote)
+    .values({
+      id: input.id,
+      userId: input.userId,
+      requestKey: input.requestKey,
+      revision: version,
+      requestedMarks: input.marks,
+      termsSnapshot: {
+        packages: [],
+        exactSurchargeIdr: 0,
+        customAmountIdr: 1,
+        exactPackageCode: null,
+        recommendation: null,
+      },
+      expiresAt: new Date(BASE_TIME.getTime() + DAY_MS),
+    })
+    .onConflictDoNothing();
+  ownedTopUpQuoteIds.add(input.id);
 }
 
 async function createCreatedMeetingFixture(fixture: Fixture) {
@@ -654,9 +714,28 @@ afterAll(async () => {
       .where(inArray(academyClassEnrollment.classId, classIds));
     await db.delete(academyClass).where(inArray(academyClass.id, classIds));
   }
+  if (ownedRoomIds.size > 0)
+    await db.delete(room).where(inArray(room.id, [...ownedRoomIds]));
+  if (ownedPaymentIds.size > 0) {
+    await db
+      .delete(paymentRecord)
+      .where(inArray(paymentRecord.id, [...ownedPaymentIds]));
+  }
+  if (ownedTopUpQuoteIds.size > 0) {
+    await db
+      .delete(economyV3TopUpQuote)
+      .where(inArray(economyV3TopUpQuote.id, [...ownedTopUpQuoteIds]));
+  }
   if (userIds.length > 0) {
     await db.delete(walletTable).where(inArray(walletTable.userId, userIds));
     await db.delete(user).where(inArray(user.id, userIds));
+  }
+  if (ownedEconomyRevisionVersions.size > 0) {
+    await db
+      .delete(economyV3Revision)
+      .where(
+        inArray(economyV3Revision.version, [...ownedEconomyRevisionVersions]),
+      );
   }
 });
 
@@ -1016,6 +1095,48 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     expect(await ledgerHolds(race)).toHaveLength(1);
   });
 
+  test("an enrollment cannot bypass a pending checkout or switch active plans", async () => {
+    const pending = await createFixture({ sessions: 1, balance: 0 });
+    await makeEnrollment(
+      pending,
+      0,
+      "single",
+      crypto.randomUUID(),
+      pending.sessionIds[0],
+    );
+    await expect(makeEnrollment(pending, 0, "single")).rejects.toThrow(
+      "existing 15-minute class checkout",
+    );
+
+    const activeFull = await createFixture({ sessions: 2, balance: 500 });
+    await makeEnrollment(activeFull, 0, "full");
+    await expect(makeEnrollment(activeFull, 0, "half")).rejects.toThrow(
+      "already has an active enrollment",
+    );
+
+    const activeHalf = await createFixture({
+      sessions: 2,
+      balance: 500,
+      startsInDays: [200, 201],
+    });
+    await makeEnrollment(activeHalf, 0, "half");
+    await expect(makeEnrollment(activeHalf, 0, "half")).rejects.toThrow(
+      "half-plan enrollment already owns",
+    );
+
+    const activeSingle = await createFixture({ sessions: 2, balance: 500 });
+    await makeEnrollment(
+      activeSingle,
+      0,
+      "single",
+      crypto.randomUUID(),
+      activeSingle.sessionIds[0],
+    );
+    await expect(makeEnrollment(activeSingle, 0, "half")).rejects.toThrow(
+      "cannot be switched to another plan",
+    );
+  });
+
   test("funding failure rolls back every seat, allocation, wallet hold, and ledger row", async () => {
     let calls = 0;
     const walletPort = {
@@ -1053,6 +1174,49 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       availableBalance: 40,
     });
   });
+
+  test.each([0, 1])(
+    "a new checkout releases an expired seat reservation for student %s",
+    async (studentIndex) => {
+      const fixture = await createFixture({
+        sessions: 2,
+        capacity: 1,
+        studentCount: 2,
+        balance: 0,
+      });
+      const previous = await makeEnrollment(fixture, 0, "full");
+      expect(previous.state).toBe("checkout_pending");
+      fixture.setNow(new Date(BASE_TIME.getTime() + 16 * 60_000));
+      const next = await makeEnrollment(fixture, studentIndex, "full");
+      expect(next.state).toBe("checkout_pending");
+      expect(next.id).not.toBe(previous.id);
+      const records = await enrollmentRows(fixture);
+      expect(records.find((row) => row.id === previous.id)?.state).toBe(
+        "expired",
+      );
+      const allocations = await allocationRows(fixture);
+      expect(
+        allocations.filter((row) => row.enrollmentId === previous.id),
+      ).toHaveLength(2);
+      expect(
+        allocations
+          .filter((row) => row.enrollmentId === previous.id)
+          .every(
+            (row) =>
+              row.state === "released" &&
+              row.fundedMarks === 0 &&
+              row.spentMarks === 0 &&
+              row.releasedMarks === 0,
+          ),
+      ).toBe(true);
+      expect(
+        allocations
+          .filter((row) => row.enrollmentId === next.id)
+          .every((row) => row.state === "checkout_reserved"),
+      ).toBe(true);
+      expect(await ledgerHolds(fixture)).toHaveLength(0);
+    },
+  );
 
   test("full/half/single snapshots survive rate edits and repeated installment pay", async () => {
     const full = await createFixture({ sessions: 16, balance: 500 });
@@ -1112,6 +1276,313 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       fundedMarks: 25,
       state: "funded",
     });
+  });
+
+  test("class checkout top-up retries persist one quote and one payment choice", async () => {
+    const quoteId = crypto.randomUUID();
+    const paymentId = crypto.randomUUID();
+    let nextQuoteId = quoteId;
+    let nextPaymentId = paymentId;
+    let quoteCalls = 0;
+    let purchaseCalls = 0;
+    const fixture = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort: {
+        createTopUpQuote: async (_studentId, input) => {
+          quoteCalls += 1;
+          if (quoteCalls === 1) throw new Error("temporary payment outage");
+          await persistTopUpQuoteFixture({
+            id: nextQuoteId,
+            userId: _studentId,
+            requestKey:
+              nextQuoteId === quoteId ? input.requestKey : crypto.randomUUID(),
+            marks: input.marks,
+          });
+          return {
+            quoteId: nextQuoteId,
+            revision: 2,
+            marks: input.marks,
+            customAmountIdr: 25_000,
+            exactPackage: null,
+            recommendedPackage: null,
+            expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
+          };
+        },
+        createPurchaseFromTopUpQuote: async (
+          _studentId,
+          _walletId,
+          receivedQuoteId,
+          choice,
+        ) => {
+          purchaseCalls += 1;
+          expect(receivedQuoteId).toBe(quoteId);
+          expect(choice).toBe("custom");
+          if (nextPaymentId === paymentId) {
+            await db
+              .insert(paymentRecord)
+              .values({
+                id: paymentId,
+                userId: _studentId,
+                walletId: _walletId,
+                quoteId,
+                quoteChoice: choice,
+                provider: "stub",
+                providerReference: `class-enrollment-topup-${paymentId}`,
+                amountIdr: 25_000,
+                marks: 25,
+              })
+              .onConflictDoNothing();
+            ownedPaymentIds.add(paymentId);
+          }
+          return {
+            paymentId: nextPaymentId,
+            checkoutUrl: "https://payments.example.test/checkout",
+            status: "PENDING",
+            recoveryRequired: false,
+          };
+        },
+      },
+    });
+    const studentId = fixture.studentIds[0]!;
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const requestKey = crypto.randomUUID();
+    const input = {
+      enrollmentId: enrollment.id,
+      ordinal: 1 as const,
+      requestKey,
+    };
+
+    await expect(
+      fixture.service.createTopUpQuote(studentId, input),
+    ).rejects.toThrow("temporary payment outage");
+    const quote = await fixture.service.createTopUpQuote(studentId, input);
+    const retryQuote = await fixture.service.createTopUpQuote(studentId, input);
+    expect(typeof quote.attemptId).toBe("string");
+    expect(quote.attemptId.length).toBeGreaterThan(0);
+    expect(quote).toMatchObject({
+      requestKey,
+      quoteId,
+      requestedMarks: 25,
+      revision: 2,
+      choice: null,
+    });
+    expect(retryQuote.attemptId).toBe(quote.attemptId);
+    expect(quoteCalls).toBe(3);
+    nextQuoteId = crypto.randomUUID();
+    await expect(
+      fixture.service.createTopUpQuote(studentId, input),
+    ).rejects.toThrow("already belongs to another quote");
+    nextQuoteId = quoteId;
+
+    const purchaseInput = {
+      attemptId: quote.attemptId,
+      choice: "custom" as const,
+    };
+    const purchase = await fixture.service.purchaseTopUp(
+      studentId,
+      purchaseInput,
+    );
+    const retryPurchase = await fixture.service.purchaseTopUp(
+      studentId,
+      purchaseInput,
+    );
+    expect(purchase).toEqual({
+      attemptId: quote.attemptId,
+      paymentId,
+      checkoutUrl: "https://payments.example.test/checkout",
+      status: "PENDING",
+      recoveryRequired: false,
+    });
+    expect(retryPurchase).toEqual(purchase);
+    expect(purchaseCalls).toBe(2);
+    nextPaymentId = crypto.randomUUID();
+    await expect(
+      fixture.service.purchaseTopUp(studentId, purchaseInput),
+    ).rejects.toThrow("already belongs to another payment");
+    nextPaymentId = paymentId;
+    await expect(
+      fixture.service.purchaseTopUp(studentId, {
+        attemptId: quote.attemptId,
+        choice: "package",
+      }),
+    ).rejects.toThrow("cannot change its selected quote option");
+
+    const [attempt] = await db
+      .select()
+      .from(academyClassEnrollmentTopUpAttempt)
+      .where(eq(academyClassEnrollmentTopUpAttempt.id, quote.attemptId));
+    expect(attempt).toMatchObject({
+      requestKey,
+      requestedMarks: 25,
+      choice: "custom",
+      quoteId,
+      paymentId,
+    });
+  });
+
+  test("second-installment top-up requires a future scheduled due session", async () => {
+    const quoteId = crypto.randomUUID();
+    const fixture = await createFixture({
+      sessions: 16,
+      balance: 176,
+      paymentPort: {
+        createTopUpQuote: async (_studentId, input) => {
+          await persistTopUpQuoteFixture({
+            id: quoteId,
+            userId: _studentId,
+            requestKey: input.requestKey,
+            marks: input.marks,
+          });
+          return {
+            quoteId,
+            revision: 1,
+            marks: input.marks,
+            customAmountIdr: 176_000,
+            exactPackage: null,
+            recommendedPackage: null,
+            expiresAt: new Date(BASE_TIME.getTime() + DAY_MS).toISOString(),
+          };
+        },
+        createPurchaseFromTopUpQuote: async () => {
+          throw new Error("Purchase is not part of this quote test");
+        },
+      },
+    });
+    const studentId = fixture.studentIds[0]!;
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const input = {
+      enrollmentId: enrollment.id,
+      ordinal: 2 as const,
+      requestKey: crypto.randomUUID(),
+    };
+
+    const quote = await fixture.service.createTopUpQuote(studentId, input);
+    expect(quote).toMatchObject({ requestedMarks: 176, quoteId });
+
+    const secondInstallment = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    const dueSessionId = secondInstallment[0]?.dueSessionId;
+    if (!dueSessionId)
+      throw new Error("Fixture did not assign the due session");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueSessionId: null })
+      .where(
+        eq(academyClassEnrollmentInstallment.id, secondInstallment[0]!.id),
+      );
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("no scheduled due session");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueSessionId })
+      .where(
+        eq(academyClassEnrollmentInstallment.id, secondInstallment[0]!.id),
+      );
+
+    const [dueSession] = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, dueSessionId));
+    if (!dueSession) throw new Error("Fixture due session was not found");
+    await db
+      .update(academyClassSession)
+      .set({ state: "cancelled" })
+      .where(eq(academyClassSession.id, dueSessionId));
+
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("session is no longer scheduled");
+    await db
+      .update(academyClassSession)
+      .set({ state: "scheduled" })
+      .where(eq(academyClassSession.id, dueSessionId));
+    fixture.setNow(dueSession.startAt);
+    await expect(
+      fixture.service.createTopUpQuote(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("installment deadline has passed");
+  });
+
+  test("top-up quotes reject expired checkouts and wallets already funded", async () => {
+    let providerCalls = 0;
+    const paymentPort: EnrollmentPaymentPort = {
+      createTopUpQuote: async () => {
+        providerCalls += 1;
+        throw new Error("Payment provider must not be called");
+      },
+      createPurchaseFromTopUpQuote: async () => {
+        throw new Error("Purchase is not part of this quote test");
+      },
+    };
+
+    const funded = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort,
+    });
+    const fundedEnrollment = await makeEnrollment(
+      funded,
+      0,
+      "single",
+      crypto.randomUUID(),
+      funded.sessionIds[0],
+    );
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 25, availableBalance: 25 })
+      .where(eq(walletTable.id, funded.walletIds[0]!));
+    await expect(
+      funded.service.createTopUpQuote(funded.studentIds[0]!, {
+        enrollmentId: fundedEnrollment.id,
+        ordinal: 1,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("wallet now has enough Marks");
+
+    const expired = await createFixture({
+      sessions: 1,
+      balance: 0,
+      paymentPort,
+    });
+    const expiredEnrollment = await makeEnrollment(
+      expired,
+      0,
+      "single",
+      crypto.randomUUID(),
+      expired.sessionIds[0],
+    );
+    expired.setNow(new Date(BASE_TIME.getTime() + 16 * 60_000));
+    await expect(
+      expired.service.createTopUpQuote(expired.studentIds[0]!, {
+        enrollmentId: expiredEnrollment.id,
+        ordinal: 1,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("checkout has expired");
+    expect(providerCalls).toBe(0);
   });
 
   test("insufficient Marks expires to zero-residual released seats and allows a fresh quote", async () => {
@@ -1219,6 +1690,69 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     expect(
       rejoin.allocations.map((allocation) => allocation.sessionId),
     ).toEqual([rejoinedSessionId]);
+  });
+
+  test("second installment payment refreshes a stale cached deadline from the scheduled session", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 500 });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    await db
+      .update(academyClassEnrollmentInstallment)
+      .set({ dueAt: BASE_TIME })
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    await expect(
+      fixture.service.paySecondInstallment(
+        fixture.studentIds[0]!,
+        enrollment.id,
+      ),
+    ).resolves.toMatchObject({ outcome: "funded" });
+    const [installment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    expect(installment).toMatchObject({
+      state: "funded",
+      dueAt: fixture.startAt[1],
+    });
+    expect(await ledgerHolds(fixture)).toHaveLength(2);
+  });
+
+  test("scheduled jobs default a due second installment against its locked session", async () => {
+    const fixture = await createFixture({
+      sessions: 4,
+      balance: 500,
+      startsInDays: [1, 2, 3, 4],
+    });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const [installment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(
+        and(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+          eq(academyClassEnrollmentInstallment.ordinal, 2),
+        ),
+      );
+    expect(installment?.dueSessionId).toBe(fixture.sessionIds[2]);
+
+    fixture.setNow(fixture.startAt[2]!);
+    await expect(fixture.service.processDueJobs()).resolves.toMatchObject({
+      defaultedInstallments: 1,
+    });
+    const [updatedInstallment] = await db
+      .select()
+      .from(academyClassEnrollmentInstallment)
+      .where(eq(academyClassEnrollmentInstallment.id, installment!.id));
+    expect(updatedInstallment?.state).toBe("defaulted");
   });
 
   test("missed reminders catch up once, while a late join never gets historical notices", async () => {
@@ -2071,6 +2605,221 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
 });
 
 describe("T06 class lifecycle minimum, postponement and session cancellation", () => {
+  test("minimum postponement rejects managed room and tutor schedule overlaps", async () => {
+    const roomTarget = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [1, 4],
+    });
+    const roomConflict = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [8, 11],
+    });
+    const [managedRoom] = await db
+      .insert(room)
+      .values({ name: "Minimum test room", location: "Jakarta", capacity: 6 })
+      .returning({ id: room.id });
+    if (!managedRoom) throw new Error("Room fixture was not created");
+    ownedRoomIds.add(managedRoom.id);
+    await db
+      .update(academyClassSession)
+      .set({ mode: "in_person", roomId: managedRoom.id })
+      .where(
+        inArray(academyClassSession.id, [
+          ...roomTarget.sessionIds,
+          ...roomConflict.sessionIds,
+        ]),
+      );
+    const replacementStarts = (fixture: Fixture, first: Date) =>
+      fixture.sessionIds.map((sessionId, index) => ({
+        sessionId,
+        expectedSessionVersion: 1,
+        startAt: new Date(first.getTime() + index * 3 * DAY_MS),
+      }));
+    await expect(
+      roomTarget.service.previewAdminMinimumDecision({
+        classId: roomTarget.classId,
+        expectedClassVersion: 1,
+        decision: "postpone",
+        reason: "Avoid a managed room conflict",
+        replacementStarts: replacementStarts(
+          roomTarget,
+          roomConflict.startAt[0]!,
+        ),
+      }),
+    ).rejects.toThrow("managed-room reservation");
+
+    const tutorTarget = await createFixture({
+      sessions: 2,
+      balance: 0,
+      startsInDays: [1, 4],
+    });
+    const tutorConflict = await createFixture({
+      sessions: 1,
+      balance: 0,
+      startsInDays: [8],
+    });
+    await db
+      .update(academyClassSession)
+      .set({ tutorId: tutorTarget.tutorId })
+      .where(eq(academyClassSession.id, tutorConflict.sessionIds[0]!));
+    await expect(
+      tutorTarget.service.previewAdminMinimumDecision({
+        classId: tutorTarget.classId,
+        expectedClassVersion: 1,
+        decision: "postpone",
+        reason: "Avoid a tutor schedule conflict",
+        replacementStarts: replacementStarts(
+          tutorTarget,
+          tutorConflict.startAt[0]!,
+        ),
+      }),
+    ).rejects.toThrow("another tutor session");
+  });
+
+  test("minimum decision quotes reject stale checks and invalid postponement schedules", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 0 });
+    await expect(
+      fixture.service.getAdminMinimumCheck(`${fixture.classId}-missing`),
+    ).rejects.toThrow();
+    await db
+      .update(academyClass)
+      .set({
+        kind: "masterclass",
+        minimumEnrollment: null,
+        minimumCheckAt: null,
+        cohortFullRateMarks: null,
+        cohortHalfRateMarks: null,
+        cohortSingleRateMarks: null,
+        masterclassRateMarks: 40,
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.getAdminMinimumCheck(fixture.classId),
+    ).rejects.toThrow("Minimum enrollment checks apply to cohort classes only");
+    await db
+      .update(academyClass)
+      .set({
+        kind: "cohort",
+        minimumEnrollment: 1,
+        minimumCheckAt: new Date(BASE_TIME.getTime() - DAY_MS),
+        cohortFullRateMarks: 20,
+        cohortHalfRateMarks: 22,
+        cohortSingleRateMarks: 25,
+        masterclassRateMarks: null,
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      createClassMinimumLifecycle({
+        db,
+        notification: { write: async () => {} } as never,
+      }).getMinimumCheck(fixture.classId),
+    ).resolves.toMatchObject({ classId: fixture.classId });
+    const continueInput = {
+      classId: fixture.classId,
+      expectedClassVersion: 1,
+      decision: "continue" as const,
+      reason: "Continue after minimum check",
+      replacementStarts: [],
+    };
+
+    await db
+      .update(academyClass)
+      .set({ minimumCheckAt: new Date(BASE_TIME.getTime() + DAY_MS) })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("not due yet");
+    await db
+      .update(academyClass)
+      .set({
+        minimumCheckAt: new Date(BASE_TIME.getTime() - DAY_MS),
+        state: "draft",
+      })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("Only a published cohort");
+    await db
+      .update(academyClass)
+      .set({ state: "published" })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...continueInput,
+        expectedClassVersion: 2,
+      }),
+    ).rejects.toThrow("class changed");
+    await db
+      .update(academyClass)
+      .set({ minimumCheckResolvedAt: BASE_TIME })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(continueInput),
+    ).rejects.toThrow("already been resolved");
+    await db
+      .update(academyClass)
+      .set({ minimumCheckResolvedAt: null })
+      .where(eq(academyClass.id, fixture.classId));
+
+    const postponeInput = {
+      ...continueInput,
+      decision: "postpone" as const,
+      replacementStarts: fixture.sessionIds.map((sessionId, index) => ({
+        sessionId,
+        expectedSessionVersion: 1,
+        startAt: new Date(BASE_TIME.getTime() + (5 + index * 2) * DAY_MS),
+      })),
+    };
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: [],
+      }),
+    ).rejects.toThrow("every scheduled session");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: [
+          postponeInput.replacementStarts[0]!,
+          postponeInput.replacementStarts[0]!,
+        ],
+      }),
+    ).rejects.toThrow("each currently scheduled session exactly once");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: postponeInput.replacementStarts.map((row, index) =>
+          index === 0 ? { ...row, expectedSessionVersion: 2 } : row,
+        ),
+      }),
+    ).rejects.toThrow("A session changed");
+    await expect(
+      fixture.service.previewAdminMinimumDecision({
+        ...postponeInput,
+        replacementStarts: postponeInput.replacementStarts.map((row) => ({
+          ...row,
+          startAt: postponeInput.replacementStarts[0]!.startAt,
+        })),
+      }),
+    ).rejects.toThrow("cannot overlap or change their order");
+    await db
+      .update(academyClassSession)
+      .set({ state: "completed" })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(postponeInput),
+    ).rejects.toThrow("delivered sessions cannot be postponed");
+    await db
+      .update(academyClassSession)
+      .set({ state: "scheduled", startAt: BASE_TIME })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    await expect(
+      fixture.service.previewAdminMinimumDecision(postponeInput),
+    ).rejects.toThrow("ongoing or past scheduled session");
+  });
+
   test("minimum checks count only active paid full/half students and continue is audited", async () => {
     const fixture = await createFixture({
       sessions: 4,
@@ -2166,6 +2915,47 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
     ).toBeInstanceOf(Date);
   });
 
+  test("minimum confirmation rejects stale quotes and conflicting request-key replays", async () => {
+    const fixture = await createFixture({ sessions: 0, balance: 0 });
+    const adminId = await createReportAdmin();
+    const input = {
+      classId: fixture.classId,
+      expectedClassVersion: 1,
+      decision: "continue" as const,
+      reason: "Continue with a reviewed minimum quote",
+      replacementStarts: [],
+    };
+    const stalePreview =
+      await fixture.service.previewAdminMinimumDecision(input);
+    const staleConfirmation = {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: stalePreview.quoteVersion,
+    };
+    await db
+      .update(academyClass)
+      .set({ minimumEnrollment: 2 })
+      .where(eq(academyClass.id, fixture.classId));
+    await expect(
+      fixture.service.confirmAdminMinimumDecision(adminId, staleConfirmation),
+    ).rejects.toThrow("Enrollment, payments, reports, or the schedule changed");
+
+    const freshPreview =
+      await fixture.service.previewAdminMinimumDecision(input);
+    const confirmation = {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: freshPreview.quoteVersion,
+    };
+    await fixture.service.confirmAdminMinimumDecision(adminId, confirmation);
+    await expect(
+      fixture.service.confirmAdminMinimumDecision(adminId, {
+        ...confirmation,
+        expectedClassVersion: 2,
+      }),
+    ).rejects.toThrow("request key was already used");
+  });
+
   test("individual cancellation rejects a stale funding quote and replays one return", async () => {
     const fixture = await createFixture({ sessions: 1, balance: 0 });
     const enrollment = await makeEnrollment(
@@ -2258,6 +3048,67 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
         ),
     ).toHaveLength(1);
   });
+
+  test.each(["full", "half"] as const)(
+    "session cancellation reconciles an unfunded %s checkout",
+    async (plan) => {
+      const fixture = await createFixture({
+        sessions: plan === "full" ? 3 : 2,
+        balance: 0,
+      });
+      const enrollment = await makeEnrollment(fixture, 0, plan);
+      const input = {
+        classId: fixture.classId,
+        sessionId: fixture.sessionIds[0]!,
+        expectedClassVersion: 1,
+        expectedSessionVersion: 1,
+        reason: "Cancel the unfunded session",
+      };
+      const quote = await fixture.service.previewAdminSessionCancellation(
+        fixture.tutorId,
+        input,
+      );
+      await fixture.service.confirmAdminSessionCancellation(fixture.tutorId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      });
+      const [updated] = await enrollmentRows(fixture);
+      const allocations = await allocationRows(fixture);
+      const installments = await db
+        .select()
+        .from(academyClassEnrollmentInstallment)
+        .where(
+          eq(academyClassEnrollmentInstallment.enrollmentId, enrollment.id),
+        );
+      if (plan === "full") {
+        expect(updated?.state).toBe("checkout_pending");
+        expect(
+          allocations.filter((row) => row.state === "checkout_reserved"),
+        ).toHaveLength(2);
+        expect(installments[0]).toMatchObject({
+          state: "checkout_pending",
+          sessionCount: 2,
+          amountMarks: 40,
+        });
+      } else {
+        expect(updated?.state).toBe("cancelled");
+        expect(allocations.every((row) => row.state === "released")).toBe(true);
+        expect(installments.every((row) => row.state === "cancelled")).toBe(
+          true,
+        );
+      }
+      expect(
+        allocations.every(
+          (row) =>
+            row.fundedMarks === 0 &&
+            row.spentMarks === 0 &&
+            row.releasedMarks === 0,
+        ),
+      ).toBe(true);
+      expect(await ledgerHolds(fixture)).toHaveLength(0);
+    },
+  );
 
   test("half payment wins the session lock and stale cancellation re-previews once", async () => {
     let gateEnabled = false;

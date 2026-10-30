@@ -40,6 +40,9 @@ describe("KOL external settlement", () => {
     expect(() =>
       calculateKolSettlement(Number.MAX_SAFE_INTEGER, 1, 0),
     ).toThrow();
+    expect(() => calculateKolSettlement(1.5, 0, 0)).toThrow(
+      "Unsafe KOL accounting amount.",
+    );
   });
   test("whole-IDR transfers, nonempty reference and correction reason are required", () => {
     const base = {
@@ -95,10 +98,17 @@ describe("KOL external settlement", () => {
     expect(kolMonthRange("2026-12").to.toISOString()).toBe(
       "2026-12-31T17:00:00.000Z",
     );
+    expect(() => kolMonthRange("2026-13")).toThrow("Invalid KOL export month.");
   });
   test("CSV quotes multiline references and neutralizes formulas", () => {
     expect(kolCsv([[" =SUM(A1)", 'bank,"ref"\nnext', -5000]])).toBe(
       `\uFEFF"' =SUM(A1)","bank,""ref""\nnext",-5000`,
+    );
+  });
+
+  test("CSV rejects numeric cells outside safe integer IDR precision", () => {
+    expect(() => kolCsv([[Number.MAX_SAFE_INTEGER + 1]])).toThrow(
+      "Unsafe CSV amount.",
     );
   });
 });

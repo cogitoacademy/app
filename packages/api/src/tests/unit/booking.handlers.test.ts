@@ -30,6 +30,7 @@ function makeBookingService() {
     addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
     getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
     listCompletionFeedback: mock(async () => [{ id: "f1" }]),
+    listCompletionFeedbackHistory: mock(async () => [{ id: "history-1" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -72,6 +73,33 @@ function makeContext(userId = "u1") {
 }
 
 describe("bookingHandler", () => {
+  test("report history forwards the requesting user and role", async () => {
+    const booking = makeBookingService();
+    const handler = createBookingHandler(booking as any);
+    const context = makeContext("admin1");
+    context.session.user.role = "admin";
+    expect(
+      await handler.listCompletionFeedbackHistory({
+        context,
+        input: { bookingId: "b1" },
+      }),
+    ).toEqual([{ id: "history-1" }]);
+    expect(booking.listCompletionFeedbackHistory).toHaveBeenCalledWith(
+      "b1",
+      "admin1",
+      "admin",
+    );
+    delete context.session.user.role;
+    await handler.listCompletionFeedbackHistory({
+      context,
+      input: { bookingId: "b1" },
+    });
+    expect(booking.listCompletionFeedbackHistory).toHaveBeenLastCalledWith(
+      "b1",
+      "admin1",
+      undefined,
+    );
+  });
   beforeEach(() => {
     bookingIdempotency["store"].clear();
   });

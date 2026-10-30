@@ -12,6 +12,7 @@ import {
   wallet,
 } from "@cogito-app/db/schema";
 import { services } from "../../services";
+import { getCompetitionCatalogEntryBySlug } from "../../modules/competition-catalog/competition-catalog.repo";
 import {
   createTestClient,
   createTestContext,
@@ -280,9 +281,7 @@ describe("competition catalog PostgreSQL CRUD", () => {
   test("backfills known palettes and carries parent colors through two-level CRUD", async () => {
     const paletteRows = await Promise.all(
       paletteBackfillCases.map((expected) =>
-        db.query.subjectCategory.findFirst({
-          where: eq(subjectCategory.slug, expected.slug),
-        }),
+        getCompetitionCatalogEntryBySlug(db, expected.slug),
       ),
     );
     paletteRows.forEach((row, index) => {

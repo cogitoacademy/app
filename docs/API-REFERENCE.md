@@ -1,5 +1,9 @@
 # Cogito API Reference
 
+## Integrated release branch validation (30 October 2026)
+
+Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
+
 ## Q15 business insights implementation — 30 October 2026
 
 Dashboard analytics separates top-up receipts (IDR), delivered services (Marks/session counts), current future commitments (funded/unfunded Marks and seat-sessions), and earned tutor costs (IDR allocated paid/unpaid as of now). Marks are never converted into estimated booking IDR value or profit. The endpoint remains admin-only /rpc/admin/getDashboardAnalytics with the normal JSON envelope.
@@ -585,7 +589,10 @@ quotes `feeMarks: 0`, exact `returnMarks`, released allocation IDs and the
 class/session versions. Confirmation cancels only one future scheduled session,
 returns only that session's unspent funded Marks and updates/cancels its unpaid
 installment obligation. The enrollment's original price/session snapshot stays
-unchanged. Ongoing, completed, reported, past and otherwise held delivery seats
+unchanged. If cancellation removes the last reserved first-installment session
+of a pending checkout, confirmation also cancels that enrollment and its unpaid
+installments and releases its remaining unfunded reservations. Second-installment
+reservations alone do not keep a checkout pending. Ongoing, completed, reported, past and otherwise held delivery seats
 are not cancellable or released by this procedure. Student and assigned tutor
 notification outboxes commit with the audit and financial rows; the durable
 meeting worker retries calendar deletion.

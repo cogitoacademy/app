@@ -9,6 +9,7 @@ import {
   classReportReminderEventKey,
   classReportReminderPeriod,
   createClassReportReminderProcessor,
+  createClassReportReminderRepo,
   type ClassReportReminderCandidate,
   type ClassReportReminderRepo,
 } from "../../modules/class-enrollment/class-enrollment.report-reminders";
@@ -125,7 +126,124 @@ function makeProcessor(
   });
 }
 
+function makeTransactionDb(resultSets: unknown[][]): DbType {
+  const tx = {
+    select: () => {
+      const result = resultSets.shift() ?? [];
+      const query = {
+        from: () => query,
+        where: () => query,
+        for: async () => result,
+        limit: async () => result,
+      };
+      return query;
+    },
+  };
+  return {
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+      callback(tx),
+  } as never;
+}
+
 describe("academy class missing-report reminders", () => {
+  test("processor uses the system clock when no clock is injected", async () => {
+    const processor = createClassReportReminderProcessor({
+      db: {} as DbType,
+      repo: {
+        findDue: async () => [],
+        writeIfPending: async () => false,
+      },
+      notification: makeNotification(async () => undefined),
+      appBaseUrl: "https://cogito.example",
+    });
+
+    await expect(processor.processPendingReportReminders()).resolves.toEqual({
+      checked: 0,
+      queued: 0,
+      skipped: 0,
+      failed: 0,
+    });
+  });
+
+  test("processor skips candidates whose reminder period is not due yet", async () => {
+    const nowAt = new Date("2026-10-21T03:00:00.000Z");
+    const futureCandidate = makeSession(
+      "future",
+      new Date(nowAt.getTime() + 1),
+    );
+    let writeAttempts = 0;
+    const processor = makeProcessor(
+      {
+        findDue: async () => [futureCandidate],
+        writeIfPending: async () => {
+          writeAttempts += 1;
+          return true;
+        },
+      },
+      makeNotification(async () => undefined),
+      () => nowAt,
+    );
+
+    await expect(processor.processPendingReportReminders()).resolves.toEqual({
+      checked: 1,
+      queued: 0,
+      skipped: 1,
+      failed: 0,
+    });
+    expect(writeAttempts).toBe(0);
+  });
+
+  test("writeIfPending skips a session that disappeared before locking", async () => {
+    const nowAt = new Date("2026-10-21T03:00:00.000Z");
+    const candidate = makeSession("disappeared", nowAt);
+    let writeCalled = false;
+    const repo = createClassReportReminderRepo();
+
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([[{ state: "published" }], []]),
+        candidate,
+        nowAt,
+        classReportReminderEventKey(candidate.id, 0),
+        async () => {
+          writeCalled = true;
+        },
+      ),
+    ).resolves.toBe(false);
+    expect(writeCalled).toBe(false);
+  });
+
+  test("writeIfPending skips a session after a report was inserted", async () => {
+    const nowAt = new Date("2026-10-21T03:00:00.000Z");
+    const candidate = makeSession("reported", nowAt);
+    let writeCalled = false;
+    const repo = createClassReportReminderRepo();
+
+    await expect(
+      repo.writeIfPending(
+        makeTransactionDb([
+          [{ state: "published" }],
+          [
+            {
+              id: candidate.id,
+              state: "scheduled",
+              tutorId: candidate.tutorId,
+              endAt: candidate.endAt,
+            },
+          ],
+          [{ id: "report-1" }],
+        ]),
+        candidate,
+        nowAt,
+        classReportReminderEventKey(candidate.id, 0),
+        async () => {
+          writeCalled = true;
+        },
+      ),
+    ).resolves.toBe(false);
+    expect(writeCalled).toBe(false);
+  });
+
   test("starts at session end and repeats on 24-hour elapsed boundaries", () => {
     const endAt = new Date("2026-10-21T03:00:00.000Z");
     expect(

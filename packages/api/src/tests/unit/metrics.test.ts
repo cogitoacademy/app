@@ -103,7 +103,7 @@ describe("Metrics", () => {
       expect(metrics["/api/extra"]).toBeUndefined();
     });
 
-    test("cleans up orphaned lastAccess entries", () => {
+    test("evicts stale series and their access timestamps together", () => {
       _resetForTest();
       for (let i = 0; i < 5; i++) {
         recordRequest(`/api/orphan-${i}`, i);

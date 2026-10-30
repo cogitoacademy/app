@@ -5,7 +5,11 @@ import {
   validateDelete,
   createAchievementService,
 } from "../../modules/achievement/achievement.service";
-import { AchievementNotEditableError } from "../../modules/achievement/achievement.errors";
+import {
+  AchievementNotEditableError,
+  AchievementNotFoundError,
+  OptimisticLockError,
+} from "../../modules/achievement/achievement.errors";
 
 function makeAchievement(overrides: Partial<{ status: string }> = {}) {
   return { id: "a1", status: "pending", ...overrides } as any;
@@ -18,6 +22,26 @@ function makeDb() {
 }
 
 describe("Achievement Service", () => {
+  test("does not notify when the insert returns no row", async () => {
+    const notification = mock(async () => {});
+    const service = createAchievementService({
+      achievementRepo: { insert: mock(async () => null) } as any,
+      auditPort: { record: mock(async () => {}) } as any,
+      notificationPort: { writeBestEffort: notification } as any,
+      db: makeDb(),
+    });
+
+    await expect(
+      service.create("student1", {
+        eventName: "Contest",
+        category: "competition",
+        award: "Gold",
+        level: "National",
+      } as any),
+    ).resolves.toBeNull();
+    expect(notification).not.toHaveBeenCalled();
+  });
+
   describe("validateUpdate", () => {
     test("does not throw for pending achievement", () => {
       expect(() =>
@@ -275,6 +299,35 @@ describe("Achievement Service", () => {
   });
 
   describe("admin soft deletion", () => {
+    test("rejects a missing record and a lost delete version race", async () => {
+      const transaction = mock(async (fn: any) => fn({ id: "tx" }));
+      const service = createAchievementService({
+        achievementRepo: {
+          getById: mock(async () => null),
+          softDelete: mock(async () => null),
+        } as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      });
+
+      await expect(
+        service.adminDelete("admin1", "missing"),
+      ).rejects.toBeInstanceOf(AchievementNotFoundError);
+      const racedService = createAchievementService({
+        achievementRepo: {
+          getById: mock(async () => ({ ...makeAchievement(), version: 3 })),
+          softDelete: mock(async () => null),
+        } as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      });
+      await expect(
+        racedService.adminDelete("admin1", "a1"),
+      ).rejects.toBeInstanceOf(OptimisticLockError);
+    });
+
     test("deletes and audits in the same transaction", async () => {
       const tx = { id: "tx" };
       const transaction = mock(async (fn: any) => fn(tx));
@@ -361,6 +414,36 @@ describe("Achievement Service", () => {
       expect(record).toHaveBeenCalledWith(
         expect.objectContaining({ db: tx, action: "achievement_restored" }),
       );
+    });
+
+    test("rejects a missing record and a lost restore version race", async () => {
+      const transaction = mock(async (fn: any) => fn({ id: "tx" }));
+      const dependencies = {
+        auditPort: { record: mock(async () => {}) } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      };
+      const missingService = createAchievementService({
+        ...dependencies,
+        achievementRepo: {
+          getById: mock(async () => null),
+          restore: mock(async () => null),
+        } as any,
+      });
+      await expect(
+        missingService.adminRestore("admin1", "missing"),
+      ).rejects.toBeInstanceOf(AchievementNotFoundError);
+
+      const racedService = createAchievementService({
+        ...dependencies,
+        achievementRepo: {
+          getById: mock(async () => ({ ...makeAchievement(), version: 3 })),
+          restore: mock(async () => null),
+        } as any,
+      });
+      await expect(
+        racedService.adminRestore("admin1", "a1"),
+      ).rejects.toBeInstanceOf(OptimisticLockError);
     });
   });
 

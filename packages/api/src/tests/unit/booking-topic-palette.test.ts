@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import { applyBookingTopicPalettes } from "../../modules/booking/booking-topic-palette";
 import type { BookingSessionTopic } from "@cogito-app/db/schema";
@@ -21,6 +21,19 @@ const palette: CompetitionPalette = {
 };
 
 describe("booking topic palette projection", () => {
+  test("does not resolve a palette when no booking has a topic", async () => {
+    const resolvePalettes = mock(async () => [palette]);
+    const bookings = [
+      { id: "booking-1", sessionTopic: null },
+      { id: "booking-2", sessionTopic: null },
+    ];
+
+    await expect(
+      applyBookingTopicPalettes(bookings, resolvePalettes),
+    ).resolves.toEqual(bookings);
+    expect(resolvePalettes).not.toHaveBeenCalled();
+  });
+
   test("uses the current palette for an archived saved category without changing snapshots", async () => {
     const result = await applyBookingTopicPalettes(
       [

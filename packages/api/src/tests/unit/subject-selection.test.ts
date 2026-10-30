@@ -10,6 +10,10 @@ import {
 const child = (id: string) => ({ id });
 
 describe("tutor subject selection", () => {
+  test("allows legacy updates that omit subject IDs", () => {
+    expect(() => validateTutorSubjectIds(undefined, [])).not.toThrow();
+  });
+
   test("accepts active specialization ids and rejects category ids", () => {
     expect(() =>
       validateTutorSubjectIds(["child-1"], [child("child-1")]),

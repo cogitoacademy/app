@@ -8,6 +8,9 @@ import {
   WebhookTimestampError,
   UnknownPaymentStatusError,
   PaymentWebhookMismatchError,
+  TopUpAmountOutOfRangeError,
+  TopUpQuoteNotFoundError,
+  V3TopUpUnavailableError,
   mapPaymentError,
 } from "../../modules/payment/payment.errors";
 
@@ -115,6 +118,15 @@ describe("payment.errors", () => {
     });
   });
   describe("mapPaymentError", () => {
+    it("maps invalid top-up amounts and missing quotes", () => {
+      expect(mapPaymentError(new TopUpAmountOutOfRangeError()).status).toBe(
+        400,
+      );
+      expect(mapPaymentError(new TopUpQuoteNotFoundError()).status).toBe(404);
+    });
+    it("maps disabled V3 top-up states to CONFLICT", () => {
+      expect(mapPaymentError(new V3TopUpUnavailableError()).status).toBe(409);
+    });
     it("should map PackageNotFoundError to NOT_FOUND", () => {
       const result = mapPaymentError(new PackageNotFoundError("pkg_1"));
       expect(result.status).toBe(404);

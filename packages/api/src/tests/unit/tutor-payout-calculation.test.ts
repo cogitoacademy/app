@@ -119,5 +119,26 @@ describe("tutor payout calculation", () => {
     expect(
       tutorTaxStatus({ legalName: "", nik: "0012345678901234", npwp: null }),
     ).toBe("missing");
+    expect(
+      tutorTaxStatus({ legalName: "A Tutor", nik: "not-a-nik", npwp: null }),
+    ).toBe("missing");
+  });
+
+  it("rejects negative and fractional IDR inputs and invalid tax rates", () => {
+    expect(() => calculateTutorTaxIdr(-1, 0)).toThrow(
+      "Gross amount must be a non-negative safe integer",
+    );
+    expect(() => calculateTutorTaxIdr(1.5, 0)).toThrow(
+      "Gross amount must be a non-negative safe integer",
+    );
+    expect(() => calculateTutorTaxIdr(1, -1)).toThrow(
+      "Tax rate must be from 0.00% to 100.00%",
+    );
+    expect(() => calculateTutorTaxIdr(1, 1.5)).toThrow(
+      "Tax rate must be from 0.00% to 100.00%",
+    );
+    expect(() => sumSafeIdr([-1])).toThrow(
+      "Session fee must be a non-negative safe integer",
+    );
   });
 });

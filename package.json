@@ -58,7 +58,7 @@
     "test:api": "bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests",
     "test:e2e": "turbo run test --filter=@cogito-app/e2e",
     "test:e2e:ui": "turbo run test:ui --filter=@cogito-app/e2e",
-    "test:coverage": "bun test --coverage --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts",
+    "test:coverage": "bun --env-file apps/server/.env.test .github/scripts/coverage-runner.ts",
     "prepare": "lefthook install"
   },
   "dependencies": {
@@ -69,7 +69,15 @@
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
+    "@types/istanbul-lib-coverage": "2.0.6",
+    "@types/istanbul-lib-instrument": "1.7.8",
+    "@types/istanbul-lib-report": "3.0.3",
+    "@types/istanbul-reports": "3.0.4",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "istanbul-lib-coverage": "3.2.2",
+    "istanbul-lib-instrument": "6.0.3",
+    "istanbul-lib-report": "3.0.1",
+    "istanbul-reports": "3.2.0",
     "lefthook": "^2.1.9",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
