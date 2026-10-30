@@ -1763,6 +1763,33 @@ export function createBookingRepo(db: DbType) {
    * @param bookingId - the booking id
    * @returns the booking with related data, or null
    */
+  async function findBookingTutorFees(bookingId: string, tutorId: string) {
+    return db
+      .select({
+        id: tutorSessionFee.id,
+        bookingSessionId: tutorSessionFee.bookingSessionId,
+        grossHonorariumIdr: tutorSessionFee.grossHonorariumIdr,
+        scheduledStartAt: tutorSessionFee.scheduledStartAt,
+        payoutStatus: tutorPayout.status,
+      })
+      .from(tutorSessionFee)
+      .leftJoin(
+        tutorPayoutAllocation,
+        and(
+          eq(tutorPayoutAllocation.tutorSessionFeeId, tutorSessionFee.id),
+          eq(tutorPayoutAllocation.active, true),
+        ),
+      )
+      .leftJoin(tutorPayout, eq(tutorPayout.id, tutorPayoutAllocation.payoutId))
+      .where(
+        and(
+          eq(tutorSessionFee.bookingId, bookingId),
+          eq(tutorSessionFee.tutorId, tutorId),
+        ),
+      )
+      .orderBy(asc(tutorSessionFee.scheduledStartAt));
+  }
+
   async function findBookingWithParticipants(bookingId: string) {
     // The `meeting` one-relation returns an unspecified row when a booking has
     // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
@@ -1986,6 +2013,7 @@ export function createBookingRepo(db: DbType) {
   return {
     findBookingById,
     findBookingWithParticipants,
+    findBookingTutorFees,
     listBookingsByProposer,
     listBookingsByTutor,
     listBookingsForAccess,

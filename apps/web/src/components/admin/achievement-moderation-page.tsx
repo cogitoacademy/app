@@ -219,7 +219,7 @@ export function AchievementModerationPage() {
           <Heading level={1} size="md">
             Verify every achievement
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Review student evidence and publish only trusted submissions.
           </Text>
         </div>

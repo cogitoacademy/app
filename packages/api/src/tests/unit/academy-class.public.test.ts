@@ -5,10 +5,13 @@ describe("toPublicAcademyClass", () => {
   test("returns the student catalog fields without admin, tutor payout, or roster data", () => {
     const publicRecord = {
       id: "class-1",
+      classNumber: 123,
       kind: "cohort",
       state: "published",
       titleEn: "Synthetic cohort",
       descriptionEn: "Test catalog description",
+      titleId: "Kelas contoh",
+      descriptionId: "Deskripsi kelas",
       coverKey: null,
       cohortFullRateMarks: 20,
       cohortHalfRateMarks: 22,
@@ -46,10 +49,13 @@ describe("toPublicAcademyClass", () => {
 
     expect(toPublicAcademyClass(publicRecord)).toEqual({
       id: "class-1",
+      classNumber: 123,
       kind: "cohort",
       state: "published",
       titleEn: "Synthetic cohort",
       descriptionEn: "Test catalog description",
+      titleId: "Kelas contoh",
+      descriptionId: "Deskripsi kelas",
       coverKey: null,
       cohortFullRateMarks: 20,
       cohortHalfRateMarks: 22,

@@ -627,7 +627,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Heading level={1} size="md">
               Book {tutorName}
             </Heading>
-            <Text className="mt-1 text-muted">
+            <Text className="max-w-full text-muted">
               Choose your session details and review the cost before sending
               your request.
             </Text>

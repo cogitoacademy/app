@@ -535,6 +535,7 @@ export function createClassSessionReportService(deps: {
       .select({
         classId: academyClass.id,
         classTitle: academyClass.titleEn,
+        classNumber: academyClass.classNumber,
         classKind: academyClass.kind,
         sessionId: academyClassSession.id,
         sequenceNumber: academyClassSession.sequenceNumber,
@@ -604,6 +605,7 @@ export function createClassSessionReportService(deps: {
     return rows.map((row) => ({
       classId: row.classId,
       classTitle: row.classTitle,
+      classNumber: row.classNumber,
       classKind: row.classKind as "cohort" | "masterclass",
       sessionId: row.sessionId,
       sequenceNumber: row.sequenceNumber,

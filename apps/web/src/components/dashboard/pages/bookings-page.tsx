@@ -6,7 +6,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
-  IconCalendarPlus,
+  IconPlus,
   IconChevronDown,
   IconInbox,
 } from "@tabler/icons-react";
@@ -144,16 +144,6 @@ export function BookingsPage() {
           <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
         <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
-          {role === "student" ? (
-            <Button
-              render={<Link to="/tutors" aria-label="Find a tutor" />}
-              nativeButton={false}
-              className="w-fit max-[363.98px]:size-9.5 max-[363.98px]:px-0 sm:w-auto sm:shrink-0"
-            >
-              <IconCalendarPlus />
-              <span className="max-[363.98px]:sr-only">Book a session</span>
-            </Button>
-          ) : null}
           <div className="max-w-full sm:hidden">
             <BookingSortSelect
               value={activeSort}
@@ -165,11 +155,28 @@ export function BookingsPage() {
       </div>
 
       <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <BookingTabBar
-          activeTab={activeTab}
-          counts={tabCounts}
-          onChange={selectTab}
-        />
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <div className="min-w-0 flex-1 sm:flex-initial">
+            <BookingTabBar
+              activeTab={activeTab}
+              counts={tabCounts}
+              onChange={selectTab}
+            />
+          </div>
+          {role === "student" ? (
+            <Button
+              variant="plain"
+              size="sm-icon"
+              className="shrink-0 text-muted"
+              aria-label="Book a session"
+              title="Book a session"
+              render={<Link to="/tutors" aria-label="Book a session" />}
+              nativeButton={false}
+            >
+              <IconPlus aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
         <div className="hidden sm:block">
           <BookingSortSelect value={activeSort} onChange={selectSort} />
         </div>
@@ -292,7 +299,15 @@ function BookingTabBar({
   counts: Record<BookingTab, number>;
   onChange: (tab: BookingTab) => void;
 }) {
-  return <FilterTabBar tabs={BOOKING_TABS.map((tab) => ({ ...tab, count: counts[tab.value] }))} activeTab={activeTab} onChange={onChange} label="Booking status" scrollerSlot="booking-tab-scroller" />;
+  return (
+    <FilterTabBar
+      tabs={BOOKING_TABS.map((tab) => ({ ...tab, count: counts[tab.value] }))}
+      activeTab={activeTab}
+      onChange={onChange}
+      label="Booking status"
+      scrollerSlot="booking-tab-scroller"
+    />
+  );
 }
 
 function BookingSortSelect({

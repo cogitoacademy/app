@@ -30,7 +30,10 @@ function RouteComponent() {
   const { session } = Route.useRouteContext();
   const user = session.data?.user as CogitoUser | undefined;
   return user?.role === "admin" ? (
-    <ContentPage kind="resource" preview={<KnowledgeBankPage />} />
+    <ContentPage
+      kind="resource"
+      preview={(onManage) => <KnowledgeBankPage onManage={onManage} />}
+    />
   ) : (
     <KnowledgeBankPage />
   );

@@ -99,14 +99,16 @@ export function AdminKolCommissionsPage() {
 
   return (
     <div id="admin-kol-commissions" className="space-y-6">
-      <header className="space-y-2">
-        <Heading level={1}>KOL commission decisions</Heading>
-        <Text className="text-muted">
+      <div>
+        <Heading level={1} size="md">
+          KOL commission decisions
+        </Heading>
+        <Text className="max-w-full text-muted">
           First eligible top-up decisions use the terms saved at signup. Amounts
           below are calculated commissions. Open settlement history to record
           actual transfers or explicit obligation adjustments.
         </Text>
-      </header>
+      </div>
 
       <Card>
         <CardBody>

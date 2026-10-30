@@ -674,7 +674,9 @@ export function BookingDetailPage({
                 {booking.modality === "online" ? "Online" : "Offline"}
               </Text>
             </div>
-            <Heading className="break-words text-2xl">{eventTitle}</Heading>
+            <Heading level={1} size="md">
+              {eventTitle}
+            </Heading>
             {booking.sessionTopic ? (
               <Badge
                 variant="secondary"

@@ -54,12 +54,18 @@ export function ContentPage({
   preview,
 }: {
   kind: ContentKind;
-  preview: ReactNode;
+  preview: (onManage: () => void) => ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [previewing, setPreviewing] = useState(true);
   const pageTitle =
-    kind === "resource" ? "Knowledge Bank" : "Competition calendar";
+    kind === "resource"
+      ? "Curate Learning Resources"
+      : "Publish Competition Opportunities";
+  const pageDescription =
+    kind === "resource"
+      ? "Add and update materials in their original language; saved resources appear in the student library."
+      : "Add and update event details and dates; saved changes appear in the competition calendar.";
   const [editing, setEditing] = useState<Row | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [active, setActive] = useState(true);
@@ -249,23 +255,17 @@ export function ContentPage({
   if (previewing)
     return (
       <Stack direction="column" spacing="lg" className="min-w-0">
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={() => setPreviewing(false)}>
-            {kind === "resource" ? "Manage resources" : "Manage calendar"}
-          </Button>
-        </div>
-        {preview}
+        {preview(() => setPreviewing(false))}
       </Stack>
     );
   return (
     <Stack direction="column" spacing="lg" className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Heading>{pageTitle}</Heading>
-          <Text className="text-muted">
-            Save content in its original language. Changes appear live after
-            saving.
-          </Text>
+          <Heading level={1} size="md">
+            {pageTitle}
+          </Heading>
+          <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
         <Button
           variant="secondary"

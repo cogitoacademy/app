@@ -1,12 +1,12 @@
 import { Toast } from "@cogito-app/ui/components/selia/toast";
 import type { QueryClient } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+
 import {
   HeadContent,
   Outlet,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+
 import { PostHogProvider, usePostHog } from "@posthog/react";
 import { PostHog } from "posthog-js";
 import { useEffect, useRef, useState } from "react";
@@ -277,12 +277,6 @@ function RootContent() {
         </div>
         <Toast />
       </ThemeProvider>
-      {import.meta.env.DEV ? (
-        <>
-          <TanStackRouterDevtools position="bottom-left" />
-          <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
-        </>
-      ) : null}
     </>
   );
 }

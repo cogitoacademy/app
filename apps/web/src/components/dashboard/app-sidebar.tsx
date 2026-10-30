@@ -33,13 +33,17 @@ import {
 import {
   IconChevronDown,
   IconCalendarEvent,
+  IconCalendarCheck,
   IconBrandWhatsapp,
+  IconClipboardText,
   IconCertificate,
   IconCoins,
   IconAdjustments,
   IconHome,
   IconUsers,
   IconHelp,
+  IconClock,
+  IconBook2,
   IconLibrary,
   IconLogout,
   IconShieldCheck,
@@ -47,6 +51,7 @@ import {
   IconRoute,
   IconSelector,
   IconSettings,
+  IconSchool,
   IconTimelineEventText,
   IconUser,
   IconUserSquare,
@@ -74,15 +79,15 @@ const studentNavGroups = [
     label: "Learning",
     items: [
       { to: "/tutors", label: "Tutors", icon: IconUserSquare },
-      { to: "/classes", label: "Classes", icon: IconCalendarEvent },
-      { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
+      { to: "/classes", label: "Classes", icon: IconSchool },
+      { to: "/bookings", label: "My Bookings", icon: IconCalendarCheck },
       {
         to: "/class-reports",
-        label: "Session reports",
-        icon: IconTimelineEventText,
+        label: "Session Reports",
+        icon: IconClipboardText,
       },
       { to: "/achievements", label: "Achievements", icon: IconCertificate },
-      { to: "/referrals", label: "My referrals", icon: IconUsers },
+      { to: "/referrals", label: "My Referrals", icon: IconUsers },
     ],
   },
 ] as const;
@@ -95,16 +100,16 @@ const tutorNavGroups = [
   {
     label: "Teaching",
     items: [
-      { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
+      { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
       {
         to: "/class-reports",
-        label: "Session reports",
+        label: "Session Reports",
         icon: IconTimelineEventText,
       },
       {
         to: "/availability",
         label: "Availability",
-        icon: IconTimelineEventText,
+        icon: IconClock,
       },
       { to: "/profile", label: "Tutor Profile", icon: IconUser },
     ],
@@ -122,12 +127,12 @@ const adminNavGroups = [
   {
     label: "Teaching",
     items: [
-      { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
-      { to: "/admin-classes", label: "Classes", icon: IconCalendarEvent },
+      { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
+      { to: "/admin-classes", label: "Classes", icon: IconBook2 },
       {
         to: "/class-reports",
-        label: "Session reports",
-        icon: IconTimelineEventText,
+        label: "Session Reports",
+        icon: IconClipboardText,
       },
       { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
     ],
@@ -135,18 +140,22 @@ const adminNavGroups = [
   {
     label: "Finance",
     items: [
-      { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
-      { to: "/admin-referrals", label: "Referral usage", icon: IconUsers },
+      { to: "/admin-tutor-payouts", label: "Tutor Payouts", icon: IconWallet },
+      { to: "/admin-referrals", label: "Referral Activity", icon: IconUsers },
       {
         to: "/admin-kol-commissions",
-        label: "KOL commissions",
+        label: "KOL Commissions",
         icon: IconCoins,
       },
-      { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+      {
+        to: "/admin-economy",
+        label: "Economy Settings",
+        icon: IconAdjustments,
+      },
     ],
   },
   {
-    label: "Content & reviews",
+    label: "Content & Reviews",
     items: [
       { to: "/admin-competitions", label: "Competitions", icon: IconTrophy },
       {
@@ -156,7 +165,7 @@ const adminNavGroups = [
       },
       {
         to: "/admin-knowledge-bank",
-        label: "Knowledge access",
+        label: "Knowledge Bank Access",
         icon: IconShieldCheck,
       },
       { to: "/faq", label: "FAQ", icon: IconHelp },
@@ -167,7 +176,7 @@ const adminNavGroups = [
 const resourceItems = [
   {
     to: "/guide",
-    label: "How it works",
+    label: "How It Works",
     icon: IconRoute,
   },
   {

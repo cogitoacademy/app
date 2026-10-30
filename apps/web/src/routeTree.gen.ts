@@ -14,8 +14,8 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReferralChoiceRouteImport } from './routes/referral-choice'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
@@ -77,14 +77,14 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReferralChoiceRoute = ReferralChoiceRouteImport.update({
   id: '/referral-choice',
   path: '/referral-choice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -274,8 +274,8 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/referral-choice': typeof ReferralChoiceRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
@@ -318,8 +318,8 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/referral-choice': typeof ReferralChoiceRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
@@ -364,8 +364,8 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/referral-choice': typeof ReferralChoiceRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin': typeof AppAdminRoute
@@ -410,8 +410,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
-    | '/reset-password'
     | '/referral-choice'
+    | '/reset-password'
     | '/verify-email'
     | '/achievements'
     | '/admin'
@@ -454,8 +454,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
-    | '/reset-password'
     | '/referral-choice'
+    | '/reset-password'
     | '/verify-email'
     | '/achievements'
     | '/admin'
@@ -499,8 +499,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
-    | '/reset-password'
     | '/referral-choice'
+    | '/reset-password'
     | '/verify-email'
     | '/_app/achievements'
     | '/_app/admin'
@@ -545,8 +545,8 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
   ReferralChoiceRoute: typeof ReferralChoiceRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -588,18 +588,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/referral-choice': {
       id: '/referral-choice'
       path: '/referral-choice'
       fullPath: '/referral-choice'
       preLoaderRoute: typeof ReferralChoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify-email': {
@@ -940,8 +940,8 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
   ReferralChoiceRoute: ReferralChoiceRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

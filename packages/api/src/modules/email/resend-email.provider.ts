@@ -1,4 +1,5 @@
 import type { EmailPort, EmailMessage } from "./email.service";
+import authEmailHeaderBase64 from "../report-export/assets/student-report-header.json";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
 import { serviceUnavailable } from "../../lib/errors";
 import { log } from "../../lib/logger";
@@ -44,6 +45,17 @@ export function createResendEmailProvider(
             to: [message.to],
             subject: message.subject,
             html: message.html,
+            ...(message.category === "auth"
+              ? {
+                  attachments: [
+                    {
+                      content: authEmailHeaderBase64,
+                      filename: "auth-email-header.png",
+                      content_id: "cogito-auth-header",
+                    },
+                  ],
+                }
+              : {}),
             tags: [{ name: "category", value: message.category }],
           }),
           signal: controller.signal,

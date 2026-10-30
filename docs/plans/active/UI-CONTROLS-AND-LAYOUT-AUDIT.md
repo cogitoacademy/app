@@ -4,7 +4,6 @@
 
 Replaced the dense tree/permanent editor with a grouped competition directory and on-demand Selia drawer. Search/status, visible specializations, parent color identity, optional descriptions/colors/movement and dirty-close confirmation make the catalog manageable without changing backend contracts. All existing audit/version/impact/lifecycle controls remain. Dedicated synthetic Edge workflow covers the changed UI; current validation results are recorded in the PR and RUNBOOK. This does not close live DB, native zoom or assistive-technology gates.
 
-
 Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
 
 ## Classes UI follow-up (22 October 2026)
@@ -39,7 +38,6 @@ The T3 preview reached the synthetic frontend, but its unmocked auth request
 failed (`TypeError: Failed to fetch`) and snapshot timed out after 15000ms.
 Browser evidence above comes from the repository's mocked Playwright workflow,
 not a live API session. No DB/provider checks were performed.
-
 
 Scope: all web TSX source and the shared Selia controls; repair browser-native
 date/time/number widgets and Card/Table composition without changing API contracts.
@@ -173,11 +171,9 @@ left running; email/payments remain stubbed and Calendar disabled.
   virtual memory. Focused lint and diff checks passed.
 - No DB, provider, persistence, or API behavior changes.
 
-
 ### KOL responsive polish checkpoint
 
 2026-10-25 bounded checkpoint: KOL settlement history wrapping and multiline settlement/export/retry actions implemented; 13/13 synthetic Edge checks pass. Measured baseline clipping and reproduction command are in RUNBOOK. This does not complete the wider V3 responsive audit: economy, payout, class/report, native 200% zoom, RTL and assistive-technology acceptance remain open. Parent owns cross-checkout docs backlog reconciliation.
-
 
 ### Economy and tutor payout responsive slice (25 October 2026)
 
@@ -186,7 +182,6 @@ Bounded implementation complete: V3 amount controls have a 14rem minimum width w
 Dedicated synthetic Edge checks pass 8/8 across 320/390/768/1440 CSS px, covering economy read/edit, payout prepared-transfer, unpaid-preview and void/reconciliation drawers, numeric widths, contained tables, button content height and keyboard reachability. Mock-only ports 3356/3357, cache, command and artifact paths are in RUNBOOK. No financial write is activated and live economy/payout specs are not run.
 
 Remaining: native 200% zoom (unverified), RTL and assistive-technology audit, live auth/persistence and financial workflow acceptance, plus other responsive slices. This checkpoint does not mark the overall V3 UI audit complete.
-
 
 ### Canonical KB/calendar pages (25 October 2026)
 
@@ -197,3 +192,13 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+
+### Tutor honorarium in booking detail (2026-10-29)
+
+Implemented: admin booking tutor participant details use gross IDR session honorarium and payment status in place of student wallet/ledger controls. Live browser and persisted payout acceptance remain pending.
+
+
+Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
+
+Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.

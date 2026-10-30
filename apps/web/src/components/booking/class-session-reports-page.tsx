@@ -1,6 +1,5 @@
 "use client";
 
-import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,18 +23,34 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import {
+  Table,
+  TableContainer,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
-  IconArrowLeft,
   IconCalendarEvent,
   IconDownload,
-  IconFileText,
   IconRefresh,
 } from "@tabler/icons-react";
 import { SessionCompletionFeedbackCard } from "@/components/booking/session-completion-feedback-card";
 import { SessionFeedbackBulletInput } from "@/components/booking/session-feedback-bullet-input";
+import { EmptyState } from "@/components/empty-state";
 import type { CompletionFeedbackDraft } from "@/components/booking/complete-session-dialog";
 import Loader from "@/components/loader";
 import { getUserFacingError } from "@/lib/error-message";
@@ -202,6 +217,41 @@ export function ClassSessionReportsPage() {
         new Date(right.startAt).getTime() - new Date(left.startAt).getTime(),
     );
   }, [currentTime, isStudent, reportsQuery.data]);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [classTypeFilter, setClassTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [reportStatusFilter, setReportStatusFilter] = useState("all");
+  const visibleRows = useMemo(() => {
+    const query = sessionSearch.trim().toLowerCase();
+    const dateBoundary =
+      dateFilter === "all"
+        ? null
+        : currentTime - Number(dateFilter) * 24 * 60 * 60 * 1000;
+
+    return rows.filter((row) => {
+      const matchesQuery =
+        !query ||
+        `CLS-${row.classNumber} ${row.classNumber} ${row.classTitle} ${row.sessionTitle}`
+          .toLowerCase()
+          .includes(query);
+      const matchesClassType =
+        classTypeFilter === "all" || row.classKind === classTypeFilter;
+      const matchesDate =
+        dateBoundary === null ||
+        new Date(row.startAt).getTime() >= dateBoundary;
+      const matchesStatus =
+        reportStatusFilter === "all" ||
+        (reportStatusFilter === "recorded" ? row.report !== null : !row.report);
+      return matchesQuery && matchesClassType && matchesDate && matchesStatus;
+    });
+  }, [
+    classTypeFilter,
+    currentTime,
+    dateFilter,
+    reportStatusFilter,
+    rows,
+    sessionSearch,
+  ]);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
@@ -220,8 +270,12 @@ export function ClassSessionReportsPage() {
 
   if (reportsQuery.isPending) return <Loader />;
 
-  const selectedSessionIdResolved = selectedSessionId ?? rows[0]?.sessionId;
-  const selectedRow = rows.find(
+  const selectedSessionIdResolved = visibleRows.some(
+    (row) => row.sessionId === selectedSessionId,
+  )
+    ? selectedSessionId
+    : visibleRows[0]?.sessionId;
+  const selectedRow = visibleRows.find(
     (row) => row.sessionId === selectedSessionIdResolved,
   );
   const activeDraft = selectedRow
@@ -448,51 +502,143 @@ export function ClassSessionReportsPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
-      {isStudent ? (
-        <Button
-          variant="plain"
-          nativeButton={false}
-          className="w-fit"
-          render={<Link to="/classes" aria-label="All classes" />}
-        >
-          <IconArrowLeft /> All classes
-        </Button>
-      ) : null}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-muted">
-            <IconFileText aria-hidden="true" className="size-4" />
-            <Text className="text-xs font-medium uppercase tracking-wider">
-              Private class records
-            </Text>
-          </div>
+    <Stack
+      direction="column"
+      spacing="md"
+      className="w-full min-w-0 max-w-full flex-nowrap overflow-visible pb-8"
+    >
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 max-w-full">
           <Heading level={1} size="md">
-            Session reports
+            Follow up on each delivered session
           </Heading>
-          <Text className="mt-2 max-w-2xl text-muted">
+          <Text className="max-w-full text-muted">
             {isStudent
-              ? "Reports for your eligible delivered sessions, including sessions retained in class history."
+              ? "Read your tutor's feedback after it is submitted."
               : isAdmin
-                ? "Review delivered class sessions, record missing reports, and make on-demand text corrections."
-                : "Record feedback for your delivered class sessions and review reports you submitted."}
+                ? "Review delivered sessions; if a report is missing, record it or correct submitted text."
+                : "Submit feedback for delivered sessions, then review your reports here."}
           </Text>
         </div>
         <Badge variant="info" className="gap-2">
           <IconCalendarEvent aria-hidden="true" />
-          {rows.length} session{rows.length === 1 ? "" : "s"}
+          {visibleRows.length} session{visibleRows.length === 1 ? "" : "s"}
         </Badge>
       </div>
 
-      {isStudent || isAdmin ? (
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Input
+          value={sessionSearch}
+          onChange={(event) => setSessionSearch(event.target.value)}
+          placeholder="Search class or session"
+          aria-label="Search class or session"
+          className="w-full min-w-0 sm:w-auto sm:max-w-xs sm:flex-1"
+        />
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">
+          <Select
+            value={classTypeFilter}
+            onValueChange={(value) => {
+              if (
+                value === "all" ||
+                value === "cohort" ||
+                value === "masterclass"
+              ) {
+                setClassTypeFilter(value);
+              }
+            }}
+          >
+            <SelectTrigger
+              aria-label="Filter by class type"
+              className="w-fit min-w-max whitespace-nowrap"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="cohort">Cohort</SelectItem>
+                <SelectItem value="masterclass">Masterclass</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          <Select
+            value={dateFilter}
+            onValueChange={(value) => {
+              if (value === "all" || value === "30" || value === "90") {
+                setDateFilter(value);
+              }
+            }}
+          >
+            <SelectTrigger
+              aria-label="Filter by date"
+              className="w-fit min-w-max whitespace-nowrap"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                <SelectItem value="all">Any date</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          <Select
+            value={reportStatusFilter}
+            onValueChange={(value) => {
+              if (
+                value === "all" ||
+                value === "recorded" ||
+                value === "pending"
+              ) {
+                setReportStatusFilter(value);
+              }
+            }}
+          >
+            <SelectTrigger
+              aria-label="Filter by report status"
+              className="w-fit min-w-max whitespace-nowrap"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="recorded">Report recorded</SelectItem>
+                <SelectItem value="pending">Report pending</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          {sessionSearch ||
+          classTypeFilter !== "all" ||
+          dateFilter !== "all" ||
+          reportStatusFilter !== "all" ? (
+            <Button
+              variant="plain"
+              className="whitespace-nowrap"
+              onClick={() => {
+                setSessionSearch("");
+                setClassTypeFilter("all");
+                setDateFilter("all");
+                setReportStatusFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {isAdmin ||
+      (isStudent &&
+        (rows.length > 0 || Boolean(exportSummaryQuery.data?.reportCount))) ? (
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Download student report PDF</CardTitle>
+              <CardTitle level={2}>Download reports</CardTitle>
               <CardDescription className="mt-2">
-                Includes reported, delivered sessions scheduled in the last
-                three calendar months. Student access follows the paid-session
-                report rules.
+                Download eligible session feedback from the last three calendar
+                months.
               </CardDescription>
             </div>
           </CardHeader>
@@ -588,17 +734,15 @@ export function ClassSessionReportsPage() {
               </div>
             ) : null}
             {exportSummaryQuery.data?.reportCount === 0 || downloadEmpty ? (
-              <Card className="border-item-border bg-item">
-                <CardBody className="space-y-1 py-4" role="status">
-                  <Text className="font-medium">
-                    No eligible reports in the last three calendar months
-                  </Text>
-                  <Text className="text-sm text-muted">
-                    Reports appear after a delivered session has a report and
-                    the selected student has a chargeable entitlement.
-                  </Text>
-                </CardBody>
-              </Card>
+              <div className="space-y-1" role="status">
+                <Text className="font-medium">
+                  No eligible reports in the last three calendar months
+                </Text>
+                <Text className="text-sm text-muted">
+                  Eligible reports will appear here once session feedback is
+                  available.
+                </Text>
+              </div>
             ) : null}
             {exportSummaryQuery.data?.reportCount ? (
               <div className="flex flex-wrap items-center gap-3">
@@ -625,85 +769,119 @@ export function ClassSessionReportsPage() {
         </Card>
       ) : null}
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-        <section
-          aria-label="Class sessions"
-          className="min-w-0 space-y-3 lg:sticky lg:top-6"
-        >
-          <Heading level={2} size="sm">
-            Choose a session
-          </Heading>
-          <div className="max-h-96 space-y-3 overflow-y-auto rounded-xl p-1 lg:max-h-[calc(100dvh-14rem)]">
-            {rows.length === 0 ? (
-              <Card>
-                <CardBody className="space-y-2 py-7">
-                  <Text className="font-medium">
-                    {isStudent
+      <div className="grid min-w-0 gap-5">
+        <section aria-label="Class sessions" className="min-w-0 space-y-3">
+          {visibleRows.length > 0 ? (
+            <Heading level={2} size="sm">
+              Class sessions
+            </Heading>
+          ) : null}
+          <div className="min-w-0">
+            {visibleRows.length === 0 ? (
+              <EmptyState
+                icon={<IconCalendarEvent aria-hidden="true" />}
+                title={
+                  rows.length === 0
+                    ? isStudent
                       ? "No reports yet"
-                      : "No past sessions to review"}
-                  </Text>
-                  <Text className="text-sm text-muted">
-                    {isStudent
-                      ? "Your eligible session reports will appear here after a tutor records them."
-                      : "Sessions awaiting a report will appear here after their scheduled end time."}
-                  </Text>
+                      : "No past sessions to review"
+                    : "No matching sessions"
+                }
+                description={
+                  rows.length === 0
+                    ? isStudent
+                      ? "After your session, your tutor’s feedback will appear here. You can read each report and download eligible reports as a PDF."
+                      : "Sessions awaiting a report will appear here after their scheduled end time."
+                    : "Try a different search or clear the filters to see more sessions."
+                }
+                className="min-h-72 rounded-lg border border-dashed border-border py-10"
+              />
+            ) : (
+              <Card>
+                <CardBody>
+                  <TableContainer>
+                    <Table
+                      aria-label="Class sessions"
+                      className="min-w-[760px]"
+                    >
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead scope="col">Class / session</TableHead>
+                          <TableHead scope="col">Date · Jakarta</TableHead>
+                          <TableHead scope="col">Format</TableHead>
+                          <TableHead scope="col">Report status</TableHead>
+                          <TableHead scope="col" className="text-right">
+                            Action
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleRows.map((row) => {
+                          const selected =
+                            row.sessionId === selectedSessionIdResolved;
+                          return (
+                            <TableRow
+                              key={row.sessionId}
+                              data-testid={`session-report-row-${row.sessionId}`}
+                              aria-selected={selected}
+                              className={selected ? "bg-accent" : undefined}
+                            >
+                              <TableCell>
+                                <Text className="font-medium">
+                                  {row.classTitle}
+                                </Text>
+                                <Text className="mt-1 text-sm text-muted">
+                                  CLS-{row.classNumber} · Session{" "}
+                                  {row.sequenceNumber} · {row.sessionTitle}
+                                </Text>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {formatSessionDate(row.startAt)}
+                              </TableCell>
+                              <TableCell>
+                                <Text className="text-sm">
+                                  {row.classKind === "cohort"
+                                    ? "Cohort"
+                                    : "Masterclass"}
+                                </Text>
+                                <Text className="mt-1 text-sm text-muted">
+                                  {row.mode === "online"
+                                    ? "Online"
+                                    : "In person"}
+                                </Text>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={row.report ? "success" : "warning"}
+                                >
+                                  {row.report
+                                    ? "Report recorded"
+                                    : "Report pending"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="plain"
+                                  size="sm"
+                                  aria-pressed={selected}
+                                  aria-label={`${isStudent ? "View report" : "Open session"}: ${row.classTitle}, session ${row.sequenceNumber}`}
+                                  onClick={() => selectRow(row)}
+                                >
+                                  {selected
+                                    ? "Selected"
+                                    : isStudent
+                                      ? "View report"
+                                      : "Open session"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </CardBody>
               </Card>
-            ) : (
-              rows.map((row) => {
-                const selected = row.sessionId === selectedSessionIdResolved;
-                const status = row.report
-                  ? "Report recorded"
-                  : "Report pending";
-                return (
-                  <Card
-                    key={row.sessionId}
-                    data-testid={`session-report-row-${row.sessionId}`}
-                    className={selected ? "ring-2 ring-primary" : undefined}
-                  >
-                    <CardBody className="space-y-3">
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={row.report ? "success" : "warning"}>
-                            {status}
-                          </Badge>
-                          <Badge variant="secondary">
-                            {row.classKind === "cohort"
-                              ? "Cohort"
-                              : "Masterclass"}
-                          </Badge>
-                        </div>
-                        <CardTitle className="break-words">
-                          {row.classTitle}
-                        </CardTitle>
-                        <CardDescription>
-                          Session {row.sequenceNumber} · {row.sessionTitle}
-                        </CardDescription>
-                        <Text className="text-xs text-muted">
-                          {formatSessionDate(row.startAt)}
-                        </Text>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <Badge variant="secondary-outline">
-                          {row.mode === "online" ? "Online" : "In person"}
-                        </Badge>
-                        <Button
-                          variant="plain"
-                          size="sm"
-                          aria-pressed={selected}
-                          onClick={() => selectRow(row)}
-                        >
-                          {selected
-                            ? "Selected"
-                            : isStudent
-                              ? "View report"
-                              : "Open session"}
-                        </Button>
-                      </div>
-                    </CardBody>
-                  </Card>
-                );
-              })
             )}
           </div>
         </section>
@@ -718,7 +896,7 @@ export function ClassSessionReportsPage() {
           }
           className="min-w-0 scroll-mt-6 space-y-4 rounded-xl outline-none focus-visible:outline-2 focus-visible:outline-primary"
         >
-          {!selectedRow || !activeDraft ? (
+          {visibleRows.length === 0 ? null : !selectedRow || !activeDraft ? (
             <Card>
               <CardBody className="py-8">
                 <Text className="text-muted">

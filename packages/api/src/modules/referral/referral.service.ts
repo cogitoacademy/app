@@ -455,8 +455,30 @@ export function createReferralService(deps: {
       )
       .limit(1);
     const config = await settingsAt(db, at);
+    const friends = await db
+      .select({
+        id: referralChoice.id,
+        name: user.name,
+        joinedAt: user.createdAt,
+        completedAt: friendRewardDecision.completedAt,
+        creditedMarks: friendRewardDecision.creditedMarks,
+      })
+      .from(referralChoice)
+      .innerJoin(user, eq(user.id, referralChoice.userId))
+      .leftJoin(
+        friendRewardDecision,
+        eq(friendRewardDecision.choiceId, referralChoice.id),
+      )
+      .where(
+        and(
+          eq(referralChoice.referrerUserId, userId),
+          eq(referralChoice.kind, "friend"),
+        ),
+      )
+      .orderBy(desc(referralChoice.decidedAt), desc(referralChoice.id));
     const earnedMarks = usage?.creditedMarks ?? 0;
     return {
+      friends,
       code: await ensureFriendCode(userId, account.name),
       settings: {
         welcomeMarks: config.welcomeMarks,

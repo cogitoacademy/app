@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  serial,
   pgTable,
   text,
   timestamp,
@@ -16,6 +17,7 @@ export const academyClass = pgTable(
   "academy_class",
   {
     id: uuidPrimaryKey,
+    classNumber: serial("class_number").unique(),
     kind: text("kind").notNull(),
     competitionId: text("competition_id")
       .notNull()

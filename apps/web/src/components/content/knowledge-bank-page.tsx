@@ -56,7 +56,9 @@ function resourceFileUrl(resourceId: string) {
   return `${serverUrl}/content/knowledge-bank/${encodeURIComponent(resourceId)}/file`;
 }
 
-export function KnowledgeBankPage() {
+export function KnowledgeBankPage({
+  onManage,
+}: { onManage?: () => void } = {}) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [selectedResource, setSelectedResource] = useState<Resource | null>(
@@ -153,14 +155,19 @@ export function KnowledgeBankPage() {
       <Stack direction="column" spacing="lg">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <Heading>Learn from curated resources</Heading>
-            </div>
-            <Text className="mt-1 max-w-2xl text-muted">
+            <Heading level={1} size="md">
+              Learn from curated resources
+            </Heading>
+            <Text className="max-w-full text-muted">
               Find focused materials to strengthen your academic and competition
               preparation.
             </Text>
           </div>
+          {onManage ? (
+            <Button variant="secondary" onClick={onManage}>
+              Manage resources
+            </Button>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">

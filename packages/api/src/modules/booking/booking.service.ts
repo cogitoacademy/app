@@ -1421,6 +1421,9 @@ export function createBookingService(deps: {
     );
     return {
       ...bookingWithPalette,
+      ...(userRole === "admin"
+        ? { tutorFees: await repo.findBookingTutorFees(bookingId, b.tutorId) }
+        : {}),
       disclaimer: computeDisclaimer(b),
       ...computeMeetingInfo(b),
     };

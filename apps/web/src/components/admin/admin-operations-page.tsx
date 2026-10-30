@@ -265,7 +265,7 @@ export function AdminOperationsPage() {
         <Heading level={1} size="md">
           Keep every booking moving
         </Heading>
-        <Text className="text-muted">
+        <Text className="max-w-full text-muted">
           Resolve booking issues, inspect wallets, and coordinate offline rooms
           from one workspace.
         </Text>
@@ -778,7 +778,10 @@ export function AdminBookingDetailPage({
       ...orpc.admin.getWallet.queryOptions({
         input: { userId: participant.userId },
       }),
-      enabled: booking !== null && bookingQuery.isSuccess,
+      enabled:
+        booking !== null &&
+        bookingQuery.isSuccess &&
+        participant.role !== "tutor",
     })),
   });
   const ledgerQueries = useQueries({
@@ -790,7 +793,10 @@ export function AdminBookingDetailPage({
           limit: 8,
         },
       }),
-      enabled: booking !== null && bookingQuery.isSuccess,
+      enabled:
+        booking !== null &&
+        bookingQuery.isSuccess &&
+        participant.role !== "tutor",
     })),
   });
   const metadata = getOverrideMetadata(booking?.overrideMeta);
@@ -862,15 +868,57 @@ export function AdminBookingDetailPage({
   const participantFinancials = new Map(
     participants.map((participant, index) => [
       participant.id,
-      <AdminParticipantFinancialDetails
-        key={participant.id}
-        affected={affectedParticipants.includes(participant.userId)}
-        wallet={walletQueries[index]?.data}
-        walletLoading={walletQueries[index]?.isPending ?? false}
-        ledger={ledgerQueries[index]?.data?.items ?? []}
-        ledgerLoading={ledgerQueries[index]?.isPending ?? false}
-        timezone={booking.timezone}
-      />,
+      participant.role === "tutor" ? (
+        <div key={participant.id} className="border-t border-border p-3">
+          <Text className="text-xs font-medium text-muted">
+            Booking honorarium (gross)
+          </Text>
+          {bookingQuery.isError ? (
+            <Text className="mt-1 text-xs">
+              Honorarium could not be loaded.
+            </Text>
+          ) : bookingQuery.data?.tutorFees?.length ? (
+            <div className="mt-1 divide-y divide-border">
+              {bookingQuery.data.tutorFees.map((fee) => (
+                <div
+                  key={fee.id}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2"
+                >
+                  <Text className="text-xs text-muted">
+                    {formatBookingDate(fee.scheduledStartAt, booking.timezone)}
+                  </Text>
+                  <div className="flex items-center gap-2">
+                    <Text className="text-xs font-medium">
+                      Rp{fee.grossHonorariumIdr.toLocaleString("id-ID")}
+                    </Text>
+                    <Badge
+                      variant={
+                        fee.payoutStatus === "paid" ? "success" : "tertiary"
+                      }
+                    >
+                      {fee.payoutStatus === "paid"
+                        ? "Paid"
+                        : "Awaiting payment"}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Text className="mt-1 text-xs">Honorarium not yet recorded.</Text>
+          )}
+        </div>
+      ) : (
+        <AdminParticipantFinancialDetails
+          key={participant.id}
+          affected={affectedParticipants.includes(participant.userId)}
+          wallet={walletQueries[index]?.data}
+          walletLoading={walletQueries[index]?.isPending ?? false}
+          ledger={ledgerQueries[index]?.data?.items ?? []}
+          ledgerLoading={ledgerQueries[index]?.isPending ?? false}
+          timezone={booking.timezone}
+        />
+      ),
     ]),
   );
   const adminSidebarContent = (

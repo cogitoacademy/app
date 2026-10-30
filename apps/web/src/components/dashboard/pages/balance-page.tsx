@@ -226,7 +226,7 @@ export function BalancePage() {
             <Heading level={1} size="md">
               Manage your Marks
             </Heading>
-            <Text className="text-muted">
+            <Text className="max-w-full text-muted">
               See what’s available, review active holds, and top up when you
               need to.
             </Text>

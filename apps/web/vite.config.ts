@@ -31,6 +31,7 @@ export default defineConfig({
     port: Number(process.env.WEB_PORT ?? 3000),
     strictPort: !!process.env.WEB_PORT,
     host: true,
+    watch: { usePolling: true, interval: 1000 },
   },
   resolve: {
     tsconfigPaths: true,

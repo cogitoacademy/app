@@ -2,7 +2,13 @@
 
 import { cn } from "@cogito-app/ui/lib/utils";
 
-export function FilterTabBar<T extends string>({ tabs, activeTab, onChange, label, scrollerSlot }: {
+export function FilterTabBar<T extends string>({
+  tabs,
+  activeTab,
+  onChange,
+  label,
+  scrollerSlot,
+}: {
   tabs: readonly { value: T; label: string; count?: number }[];
   activeTab: T;
   onChange: (value: T) => void;
@@ -35,7 +41,9 @@ export function FilterTabBar<T extends string>({ tabs, activeTab, onChange, labe
                 onClick={() => onChange(tab.value)}
               >
                 {tab.label}
-                {tab.count !== undefined ? <span className="text-xs text-dimmed">{tab.count}</span> : null}
+                {tab.count !== undefined ? (
+                  <span className="text-xs text-dimmed">{tab.count}</span>
+                ) : null}
               </button>
             ))}
           </div>

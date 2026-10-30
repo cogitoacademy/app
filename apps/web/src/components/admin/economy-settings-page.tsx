@@ -275,14 +275,12 @@ export function EconomySettingsPage() {
   return (
     <Stack direction="column" spacing="lg">
       <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Heading level={1} size="md">
-            Shape a sustainable booking economy
-          </Heading>
-        </div>
-        <Text className="mt-1 max-w-3xl text-muted">
-          Set the Cogito platform take used when a new booking calculates its
-          IDR total. Tutor honoraria stay separate and are never converted from
+        <Heading level={1} size="md">
+          Set the platform take for new bookings
+        </Heading>
+        <Text className="max-w-full text-muted">
+          Choose online and offline rates. Saved changes apply to future
+          bookings; tutor honoraria stay separate and are never converted from
           Marks.
         </Text>
       </div>

@@ -60,7 +60,7 @@ export function FaqReadOnlyPage() {
           <Heading level={1} size="md">
             FAQ
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Answers to common questions about Cogito Academy.
           </Text>
         </div>

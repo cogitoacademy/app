@@ -555,7 +555,7 @@ export function AdminTutorPayoutsPage() {
           <Heading level={1} size="md">
             Tutor payouts
           </Heading>
-          <Text className="mt-1 max-w-3xl text-muted">
+          <Text className="max-w-full text-muted">
             Select unpaid sessions, prepare a fixed preview, perform the bank
             transfer separately, then record its actual amount and evidence.
           </Text>

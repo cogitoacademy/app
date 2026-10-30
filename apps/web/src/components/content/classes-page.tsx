@@ -56,13 +56,17 @@ export function ClassesPage() {
   );
 
   return (
-    <Stack direction="column" spacing="md" className="w-full min-w-0 pb-8">
+    <Stack
+      direction="column"
+      spacing="md"
+      className="w-full min-w-0 flex-nowrap pb-8"
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-full">
           <Heading level={1} size="md">
             Find your next class
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Prepare for your competition with a cohort or a focused masterclass.
           </Text>
         </div>
@@ -75,39 +79,33 @@ export function ClassesPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardBody className="grid gap-5 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Text className="font-semibold">Cohorts · Learn step by step</Text>
-            <Text className="text-sm text-muted">
-              Follow a sequence of sessions. Open a class to compare full, half,
-              and single-session plans.
-            </Text>
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 basis-full flex-col gap-2 sm:basis-auto sm:flex-row sm:items-center sm:gap-4">
+          <div className="min-w-0 sm:shrink">
+            <FilterTabBar
+              label="Class type"
+              activeTab={kind}
+              onChange={setKind}
+              tabs={[
+                { value: "all", label: "All classes" },
+                { value: "cohort", label: "Cohorts" },
+                { value: "masterclass", label: "Masterclasses" },
+              ]}
+            />
           </div>
-          <div className="space-y-1">
-            <Text className="font-semibold">
-              Masterclasses · Focus on a topic
+          {!classes.isPending && !classes.isError ? (
+            <Text
+              className="shrink-0 whitespace-nowrap text-sm text-muted"
+              role="status"
+            >
+              {visibleClasses.length} class
+              {visibleClasses.length === 1 ? "" : "es"}
+              {query || kind !== "all" ? " found" : " available"} · All times in
+              WIB
             </Text>
-            <Text className="text-sm text-muted">
-              Explore the topic, tutor, and schedule, then review your
-              enrollment options.
-            </Text>
-          </div>
-        </CardBody>
-      </Card>
-
-      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <FilterTabBar
-          label="Class type"
-          activeTab={kind}
-          onChange={setKind}
-          tabs={[
-            { value: "all", label: "All classes" },
-            { value: "cohort", label: "Cohorts" },
-            { value: "masterclass", label: "Masterclasses" },
-          ]}
-        />
-        <Field className="w-full sm:max-w-xs">
+          ) : null}
+        </div>
+        <Field className="w-full sm:w-64 sm:shrink-0">
           <FieldLabel htmlFor="class-search" className="sr-only">
             Search classes
           </FieldLabel>
@@ -150,12 +148,6 @@ export function ClassesPage() {
           />
         ) : (
           <>
-            <Text className="text-sm text-muted" role="status">
-              {visibleClasses.length} class
-              {visibleClasses.length === 1 ? "" : "es"}
-              {query || kind !== "all" ? " found" : " available"} · All times in
-              WIB
-            </Text>
             {visibleClasses.length === 0 ? (
               <EmptyStateCard
                 tone="secondary"
@@ -251,6 +243,39 @@ export function ClassesPage() {
                       data-testid={`class-card-${academyClass.id}`}
                     >
                       <div className="flex h-full min-w-0 flex-col gap-3 p-4">
+                        <Heading
+                          level={2}
+                          size="sm"
+                          className="line-clamp-2 wrap-anywhere leading-snug"
+                          title={academyClass.titleEn}
+                        >
+                          {academyClass.titleEn}
+                        </Heading>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant="secondary"
+                            size="sm"
+                            className={
+                              palette ? competitionPaletteClassName : undefined
+                            }
+                            style={getCompetitionPaletteStyle(palette)}
+                          >
+                            {academyClass.competition.parent
+                              ? `${academyClass.competition.parent.name} · `
+                              : ""}
+                            {academyClass.competition.name}
+                          </Badge>
+                          <Badge variant="tertiary" size="sm">
+                            {academyClass.kind === "cohort"
+                              ? "Cohort"
+                              : "Masterclass"}
+                          </Badge>
+                          {academyClass.state === "postponed" ? (
+                            <Badge variant="warning" size="sm">
+                              Postponed
+                            </Badge>
+                          ) : null}
+                        </div>
                         <div className="flex min-w-0 items-center gap-3">
                           <div
                             className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-accent"
@@ -282,7 +307,7 @@ export function ClassesPage() {
                               )}
                               {academyClass.kind === "cohort"
                                 ? cohortDateRange
-                                : `${formattedTime} WIB`}
+                                : `${formattedDate} · ${formattedTime} WIB`}
                             </Text>
                             <Text className="flex items-center gap-2 text-muted">
                               <IconMapPin
@@ -315,28 +340,14 @@ export function ClassesPage() {
                             </Text>
                           </div>
                         </div>
-                        <Heading
-                          level={2}
-                          size="sm"
-                          className="truncate"
-                          title={academyClass.titleEn}
-                        >
-                          {academyClass.titleEn}
-                        </Heading>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Badge
-                            variant="secondary"
-                            size="sm"
-                            className={
-                              palette ? competitionPaletteClassName : undefined
-                            }
-                            style={getCompetitionPaletteStyle(palette)}
-                          >
-                            {academyClass.competition.parent
-                              ? `${academyClass.competition.parent.name} · `
-                              : ""}
-                            {academyClass.competition.name}
-                          </Badge>
+                        {academyClass.kind === "cohort" ? (
+                          <Text className="text-sm text-muted">
+                            {nextSession
+                              ? "Enroll before your selected session starts · subject to availability"
+                              : "No upcoming sessions"}
+                          </Text>
+                        ) : null}
+                        <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-x-1 text-muted">
                             {startingRate !== null ? (
                               <>
@@ -347,38 +358,19 @@ export function ClassesPage() {
                               <span className="text-sm">Price unavailable</span>
                             )}
                           </div>
+                          <span
+                            className={buttonVariants({
+                              size: "sm",
+                              className: "shrink-0",
+                            })}
+                          >
+                            Details{" "}
+                            <IconChevronRight
+                              className="size-4"
+                              aria-hidden="true"
+                            />
+                          </span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="tertiary" size="sm">
-                            {academyClass.kind === "cohort"
-                              ? "Cohort"
-                              : "Masterclass"}
-                          </Badge>
-                          {academyClass.state === "postponed" ? (
-                            <Badge variant="warning" size="sm">
-                              Postponed
-                            </Badge>
-                          ) : null}
-                          <Text className="text-sm text-muted">
-                            {academyClass.kind === "cohort"
-                              ? nextSession
-                                ? "Enroll before your selected session starts · subject to availability"
-                                : "No upcoming sessions"
-                              : `${nextSession ? "Next" : "Started"} ${formattedDate}`}
-                          </Text>
-                        </div>
-                        <span
-                          className={buttonVariants({
-                            size: "sm",
-                            className: "mt-auto self-end",
-                          })}
-                        >
-                          Details{" "}
-                          <IconChevronRight
-                            className="size-4"
-                            aria-hidden="true"
-                          />
-                        </span>
                       </div>
                     </Card>
                   );

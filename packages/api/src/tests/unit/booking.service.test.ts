@@ -452,6 +452,30 @@ describe("BookingService", () => {
   });
 
   describe("getById", () => {
+    test("exposes booking-scoped tutor fees only to admins", async () => {
+      const fees = [
+        { id: "fee1", grossHonorariumIdr: 300000, payoutStatus: "paid" },
+      ];
+      const findFees = mock(async () => fees);
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => ({
+            id: "b1",
+            proposerId: "student1",
+            tutorId: "tutor1",
+            currentState: "confirmed",
+          })),
+          findBookingTutorFees: findFees,
+        },
+      });
+      const student = await service.getById("b1", "student1");
+      expect(student).not.toHaveProperty("tutorFees");
+      expect(findFees).not.toHaveBeenCalled();
+      const admin = await service.getById("b1", "admin1", "admin");
+      expect(admin.tutorFees).toEqual(fees);
+      expect(findFees).toHaveBeenCalledWith("b1", "tutor1");
+    });
+
     test("returns booking with participants when found and user is proposer", async () => {
       const booking = {
         id: "b1",

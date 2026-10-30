@@ -65,6 +65,14 @@ Contextual styling has high specificity. Two override paths:
 
 Before creating a new component, compose existing Selia components. Example: comment layout = `Item` (media object pattern) with `Avatar`, `Text`, timestamps.
 
+### 6. Layout Before Containers
+
+Start page layouts with semantic sections, headings, spacing, and grid or Stack. Group related content through alignment and proximity; use Separator when a visible division helps scanning.
+
+Use Card only for a self-contained unit that benefits from a distinct surface or boundary, such as a selectable offering or an independent summary. Page sections, forms, filters, tables, and individual metrics can sit directly on the page. Choose their container based on the content and task.
+
+Keep related fields in a single form with fieldsets and labels. Present repeated records as Table or Item rows. Before adding a Card, identify the boundary it communicates; if spacing and a heading communicate the same grouping, use those. Apply the same check to nested Cards and avoid recreating card surfaces with rounded borders, backgrounds, and shadows on generic wrappers.
+
 ## Design Tokens
 
 OKLCH color space via CSS variables. All mapped as Tailwind v4 `@theme` tokens.
@@ -176,7 +184,7 @@ apps/web/
 
 ### Dashboard Page
 
-Uses Card grid, stat-cards with IconBox+Bade, Stack layout, Table for orders, Item for best-sellers list, Select for period filter.
+Existing implementation uses a Card grid, stat-cards with IconBox+Badge, Stack layout, Table for orders, Item for best-sellers list, and Select for period filter. This is a reference for component APIs, not a requirement to repeat its containers on other pages.
 
 ### Dashboard Sidebar
 
@@ -193,7 +201,7 @@ Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 3. Follow CVA variant pattern for new component variants
 4. Use `data-slot` attributes for contextual styling
 5. Use OKLCH CSS variables / Tailwind theme colors — never hardcode colors
-6. Prefer Card + Stack + Item composition for layout
+6. Follow "Layout Before Containers" when choosing page structure; compose Selia controls within that structure
 7. Use `plain` variant when nesting components that shouldn't have their own background/border
 8. Use `!` important modifier only for one-off overrides (rare)
 9. Use `use client` directive on all component files

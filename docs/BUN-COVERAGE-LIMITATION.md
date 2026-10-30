@@ -8,24 +8,14 @@ Use this `handler.ts` in a disposable directory:
 
 ```ts
 type Context = { actor: string };
-async function run<T>(operation: () => T): Promise<T> { return operation(); }
+async function run<T>(operation: () => T): Promise<T> {
+  return operation();
+}
 export function createHandler() {
   return {
-    create: ({
-      input,
-      context,
-    }: {
-      input: string;
-      context: Context;
-    }) =>
+    create: ({ input, context }: { input: string; context: Context }) =>
       run(() => `${context.actor}:${input}`),
-    remove: ({
-      input,
-      context,
-    }: {
-      input: string;
-      context: Context;
-    }) =>
+    remove: ({ input, context }: { input: string; context: Context }) =>
       run(() => `${context.actor}:${input}`),
   };
 }
@@ -37,23 +27,30 @@ Use this `handler.test.ts`:
 import { expect, test } from "bun:test";
 import { createHandler } from "./handler";
 test("executes selected partition", async () => {
-  const methods = process.env.REPRO_METHOD === "both"
-    ? ["create", "remove"] as const
-    : [process.env.REPRO_METHOD === "remove" ? "remove" : "create"] as const;
+  const methods =
+    process.env.REPRO_METHOD === "both"
+      ? (["create", "remove"] as const)
+      : ([
+          process.env.REPRO_METHOD === "remove" ? "remove" : "create",
+        ] as const);
   for (const method of methods) {
-    expect(await createHandler()[method]({ input: "guide", context: { actor: "admin" } }))
-      .toBe("admin:guide");
+    expect(
+      await createHandler()[method]({
+        input: "guide",
+        context: { actor: "admin" },
+      }),
+    ).toBe("admin:guide");
   }
 });
 ```
 
 Run `bun test --coverage --coverage-reporter=lcov` separately with `REPRO_METHOD=create` and `REPRO_METHOD=remove`, snapshotting each `coverage/lcov.info`. Merge those snapshots with `.github/scripts/merge-lcov.ts`. For the control, run the same test once with `REPRO_METHOD=both`. Use an isolated config without collection thresholds for the individual reproduction partitions; do not change repository release thresholds.
 
-| Measurement | Lines | Functions |
-| --- | --- | --- |
-| Each separate partition | 9/16 | 4/5 |
-| Merged separate partitions | 12/20 | lower-bound 4/5 |
-| Both actions in one process | 12/12 | 5/5 |
+| Measurement                 | Lines | Functions       |
+| --------------------------- | ----- | --------------- |
+| Each separate partition     | 9/16  | 4/5             |
+| Merged separate partitions  | 12/20 | lower-bound 4/5 |
+| Both actions in one process | 12/12 | 5/5             |
 
 The separate profiles contain zero-hit records for type-annotation lines 8-11 and 16-19. Those lines disappear from the profile when the corresponding action executes. Bun also emits function summaries without named function identities, so taking the maximum FNH cannot establish the union of the two exercised actions. The merger conservatively retains these unknowns; neither deleting zero-hit records nor summing function hits would be a trustworthy fix.
 

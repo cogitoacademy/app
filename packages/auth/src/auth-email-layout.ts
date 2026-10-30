@@ -30,7 +30,7 @@ export function authEmailLayout(content: string, headerUrl?: string): string {
     }
   }
   const header = headerUrl
-    ? `<img src="${escapeHtml(headerUrl)}" alt="Cogito Academy" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;color:${blue};font-size:20px;font-weight:700;">`
+    ? `<img src="cid:cogito-auth-header" alt="Cogito Academy" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;color:${blue};font-size:20px;font-weight:700;">`
     : `<p style="margin:0;padding:24px;font-size:23px;line-height:28px;font-weight:700;color:${blue};">Cogito Academy</p>`;
   return `<!DOCTYPE html>
 <html lang="en">

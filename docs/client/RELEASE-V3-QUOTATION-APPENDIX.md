@@ -8,15 +8,15 @@ This appendix accompanies the [Release v3 PRD](../plans/active/RELEASE-V3-PRD.md
 
 ## 1. Additional development fee
 
-| Additional work package | Included change |
-| --- | --- |
-| Economy changes and exact top-up | Revised competition rate card and admin controls, package adjustments, custom Marks quotations, pricing tiers, surcharge, and recommendations and integration with the existing payment flow |
-| Cohorts and masterclasses | Shared public class/session model, curriculum, tutor assignment, capacity and enrollment, full/half/single plans, installment reminders, late joining/rejoining and class-specific cancellation/returns |
-| Tutor finance extension | Tax identity/settings/override, withholding, explicit session coverage, payout snapshots, actual-transfer recording, void/reconciliation and monthly tax export |
-| Report extensions and branded PDF | New report limits/reminders/admin resolution and cross-class support, plus student/admin three-month branded PDF export, reusing the agreed session report foundation |
-| Friend referrals and KOL | Registration-code integration, welcome/reward rules, semester caps, campaign attribution/commission, settlement history/corrections and exports |
-| Website and content extensions | App-backed Activities and public tutor integration, FAQ administration/full page, scoped Calendar/Knowledge Bank source migration and targeted landing changes, with English required and Indonesian optional |
-| Competition catalog management | Admin CRUD for parent competition types and child specializations, archive/reactivate and safe deletion/move rules, configurable parent palettes, and dynamic catalog use across affected features as defined by PRD REQ-COMP-01..07 |
+| Additional work package           | Included change                                                                                                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Economy changes and exact top-up  | Revised competition rate card and admin controls, package adjustments, custom Marks quotations, pricing tiers, surcharge, and recommendations and integration with the existing payment flow                                         |
+| Cohorts and masterclasses         | Shared public class/session model, curriculum, tutor assignment, capacity and enrollment, full/half/single plans, installment reminders, late joining/rejoining and class-specific cancellation/returns                              |
+| Tutor finance extension           | Tax identity/settings/override, withholding, explicit session coverage, payout snapshots, actual-transfer recording, void/reconciliation and monthly tax export                                                                      |
+| Report extensions and branded PDF | New report limits/reminders/admin resolution and cross-class support, plus student/admin three-month branded PDF export, reusing the agreed session report foundation                                                                |
+| Friend referrals and KOL          | Registration-code integration, welcome/reward rules, semester caps, campaign attribution/commission, settlement history/corrections and exports                                                                                      |
+| Website and content extensions    | App-backed Activities and public tutor integration, FAQ administration/full page, scoped Calendar/Knowledge Bank source migration and targeted landing changes, with English required and Indonesian optional                        |
+| Competition catalog management    | Admin CRUD for parent competition types and child specializations, archive/reactivate and safe deletion/move rules, configurable parent palettes, and dynamic catalog use across affected features as defined by PRD REQ-COMP-01..07 |
 
 **Fixed additional development fee: Rp5,500,000.** This is one bundled price for all listed work packages; no row is a separately priced unit or measured hourly estimate. Testing, documentation updates and deployment work for these additions are included. Removing a work package requires a written quotation revision because dependencies may be shared.
 
@@ -41,9 +41,9 @@ Any invoice tax treatment or withholding required by the parties must be recorde
 
 ## 3. Payment milestones
 
-| Milestone | Amount | Trigger |
-| --- | ---: | --- |
-| First payment - 50% | Rp2,750,000 | Written acceptance of this additional scope and quotation |
+| Milestone           |      Amount | Trigger                                                                                      |
+| ------------------- | ----------: | -------------------------------------------------------------------------------------------- |
+| First payment - 50% | Rp2,750,000 | Written acceptance of this additional scope and quotation                                    |
 | Final payment - 50% | Rp2,750,000 | Completion of agreed UAT and recorded acceptance, before production release of the additions |
 
 Original-contract payment arrangements remain separate. If a partial/phased release is agreed, record its deliverables, acceptance and payment milestones in writing before proceeding.
@@ -54,11 +54,11 @@ At issue, no client acceptance or payment is recorded. W1 November is the projec
 
 This appendix is the commercial summary of the current planning target; the PRD and [execution plan](../plans/active/RELEASE-V3-TASKS.md) retain detailed dependencies and acceptance scenarios.
 
-| Phase | Current target | Exit condition |
-| --- | --- | --- |
-| Development and integration | 19-30 October 2026 | Agreed additional flows available for integrated testing; progress checkpoint at the end of development |
-| Integrated testing, UAT and fixes | 31 October-6 November 2026 | Relevant financial/access/booking tests pass, release blockers resolved, client acceptance recorded |
-| Target production release | W1 November 2026 (1-7 November) | Testing and acceptance complete, final payment milestone met, release readiness confirmed |
+| Phase                             | Current target                  | Exit condition                                                                                          |
+| --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Development and integration       | 19-30 October 2026              | Agreed additional flows available for integrated testing; progress checkpoint at the end of development |
+| Integrated testing, UAT and fixes | 31 October-6 November 2026      | Relevant financial/access/booking tests pass, release blockers resolved, client acceptance recorded     |
+| Target production release         | W1 November 2026 (1-7 November) | Testing and acceptance complete, final payment milestone met, release readiness confirmed               |
 
 **W1 November (1-7 November 2026) is the target production release window, not a fixed delivery guarantee or a validated effort estimate.** Production release may occur only after testing/UAT exit conditions, client acceptance and release-readiness gates are met. If a required gate is still open by 7 November, the parties must record a revised date before production release; the target does not waive any gate.
 

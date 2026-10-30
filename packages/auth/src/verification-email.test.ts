@@ -116,9 +116,7 @@ test("all three builders use the escaped public banner and reject unsafe headers
       'https://app.test/auth-email-header.png?a=1&b="two"',
     );
     expect(subject).toContain("Cogito Academy");
-    expect(html).toContain(
-      'src="https://app.test/auth-email-header.png?a=1&amp;b=&quot;two&quot;"',
-    );
+    expect(html).toContain('src="cid:cogito-auth-header"');
     expect(html).toContain('alt="Cogito Academy"');
     expect(html).not.toContain("#9751c1");
     expect(html).not.toContain("border-bottom:3px");

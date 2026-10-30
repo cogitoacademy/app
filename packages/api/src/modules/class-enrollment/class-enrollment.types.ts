@@ -376,6 +376,7 @@ export const listClassSessionReportsOutput = z.array(
   z.object({
     classId: z.string().uuid(),
     classTitle: z.string(),
+    classNumber: z.number().int().positive(),
     classKind: z.enum(["cohort", "masterclass"]),
     sessionId: z.string().uuid(),
     sequenceNumber: z.number().int().positive(),

@@ -20,7 +20,9 @@ import {
   type CalendarCompetition,
 } from "./competition-calendar";
 
-export function CompetitionCalendarPage() {
+export function CompetitionCalendarPage({
+  onManage,
+}: { onManage?: () => void } = {}) {
   const competitions = useQuery(orpc.content.listCompetitions.queryOptions());
   const events = useMemo<CalendarCompetition[]>(
     () =>
@@ -74,14 +76,21 @@ export function CompetitionCalendarPage() {
     <Stack direction="column" spacing="lg" className="min-h-0 flex-nowrap">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Heading>Your Gateway to the World Stage</Heading>
-          <Text className="mt-1 max-w-3xl text-muted">
+          <Heading level={1} size="md">
+            Your Gateway to the World Stage
+          </Heading>
+          <Text className="max-w-full text-muted">
             From national challenges to global arenas, access a curated list of
             opportunities tailored for your next big win. Keep track of upcoming
             competitions, registration deadlines, and event details in one
             place.
           </Text>
         </div>
+        {onManage ? (
+          <Button variant="secondary" onClick={onManage}>
+            Manage calendar
+          </Button>
+        ) : null}
       </div>
       {events.length > 0 ? (
         <CompetitionCalendar events={events} />

@@ -6,11 +6,9 @@ Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 as
 
 The unchanged 100% coverage gate still fails: API 87.6%, overall 87.8%, function lower bounds 94.8%, 45 files with unverified function unions. A minimal reproduction proves partition-dependent Bun line denominators and absent function identities; zero branch records are not branch-coverage proof. See [BUN-COVERAGE-LIMITATION.md](BUN-COVERAGE-LIMITATION.md) for raw evidence, reproduction and next gate. No coverage filter/threshold was weakened. Initial interrupted/undersized-memory attempts are not passes. Hosted CI, genuine remaining coverage, provider/private-R2 acceptance, production restore/cutover and client approvals/UAT remain open.
 
-
 ## Server acceptance follow-up (28 October 2026)
 
 Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
-
 
 ## V3 regression and restore checkpoint (28 October 2026)
 
@@ -51,13 +49,11 @@ From repository root, run `node packages/e2e/node_modules/@playwright/test/cli.j
 
 The synthetic catalog fixture exercises directory search/status, child parent context, version conflict/retry and dirty close, create/lifecycle impact guards, parent color validation/live preview, movement payloads, four responsive widths and non-admin redirect. Screenshots remain ignored in `packages/e2e/test-results/competition-types-synthetic/`. The live `competition-catalog.spec.ts` has updated locators but remains unrun; persistence, server authorization, native zoom and assistive-technology acceptance are separate gates. No real catalog writes or migration are performed by this workflow.
 
-
 Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
 
 ## Isolated admin KOL campaign verification (26 October 2026)
 
 Run `bun test apps/web/src/components/admin/kol-campaign-input.test.ts apps/web/src/components/admin/tax-rate-input.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`, then `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`. Set `$env:KOL_BROWSER_CHANNEL='msedge'` to use installed Edge; no browser download is needed. The dedicated Vite server uses 3366, mocked API origin 3367, a separate cache, one worker, no reuse/global setup/seed/API server. All auth/session/RPC responses are intercepted; this does not prove real persistence, authorization, OAuth, provider, production, or DB behavior. Do not restart servers or create real campaigns as part of this workflow. In a real uncertain create result, refresh campaigns before deciding to submit again; requests have no idempotency key.
-
 
 Admin workflow: open Finance > Referral usage > Create KOL campaign. Enter the campaign name and chosen code, expiry/optional activation in WIB, attribution days and flat IDR and/or percentage commission, then Save KOL campaign. Review the immutable saved terms below. This does not create a student friend code. No real campaign was created during verification.
 
@@ -102,7 +98,6 @@ The browser config owns Vite 3320, mocks API origin 3321, uses installed Edge
 and starts no API/DB/global seed. Keep these ports free; it refuses server reuse.
 PostHog fetch warnings occurred while all three cases passed. Real Google OAuth,
 Redis/PostgreSQL, provider, restore and client UAT gates remain separate.
-
 
 ## Referral session cache correction (24 October 2026)
 
@@ -151,7 +146,6 @@ identities for each choice; verify real attribution/rewards and existing account
 reuse without reopening choice. No such provider/DB acceptance ran here. Already
 created affected accounts are not repaired by this source fix; no backfill authorized.
 
-
 ## Real dev class-to-PDF checkpoint (24 October 2026)
 
 On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
@@ -185,7 +179,6 @@ future financial reversal must use an approved audited correction, never deletio
 Local evidence/PDF/render remain ignored under this checkout's
 `tmp/dev-journey/`; private login/session files must never be committed or shared.
 Production, real provider delivery, full browser journey and client UAT remain gates.
-
 
 ## KB/calendar local dev activation (24 October 2026)
 
@@ -233,10 +226,10 @@ Account email branding is shared in `packages/auth/src/auth-email-layout.ts`.
 Edit that shell once to update OTP/welcome/reset header/footer; edit the separate
 builders for body-specific copy. The supplied report banner is copied byte-for-byte
 to `apps/web/public/auth-email-header.png`; deploy that asset with the web app
-before deploying sender code. CORS_ORIGIN must be the public HTTPS frontend
-origin in production. External mail clients cannot load a localhost image URL;
-local previews resolve the local asset, and text/alt content remains readable
-when remote images are blocked. No data URI or attachment is required.
+before deploying sender code. Auth email headers are attached inline from the
+byte-identical report-export image using a CID, so email delivery does not rely
+on the web asset URL. CORS_ORIGIN must still be the public HTTPS frontend origin
+in production for links. Text/alt content remains readable if images are disabled.
 Run `bun test ./packages/auth/src/verification-email.test.ts ./packages/api/src/tests/unit/reset-password-email.test.ts`.
 No provider send or real Gmail/Outlook rendering is part of these checks.
 
@@ -364,7 +357,6 @@ allocation is bounded by 1,000 insert attempts plus owner rereads. Existing-owne
 requests do not scan the namespace. DB concurrency/provider/browser acceptance
 has not been run for this source slice.
 
-
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and
@@ -446,7 +438,6 @@ typecheck includes pre-existing test typing errors;
 use normal project hook checks for the source gate. Browser and DB proof remain
 parent-owned. Earlier transfer-deferred source notes below are historical.
 
-
 ## DB-free referral/KOL browser regression
 
 From `packages/e2e`, run:
@@ -522,7 +513,6 @@ the production refund repo and use unqualified SET target columns.
 The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
 browser reconciliation display and broader release UAT remain separate gates.
 This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
-
 
 ## KOL first commission source checkpoint (23 October 2026)
 
@@ -760,7 +750,6 @@ Manual check: browse/search classes, open details, review enrollment; in Class
 studio switch Drafts & editor, change a draft, switch tabs and return without
 losing edits. Open Manage class to review the existing audited lifecycle controls.
 In reports, select a session on mobile and verify its report comes into view.
-
 
 ## On-demand report acceptance (22 October 2026)
 
@@ -2300,7 +2289,6 @@ remains available; reopen it and check support. On mobile, section toggles keep
 the sidebar open and following a link closes the overlay. No saved state is
 expected after a fresh mount.
 
-
 As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
 Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,
 Economy), Content & reviews (Competitions, Achievements, Knowledge access, FAQ,
@@ -2830,7 +2818,7 @@ Andre only; Argya and Athena remain fixed defaults.
 
 The full production/staging seed creates or reuses the separate review address
 from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
-every production-like server boot, the `ADMIN_EMAILS` operator allowlist
+every server boot outside test mode, the `ADMIN_EMAILS` operator allowlist
 promotes matching existing accounts
 case-insensitively without demoting other admins. A matching account created
 after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
@@ -4424,7 +4412,6 @@ On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly 
 
 Integrated report workspace and settlement through `d508467b` into local `f/release-v3`. Applied `0067_class-session-reports.sql` to verified loopback development `cogito-app:6767` with the normal Drizzle runner, without reset or seed. Readback: journal id 88, timestamp `1792572957418`, SHA-256 `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. The session-owned API was restarted; `/health` reports database/Redis/scheduler healthy and anonymous `/rpc/classes/listSessionReports` returns 401. `/class-reports` on web port 3000 returns 200. Authenticated browser acceptance remains the isolated test result, not a development seed or production-provider test.
 
-
 ### KOL responsive polish checkpoint
 
 KOL settlement responsive checkpoint (2026-10-25): use the existing database-free synthetic workflow with isolated ports:
@@ -4439,7 +4426,6 @@ node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2
 Unset overrides to retain Chromium and ports 3306/3307. The optional browser channel uses an already installed browser; no browser install is needed for Edge. Vite cache is separated by web port, reuseExistingServer remains false, and all API requests are intercepted. No API/DB/provider/seed starts. 13/13 checks passed on Edge: seven existing settlement wire/render cases, five reflow widths (320/390/720/768/1440), and a 320px keyboard retry/review case. A 185-character bank reference measured 1743px scroll width before; after, panel scroll/client widths match at 288/358/688/736/1119px respectively. Original retry review button: 38px height versus 49px scroll height; after: 56/56px, keyboard Tab/Enter reaches and activates review. Screenshots are local test-results artifacts, with baseline viewport captures retained in tmp/responsive-before. The 720px case is only a reflow proxy for 1440px at 200%, not native browser zoom proof. Native zoom, RTL, screen reader, real persistence/provider/auth, and other V3 screens remain unverified. No release-readiness claim.
 
 Validation also passed scoped oxlint/oxfmt and the serial repository check-types command (four tasks: e2e/web executed, ui/server cache hits). The first typecheck caught two new fixture/log typing errors, corrected before the passing run. Layout guidance: https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md (content handling and flex minimum sizing).
-
 
 ### Isolated economy/payout layout checks (25 October 2026)
 
@@ -4456,7 +4442,6 @@ Baseline on 834f525f: 2 failed / 6 passed after settling drawer animations and e
 Payout table scroll/client widths are 1500/288, 1500/358, 1500/736 and 1500/1119 at 320/390/768/1440px; these are contained horizontal scrollers. At 320px, economy package and competition tables scroll at 578/288 and 602/288, preserving readable inputs rather than shrinking them. Screenshots are written to `test-results/finance-layout/` in the checkout root (read-only/edit economy, payout page, drawers and focused actions); traces on failure are under `packages/e2e/test-results/finance-layout/`.
 
 Web and E2E TypeScript use serial TS-Go `--checkers 1` with `GOMEMLIMIT=1GiB` and `GOMAXPROCS=2`. Focused lint and formatting checks cover only changed code. Native 200% browser zoom is unverified; viewport sizing, CSS zoom and deviceScaleFactor are not substitutes. RTL, screen-reader/contrast audit, live persistence/authorization, financial acceptance and broader release checks remain parent gates. No separate confirmation modal exists on these routes; the checks exercise the existing payout drawer actions without activating financial writes.
-
 
 ### KB/calendar management on canonical pages (25 October 2026)
 
@@ -4475,6 +4460,69 @@ Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, f
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
 
+## Activities website local verification (2026-10-26)
+
+Marketing route: `http://localhost:2001/en/activities` (also `/id/activities`).
+Configure marketing server `COGITO_APP_API_URL` to the app API origin and
+`NEXT_PUBLIC_APP_URL` to the app browser origin. Existing Sanity configuration
+continues to supply Others. Requests are read-only; no DB reset/migration,
+provider send or production activation is needed for this website slice.
+Restart/redeploy the API with the public DTO update before expecting Indonesian
+class titles/descriptions; older API versions remain readable with English fallback.
+Both localized legacy `/events/townhall-and-101-series` and
+`/events/simulation-days` routes return permanent redirects to Activities.
+
+Focused checks: marketing `bun test apps/web/tests/activities-api.test.mjs`;
+API `bun test ./packages/api/src/tests/unit/academy-class.public.test.ts`.
+Browser acceptance covers class filtering/empty state, app links, article detail
+open/close, EN/ID navigation and redirects, and overflow at desktop/mobile widths.
+Published content and current class availability depend on the configured sources;
+local fixture content does not establish production content acceptance. Others
+DB migration/admin CRUD and deployment remain separate gates.
+
+Verification outcome: marketing adapter **4 tests / 18 expectations** and the
+focused public DTO **1 test** pass. Marketing production build (including
+TypeScript), standalone web typecheck, scoped lint/format and diff checks pass.
+Edge against the local production server verifies class filters/empty state,
+app class links, article modal open/Escape, mobile Activities navigation, all
+four localized legacy URL HTTP 308 redirects and no horizontal overflow at
+1280/390/320px, with no page errors. The configured live sources returned one
+cohort and six legacy events. Masterclass/postponed and optional Indonesian
+class fields have adapter/source verification; these are not full live fixture
+journeys. The DB, provider and production environment were not mutated.
+
+Activities image-free follow-up: verify Classes contains no image/cover slot,
+with date tiles and compact booking-style rows at desktop/mobile widths.
+Others retains its article images. The class adapter suite now has 4 tests /
+13 expectations after removing unused cover URL derivation.
+Final follow-up checks pass: production build/typecheck, 4 adapter tests, scoped
+lint/format, and Edge at 1280/390/320px. Classes has zero image elements and
+one date tile per row; filtering, detail links, Others modal, navigation and
+redirect checks remain passing. No production deployment was performed.
+
+Activities text follow-up: compare compact title and icon-led time/mode/tutor
+metadata with app My Bookings; check competition/session/price wrapping and
+the full-width mobile detail action at 320/390px. No API/schema change.
+Verified after the text follow-up: production build/typecheck and scoped lint
+pass; Edge checks at 1280/390/320px pass with no overflow or page errors.
+Class filtering, detail links, modal and locale redirects still pass.
+
 ### Academy capacity policy (2026-10-29)
 
 Academy capacity changes require no migration or environment change. Restart the API to load updated draft/publish validation. For acceptance, save and publish online and in-person sessions above the assigned tutor private teaching limit; keep in-person capacity within the room limit and confirm schedule conflicts still fail.
+
+<!-- Student referral dashboard, 2026-10-29 -->
+
+Student referrals: `/rpc/referral/getMine` now includes `friends` scoped to the authenticated referrer (name, signup date, first completed paid session date, credited Marks). The page shows a semester sidebar and invited-friends table with account-created/completed-session states; zero credited Marks remains visible when no reward was granted. No migration or environment changes required.
+
+Classes layout checks can use installed Edge with PLAYWRIGHT_CHANNEL=msedge. Set PLAYWRIGHT_NO_ARTIFACTS=1 to disable traces and screenshots on constrained disks. Run node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.classes-layout.config.ts from the repository root. These use synthetic auth/RPC responses, without database seeds or provider calls.
+
+
+### Tutor honorarium in booking detail (2026-10-29)
+
+Admin booking honorarium display requires existing tutor session fee and payout allocation tables; no new migration or environment configuration. Historical aggregate-only payouts without source allocation cannot establish payment for an individual fee.
+
+
+Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
+
+Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.

@@ -14,8 +14,9 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3300",
     browserName: "chromium",
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure",
+    channel: process.env.PLAYWRIGHT_CHANNEL,
+    trace: process.env.PLAYWRIGHT_NO_ARTIFACTS ? "off" : "retain-on-failure",
+    screenshot: process.env.PLAYWRIGHT_NO_ARTIFACTS ? "off" : "only-on-failure",
   },
   webServer: {
     command:

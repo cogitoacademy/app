@@ -723,9 +723,11 @@ export function CompetitionCatalogPage() {
   return (
     <Stack spacing="lg" className="mx-auto w-full min-w-0 max-w-6xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Heading level={1}>Competition types</Heading>
-          <Text className="max-w-xl text-muted">
+        <div>
+          <Heading level={1} size="md">
+            Competition types
+          </Heading>
+          <Text className="max-w-full text-muted">
             Organize competitions and the specializations students can book.
             Select any entry to manage its details.
           </Text>

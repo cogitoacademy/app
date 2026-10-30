@@ -1048,27 +1048,28 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6 max-w-4xl">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div>
+        <div>
           <Heading level={1} size="md">
             {isDraft
               ? "Build a profile students can trust"
               : "Keep your profile ready for students"}
           </Heading>
-          <Badge variant={statusBadge.variant} size="md">
-            {statusBadge.label}
-          </Badge>
+          <Text className="max-w-full text-muted">
+            Give students a clear picture of your specializations, teaching
+            format, and availability.
+          </Text>
         </div>
-        <Text className="text-muted">
-          Give students a clear picture of your specializations, teaching
-          format, and availability.
-        </Text>
+        <Badge variant={statusBadge.variant} size="md">
+          {statusBadge.label}
+        </Badge>
+
         {statusMessage ? (
           <Text role="status" className="text-sm text-muted">
             {statusMessage}
           </Text>
         ) : null}
-      </header>
+      </div>
 
       {hasReviewFeedback ? (
         <Card className="ring-warning-border bg-warning/5" role="status">

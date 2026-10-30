@@ -236,14 +236,14 @@ export function TutorsPageContent() {
         <Heading level={1} size="md">
           Book a Session
         </Heading>
-        <Text className="text-muted">
+        <Text className="max-w-full text-muted">
           Find a verified tutor by name, field of competition, and
           specialization.
         </Text>
       </div>
 
-      <div className="flex w-full min-w-0 max-w-full items-center gap-3">
-        <InputGroup className="min-w-0 flex-1">
+      <div className="flex w-full min-w-0 max-w-full items-center gap-3 lg:justify-between">
+        <InputGroup className="min-w-0 lg:min-w-lg max-w-xl">
           <InputGroupAddon>
             <IconSearch className="size-4" />
           </InputGroupAddon>

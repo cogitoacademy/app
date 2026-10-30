@@ -16,10 +16,13 @@ function publicCompetitionColors(value: PublicCompetitionColors) {
 
 export type PublicAcademyClassSource = {
   id: string;
+  classNumber: number;
   kind: string;
   state: string;
   titleEn: string;
   descriptionEn: string;
+  titleId?: string | null;
+  descriptionId?: string | null;
   coverKey: string | null;
   cohortFullRateMarks: number | null;
   cohortHalfRateMarks: number | null;
@@ -43,10 +46,13 @@ export type PublicAcademyClassSource = {
 export function toPublicAcademyClass(record: PublicAcademyClassSource) {
   return {
     id: record.id,
+    classNumber: record.classNumber,
     kind: record.kind,
     state: record.state,
     titleEn: record.titleEn,
     descriptionEn: record.descriptionEn,
+    titleId: record.titleId ?? null,
+    descriptionId: record.descriptionId ?? null,
     coverKey: record.coverKey,
     cohortFullRateMarks: record.cohortFullRateMarks,
     cohortHalfRateMarks: record.cohortHalfRateMarks,

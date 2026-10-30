@@ -260,7 +260,7 @@ function RouteComponent() {
         <Heading level={1} size="md">
           Build a trusted tutor network
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Invite new tutors, review their profiles, and keep the public
           directory accurate.
         </Text>

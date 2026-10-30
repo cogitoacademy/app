@@ -247,10 +247,10 @@ export function ProfilePage({
             <Badge variant="info" pill>
               Student profile
             </Badge>
-            <Heading className="mt-3" size="lg">
+            <Heading level={1} size="md">
               Make your profile work for you
             </Heading>
-            <Text className="mt-2 max-w-2xl text-muted">
+            <Text className="max-w-full text-muted">
               Keep your learning details and parent contact information current
               so tutors can prepare for every session.
             </Text>

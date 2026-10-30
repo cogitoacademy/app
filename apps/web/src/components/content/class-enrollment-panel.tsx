@@ -14,16 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
-import {
-  Select,
-  SelectItem,
-  SelectList,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@cogito-app/ui/components/selia/select";
+import { Radio, RadioGroup } from "@cogito-app/ui/components/selia/radio";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
+import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { IconCoins, IconWallet } from "@tabler/icons-react";
+import { Tabs, TabsList, TabsItem } from "@cogito-app/ui/components/selia/tabs";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { CogitoMarks } from "@/components/cogito-marks";
@@ -37,6 +34,7 @@ type Plan = "full" | "half" | "single" | "masterclass";
 type ClassEnrollmentPanelProps = {
   classId: string;
   kind: "cohort" | "masterclass";
+  competitionName: string;
   rates: {
     cohortFullRateMarks: number | null;
     cohortHalfRateMarks: number | null;
@@ -48,6 +46,8 @@ type ClassEnrollmentPanelProps = {
     sequenceNumber: number;
     titleEn: string;
     startAt: Date | string;
+    mode: string;
+    tutor: { name: string } | null;
   }[];
 };
 
@@ -74,6 +74,7 @@ export function ClassEnrollmentPanel({
   classId,
   kind,
   rates,
+  competitionName,
   sessions,
 }: ClassEnrollmentPanelProps) {
   const queryClient = useQueryClient();
@@ -176,6 +177,59 @@ export function ClassEnrollmentPanel({
   const quoteTotalMarks = firstInstallmentMarks + secondInstallmentMarks;
   const quoteReady =
     selectedSessions.length > 0 && seatsAvailable && firstInstallmentMarks > 0;
+
+  const summarySessions = sessions
+    .filter((session) =>
+      selectedSessions.some((selected) => selected.sessionId === session.id),
+    )
+    .toSorted(
+      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+    );
+  const modes = [...new Set(summarySessions.map((session) => session.mode))];
+  const sessionRate =
+    selectedPlan === "single"
+      ? rates.cohortSingleRateMarks
+      : selectedPlan === "masterclass"
+        ? rates.masterclassRateMarks
+        : selectedPlan === "half"
+          ? rates.cohortHalfRateMarks
+          : rates.cohortFullRateMarks;
+  const summaryRows = [
+    ...(kind === "masterclass" || selectedPlan === "single"
+      ? [
+          {
+            label: "Tutor",
+            value: summarySessions[0]?.tutor?.name ?? "To be announced",
+          },
+        ]
+      : []),
+    { label: "Competition", value: competitionName },
+    {
+      label: "Sessions",
+      value: sessionCount
+        ? `${sessionCount} session${sessionCount === 1 ? "" : "s"}`
+        : "Choose a session",
+    },
+    {
+      label: "Format",
+      value:
+        modes.length > 1
+          ? "Online & in person"
+          : modes[0]
+            ? modes[0] === "online"
+              ? "Online"
+              : "In person"
+            : "—",
+    },
+    {
+      label: "Schedule",
+      value: summarySessions.length
+        ? summarySessions.length === 1
+          ? `${formatDate(summarySessions[0]!.startAt)} WIB`
+          : `${formatDate(summarySessions[0]!.startAt)} – ${formatDate(summarySessions[summarySessions.length - 1]!.startAt)} WIB`
+        : "Choose a session",
+    },
+  ];
 
   const refreshEnrollmentState = () =>
     Promise.all([
@@ -411,11 +465,10 @@ export function ClassEnrollmentPanel({
     <Stack direction="column" spacing="lg">
       <Card>
         <CardHeader>
-          <CardTitle level={2}>Enrollment & payment</CardTitle>
-          <CardDescription>
-            Manage your existing enrollment or choose a plan below. Review the
-            payment summary before reserving a seat.
-          </CardDescription>
+          <IconBox variant="warning-subtle">
+            <IconCoins aria-hidden="true" />
+          </IconBox>
+          <CardTitle level={2}>Booking summary</CardTitle>
         </CardHeader>
         <CardBody className="space-y-4">
           {enrollmentsData?.classState === "postponed" ? (
@@ -438,10 +491,15 @@ export function ClassEnrollmentPanel({
                   (installment) => installment.ordinal === 2,
                 );
                 return (
-                  <Card key={enrollment.id}>
-                    <CardHeader>
+                  <section
+                    key={enrollment.id}
+                    className="space-y-3 border-b border-border pb-4 last:border-b-0 last:pb-0"
+                  >
+                    <div className="space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <CardTitle>{planLabel(enrollment.plan)}</CardTitle>
+                        <Heading level={3} size="sm">
+                          {planLabel(enrollment.plan)}
+                        </Heading>
                         <Badge
                           variant={
                             enrollment.state === "active"
@@ -454,14 +512,14 @@ export function ClassEnrollmentPanel({
                           {enrollment.state.replaceAll("_", " ")}
                         </Badge>
                       </div>
-                      <CardDescription>
+                      <Text className="text-sm text-muted">
                         Enrollment total:{" "}
                         <CogitoMarks value={enrollment.totalMarks} /> ·{" "}
                         {enrollment.sessionCount} session
                         {enrollment.sessionCount === 1 ? "" : "s"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardBody className="space-y-3">
+                      </Text>
+                    </div>
+                    <div className="space-y-3">
                       <Text>
                         First payment:{" "}
                         <CogitoMarks value={enrollment.firstInstallmentMarks} />
@@ -499,9 +557,9 @@ export function ClassEnrollmentPanel({
                           the payment deadline.
                         </Text>
                       ) : null}
-                    </CardBody>
+                    </div>
                     {enrollment.state === "checkout_pending" && first ? (
-                      <CardFooter className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {availableMarks >= first.amountMarks ? (
                           <Button
                             progress={completeCheckout.isPending}
@@ -531,11 +589,11 @@ export function ClassEnrollmentPanel({
                             </Text>
                           </>
                         )}
-                      </CardFooter>
+                      </div>
                     ) : null}
                     {enrollment.state === "active" &&
                     second?.state === "pending" ? (
-                      <CardFooter className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {availableMarks >= second.amountMarks ? (
                           <Button
                             progress={paySecondInstallment.isPending}
@@ -565,16 +623,16 @@ export function ClassEnrollmentPanel({
                             </Text>
                           </>
                         )}
-                      </CardFooter>
+                      </div>
                     ) : null}
                     {second?.state === "defaulted" ? (
-                      <CardFooter>
+                      <div>
                         <Text className="text-sm text-muted">
                           The deadline passed. Unpaid future session seats were
                           released; choose a new current half-plan quote to
                           rejoin future sessions.
                         </Text>
-                      </CardFooter>
+                      </div>
                     ) : null}
                     {enrollment.state === "active" ? (
                       <ClassCancellationPanel
@@ -586,92 +644,81 @@ export function ClassEnrollmentPanel({
                         onChanged={refreshEnrollmentState}
                       />
                     ) : null}
-                  </Card>
+                  </section>
                 );
               })}
             </Stack>
-          ) : (
-            <Text className="text-sm text-muted">
-              You do not have an enrollment in this class yet.
-            </Text>
-          )}
+          ) : null}
 
           {allowedPlans.length > 0 ? (
-            <div className="space-y-4 border-t border-border pt-4">
-              <Text className="font-semibold">Choose your enrollment plan</Text>
+            <div className="space-y-4">
               <div className="flex flex-wrap items-end gap-4">
                 {allowedPlans.length > 1 ? (
-                  <Field className="w-full min-w-0">
-                    <FieldLabel htmlFor={`class-plan-${classId}`}>
-                      Plan
-                    </FieldLabel>
-                    <Select
-                      value={selectedPlan}
-                      onValueChange={(value) => setPlan(String(value) as Plan)}
-                      items={allowedPlans.map((item) => ({
-                        value: item,
-                        label: planLabel(item),
-                      }))}
-                    >
-                      <SelectTrigger id={`class-plan-${classId}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectList>
-                          {allowedPlans.map((item) => (
-                            <SelectItem key={item} value={item}>
-                              {planLabel(item)}
-                            </SelectItem>
-                          ))}
-                        </SelectList>
-                      </SelectPopup>
-                    </Select>
-                  </Field>
+                  <Tabs
+                    value={selectedPlan}
+                    onValueChange={(value) => {
+                      if (allowedPlans.includes(value as Plan))
+                        setPlan(value as Plan);
+                    }}
+                    className="w-full min-w-0"
+                  >
+                    <TabsList aria-label="Enrollment plan">
+                      {allowedPlans.map((item) => (
+                        <TabsItem
+                          key={item}
+                          value={item}
+                          className="min-w-0 px-2 text-sm"
+                        >
+                          {item === "full"
+                            ? "Full"
+                            : item === "half"
+                              ? "Half"
+                              : "Single session"}
+                        </TabsItem>
+                      ))}
+                    </TabsList>
+                  </Tabs>
                 ) : (
                   <Text className="font-medium">
                     Plan: {planLabel(selectedPlan)}
                   </Text>
                 )}
                 {selectedPlan === "single" ? (
-                  <Field className="w-full min-w-0 flex-1">
-                    <FieldLabel htmlFor={`class-session-${classId}`}>
-                      Upcoming session
-                    </FieldLabel>
-                    <Select
-                      value={selectedSessionId}
-                      onValueChange={(value) =>
-                        setSelectedSessionId(String(value ?? ""))
-                      }
-                      items={openSessions
-                        .filter((session) => session.seatsAvailable > 0)
-                        .map((session) => ({
-                          value: session.sessionId,
-                          label: `Session ${session.sequenceNumber} · ${sessions.find((item) => item.id === session.sessionId)?.titleEn ?? "Session"} · ${formatDate(session.startAt)}`,
-                        }))}
-                    >
-                      <SelectTrigger id={`class-session-${classId}`}>
-                        <SelectValue placeholder="Choose a session" />
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectList>
-                          {openSessions
-                            .filter((session) => session.seatsAvailable > 0)
-                            .map((session) => (
-                              <SelectItem
-                                key={session.sessionId}
-                                value={session.sessionId}
-                              >
-                                Session {session.sequenceNumber} ·{" "}
-                                {sessions.find(
-                                  (item) => item.id === session.sessionId,
-                                )?.titleEn ?? "Session"}{" "}
-                                · {formatDate(session.startAt)}
-                              </SelectItem>
-                            ))}
-                        </SelectList>
-                      </SelectPopup>
-                    </Select>
-                  </Field>
+                  <RadioGroup
+                    aria-label="Upcoming session"
+                    value={selectedSessionId}
+                    onValueChange={(value) =>
+                      setSelectedSessionId(String(value))
+                    }
+                    className="w-full min-w-0"
+                  >
+                    {openSessions
+                      .filter((session) => session.seatsAvailable > 0)
+                      .map((session) => (
+                        <label
+                          key={session.sessionId}
+                          htmlFor={`class-${classId}-session-${session.sessionId}`}
+                          className="flex min-w-0 cursor-pointer items-start gap-3 rounded border border-border p-3 has-[[data-checked]]:border-primary has-[[data-checked]]:bg-primary/5"
+                        >
+                          <Radio
+                            id={`class-${classId}-session-${session.sessionId}`}
+                            value={session.sessionId}
+                            className="mt-1"
+                          />
+                          <span className="flex min-w-0 flex-col gap-1 wrap-anywhere">
+                            <span className="font-medium">
+                              Session {session.sequenceNumber} ·{" "}
+                              {sessions.find(
+                                (item) => item.id === session.sessionId,
+                              )?.titleEn ?? "Session"}
+                            </span>
+                            <span className="text-sm text-muted">
+                              {formatDate(session.startAt)} WIB
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                  </RadioGroup>
                 ) : null}
               </div>
 
@@ -685,80 +732,119 @@ export function ClassEnrollmentPanel({
                 </Text>
               ) : null}
 
-              {quoteReady ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Your payment summary</CardTitle>
-                    <CardDescription>
-                      Review the cost below before reserving your seat.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardBody className="space-y-2">
-                    <Text>
-                      First payment now:{" "}
+              <dl className="space-y-4 border-t border-border pt-4">
+                {summaryRows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-start justify-between gap-4"
+                  >
+                    <dt className="shrink-0 text-sm text-muted">{row.label}</dt>
+                    <dd className="min-w-0 text-right font-medium wrap-anywhere">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <Separator />
+              <dl className="space-y-4">
+                {[
+                  {
+                    label: "Session price",
+                    value:
+                      sessionRate && sessionRate > 0 ? (
+                        <CogitoMarks value={sessionRate} />
+                      ) : (
+                        "Unavailable"
+                      ),
+                  },
+                  {
+                    label: "Reserve now",
+                    value: quoteReady ? (
                       <CogitoMarks value={firstInstallmentMarks} />
-                    </Text>
-                    {secondInstallmentMarks > 0 ? (
-                      <Text>
-                        Second payment:{" "}
-                        <CogitoMarks value={secondInstallmentMarks} /> before
-                        the first session in the second half.
-                      </Text>
-                    ) : null}
-                    <Text className="font-semibold">
-                      Total: <CogitoMarks value={quoteTotalMarks} /> across{" "}
-                      {sessionCount} upcoming session
-                      {sessionCount === 1 ? "" : "s"}.
-                    </Text>
-                    <Text className="text-sm text-muted">
-                      Wallet available: <CogitoMarks value={availableMarks} />
-                      {availableMarks < firstInstallmentMarks
-                        ? ` · ${firstInstallmentMarks - availableMarks} Marks short. You can use a quoted top-up after reserving.`
-                        : ""}
-                    </Text>
-                  </CardBody>
-                  <CardFooter>
-                    <Button
-                      className="w-full"
-                      progress={createEnrollment.isPending}
-                      disabled={createEnrollment.isPending}
-                      onClick={() =>
-                        createEnrollment.mutate({
-                          classId,
-                          requestKey: getEnrollmentRequestKey(),
-                          plan: selectedPlan,
-                          ...(selectedPlan === "single"
-                            ? { sessionId: selectedSessionId }
-                            : {}),
-                        })
-                      }
-                    >
-                      Reserve and confirm Marks
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ) : (
+                    ) : (
+                      "—"
+                    ),
+                  },
+                  ...(secondInstallmentMarks > 0
+                    ? [
+                        {
+                          label: "Second payment",
+                          value: <CogitoMarks value={secondInstallmentMarks} />,
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "Total",
+                    value: quoteReady ? (
+                      <CogitoMarks value={quoteTotalMarks} />
+                    ) : (
+                      "—"
+                    ),
+                  },
+                  {
+                    label: "Available balance",
+                    value: (
+                      <span className="inline-flex items-center gap-1.5">
+                        <IconWallet
+                          className="size-4 text-muted"
+                          aria-hidden="true"
+                        />
+                        <CogitoMarks value={availableMarks} />
+                      </span>
+                    ),
+                  },
+                ].map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-start justify-between gap-4"
+                  >
+                    <dt className="shrink-0 text-sm text-muted">{row.label}</dt>
+                    <dd className="min-w-0 text-right font-medium">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {secondInstallmentMarks > 0 ? (
                 <Text className="text-sm text-muted">
+                  Second payment is due before the first session in the second
+                  half.
+                </Text>
+              ) : null}
+              <Text className="text-sm text-muted">
+                Marks are reserved when you enroll and charged as sessions are
+                completed. Cancellation rules apply.
+              </Text>
+              {quoteReady && availableMarks < firstInstallmentMarks ? (
+                <Text className="text-sm text-muted">
+                  {firstInstallmentMarks - availableMarks} Marks short. You can
+                  use a quoted top-up after reserving.
+                </Text>
+              ) : null}
+              {!quoteReady ? (
+                <Text role="status" className="text-sm text-muted">
                   {openSessions.length === 0
                     ? "There are no unreserved upcoming sessions available."
                     : selectedPlan === "single" && !selectedSessionId
                       ? "Choose an upcoming session with an available seat."
                       : "No seat is available for the selected sessions."}
                 </Text>
-              )}
+              ) : null}
             </div>
           ) : null}
 
           {topUpContext ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Top up the quoted shortfall</CardTitle>
-                <CardDescription>
+            <section className="space-y-3 border-t border-border pt-4">
+              <div className="space-y-1">
+                <Heading level={3} size="sm">
+                  Top up the quoted shortfall
+                </Heading>
+                <Text className="text-sm text-muted">
                   Add {topUpContext.quote.requestedMarks} Marks for payment{" "}
                   {topUpContext.ordinal}.
-                </CardDescription>
-              </CardHeader>
-              <CardBody className="space-y-3">
+                </Text>
+              </div>
+              <div className="space-y-3">
                 {topUpContext.quote.exactPackage ? (
                   <Button
                     variant="secondary"
@@ -815,10 +901,35 @@ export function ClassEnrollmentPanel({
                   A completed top-up credits your wallet. If this class checkout
                   expires first, its seat reservation is released.
                 </Text>
-              </CardBody>
-            </Card>
+              </div>
+            </section>
           ) : null}
         </CardBody>
+        {allowedPlans.length > 0 ? (
+          <CardFooter>
+            <Button
+              className="w-full"
+              progress={createEnrollment.isPending}
+              disabled={!quoteReady || createEnrollment.isPending}
+              onClick={() =>
+                createEnrollment.mutate({
+                  classId,
+                  requestKey: getEnrollmentRequestKey(),
+                  plan: selectedPlan,
+                  ...(selectedPlan === "single"
+                    ? { sessionId: selectedSessionId }
+                    : {}),
+                })
+              }
+            >
+              {quoteReady
+                ? "Reserve and confirm Marks"
+                : selectedPlan === "single" && !selectedSessionId
+                  ? "Choose a session"
+                  : "Enrollment unavailable"}
+            </Button>
+          </CardFooter>
+        ) : null}
       </Card>
     </Stack>
   );

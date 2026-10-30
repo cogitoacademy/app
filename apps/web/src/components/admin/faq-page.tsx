@@ -1,5 +1,7 @@
 "use client";
 
+import { Text } from "@cogito-app/ui/components/selia/text";
+
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -467,9 +469,9 @@ export function FaqPage() {
             <Heading level={1} size="md">
               FAQ
             </Heading>
-            <p className="text-muted">
+            <Text className="max-w-full text-muted">
               Answers to common questions about Cogito Academy.
-            </p>
+            </Text>
           </div>
           <Button
             disabled={saveMutation.isPending}

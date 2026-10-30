@@ -36,12 +36,15 @@ import {
   TabsPanel,
 } from "@cogito-app/ui/components/selia/tabs";
 import {
-  Accordion,
-  AccordionItem,
-  AccordionHeader,
-  AccordionTrigger,
-  AccordionPanel,
-} from "@cogito-app/ui/components/selia/accordion";
+  Drawer,
+  DrawerTrigger,
+  DrawerPopup,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerBody,
+  DrawerClose,
+} from "@cogito-app/ui/components/selia/drawer";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -75,7 +78,7 @@ type SessionForm = {
   curriculumEn: string;
   curriculumId: string;
   startAt: string;
-  endAt: string;
+  durationMinutes: string;
   mode: SessionMode;
   roomId: string;
   tutorId: string;
@@ -117,7 +120,7 @@ const emptySession = (): SessionForm => ({
   curriculumEn: "",
   curriculumId: "",
   startAt: "",
-  endAt: "",
+  durationMinutes: "60",
   mode: "online",
   roomId: "",
   tutorId: "",
@@ -177,7 +180,11 @@ function draftFromRecord(record: ClassRecord): DraftForm {
       curriculumEn: session.curriculumEn ?? "",
       curriculumId: session.curriculumId ?? "",
       startAt: toLocalDateTime(session.startAt),
-      endAt: toLocalDateTime(session.endAt),
+      durationMinutes: String(
+        (new Date(session.endAt).getTime() -
+          new Date(session.startAt).getTime()) /
+          60_000,
+      ),
       mode: session.mode as SessionMode,
       roomId: session.roomId ?? "",
       tutorId: session.tutorId,
@@ -303,6 +310,7 @@ export function AcademyClassPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DraftForm>(() => emptyDraft());
   const [workspace, setWorkspace] = useState("published");
+  const [showDrafts, setShowDrafts] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [meetingRetryReasons, setMeetingRetryReasons] = useState<
@@ -545,7 +553,10 @@ export function AcademyClassPage() {
       curriculumEn: session.curriculumEn,
       curriculumId: session.curriculumId,
       startAt: new Date(session.startAt).toISOString(),
-      endAt: new Date(session.endAt).toISOString(),
+      endAt: new Date(
+        new Date(session.startAt).getTime() +
+          Number(session.durationMinutes) * 60_000,
+      ).toISOString(),
       mode: session.mode,
       roomId: session.roomId || null,
       tutorId: session.tutorId,
@@ -628,411 +639,521 @@ export function AcademyClassPage() {
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
-      <Stack direction="column" spacing="sm">
-        <Heading level={1}>Class studio</Heading>
-        <Text className="text-muted">
+      <div className="min-w-0 max-w-full">
+        <Heading level={1} size="md">
+          Class Studio
+        </Heading>
+        <Text className="max-w-full text-muted">
           Manage published classes, or build a draft before sharing it with
           students.
         </Text>
-      </Stack>
+      </div>
 
       <Tabs
         value={workspace}
         onValueChange={(value) => setWorkspace(String(value))}
         className="gap-5"
       >
-        <TabsList
-          aria-label="Class studio workspace"
-          className="w-full sm:w-fit"
-        >
-          <TabsItem value="published" className="whitespace-nowrap">
-            Published classes
-          </TabsItem>
-          <TabsItem value="drafts" className="whitespace-nowrap">
-            Drafts &amp; editor
-          </TabsItem>
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList
+            aria-label="Class studio workspace"
+            className="w-full sm:w-fit"
+          >
+            <TabsItem value="published" className="whitespace-nowrap">
+              Published classes
+            </TabsItem>
+            <TabsItem value="drafts" className="whitespace-nowrap">
+              Drafts &amp; editor
+            </TabsItem>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              aria-expanded={workspace === "drafts" && showDrafts}
+              onClick={() => {
+                setWorkspace("drafts");
+                setShowDrafts((current) => !current);
+              }}
+            >
+              Drafts
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              aria-label="New class"
+              disabled={coverUploading}
+              onClick={() => {
+                setForm(emptyDraft());
+                setCoverPreviewUrl(null);
+                setWorkspace("drafts");
+                setShowDrafts(false);
+              }}
+            >
+              <IconPlus />
+            </Button>
+          </div>
+        </div>
         <TabsPanel value="published">
-          <Card>
-            <CardHeader>
-              <CardTitle>Published and postponed classes</CardTitle>
-              <CardDescription>
-                Review meeting setup and open a class to manage its schedule or
-                enrollment.
-              </CardDescription>
-            </CardHeader>
-            <CardBody>
-              <Stack direction="column" spacing="sm">
-                {publishedClassesQuery.isLoading ? (
-                  <Text className="text-muted">Loading published classes…</Text>
-                ) : postponedClassesQuery.isLoading ? (
-                  <Text className="text-muted">Loading postponed classes…</Text>
-                ) : publishedClassesQuery.isError ||
-                  postponedClassesQuery.isError ? (
-                  <Text className="text-danger-foreground">
-                    Published or postponed classes could not be loaded. Refresh
-                    to try again.
-                  </Text>
-                ) : publishedClasses.length === 0 ? (
-                  <Text className="text-muted">
-                    No classes have been published.
-                  </Text>
-                ) : (
-                  publishedClasses.map((record) => {
-                    const onlineSessions = record.sessions.filter(
-                      (session) => session.mode === "online",
-                    );
-                    const failedMeetings = onlineSessions.filter(
-                      (session) => session.meeting?.status === "failed",
-                    );
-                    const createdMeetings = onlineSessions.filter(
-                      (session) => session.meeting?.status === "created",
-                    );
-                    const pendingMeetings =
-                      onlineSessions.length -
-                      failedMeetings.length -
-                      createdMeetings.length;
-                    const retryReason = meetingRetryReasons[record.id] ?? "";
-                    return (
-                      <div
-                        key={record.id}
-                        data-testid={`published-class-${record.id}`}
-                        className="rounded-lg border border-card-border bg-card p-4"
+          <div className="grid min-w-0 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            {publishedClassesQuery.isLoading ? (
+              <Text className="text-muted">Loading published classes…</Text>
+            ) : postponedClassesQuery.isLoading ? (
+              <Text className="text-muted">Loading postponed classes…</Text>
+            ) : publishedClassesQuery.isError ||
+              postponedClassesQuery.isError ? (
+              <Text className="text-danger-foreground">
+                Published or postponed classes could not be loaded. Refresh to
+                try again.
+              </Text>
+            ) : publishedClasses.length === 0 ? (
+              <Text className="text-muted">
+                No classes have been published.
+              </Text>
+            ) : (
+              publishedClasses.map((record) => {
+                const onlineSessions = record.sessions.filter(
+                  (session) => session.mode === "online",
+                );
+                const failedMeetings = onlineSessions.filter(
+                  (session) => session.meeting?.status === "failed",
+                );
+                const createdMeetings = onlineSessions.filter(
+                  (session) => session.meeting?.status === "created",
+                );
+                const pendingMeetings =
+                  onlineSessions.length -
+                  failedMeetings.length -
+                  createdMeetings.length;
+                const retryReason = meetingRetryReasons[record.id] ?? "";
+                return (
+                  <Card
+                    key={record.id}
+                    data-testid={`published-class-${record.id}`}
+                    className="min-w-0 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Heading
+                            level={2}
+                            size="sm"
+                            className="w-full line-clamp-2 wrap-anywhere leading-snug"
+                            title={record.titleEn}
+                          >
+                            {record.titleEn}
+                          </Heading>
+                          <Badge variant="secondary" size="sm">
+                            {record.competition.name}
+                          </Badge>
+                          <Badge
+                            variant={
+                              record.state === "postponed"
+                                ? "warning"
+                                : "success"
+                            }
+                          >
+                            {record.state === "postponed"
+                              ? "Postponed"
+                              : "Published"}
+                          </Badge>
+                          <Badge variant="tertiary" size="sm">
+                            {record.kind === "cohort"
+                              ? "Cohort"
+                              : "Masterclass"}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex min-w-0 items-center gap-3">
+                          {record.sessions[0] ? (
+                            <div
+                              className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-accent"
+                              aria-hidden="true"
+                            >
+                              <span className="text-sm uppercase">
+                                {new Intl.DateTimeFormat("en", {
+                                  weekday: "short",
+                                  timeZone: "Asia/Jakarta",
+                                }).format(new Date(record.sessions[0].startAt))}
+                              </span>
+                              <span className="text-2xl font-semibold tabular-nums">
+                                {new Intl.DateTimeFormat("en", {
+                                  day: "numeric",
+                                  timeZone: "Asia/Jakarta",
+                                }).format(new Date(record.sessions[0].startAt))}
+                              </span>
+                              <span className="text-sm uppercase">
+                                {new Intl.DateTimeFormat("en", {
+                                  month: "short",
+                                  timeZone: "Asia/Jakarta",
+                                }).format(new Date(record.sessions[0].startAt))}
+                              </span>
+                            </div>
+                          ) : null}
+                          <div className="min-w-0 space-y-1">
+                            <Text>
+                              {record.sessions[0]
+                                ? new Intl.DateTimeFormat("en", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                    timeZone: "Asia/Jakarta",
+                                  }).format(
+                                    new Date(record.sessions[0].startAt),
+                                  ) + " WIB"
+                                : "Schedule unavailable"}
+                            </Text>
+                            <Text className="text-muted">
+                              {onlineSessions.length === record.sessions.length
+                                ? "Online"
+                                : onlineSessions.length === 0
+                                  ? "Offline"
+                                  : "Online · Offline"}
+                            </Text>
+                            <Text className="text-muted">
+                              {record.sessions.length} session
+                              {record.sessions.length === 1 ? "" : "s"}
+                            </Text>
+                          </div>
+                        </div>
+                        <Text className="mt-2 text-sm text-muted">
+                          {onlineSessions.length === 0
+                            ? "In-person sessions use managed rooms; no Meet is created."
+                            : `${createdMeetings.length} Meet(s) ready${pendingMeetings > 0 ? ` · ${pendingMeetings} pending` : ""}${failedMeetings.length > 0 ? ` · ${failedMeetings.length} failed` : ""}.`}
+                        </Text>
+                      </div>
+                    </div>
+                    {failedMeetings.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap items-end gap-3">
+                        <Field className="w-full min-w-0 flex-1 sm:min-w-64">
+                          <FieldLabel htmlFor={`meeting-retry-${record.id}`}>
+                            Retry reason
+                          </FieldLabel>
+                          <Input
+                            id={`meeting-retry-${record.id}`}
+                            maxLength={500}
+                            value={retryReason}
+                            onChange={(event) =>
+                              setMeetingRetryReasons((current) => ({
+                                ...current,
+                                [record.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </Field>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            retryClassMeetings.isPending ||
+                            retryReason.trim().length < 3
+                          }
+                          onClick={() =>
+                            retryClassMeetings.mutate({
+                              id: record.id,
+                              reason: retryReason,
+                            })
+                          }
+                        >
+                          Retry failed meeting setup
+                        </Button>
+                      </div>
+                    ) : pendingMeetings > 0 ? (
+                      <Text className="mt-3 text-sm text-muted">
+                        Meeting work is queued or running. Failed attempts are
+                        retried automatically.
+                      </Text>
+                    ) : null}
+                    <Drawer>
+                      <DrawerTrigger
+                        render={
+                          <Button
+                            variant="secondary"
+                            className="mt-4"
+                            aria-label="Manage class"
+                          />
+                        }
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
+                        Manage class
+                      </DrawerTrigger>
+                      <DrawerPopup direction="right">
+                        <DrawerHeader>
+                          <div className="min-w-0 flex-1">
+                            <DrawerTitle className="wrap-anywhere">
+                              {record.titleEn}
+                            </DrawerTitle>
+                            <DrawerDescription>
+                              Manage class schedule, enrollment, and lifecycle.
+                            </DrawerDescription>
+                          </div>
+                          <DrawerClose aria-label="Close class management">
+                            Close
+                          </DrawerClose>
+                        </DrawerHeader>
+                        <DrawerBody>
+                          <div className="space-y-4 pb-4">
+                            <ClassAdminCancellationPanel
+                              classId={record.id}
+                              expectedVersion={record.version}
+                              onChanged={() =>
+                                Promise.all([
+                                  queryClient.invalidateQueries({
+                                    queryKey: orpc.admin.listAcademyClasses.key(
+                                      {
+                                        input: { state: "published" },
+                                      },
+                                    ),
+                                  }),
+                                  queryClient.invalidateQueries({
+                                    queryKey: orpc.admin.listAcademyClasses.key(
+                                      {
+                                        input: { state: "postponed" },
+                                      },
+                                    ),
+                                  }),
+                                ])
+                              }
+                            />
+                            <ClassAdminLifecyclePanel
+                              classRecord={record}
+                              onChanged={() =>
+                                Promise.all([
+                                  queryClient.invalidateQueries({
+                                    queryKey: orpc.admin.listAcademyClasses.key(
+                                      {
+                                        input: { state: "published" },
+                                      },
+                                    ),
+                                  }),
+                                  queryClient.invalidateQueries({
+                                    queryKey: orpc.admin.listAcademyClasses.key(
+                                      {
+                                        input: { state: "postponed" },
+                                      },
+                                    ),
+                                  }),
+                                ])
+                              }
+                            />
+                          </div>
+                        </DrawerBody>
+                      </DrawerPopup>
+                    </Drawer>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </TabsPanel>
+        <TabsPanel value="drafts" keepMounted>
+          <div className="min-w-0 space-y-6">
+            {showDrafts ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Draft classes</CardTitle>
+                  <CardDescription>
+                    Only your team can see these drafts.
+                  </CardDescription>
+                </CardHeader>
+                <CardBody>
+                  <Stack direction="column" spacing="sm">
+                    {classesQuery.isLoading ? (
+                      <Text className="text-muted">Loading drafts…</Text>
+                    ) : classesQuery.isError ? (
+                      <Text className="text-danger-foreground">
+                        Draft classes could not be loaded. Refresh to try again.
+                      </Text>
+                    ) : classes.length === 0 ? (
+                      <Text className="text-muted">No class drafts yet.</Text>
+                    ) : (
+                      classes.map((record) => (
+                        <div
+                          key={record.id}
+                          className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
                               <Text className="font-medium">
                                 {record.titleEn}
                               </Text>
-                              <Badge
-                                variant={
-                                  record.state === "postponed"
-                                    ? "warning"
-                                    : "success"
-                                }
-                              >
-                                {record.state === "postponed"
-                                  ? "Postponed"
-                                  : "Published"}
-                              </Badge>
                               <Badge variant="secondary">{record.kind}</Badge>
                             </div>
-                            <Text className="mt-1 text-sm text-muted">
-                              {record.sessions.length} session(s) ·{" "}
+                            <Text className="text-muted text-sm">
+                              {record.sessions.length} session
+                              {record.sessions.length === 1 ? "" : "s"} ·{" "}
                               {record.competition.name}
                             </Text>
-                            <Text className="mt-2 text-sm text-muted">
-                              {onlineSessions.length === 0
-                                ? "In-person sessions use managed rooms; no Meet is created."
-                                : `${createdMeetings.length} Meet(s) ready${pendingMeetings > 0 ? ` · ${pendingMeetings} pending` : ""}${failedMeetings.length > 0 ? ` · ${failedMeetings.length} failed` : ""}.`}
-                            </Text>
                           </div>
+                          <Button
+                            type="button"
+                            variant="plain"
+                            size="sm"
+                            disabled={coverUploading}
+                            aria-label={`Edit ${record.titleEn}`}
+                            onClick={() => {
+                              setForm(draftFromRecord(record));
+                              setShowDrafts(false);
+                              setCoverPreviewUrl(null);
+                            }}
+                          >
+                            <IconEdit />
+                          </Button>
                         </div>
-                        {failedMeetings.length > 0 ? (
-                          <div className="mt-4 flex flex-wrap items-end gap-3">
-                            <Field className="w-full min-w-0 flex-1 sm:min-w-64">
-                              <FieldLabel
-                                htmlFor={`meeting-retry-${record.id}`}
-                              >
-                                Retry reason
-                              </FieldLabel>
-                              <Input
-                                id={`meeting-retry-${record.id}`}
-                                maxLength={500}
-                                value={retryReason}
-                                onChange={(event) =>
-                                  setMeetingRetryReasons((current) => ({
-                                    ...current,
-                                    [record.id]: event.target.value,
-                                  }))
-                                }
-                              />
-                            </Field>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={
-                                retryClassMeetings.isPending ||
-                                retryReason.trim().length < 3
-                              }
-                              onClick={() =>
-                                retryClassMeetings.mutate({
-                                  id: record.id,
-                                  reason: retryReason,
-                                })
-                              }
-                            >
-                              Retry failed meeting setup
-                            </Button>
-                          </div>
-                        ) : pendingMeetings > 0 ? (
-                          <Text className="mt-3 text-sm text-muted">
-                            Meeting work is queued or running. Failed attempts
-                            are retried automatically.
-                          </Text>
-                        ) : null}
-                        <Accordion className="mt-4 border-t border-border">
-                          <AccordionItem value="manage">
-                            <AccordionHeader>
-                              <AccordionTrigger>Manage class</AccordionTrigger>
-                            </AccordionHeader>
-                            <AccordionPanel>
-                              <div className="space-y-4 pb-4">
-                                <ClassAdminCancellationPanel
-                                  classId={record.id}
-                                  expectedVersion={record.version}
-                                  onChanged={() =>
-                                    Promise.all([
-                                      queryClient.invalidateQueries({
-                                        queryKey:
-                                          orpc.admin.listAcademyClasses.key({
-                                            input: { state: "published" },
-                                          }),
-                                      }),
-                                      queryClient.invalidateQueries({
-                                        queryKey:
-                                          orpc.admin.listAcademyClasses.key({
-                                            input: { state: "postponed" },
-                                          }),
-                                      }),
-                                    ])
-                                  }
-                                />
-                                <ClassAdminLifecyclePanel
-                                  classRecord={record}
-                                  onChanged={() =>
-                                    Promise.all([
-                                      queryClient.invalidateQueries({
-                                        queryKey:
-                                          orpc.admin.listAcademyClasses.key({
-                                            input: { state: "published" },
-                                          }),
-                                      }),
-                                      queryClient.invalidateQueries({
-                                        queryKey:
-                                          orpc.admin.listAcademyClasses.key({
-                                            input: { state: "postponed" },
-                                          }),
-                                      }),
-                                    ])
-                                  }
-                                />
-                              </div>
-                            </AccordionPanel>
-                          </AccordionItem>
-                        </Accordion>
-                      </div>
-                    );
-                  })
-                )}
-              </Stack>
-            </CardBody>
-          </Card>
-        </TabsPanel>
-        <TabsPanel value="drafts" keepMounted>
-          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Draft classes</CardTitle>
-                <CardDescription>
-                  Only your team can see these drafts.
-                </CardDescription>
-              </CardHeader>
-              <CardBody>
-                <Stack direction="column" spacing="sm">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={coverUploading}
-                    onClick={() => {
-                      setForm(emptyDraft());
-                      setCoverPreviewUrl(null);
-                    }}
-                  >
-                    <IconPlus />
-                    New class draft
-                  </Button>
-                  {classesQuery.isLoading ? (
-                    <Text className="text-muted">Loading drafts…</Text>
-                  ) : classesQuery.isError ? (
-                    <Text className="text-danger-foreground">
-                      Draft classes could not be loaded. Refresh to try again.
-                    </Text>
-                  ) : classes.length === 0 ? (
-                    <Text className="text-muted">No class drafts yet.</Text>
-                  ) : (
-                    classes.map((record) => (
-                      <div
-                        key={record.id}
-                        className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="mb-1 flex flex-wrap items-center gap-2">
-                            <Text className="font-medium">
-                              {record.titleEn}
-                            </Text>
-                            <Badge variant="secondary">{record.kind}</Badge>
-                          </div>
-                          <Text className="text-muted text-sm">
-                            {record.sessions.length} session
-                            {record.sessions.length === 1 ? "" : "s"} ·{" "}
-                            {record.competition.name}
-                          </Text>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="plain"
-                          size="sm"
-                          disabled={coverUploading}
-                          aria-label={`Edit ${record.titleEn}`}
-                          onClick={() => {
-                            setForm(draftFromRecord(record));
-                            setCoverPreviewUrl(null);
-                          }}
-                        >
-                          <IconEdit />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </Stack>
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {form.id ? "Edit class draft" : "New class draft"}
-                </CardTitle>
-              </CardHeader>
-              <CardBody>
-                <form onSubmit={submitDraft}>
-                  <Stack direction="column" spacing="lg">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="class-kind">Class type</FieldLabel>
-                        <Select
-                          value={form.kind}
-                          onValueChange={(value) =>
-                            changeKind(String(value) as ClassKind)
-                          }
-                          items={[
-                            { value: "cohort", label: "Cohort" },
-                            { value: "masterclass", label: "Masterclass" },
-                          ]}
-                        >
-                          <SelectTrigger id="class-kind">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectList>
-                              <SelectItem value="cohort">Cohort</SelectItem>
-                              <SelectItem value="masterclass">
-                                Masterclass
-                              </SelectItem>
-                            </SelectList>
-                          </SelectPopup>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="class-competition">
-                          Competition
-                        </FieldLabel>
-                        <Select
-                          value={form.competitionId}
-                          onValueChange={(value) =>
-                            updateForm("competitionId", String(value ?? ""))
-                          }
-                          items={competitions.map((competition) => ({
-                            value: competition.id,
-                            label: competition.name,
-                          }))}
-                        >
-                          <SelectTrigger id="class-competition">
-                            <SelectValue placeholder="Choose a competition" />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectList>
-                              {competitions.map((competition) => (
-                                <SelectItem
-                                  key={competition.id}
-                                  value={competition.id}
-                                >
-                                  {competition.parent
-                                    ? `${competition.parent.name} · ${competition.name}`
-                                    : competition.name}
+                      ))
+                    )}
+                  </Stack>
+                </CardBody>
+              </Card>
+            ) : (
+              <form onSubmit={submitDraft} className="min-w-0 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      {form.id ? "Edit class draft" : "New class draft"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="flex min-w-0 flex-col gap-5">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="class-kind">
+                            Class type
+                          </FieldLabel>
+                          <Select
+                            value={form.kind}
+                            onValueChange={(value) =>
+                              changeKind(String(value) as ClassKind)
+                            }
+                            items={[
+                              { value: "cohort", label: "Cohort" },
+                              { value: "masterclass", label: "Masterclass" },
+                            ]}
+                          >
+                            <SelectTrigger id="class-kind">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              <SelectList>
+                                <SelectItem value="cohort">Cohort</SelectItem>
+                                <SelectItem value="masterclass">
+                                  Masterclass
                                 </SelectItem>
-                              ))}
-                            </SelectList>
-                          </SelectPopup>
-                        </Select>
+                              </SelectList>
+                            </SelectPopup>
+                          </Select>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="class-competition">
+                            Competition
+                          </FieldLabel>
+                          <Select
+                            value={form.competitionId}
+                            onValueChange={(value) =>
+                              updateForm("competitionId", String(value ?? ""))
+                            }
+                            items={competitions.map((competition) => ({
+                              value: competition.id,
+                              label: competition.name,
+                            }))}
+                          >
+                            <SelectTrigger id="class-competition">
+                              <SelectValue placeholder="Choose a competition" />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              <SelectList>
+                                {competitions.map((competition) => (
+                                  <SelectItem
+                                    key={competition.id}
+                                    value={competition.id}
+                                  >
+                                    {competition.parent
+                                      ? `${competition.parent.name} · ${competition.name}`
+                                      : competition.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectList>
+                            </SelectPopup>
+                          </Select>
+                        </Field>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextField
+                          id="class-title-en"
+                          label="Title (English)"
+                          value={form.titleEn}
+                          onChange={(value) => updateForm("titleEn", value)}
+                          required
+                          maxLength={200}
+                        />
+                        <TextField
+                          id="class-title-id"
+                          label="Title (Indonesian, optional)"
+                          value={form.titleId}
+                          onChange={(value) => updateForm("titleId", value)}
+                          maxLength={200}
+                        />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextareaField
+                          id="class-description-en"
+                          label="Description (English)"
+                          value={form.descriptionEn}
+                          onChange={(value) =>
+                            updateForm("descriptionEn", value)
+                          }
+                          required
+                          maxLength={5_000}
+                        />
+                        <TextareaField
+                          id="class-description-id"
+                          label="Description (Indonesian, optional)"
+                          value={form.descriptionId}
+                          onChange={(value) =>
+                            updateForm("descriptionId", value)
+                          }
+                          maxLength={5_000}
+                        />
+                      </div>
+                      <Field>
+                        <FieldLabel htmlFor="class-cover">
+                          Cover image
+                        </FieldLabel>
+                        <Input
+                          id="class-cover"
+                          type="file"
+                          accept={COVER_IMAGE_TYPES.join(",")}
+                          disabled={coverUploading}
+                          onChange={(event) => void uploadCover(event)}
+                        />
+                        <FieldDescription>
+                          {coverUploading
+                            ? "Uploading cover image…"
+                            : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
+                        </FieldDescription>
+                        <Text className="text-muted text-sm">
+                          {form.coverKey
+                            ? "A cover image is attached to this draft. Save to keep it."
+                            : "No cover image is attached yet."}
+                        </Text>
+                        {coverPreviewUrl ? (
+                          <img
+                            src={coverPreviewUrl}
+                            alt=""
+                            className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
+                          />
+                        ) : null}
                       </Field>
                     </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <TextField
-                        id="class-title-en"
-                        label="Title (English)"
-                        value={form.titleEn}
-                        onChange={(value) => updateForm("titleEn", value)}
-                        required
-                        maxLength={200}
-                      />
-                      <TextField
-                        id="class-title-id"
-                        label="Title (Indonesian, optional)"
-                        value={form.titleId}
-                        onChange={(value) => updateForm("titleId", value)}
-                        maxLength={200}
-                      />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <TextareaField
-                        id="class-description-en"
-                        label="Description (English)"
-                        value={form.descriptionEn}
-                        onChange={(value) => updateForm("descriptionEn", value)}
-                        required
-                        maxLength={5_000}
-                      />
-                      <TextareaField
-                        id="class-description-id"
-                        label="Description (Indonesian, optional)"
-                        value={form.descriptionId}
-                        onChange={(value) => updateForm("descriptionId", value)}
-                        maxLength={5_000}
-                      />
-                    </div>
-                    <Field>
-                      <FieldLabel htmlFor="class-cover">Cover image</FieldLabel>
-                      <Input
-                        id="class-cover"
-                        type="file"
-                        accept={COVER_IMAGE_TYPES.join(",")}
-                        disabled={coverUploading}
-                        onChange={(event) => void uploadCover(event)}
-                      />
-                      <FieldDescription>
-                        {coverUploading
-                          ? "Uploading cover image…"
-                          : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
-                      </FieldDescription>
-                      <Text className="text-muted text-sm">
-                        {form.coverKey
-                          ? "A cover image is attached to this draft. Save to keep it."
-                          : "No cover image is attached yet."}
-                      </Text>
-                      {coverPreviewUrl ? (
-                        <img
-                          src={coverPreviewUrl}
-                          alt=""
-                          className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
-                        />
-                      ) : null}
-                    </Field>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  </CardBody>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pricing &amp; enrollment</CardTitle>
+                    <CardDescription>
+                      Set session rates and the minimum enrollment check.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardBody className="flex min-w-0 flex-col gap-5">
+                    <div className="grid items-start gap-4 sm:grid-cols-2">
                       <NumberField
                         id="class-tutor-fee"
                         label="Flat tutor fee per session (IDR)"
@@ -1069,8 +1190,8 @@ export function AcademyClassPage() {
                       )}
                     </div>
                     {form.kind === "cohort" ? (
-                      <>
-                        <div className="grid gap-4">
+                      <div className="flex flex-col gap-4">
+                        <div className="grid items-start gap-4">
                           <TextField
                             id="class-minimum-check-at"
                             label="Minimum-enrollment check date"
@@ -1115,9 +1236,15 @@ export function AcademyClassPage() {
                           The minimum counts unique active full/half-plan
                           students. Single-session buyers do not count.
                         </Text>
-                      </>
+                      </div>
                     ) : null}
-
+                  </CardBody>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Sessions</CardTitle>
+                  </CardHeader>
+                  <CardBody>
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -1226,13 +1353,13 @@ export function AcademyClassPage() {
                               }
                               required
                             />
-                            <TextField
-                              id={`session-${index}-end`}
-                              label="End"
-                              type="datetime-local"
-                              value={session.endAt}
+                            <NumberField
+                              id={`session-${index}-duration`}
+                              label="Duration (minutes)"
+                              description="End time is calculated from the start time and duration."
+                              value={session.durationMinutes}
                               onChange={(value) =>
-                                updateSession(index, { endAt: value })
+                                updateSession(index, { durationMinutes: value })
                               }
                               required
                             />
@@ -1426,10 +1553,10 @@ export function AcademyClassPage() {
                         {saveDraft.isPending ? "Saving…" : "Save draft"}
                       </Button>
                     </div>
-                  </Stack>
-                </form>
-              </CardBody>
-            </Card>
+                  </CardBody>
+                </Card>
+              </form>
+            )}
           </div>
         </TabsPanel>
       </Tabs>

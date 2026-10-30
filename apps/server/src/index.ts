@@ -120,6 +120,9 @@ if (env.PAYMENT_PROVIDER === "stub") {
   });
 }
 
+const authEmailHeaderUrl = new URL("/auth-email-header.png", env.CORS_ORIGIN)
+  .href;
+
 setAuthEmailSender(async ({ user, url }) => {
   if (env.NODE_ENV === "test") return;
   if (!isProductionLike(env.NODE_ENV)) {
@@ -130,7 +133,7 @@ setAuthEmailSender(async ({ user, url }) => {
     });
   }
   const { subject, html } = buildResetPasswordEmail({
-    headerUrl: new URL("/auth-email-header.png", env.CORS_ORIGIN).href,
+    headerUrl: authEmailHeaderUrl,
     name: user.name,
     url,
   });
@@ -147,7 +150,7 @@ setAuthEmailSender(async ({ user, url }) => {
 setPreAccountSignupEmailSender(async ({ email, otp }) => {
   if (env.NODE_ENV === "test") return;
   const { subject, html } = buildVerificationEmail({
-    headerUrl: new URL("/auth-email-header.png", env.CORS_ORIGIN).href,
+    headerUrl: authEmailHeaderUrl,
     name: email.split("@")[0] ?? email,
     otp,
     expiresInMinutes: 5,
@@ -163,7 +166,7 @@ setPreAccountSignupEmailSender(async ({ email, otp }) => {
 setSignupWelcomeEmailSender(async ({ user }) => {
   if (env.NODE_ENV === "test") return;
   const { subject, html } = buildSignupWelcomeEmail({
-    headerUrl: new URL("/auth-email-header.png", env.CORS_ORIGIN).href,
+    headerUrl: authEmailHeaderUrl,
     name: user.name,
     loginUrl: `${env.CORS_ORIGIN.replace(/\/$/, "")}/login`,
   });
@@ -181,7 +184,7 @@ setSignupWelcomeEmailSender(async ({ user }) => {
 setVerificationEmailSender(async ({ email, otp }) => {
   if (env.NODE_ENV === "test") return;
   const { subject, html } = buildVerificationEmail({
-    headerUrl: new URL("/auth-email-header.png", env.CORS_ORIGIN).href,
+    headerUrl: authEmailHeaderUrl,
     name: email.split("@")[0] ?? email,
     otp,
     expiresInMinutes: 5,

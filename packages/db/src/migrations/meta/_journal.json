@@ -533,6 +533,13 @@
       "when": 1792822161322,
       "tag": "0075_kb_calendar_content",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793327425722,
+      "tag": "0076_academy_class_number",
+      "breakpoints": true
     }
   ]
 }

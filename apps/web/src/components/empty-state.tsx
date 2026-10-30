@@ -121,14 +121,6 @@ export function EmptyState({
         className,
       )}
     >
-      <div
-        aria-hidden="true"
-        className={cn(
-          "absolute inset-x-12 top-0 -z-1 h-28 rounded-full blur-3xl",
-          size === "inline" && "inset-x-6 h-20",
-          styles.glow,
-        )}
-      />
       <IconBox
         variant={styles.icon}
         size={sizeStyles.icon}

@@ -19,7 +19,10 @@ function RouteComponent() {
   const { session } = Route.useRouteContext();
   const user = session.data?.user as CogitoUser | undefined;
   return user?.role === "admin" ? (
-    <ContentPage kind="event" preview={<CompetitionCalendarPage />} />
+    <ContentPage
+      kind="event"
+      preview={(onManage) => <CompetitionCalendarPage onManage={onManage} />}
+    />
   ) : (
     <CompetitionCalendarPage />
   );

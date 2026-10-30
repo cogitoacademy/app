@@ -102,7 +102,7 @@ function RouteComponent() {
         <Heading level={1} size="md">
           Review tutor profile
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Check details, proofs, photos, and publication status in one focused
           workspace.
         </Text>

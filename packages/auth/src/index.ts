@@ -367,7 +367,7 @@ function buildAuth(options?: InternalAuthOptions) {
               data.emailVerified = true;
             }
             if (
-              isProductionLike(env.NODE_ENV) &&
+              env.NODE_ENV !== "test" &&
               isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
             ) {
               data.role = "admin";

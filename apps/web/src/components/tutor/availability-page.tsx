@@ -441,7 +441,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
           <Heading level={1} size="md">
             Open your calendar to students
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Set your regular teaching hours, then adjust individual dates when
             plans change.
           </Text>

@@ -8,7 +8,7 @@ Better Auth configuration for Cogito, wired to the Drizzle `schema.user` table (
 - **Email OTP verification** (`emailOTP` plugin): 6-digit codes, 5-minute expiry (`otpLength: 6`, `expiresIn: 300`) for existing-account verification, sign-in, reset, and change-email. The plugin does not create or verify a public signup account.
 - **Sessions** expire after 7 days (`expiresIn: 60 * 60 * 24 * 7`), with an opt-in cookie cache (`SESSION_COOKIE_CACHE_MAX_AGE` from env).
 - **Password policy**: minimum 8 characters (Better Auth `minPasswordLength`) plus `assertPasswordPolicy(...)` at sign-up — at least one uppercase letter, one lowercase letter, and one digit.
-- **User model**: `role` additional field (default `"student"`, not client-settable). In production-like envs, accounts with a configured admin email (`env.ADMIN_EMAILS`) are stored as `admin` by the create-before hook.
+- **User model**: `role` additional field (default `"student"`, not client-settable). Outside test mode, accounts with a configured admin email (`env.ADMIN_EMAILS`) are stored as `admin` by the create-before hook. Server startup also promotes matching existing accounts; set `ADMIN_EMAILS` explicitly for local development.
 - **Cookies**: `sameSite: strict` + `secure: true` in production-like envs (lax otherwise); the OAuth state cookie stays `lax`.
 
 ## Email sender wiring

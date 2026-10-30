@@ -210,7 +210,7 @@ export function NotificationsPage() {
         <Heading level={1} size="md">
           Keep up with what matters
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Catch up on booking activity and important account updates.
         </Text>
       </div>

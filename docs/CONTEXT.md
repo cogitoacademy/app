@@ -6,11 +6,9 @@ Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 as
 
 The unchanged 100% coverage gate still fails: API 87.6%, overall 87.8%, function lower bounds 94.8%, 45 files with unverified function unions. A minimal reproduction proves partition-dependent Bun line denominators and absent function identities; zero branch records are not branch-coverage proof. See [BUN-COVERAGE-LIMITATION.md](BUN-COVERAGE-LIMITATION.md) for raw evidence, reproduction and next gate. No coverage filter/threshold was weakened. Initial interrupted/undersized-memory attempts are not passes. Hosted CI, genuine remaining coverage, provider/private-R2 acceptance, production restore/cutover and client approvals/UAT remain open.
 
-
 ## Server acceptance follow-up (28 October 2026)
 
 Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
-
 
 ## V3 local regression continuation (28 October 2026)
 
@@ -32,11 +30,9 @@ No reset, migration, dev/prod activation or production storage operation. Resour
 
 Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The live catalog browser spec now passes 1/1 installed-Edge journey against isolated PostgreSQL 6769/Redis 6381, covering archive/restore/move persistence readback, inherited colors, and student HTTP 403 for admin list/archive. Test fixtures are cleaned up; no reset/migration or dev/production access. Historical-reference/concurrency and broader consumer acceptance remain open; see RUNBOOK for the 26 October checkpoint.
 
-
 ## Admin KOL campaign UI (26 October 2026)
 
 `/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.
-
 
 ## V3 bounded regression checkpoint (25 October 2026)
 
@@ -56,7 +52,6 @@ No DB mutation, migration, reset, seed, parent API restart or production action
 was performed for this checkpoint. Historical real-DB evidence retains its own
 source/environment scope. Run commands are in RUNBOOK. Backlog T09/T12 rows now
 reflect their later integration/local-dev checkpoints; T13 remains in progress.
-
 
 ## Referral session cache correction (24 October 2026)
 
@@ -94,8 +89,6 @@ fix; fresh session and reuse regression passes. Three mocked Edge UI/wire cases
 cover friend/KOL/no-code, invalid code, reload and stale cached session. These
 are not PostgreSQL, real Google or reward-ledger acceptance.
 
-
-
 ## Real dev class-to-PDF checkpoint (24 October 2026)
 
 On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
@@ -129,7 +122,6 @@ future financial reversal must use an approved audited correction, never deletio
 Local evidence/PDF/render remain ignored under this checkout's
 `tmp/dev-journey/`; private login/session files must never be committed or shared.
 Production, real provider delivery, full browser journey and client UAT remain gates.
-
 
 ## KB/calendar local dev activation (24 October 2026)
 
@@ -177,8 +169,9 @@ OTP (pre-account and existing-account verification), welcome and password-reset
 emails share `packages/auth/src/auth-email-layout.ts`: the approved report banner,
 orange CTA, blue footer and full Cogito Academy name. Owner removed the orange
 rule below the banner. Bodies remain separate builders; future body changes reuse
-the wrapper. The public asset is `/auth-email-header.png`; server senders derive
-its absolute URL from CORS_ORIGIN. Instructions/OTP/links remain live HTML with
+the wrapper. Resend attaches the approved PNG inline with a CID, using the
+byte-identical base64 asset shared with report export.
+Instructions/OTP/links remain live HTML with
 alt-text branding if images are blocked. No other notification templates changed.
 
 ## Admin referral usage (24 October 2026)
@@ -259,7 +252,6 @@ The shared uppercase unique namespace includes KOL codes. Allocation scans at mo
 HTTP 409, never a longer code or a silent alternate prefix. Database concurrency,
 auth/provider and browser acceptance remain parent-owned and unrun for this slice.
 
-
 ## KOL settlement release/dev sync (24 October 2026)
 
 PR #319 is merged into release at 61031cc9, following sidebar #318 and
@@ -325,7 +317,6 @@ DB-free focused units and web typecheck are the validation scope; guarded parent
 PostgreSQL/concurrency, admin browser and migration/deployment acceptance remain
 open. Earlier settlement-deferred checkpoints below describe their historical
 source slices, superseded here for implementation only. T09 remains in progress.
-
 
 ## Synthetic referral/KOL browser checkpoint (23 October 2026)
 
@@ -419,7 +410,6 @@ The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
 browser reconciliation display and broader release UAT remain separate gates.
 This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
 
-
 ## Referral review corrections (22 October 2026)
 
 Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
@@ -480,6 +470,7 @@ findings with no remaining spec/behavior findings. Its P2 documentation-status
 finding is corrected in this follow-up; the reviewer did not rerun tests.
 OAuth/browser UAT, development/production migration, and provider acceptance
 remain open.
+
 ## Report PDF parent verification (22 October 2026)
 
 The parent repaired long metadata pagination and added a semantic student-search
@@ -682,7 +673,6 @@ current application hard-delete path was found, and this documents the existing
 schema boundary rather than adding a release gate. No historical actor is
 invented and no legacy row is backfilled.
 
-
 ## V3 execution priorities (22 October 2026)
 
 Owner direction: finish core V3 work through feature branches and GitHub PRs into
@@ -690,8 +680,6 @@ Owner direction: finish core V3 work through feature branches and GitHub PRs int
 squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migration
 are tertiary. Their scope/release gates remain until an approved client deferral;
 this priority change does not authorize production release or changing `main`.
-
-
 
 ## Explicit ongoing experience (22 October 2026)
 
@@ -1098,6 +1086,37 @@ for new selections; its existing assignments and agreements remain recognizable.
 Owner-requested CRUD is specified in PRD S04 / REQ-COMP-01..07 and task T00A.
 Implementation is in progress on the working branch; TASKS records verification
 and remaining integration gates. The domain terms above do not imply release.
+
+## Activities website implementation (2026-10-26)
+
+The marketing checkout `C:/.Projects/cogito-acad` now implements localized
+`/en/activities` and `/id/activities`: the existing website heading treatment is
+followed directly by Classes, then Others, without the preview's section-jump
+links. Cohorts and Masterclasses share a catalog and type filters. The owner-requested
+follow-up removes cover/placeholder images and uses compact My Bookings-style
+rows: date tile, icon-led time/mode/tutor metadata, compact class title,
+competition/session/price metadata and detail action. The follow-up matches
+My Bookings text hierarchy and removes the large description paragraph.
+Class rows read `/rpc/classes/list`, link to the corresponding app class detail,
+and show schedules, tutor names, current rates and postponed status. The public
+class DTO now includes nullable `titleId`/`descriptionId` for Indonesian fallback.
+Others combines published legacy Sanity events into one article list; existing
+event detail/registration behavior is retained and no category labels are added.
+Desktop/mobile navigation links to Activities; the two legacy event category
+routes permanently redirect to the same locale's Activities page. Fetch failure
+and valid empty results have distinct messages. T10 is not complete: Others DB
+migration/admin authoring, approved content and release acceptance remain open.
+
+## Planned Activities page (2026-10-26)
+
+Owner direction for pending T10: one Activities page with a heading matching the
+other main website pages. Use two or three sections: Cohorts and Masterclasses
+may be combined under Classes or kept separate, plus one Others section.
+Others presents Simulation Days, Cogito 101 series, Monthly Townhall and similar
+content together as an article-style list, without activity-type labels or
+separate type subsections. Class sections continue to use app class records.
+The presentation slice is implemented as recorded above; see REQ-CONTENT-01 and
+the T10 Activities checklist in `docs/plans/active/RELEASE-V3-TASKS.md`.
 
 ## Marketing landing checkpoint (2026-10-19)
 
@@ -2211,11 +2230,12 @@ container and does not serve TLS. Production-like API deployments therefore set
 verification when TLS is enabled, and should remain `true` for a managed or
 external PostgreSQL endpoint that requires TLS.
 
-Production-like server boot reconciles the comma-separated `ADMIN_EMAILS`
+Server boot outside test mode reconciles the comma-separated `ADMIN_EMAILS`
 allowlist before serving traffic. It defaults to
 `itcogitoacademy01@gmail.com`, matches case-insensitively, promotes matching
 existing accounts, and never demotes other admins. The Better Auth signup hook
-covers a matching account created after boot. The guarded production seed uses
+covers a matching account created after boot. Development uses the same explicit
+allowlist; tests never bootstrap configured admins. The guarded production seed uses
 a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
 `ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
 student has verified local authentication and seeded Marks, while its review
@@ -2775,7 +2795,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## Auth Config
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening); the configured Google provider sends `prompt=consent` so the Google permission screen is shown during verification runs even for a previously authorized account.
-- Production/staging admin bootstrap uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; existing admins are preserved and the normal admin role-management flow remains available for other addresses.
+- Admin bootstrap outside test mode uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; development, staging, and production are included. Existing admins are preserved and the normal admin role-management flow remains available for other addresses.
 - Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: session cookies use sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. The short-lived Better Auth OAuth state cookie is explicitly sameSite=lax so the signed state returns on the provider's top-level callback GET; it remains secure/httpOnly and is checked against the database verification record. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site. Google login uses `prompt=consent` to make the provider permission screen visible for verification evidence; it requests identity scopes only and does not add the server-side Meet/Calendar scope to every user's login.
@@ -2834,13 +2854,13 @@ file are the permanent record; plan-file archives are not maintained.
 > ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
 > decision). Fresh clones need no `.superpowers/` content.
 
-| Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 ordinary rescheduling, Q14/Q15, OPS01 and final release gates remain open. |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
-| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
-| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
-| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                   |
+| Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 ordinary rescheduling, Q14/Q15, OPS01 and final release gates remain open. |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active
 production payment-provider guide.
@@ -3358,11 +3378,9 @@ passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 task
 
 Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long unbroken history references overflowed the card (1743px content at 288/358/736/1119px card widths) and were clipped by the existing app scroller. Settlement cards now wrap identifiers; settlement/export buttons grow with labels and retry actions wrap. Synthetic Edge checks pass 13/13; see RUNBOOK. No backend, accounting or authorization changes. Economy, payout, class/report, native 200% zoom, RTL and screen-reader acceptance remain unverified.
 
-
 ### Economy/payout responsive checkpoint (25 October 2026)
 
 The bounded frontend slice gives V3 economy amount controls a 14rem minimum width so ten-digit IDR values remain readable inside locally scrolling tables. Shared Card/NumberField styles and financial/auth/RPC behavior are unchanged. Dedicated mocked Edge coverage inspects economy read/edit and tutor payout prepared, unpaid-preview and void/reconciliation drawers at 320/390/768/1440 CSS px. This is synthetic layout evidence, not payout persistence or release acceptance; native 200% zoom remains unverified. See RUNBOOK and the active UI audit plan.
-
 
 ### Canonical KB/calendar management (25 October 2026)
 
@@ -3372,9 +3390,9 @@ Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar
 
 Academy class capacity is set by Cogito per session and is independent of tutor online/offline private teaching limits. Draft save and publication retain tutor status/mode, schedule overlap, session quota, and managed-room capacity validation.
 
-Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
-
 Classes catalog cards on mobile and desktop follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a compact Details action aligned to the right. The same card composition is used across the responsive catalog grid. Prices use Start from with the lowest positive configured cohort plan rate or the masterclass rate; missing rates show Price unavailable.
+
+Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
 
 Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
 
@@ -3387,3 +3405,61 @@ Classes card session metadata uses an explicit flex column so icon-bearing Selia
 Cohort catalog cards show the first-to-last session date range instead of a session time. Enrollment copy reflects the per-session start cutoff and availability, not a single cohort-wide deadline; single-session enrollment can select a future session mid-cohort, while full/half plans quote remaining upcoming sessions.
 
 Classes catalog Cohort/Masterclass type badges use the tertiary variant to distinguish them from the card background.
+
+Class detail uses a compact overview with competition palette, tertiary class type, expandable description, schedule metadata and starting price. Desktop enrollment sits beside the overview and expandable session curriculum; mobile order is overview, enrollment, sessions. Existing ClassEnrollmentPanel retains authentication, payment, cancellation and postponement handling. No progress/review/week grouping is inferred.
+
+<!-- Student referral dashboard, 2026-10-29 -->
+
+Student referrals: `/rpc/referral/getMine` now includes `friends` scoped to the authenticated referrer (name, signup date, first completed paid session date, credited Marks). The page shows a semester sidebar and invited-friends table with account-created/completed-session states; zero credited Marks remains visible when no reward was granted. No migration or environment changes required.
+
+Student referral layout: friend code and semester summary share the left column on desktop; invited friends aligns with the top of that column. Mobile stacks code, semester summary, then friends.
+
+Enrollment & payment uses one outer Card. Existing enrollment summaries, new-plan payment summary, and quoted top-up use plain sections and dividers; financial calculations and mutation handlers are unchanged.
+
+### Class detail layout validation (2026-10-29)
+
+Compact overview, expandable session curriculum, and the single-card enrollment/payment panel are implemented locally. Focused Edge synthetic browser run: 25 passed in 43.8s, covering catalog/detail widths 320/390/768/1440, keyboard disclosure, long/empty/missing content, starting rate and schedule ordering, unavailable states, signed-out/unverified/tutor route guards, loading/API errors, postponed/sold-out states, mid-cohort single-session request selection, and pending/second-installment/shortfall/defaulted payment controls. Web and E2E typechecks, scoped lint, and diff checks pass. Desktop render was inspected. No live DB checkout, provider/payment, cancellation transaction, or production acceptance was run; broader release gates stay open.
+
+Class enrollment plan selection uses Selia tabs (Full, Half, Single session), retaining allowed-plan restrictions; single sessions use a labeled radio list. Session accordion cards use tighter horizontal and vertical padding.
+
+Plan-tab and compact-session follow-up: 27 focused synthetic Edge cases are covered (26 passed initially; the desktop catalog navigation timeout passed on a focused rerun). Direct/keyboard plan switching and reduced session padding pass at 320/1440px. Web and E2E typechecks, scoped lint and diff checks pass; web typecheck used GOMAXPROCS=2 and GOMEMLIMIT=768MiB after an initial machine-memory failure. Live payment/provider acceptance remains unrun.
+
+Class enrollment uses the Booking summary presentation: warning IconBox header, label/value metadata and cost rows, and a CardFooter action. The single-session radio list excludes sold-out/already-entitled sessions; summary tutor, format, schedule and amounts reflect the selected session. Existing checkout, installment and top-up handlers remain intact.
+
+Booking summary/radio follow-up: 29 focused synthetic Edge browser cases passed (53.4s), plus 6 pricing unit tests / 22 assertions. Final layout adjustment was rechecked with 5 passing overview/radio responsive cases (13.4s). Web/E2E typechecks, scoped lint and diff checks pass. Mobile and desktop renders were inspected. Live database checkout, external payment/provider calls and production acceptance remain unrun.
+
+My referrals Invited friends table has a hover/click InfoPreview on Status explaining Account created and First session completed. The descriptions follow the existing completedAt projection and do not imply a fixed reward beyond the semester cap.
+
+My referrals table and reward note use separate CardBody sections so the table-only contextual spacing removes the gap below the Invited friends header while retaining the note inset and empty-state padding.
+
+Admin referral layout (2026-10-29): summary cards sit beside the filtered usage table at wide desktop widths; campaign management appears above the summary and activity area. Smaller screens stack summary and activity. Existing search, pagination, audit details and campaign actions are preserved; API and reward rules are unchanged.
+
+Classes catalog cards lead with a two-line class title, then competition/type/status badges, then date and session metadata. Starting price and Details share the bottom row. Masterclass date/time is consolidated in metadata. Focused synthetic catalog/enrollment browser checks pass at 320, 390, 768 and 1440px (4/4); mobile render inspected.
+
+Published admin classes render directly in the tab without an outer Card, using the student catalog card grid, title and badge hierarchy, and WIB date tiles; meeting setup and class management remain available within each card.
+
+Class studio: the tab bar has Drafts and icon-only New class actions. Drafts toggles the saved draft list; selecting a draft or creating a class closes the list so the editor appears alone by default.
+
+Shared CardBody table spacing (2026-10-29): remove top padding when a direct-child TableContainer is first and bottom padding when it is last. This also covers tables followed by pagination or preceded by controls, while preserving the inset for those siblings.
+
+Class studio draft list and editor are mutually exclusive. The icon-size New class action opens an editor grouped into details, pricing/enrollment, and sessions cards, following tutor profile form sections. Cohort pricing uses explicit vertical spacing.
+
+Session reports (`/class-reports`) use a full-width Selia table for class/session, Jakarta date, format, report status, and selection action. Search and filters narrow by class/session text, class type, date range, and report status; clearing filters resets the list. The selected report reader/editor follows below; narrow screens scroll the table horizontally.
+
+Published class Manage class opens a right-side Selia drawer with a scrollable body containing cancellation and lifecycle controls, replacing the inline accordion.
+
+
+### Tutor honorarium in booking detail (2026-10-29)
+
+Admin booking participant details show tutor gross IDR honorarium per recorded session with payout status; student wallet and booking ledger remain available.
+
+Page title convention: use Selia `Heading level={1} size="md"` followed by `Text className="max-w-full text-muted"` in a plain div (optionally `min-w-0 max-w-full`).
+
+Class Studio Manage class uses the default Selia side drawer width (max-w-md, 28rem).
+
+
+Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
+
+Session reports UI: a single empty state replaces redundant export and selection placeholders when no sessions exist. Report exports use a flat section; report eligibility and API contracts are unchanged.
+
+Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.
