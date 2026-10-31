@@ -102,7 +102,6 @@ async function main() {
         resolve(import.meta.dir, "coverage-instrument.ts"),
         "--timeout",
         "30000",
-        "--parallel=1",
         ...partition.arguments,
       ],
       {
