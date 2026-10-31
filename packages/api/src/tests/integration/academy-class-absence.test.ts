@@ -5,22 +5,27 @@ import * as s from "@cogito-app/db/schema";
 import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
 
 const url = new URL(process.env.DATABASE_URL ?? "http://invalid");
+const isolatedTest =
+  process.env.NODE_ENV === "test" &&
+  url.port === "6769" &&
+  url.pathname === "/cogito-test";
+const approvedDev =
+  process.env.ACADEMY_CLASS_ABSENCE_DEV_ACCEPTANCE === "true" &&
+  process.env.NODE_ENV === "development" &&
+  url.port === "6767" &&
+  url.pathname === "/cogito-app";
 if (
-  process.env.ACADEMY_CLASS_ABSENCE_DEV_ACCEPTANCE !== "true" ||
-  process.env.NODE_ENV !== "development" ||
+  (!isolatedTest && !approvedDev) ||
   !["postgres:", "postgresql:"].includes(url.protocol) ||
   !["localhost", "127.0.0.1"].includes(url.hostname) ||
-  url.port !== "6767" ||
-  url.pathname !== "/cogito-app" ||
   url.search ||
   url.hash ||
   process.env.TEST_DATABASE_ALLOW_RESET !== undefined ||
   process.env.TEST_DATABASE_RESET_TARGET !== undefined
 )
   throw new Error(
-    "Academy absence acceptance requires explicit localhost:6767/cogito-app opt-in; resets are forbidden",
+    "Academy absence requires isolated test 6769/cogito-test or explicit dev acceptance; resets are forbidden",
   );
-
 test("absence notices and same-time replacement preserve assignment history and earned ownership", async () => {
   const rollback = new Error("ROLLBACK_ABSENCE_FIXTURES");
   const tag = crypto.randomUUID();

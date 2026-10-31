@@ -92,6 +92,20 @@ function fixture(
 }
 
 describe("academy class service reads and meeting recovery", () => {
+  test("getPublished returns published catalog records and hides drafts", async () => {
+    const f = fixture([], [published]);
+    await expect(f.service.getPublished("class-1")).resolves.toMatchObject({
+      id: "class-1",
+      state: "published",
+      titleEn: "Class",
+    });
+
+    const draft = fixture([], [{ ...published, state: "draft" }]);
+    await expect(draft.service.getPublished("class-1")).rejects.toBeInstanceOf(
+      AcademyClassNotFoundError,
+    );
+  });
+
   test.each([
     "missing",
     "published",

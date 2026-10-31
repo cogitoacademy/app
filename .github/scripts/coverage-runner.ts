@@ -46,13 +46,13 @@ async function main() {
     "referral-completion",
     "referral-kol-commission",
     "kb-calendar",
+    "academy-class-absence",
   ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
   const payout =
     "./packages/api/src/tests/integration/booking-payout-g16.test.ts";
   const guardedAcceptance = [
     "class-payout-lifecycle",
     "admin-operations-analytics",
-    "academy-class-absence",
   ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
   const resettableIntegrationFiles = [
     ...new Bun.Glob("**/*.test.ts").scanSync({
