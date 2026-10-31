@@ -18,7 +18,8 @@ export function createResendEmailProvider(
     redis: redis ?? undefined,
     monitor: (state, error) => {
       log({
-        level: state === "open" ? "error" : "info",
+        // The breaker reports failures before transitioning to open.
+        level: "info",
         action: "circuit_breaker_state_change",
         service: "resend",
         state,

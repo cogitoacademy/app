@@ -335,6 +335,7 @@ export function createReportExportService(deps: {
           const start = row.childStartAt ?? row.bookingStartAt;
           const end = row.childEndAt ?? row.bookingEndAt;
           const sessions = sessionsBySeries.get(row.bookingId);
+          const sessionIndex = sessions?.indexOf(row.sessionId ?? "");
           const sections = reportSections(
             row.discussion,
             row.strengths,
@@ -354,9 +355,7 @@ export function createReportExportService(deps: {
               row,
               start,
               end,
-              sessions?.indexOf(row.sessionId ?? "") === -1
-                ? undefined
-                : (sessions?.indexOf(row.sessionId ?? "") ?? 0) + 1,
+              sessionIndex === -1 ? undefined : (sessionIndex ?? 0) + 1,
               sessions?.length,
             ),
             sections,

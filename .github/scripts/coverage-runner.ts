@@ -1,6 +1,11 @@
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { isolatedIntegrationPartitions } from "./coverage-partitions";
+import {
+  discoverResettableTests,
+  isolatedIntegrationPartitions,
+  parseCoverageArguments,
+  selectCoveragePartitions,
+} from "./coverage-partitions";
 
 function assertTarget(
   value: string | undefined,
@@ -26,19 +31,22 @@ function assertTarget(
     throw new Error(message);
 }
 async function main() {
-  if (process.argv.slice(2).some((argument) => argument !== "--collect-only"))
-    throw new Error("Unknown coverage runner argument");
-  assertTarget(process.env.DATABASE_URL, "6769", "cogito-test");
-  assertTarget(process.env.PAYOUT_DATABASE_URL, "6770", "cogito-test-payout");
-  if (process.env.COVERAGE_DB_RESET_WINDOW !== "confirmed")
-    throw new Error(
-      "Coverage resets both isolated test databases; requires COVERAGE_DB_RESET_WINDOW=confirmed",
-    );
-  if (
-    process.env.TEST_DATABASE_ALLOW_RESET !== undefined ||
-    process.env.TEST_DATABASE_RESET_TARGET !== undefined
-  )
-    throw new Error("Coverage owns reset overrides; unset ambient reset flags");
+  const options = parseCoverageArguments(process.argv.slice(2));
+  if (!options.list) {
+    assertTarget(process.env.DATABASE_URL, "6769", "cogito-test");
+    assertTarget(process.env.PAYOUT_DATABASE_URL, "6770", "cogito-test-payout");
+    if (process.env.COVERAGE_DB_RESET_WINDOW !== "confirmed")
+      throw new Error(
+        "Coverage resets both isolated test databases; requires COVERAGE_DB_RESET_WINDOW=confirmed",
+      );
+    if (
+      process.env.TEST_DATABASE_ALLOW_RESET !== undefined ||
+      process.env.TEST_DATABASE_RESET_TARGET !== undefined
+    )
+      throw new Error(
+        "Coverage owns reset overrides; unset ambient reset flags",
+      );
+  }
   const fixtures = [
     "booking-admin-reports",
     "class-enrollment",
@@ -55,27 +63,16 @@ async function main() {
     "class-payout-lifecycle",
     "admin-operations-analytics",
   ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
-  const resettableIntegrationFiles = [
-    ...new Bun.Glob("**/*.test.ts").scanSync({
-      cwd: "packages/api/src/tests/integration",
-    }),
-  ]
-    .filter((path) =>
-      /\bresetDatabase\s*\(/.test(
-        readFileSync(`packages/api/src/tests/integration/${path}`, "utf8"),
-      ),
-    )
-    .map((path) => `./packages/api/src/tests/integration/${path}`)
-    .filter((path) => path !== payout);
+  const resettableIntegrationFiles = discoverResettableTests(
+    "packages/api/src/tests",
+    [payout],
+  );
   const partitions = [
     {
       name: "api-resettable",
       arguments: [...fixtures, payout, ...guardedAcceptance]
         .concat(resettableIntegrationFiles)
-        .flatMap((path) => [
-          "--path-ignore-patterns",
-          `**/packages/api/src/tests/integration/${path.split("/").at(-1)}`,
-        ])
+        .flatMap((path) => ["--path-ignore-patterns", `**/${path.slice(2)}`])
         .concat([
           "./packages/api/src/tests/",
           "./packages/env/src/",
@@ -107,7 +104,15 @@ async function main() {
       },
     },
   ];
-  const profiles = partitions.map(({ name }) =>
+  if (options.list) {
+    for (const partition of partitions)
+      console.log(
+        `${partition.name}: ${partition.arguments.filter((argument) => argument.startsWith("./")).join(" ")}`,
+      );
+    return;
+  }
+  const selected = selectCoveragePartitions(partitions, options.groups);
+  const profiles = selected.map(({ name }) =>
     resolve("coverage", name, "counters.json"),
   );
   for (const profile of profiles) {
@@ -115,7 +120,7 @@ async function main() {
     rmSync(profile, { force: true });
   }
   const failures: string[] = [];
-  for (const [index, partition] of partitions.entries()) {
+  for (const [index, partition] of selected.entries()) {
     console.log(`Collecting ${partition.name}`);
     const child = Bun.spawn(
       [
@@ -138,7 +143,19 @@ async function main() {
       },
     );
     // eslint-disable-next-line no-await-in-loop -- Partitions share resettable database fixtures.
-    if ((await child.exited) !== 0) failures.push(partition.name);
+    const code = await child.exited;
+    console.log(
+      `${code === 0 ? "PASS" : "FAIL"} ${partition.name} (exit ${code})`,
+    );
+    if (code !== 0) failures.push(partition.name);
+  }
+  if (options.groups.length) {
+    console.log(
+      "Partial coverage only; full merged report and 100% gate require all groups.",
+    );
+    if (failures.length)
+      throw new Error(`Coverage collection failed: ${failures.join(", ")}`);
+    return;
   }
   const report = Bun.spawn(
     [
@@ -151,7 +168,7 @@ async function main() {
   if ((await report.exited) !== 0) failures.push("report");
   if (failures.length)
     throw new Error(`Coverage collection failed: ${failures.join(", ")}`);
-  if (!process.argv.includes("--collect-only")) {
+  if (!options.collectOnly) {
     const gate = Bun.spawn(
       [process.execPath, resolve(import.meta.dir, "coverage-comment.ts")],
       {

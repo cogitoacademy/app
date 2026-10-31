@@ -10,7 +10,7 @@ import {
 } from "./upload.types";
 
 export function sanitizeFilename(filename: string): string {
-  const base = filename.replace(/\\/g, "/").split("/").pop() ?? "";
+  const base = filename.replace(/\\/g, "/").split("/").pop()!;
   const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, "_");
   const safe = cleaned.replace(/\.{2,}/g, ".").replace(/^\.+/, "");
   return safe.slice(0, 100) || "file";

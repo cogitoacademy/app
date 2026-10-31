@@ -21,6 +21,7 @@ import {
   IconLink,
   IconMapPin,
   IconSend,
+  IconRefresh,
   IconUserCheck,
   IconUserPlus,
   IconUsers,
@@ -205,7 +206,7 @@ export function BookingDetailPage({
   });
 
   function refreshBookingQueries() {
-    void Promise.all([
+    return Promise.all([
       queryClient.invalidateQueries({
         queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
       }),
@@ -366,6 +367,26 @@ export function BookingDetailPage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Meeting link could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const retryMeeting = useMutation(
+    orpc.adminBooking.retryMeeting.mutationOptions({
+      onSuccess: async (result) => {
+        await refreshBookingQueries();
+        toastManager.add({
+          title: result.scheduled ? "Meeting created" : "Retry failed",
+          description: result.scheduled
+            ? "The Google Meet link is ready."
+            : "Google Meet could not be created. You can retry again.",
+          type: result.scheduled ? "success" : "error",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Google Meet link could not be created",
           description: getUserFacingError(error),
           type: "error",
         }),
@@ -864,15 +885,36 @@ export function BookingDetailPage({
                         {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
                       {booking.modality === "online" ? (
-                        <MeetingStatusPopover
-                          bookingState={booking.currentState}
-                          meetingStatus={booking.meetingStatus}
-                          providerStatus={booking.meeting?.status}
-                          meetingUrl={meetingUrl}
-                          canSetManualLink={canSetManualLink}
-                          onSetManualLink={() => setManualLinkDialogOpen(true)}
-                          manualLinkPending={meetingLinkPending}
-                        />
+                        <>
+                          <MeetingStatusPopover
+                            bookingState={booking.currentState}
+                            meetingStatus={booking.meetingStatus}
+                            providerStatus={booking.meeting?.status}
+                            meetingUrl={meetingUrl}
+                            canSetManualLink={canSetManualLink}
+                            onSetManualLink={() =>
+                              setManualLinkDialogOpen(true)
+                            }
+                            manualLinkPending={meetingLinkPending}
+                          />
+                          {isAdmin &&
+                          booking.currentState === "confirmed" &&
+                          booking.meetingStatus === "failed" &&
+                          !meetingUrl ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="xs"
+                              aria-label="Retry Google Meet creation"
+                              title="Retry Google Meet creation"
+                              disabled={retryMeeting.isPending}
+                              progress={retryMeeting.isPending}
+                              onClick={() => retryMeeting.mutate({ bookingId })}
+                            >
+                              <IconRefresh aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                        </>
                       ) : !activeRoomBooking ? (
                         <InfoPreview
                           title="Room details"

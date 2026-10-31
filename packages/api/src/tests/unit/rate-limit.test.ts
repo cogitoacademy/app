@@ -168,3 +168,20 @@ describe("rateLimit with Redis", () => {
     expect(r2.allowed).toBe(true);
   });
 });
+
+test("periodic cleanup retains unexpired rate-limit entries", async () => {
+  resetRateLimitStore();
+  const originalNow = Date.now;
+  let now = 1000000;
+  Date.now = () => now;
+  try {
+    const limiter = rateLimit({ windowMs: 120000, maxRequests: 1 });
+    expect((await limiter("still-active")).allowed).toBe(true);
+    now += 61000;
+    expect((await limiter("cleanup-trigger")).allowed).toBe(true);
+    expect((await limiter("still-active")).allowed).toBe(false);
+  } finally {
+    Date.now = originalNow;
+    resetRateLimitStore();
+  }
+});

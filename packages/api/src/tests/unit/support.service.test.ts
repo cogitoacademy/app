@@ -390,3 +390,13 @@ describe("SupportService", () => {
     });
   });
 });
+
+test("ticket listing without filters uses the standard page size", async () => {
+  const { service, repo } = createService();
+  expect(await service.listTickets("student1")).toEqual([]);
+  expect(repo.listByReporter).toHaveBeenCalledWith(
+    expect.anything(),
+    "student1",
+    expect.objectContaining({ limit: 20 }),
+  );
+});

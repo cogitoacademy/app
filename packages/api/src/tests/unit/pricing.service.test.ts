@@ -257,3 +257,9 @@ describe("Pricing Service", () => {
     });
   });
 });
+
+test("base honorarium validation uses the default economy configuration", () => {
+  expect(createPricingService().validateBaseRates({}, "online")).toBe(
+    "At least one IDR base honorarium is required",
+  );
+});

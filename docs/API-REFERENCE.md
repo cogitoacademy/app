@@ -2689,20 +2689,21 @@ Student invitation and semester summary still consume `/rpc/referral/getMine`; a
 ## Others article API (2026-10-30)
 
 `POST /rpc/publicContent/activities/list`, body `{"json":{"locale":"en"}}`
-(or `id`), returns `{json:[{id,title,description,imageUrl,location,startAt,endAt,
+(or `id`), returns `{json:[{id,title,description,imageUrl,location,startAt,
 status,body}]}`. Published only; no author/version/internal locale fields.
+`imageUrl` is `null` when no cover is set.
 Indonesian falls back to English independently per field; `status` is upcoming
-or completed based on end time. Dates are ISO instants, shown as WIB by clients.
-Admin-only `/rpc/adminActivities/list`, `/save`, `/remove`. Save requires
-`titleEn`, optional nullable `titleId`, `descriptionEn`, nullable `descriptionId`,
-HTTP(S) `coverUrl`, `location`, ISO `startAt`/`endAt`, rich `bodyEn`, nullable
-`bodyId`, and `state` (draft/published/cancelled/postponed). Updates require `id`
-and `expectedVersion`; remove requires both. Conflicts return CONFLICT without
-overwriting. End must not precede start. Rich body uses existing safe FAQ doc
-format and rejects unsafe links. The Activities admin editor accepts one
-language per article and stores it in the `En` fields with Indonesian fields
-null; public reads therefore show the same saved article for either locale.
-There is no registrationLink input.
+or completed based on the single `startAt` date and time. Dates are ISO
+instants, shown as WIB by clients. Admin-only `/rpc/adminActivities/list`,
+`/save`, `/remove`. Save requires `titleEn`, optional nullable `titleId`,
+`descriptionEn`, nullable `descriptionId`, nullable HTTP(S) `coverUrl`, `location`, ISO
+`startAt`, rich `bodyEn`, nullable `bodyId`, and `state`
+(draft/published/cancelled/postponed). Updates require `id` and
+`expectedVersion`; remove requires both. Conflicts return CONFLICT without
+overwriting. Rich body uses existing safe FAQ doc format and rejects unsafe
+links. The Activities admin editor accepts one language per article and stores
+it in the `En` fields with Indonesian fields null; public reads therefore show
+the same saved article for either locale. There is no registrationLink input.
 
 Competition catalog listing and V3 economy parent reads exclude superseded
 migration 0027 seed records. RPC shapes are unchanged; catalog list results omit
@@ -2730,3 +2731,7 @@ V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive 
 
 
 FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
+
+## Admin meeting retry
+
+`POST /rpc/adminBooking/retryMeeting` accepts `{"json":{"bookingId":"..."}}`. Admin only. It retries Google Meet creation for one confirmed online booking with a recorded failed Google Meet attempt, audits the action, and returns `{bookingId, scheduled}`. A failed retry leaves the booking confirmed for another attempt or manual-link setup.

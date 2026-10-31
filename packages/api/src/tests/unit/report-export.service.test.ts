@@ -35,6 +35,13 @@ test("all export operations return null for an absent student", async () => {
 
 test.each([
   {
+    bookingType: "series",
+    sessionId: null,
+    sessions: [{ id: "known-session", bookingId: "booking" }],
+    topic: null,
+    modality: "online",
+  },
+  {
     bookingType: "solo",
     sessionId: null,
     sessions: [],

@@ -3655,3 +3655,14 @@ Hosted run `40671516167` on `d7f70efb` passes all three API coverage test partit
 
 
 FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
+
+## Admin meeting retry UI (31 October 2026)
+
+Admin booking detail provides an icon-only retry action for confirmed online bookings with a failed Google Meet attempt and no URL. The admin API locks and validates the booking, reruns existing meeting finalization, records the successful transition as admin, and audits the result. Admin Classes retains its class-level failed-meeting retry and now uses an accessible icon-only control. No schema change.
+
+
+Live validation (31 October 2026): admin class retry recovered a failed dev session after transient Google OAuth hostname resolution errors. A read-only Calendar API probe succeeded, then the admin retry handler returned a persisted `created` meeting with URL/event ID. No Google Cloud Console change or code patch was needed for that incident; evidence: `tmp/v3-only-dev/academy-meet-retry-live.json`.
+
+Coverage tooling supports `--list` and repeatable `--group NAME` for focused counter collection and per-process PASS/FAIL diagnostics. Selected runs never replace the full merged report or satisfy the global 100% gate. See RUNBOOK selective coverage runs. CI diagnosis artifacts include all isolated integration counters.
+
+Coverage remediation: resetDatabase() suites are discovered across the complete API test tree and isolated per process, including tutor invite, role scope, and email verification suites. The 100% aggregate gate remains unchanged. Focused tests now cover OTP delivery races, payment/refund recovery, payout/report guards, Academy/postponement recovery and PDF page boundaries. Full gate acceptance requires fresh matching source hashes across every collected partition.

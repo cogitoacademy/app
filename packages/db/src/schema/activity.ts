@@ -17,10 +17,9 @@ export const activityArticle = pgTable(
     titleId: text("title_id"),
     descriptionEn: text("description_en").notNull(),
     descriptionId: text("description_id"),
-    coverUrl: text("cover_url").notNull(),
+    coverUrl: text("cover_url"),
     location: text("location").notNull(),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
-    endAt: timestamp("end_at", { withTimezone: true }).notNull(),
     bodyEn: jsonb("body_en").$type<FaqRichTextDocument>().notNull(),
     bodyId: jsonb("body_id").$type<FaqRichTextDocument | null>(),
     state: text("state").notNull().default("draft"),
@@ -32,7 +31,7 @@ export const activityArticle = pgTable(
   (t) => [
     check(
       "activity_article_valid",
-      sql`${t.endAt} >= ${t.startAt} AND ${t.state} IN ('draft','published','cancelled','postponed') AND ${t.version} > 0`,
+      sql`${t.state} IN ('draft','published','cancelled','postponed') AND ${t.version} > 0`,
     ),
     index("activity_article_public").on(t.state, t.startAt),
   ],

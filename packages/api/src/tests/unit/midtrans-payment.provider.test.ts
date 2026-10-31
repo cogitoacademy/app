@@ -1054,3 +1054,124 @@ describe("MidtransPaymentProvider refund", () => {
     );
   });
 });
+
+describe("Midtrans boundary evidence", () => {
+  test.each(["deny", "expire"])(
+    "sanitizes %s status diagnostics and falls back to requested order identity",
+    async (transaction_status) => {
+      statusApiState = {
+        transaction_status,
+        status_message: "  rejected\n by provider  ",
+      };
+      const provider = createMidtransPaymentProvider({
+        ...opts,
+        resolvePayment: async () => null,
+      });
+      const result = await provider.getPaymentRequestStatus!("fallback-order");
+      expect(result.providerReference).toBe("fallback-order");
+      expect(result.providerEventId).toBe("fallback-order");
+      expect(result.failureReason).toBe("rejected by provider");
+    },
+  );
+
+  test("empty provider diagnostics remain null", async () => {
+    statusApiState = { transaction_status: "expire", status_message: " \n " };
+    const result =
+      await createMidtransPaymentProvider(opts).getPaymentRequestStatus!(
+        "order-empty",
+      );
+    expect(result.failureReason).toBeNull();
+  });
+
+  test("missing status is rejected rather than assumed pending", async () => {
+    await expect(
+      createMidtransPaymentProvider(opts).getPaymentRequestStatus!(
+        "order-missing",
+      ),
+    ).rejects.toThrow();
+    const body = notificationBody({ transaction_status: undefined });
+    await expect(
+      createMidtransPaymentProvider(opts).verifyWebhook(
+        JSON.stringify(body),
+        "",
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("failed notification without transaction id or message uses order identity and null reason", async () => {
+    const body = notificationBody({
+      transaction_status: "deny",
+      transaction_id: undefined,
+      status_message: undefined,
+    });
+    const result = await createMidtransPaymentProvider(opts).verifyWebhook(
+      JSON.stringify(body),
+      "",
+    );
+    expect(result.providerEventId).toBe(body.order_id);
+    expect(result.failureReason).toBeNull();
+  });
+
+  test("refund accepts transaction identity when provider omits refund key", async () => {
+    statusApiState = { transaction_id: "refund-transaction" };
+    await expect(
+      createMidtransPaymentProvider(opts).refund("order-refund", 100),
+    ).resolves.toEqual({ providerRefundId: "refund-transaction" });
+  });
+
+  test("invalid diagnostic code and blank message never leak raw provider data", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status_code: "secret with spaces",
+            status_message: "  ",
+          }),
+          { status: 503 },
+        ),
+    ) as never;
+    await expect(
+      createMidtransPaymentProvider(opts).refund("order-refund", 100),
+    ).rejects.toThrow("Payment provider refund error: 503 HTTP error");
+  });
+
+  test("refund identity is stable when evidence lacks timestamps and amounts", async () => {
+    statusApiState = {
+      transaction_status: "refund",
+      gross_amount: "50000",
+      currency: "IDR",
+      refunds: [{ refund_key: "z" }, { refund_key: "a" }],
+    };
+    const provider = createMidtransPaymentProvider(opts);
+    const first = await provider.getPaymentRequestStatus!("order-refund");
+    statusApiState.refunds = [{ refund_key: "a" }, { refund_key: "z" }];
+    const second = await provider.getPaymentRequestStatus!("order-refund");
+    expect(first.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    expect(second.providerRefundIdentity).toBe(first.providerRefundIdentity);
+  });
+});
+
+test("provider error accepts a safe fallback message when status_message is absent", async () => {
+  globalThis.fetch = mock(
+    async () =>
+      new Response(JSON.stringify({ message: "  Provider\n unavailable " }), {
+        status: 503,
+      }),
+  ) as never;
+  await expect(
+    createMidtransPaymentProvider(opts).refund("order-error", 100),
+  ).rejects.toThrow("Provider unavailable");
+});
+
+test("provider preserves a falsey transport rejection without inventing error details", async () => {
+  globalThis.fetch = mock(async () => {
+    throw undefined;
+  }) as never;
+  await expect(
+    createMidtransPaymentProvider(opts).createIntent({
+      paymentId: "order-error",
+      amountIdr: 100,
+      providerReference: "ref",
+    }),
+  ).rejects.toBeUndefined();
+});

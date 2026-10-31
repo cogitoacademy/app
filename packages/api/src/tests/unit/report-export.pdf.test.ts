@@ -210,3 +210,45 @@ describe("student report PDF layout", () => {
     expect(await pageCount(bytes)).toBeGreaterThan(1);
   });
 });
+
+test("sparse metadata and blank feedback remain renderable without losing later text", async () => {
+  const entry = makeEntry({
+    discussion: ["   ", "\n", "Visible follow-up"],
+    strengths: [],
+    improvements: [],
+  });
+  entry.metadata = [{ label: "Custom", value: "   " }];
+  const geometry = await textGeometry(
+    await createStudentReportPdf({
+      studentName: "Student",
+      generatedAt: new Date("2026-10-22"),
+      reports: [entry],
+    }),
+  );
+  expect(geometry.pageCount).toBe(1);
+  expect(geometry.glyphCount).toBeGreaterThan(20);
+});
+
+test("feedback heading moves to the next page when metadata fills the first page", async () => {
+  const entry = makeEntry({
+    discussion: ["Feedback survives"],
+    strengths: [],
+    improvements: [],
+  });
+  entry.metadata = Array.from({ length: 86 }, (_, cell) => ({
+    label: `Field ${cell}`,
+    value: "Metadata value",
+  }));
+  const geometry = await textGeometry(
+    await createStudentReportPdf({
+      studentName: "Student",
+      generatedAt: new Date("2026-10-22"),
+      reports: [entry],
+    }),
+  );
+  expect(geometry.pageCount).toBe(2);
+  expect(geometry.glyphCount).toBeGreaterThan(1000);
+  expect(
+    geometry.baselines.every((y) => y >= 64 || Math.abs(y - 31) < 0.01),
+  ).toBe(true);
+});

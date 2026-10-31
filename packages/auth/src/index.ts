@@ -584,10 +584,7 @@ export async function sendPreAccountSignupOtp(input: {
     // A resend may have replaced this proof while delivery was in flight.
     // Delete only this request's row and leave any newer proof untouched.
     await db.delete(verificationRow).where(eq(verificationRow.id, proof.rowId));
-    if (env.NODE_ENV === "test") {
-      const captured = testSignupOtps.get(email);
-      if (captured?.rowId === proof.rowId) testSignupOtps.delete(email);
-    }
+    // Capture is written only after delivery succeeds. A concurrent newer capture must survive.
     if (env.NODE_ENV !== "production") {
       console.error(
         JSON.stringify({

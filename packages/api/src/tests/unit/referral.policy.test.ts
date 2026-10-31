@@ -137,3 +137,8 @@ describe("referral policy", () => {
     ).toBe(false);
   });
 });
+
+test("missing referral codes are absent", () => {
+  expect(normalizeReferralCode(undefined)).toBeNull();
+  expect(normalizeReferralCode(null)).toBeNull();
+});

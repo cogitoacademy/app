@@ -158,3 +158,16 @@ describe("TutorRepo", () => {
     expect(set).toHaveBeenCalledWith({ name: "New Name" });
   });
 });
+
+test("accepting terms without a version preserves the SQL null fallback", async () => {
+  const returning = mock(async () => [{ id: "profile1" }]);
+  const set = mock((_values: unknown) => ({ where: () => ({ returning }) }));
+  const conn = { update: () => ({ set }) } as unknown as DbOrTx;
+  await expect(
+    updateStatus(conn, "tutor1", "pending_review", { acceptTerms: true }),
+  ).resolves.toMatchObject({ id: "profile1" });
+  const values = set.mock.calls[0]?.[0] as Record<string, unknown>;
+  expect(values.onboardingStatus).toBe("pending_review");
+  expect(values.termsOfServiceVersion).toBeDefined();
+  expect(values.termsOfServiceAcceptedAt).toBeDefined();
+});

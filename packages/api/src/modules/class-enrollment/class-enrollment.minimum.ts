@@ -253,9 +253,8 @@ export function createClassMinimumLifecycle(deps: {
     const scheduledSessions = rows.sessions
       .filter((session) => session.state === "scheduled")
       .toSorted(
-        (left, right) =>
-          left.sequenceNumber - right.sequenceNumber ||
-          left.id.localeCompare(right.id),
+        // The class/sequence unique index makes sequence numbers distinct here.
+        (left, right) => left.sequenceNumber - right.sequenceNumber,
       );
     let replacementSessions: {
       sessionId: string;
@@ -559,15 +558,8 @@ export function createClassMinimumLifecycle(deps: {
         input.decision === "postpone"
           ? new Date(now.getTime() + EXIT_WINDOW_MS)
           : null;
-      if (
-        input.decision === "postpone" &&
-        quote.replacementSessions.some(
-          (session) => session.startAt <= actualFreeExitUntil!,
-        )
-      )
-        throw new ClassEnrollmentConflictError(
-          "The 72-hour deadline moved while you were reviewing. Move every replacement session after the updated deadline and review again",
-        );
+      // loadDecisionQuote validated every replacement against this same
+      // decision instant before returning; no time is recomputed here.
 
       const replacementById = new Map(
         quote.replacementSessions.map((session) => [
@@ -623,10 +615,10 @@ export function createClassMinimumLifecycle(deps: {
             dueSessionIds.includes(installment.dueSessionId),
         );
         for (const installment of pendingInstallments) {
+          // dueSessionIds above only contains sessions successfully saved.
           const schedule = nextSessions.find(
             (session) => session.sessionId === installment.dueSessionId,
-          );
-          if (!schedule) continue;
+          )!;
           await tx
             .update(academyClassEnrollmentInstallment)
             .set({

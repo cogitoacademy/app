@@ -187,3 +187,10 @@ test("rejects a withdrawal whose funded Marks total exceeds the safe range", () 
     ),
   ).toThrow("Cancellation Marks exceed the supported range");
 });
+
+test("fully released funded allocations add no cancellation charge or return", () => {
+  const row = { ...allocation("released", 20), releasedMarks: 20 };
+  expect(
+    quoteEnrollmentCancellation("e", [row], [session("released", 48)], now),
+  ).toMatchObject({ feeMarks: 0, returnMarks: 0, allocations: [] });
+});

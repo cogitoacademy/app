@@ -267,7 +267,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-install-
       - run: bun install --frozen-lockfile
       - name: Test LCOV merger
-        run: bun test ./.github/scripts/merge-lcov.test.ts ./.github/scripts/coverage-counters.test.ts
+        run: bun test ./.github/scripts/merge-lcov.test.ts ./.github/scripts/coverage-counters.test.ts ./.github/scripts/coverage-partitions.test.ts
       - name: Create env file for drizzle
         run: |
           echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
@@ -333,10 +333,7 @@ jobs:
         with:
           name: api-coverage-profiles-${{ github.run_id }}
           path: |
-            coverage/api-resettable/counters.json
-            coverage/api-resettable-sequential/counters.json
-            coverage/api-fixtures/counters.json
-            coverage/api-payout/counters.json
+            coverage/api-*/counters.json
             coverage/counters.merged.json
             coverage/lcov.info
             coverage/lcov.merged.info

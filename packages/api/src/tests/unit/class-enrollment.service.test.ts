@@ -2071,54 +2071,59 @@ describe("class enrollment checkout recovery", () => {
     }
   });
 
-  test("completeCheckout returns an insufficient-balance summary", async () => {
-    const pending = {
-      ...enrollment,
-      state: "checkout_pending",
-      checkoutExpiresAt: new Date(now.getTime() + 60_000),
-    };
-    const first = {
-      id: "first",
-      enrollmentId: enrollment.id,
-      ordinal: 1,
-      rateMarks: 25,
-      sessionCount: 1,
-      amountMarks: 25,
-      state: "checkout_pending",
-    };
-    const allocation = {
-      installmentId: first.id,
-      sessionId: session.id,
-      state: "checkout_reserved",
-      rateMarks: 25,
-      ordinal: 1,
-      sequenceNumber: 1,
-      fundedMarks: 0,
-      spentMarks: 0,
-      releasedMarks: 0,
-    };
-    const f = fixture({
-      findEnrollment: mock(async () => pending),
-      findAllocations: mock(async () => [
-        allocation,
-        { ...allocation, sessionId: "released-session", state: "released" },
-      ]),
-      lockSessions: mock(async () => [session]),
-      findInstallments: mock(async () => [first]),
-      getWalletByUser: mock(async () => null),
-    });
-    try {
-      await expect(
-        f.service.completeCheckout("student1", enrollment.id),
-      ).resolves.toMatchObject({
-        outcome: "insufficient",
-        availableMarks: 0,
-        shortfallMarks: 25,
+  test.each([null, 10])(
+    "completeCheckout returns an insufficient-balance summary for wallet balance %s",
+    async (balance) => {
+      const pending = {
+        ...enrollment,
+        state: "checkout_pending",
+        checkoutExpiresAt: new Date(now.getTime() + 60_000),
+      };
+      const first = {
+        id: "first",
+        enrollmentId: enrollment.id,
+        ordinal: 1,
+        rateMarks: 25,
+        sessionCount: 1,
+        amountMarks: 25,
+        state: "checkout_pending",
+      };
+      const allocation = {
+        installmentId: first.id,
+        sessionId: session.id,
+        state: "checkout_reserved",
+        rateMarks: 25,
+        ordinal: 1,
+        sequenceNumber: 1,
+        fundedMarks: 0,
+        spentMarks: 0,
+        releasedMarks: 0,
+      };
+      const f = fixture({
+        findEnrollment: mock(async () => pending),
+        findAllocations: mock(async () => [
+          allocation,
+          { ...allocation, sessionId: "released-session", state: "released" },
+        ]),
+        lockSessions: mock(async () => [session]),
+        findInstallments: mock(async () => [first]),
+        getWalletByUser: mock(async () =>
+          balance === null ? null : { availableBalance: balance },
+        ),
       });
-    } finally {
-      f.restore();
-    }
-  });
+      try {
+        await expect(
+          f.service.completeCheckout("student1", enrollment.id),
+        ).resolves.toMatchObject({
+          outcome: "insufficient",
+          availableMarks: balance ?? 0,
+          shortfallMarks: 25 - (balance ?? 0),
+        });
+      } finally {
+        f.restore();
+      }
+    },
+  );
 
   test("completeCheckout rejects first-installment reservations no longer reserved", async () => {
     const pending = {

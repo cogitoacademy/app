@@ -574,7 +574,7 @@ export function createClassSessionReportService(deps: {
           ),
         ),
       )
-      .where(conditions.length ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(
         asc(academyClassSession.startAt),
         asc(academyClassSession.sequenceNumber),

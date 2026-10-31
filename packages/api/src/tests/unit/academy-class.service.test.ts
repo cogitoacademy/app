@@ -80,9 +80,12 @@ function fixture(
         };
       },
     }),
+    insert: () => ({
+      values: () => ({ returning: async () => [{ id: published.id }] }),
+    }),
     delete: () => ({ where: async () => [] }),
   };
-  const audit = { record: mock(async () => undefined) };
+  const audit = { record: mock(async (_entry: unknown) => undefined) };
   const meeting = {
     createMeeting: mock(async () => undefined),
     ...meetingOverrides,
@@ -272,16 +275,20 @@ describe("academy class service reads and meeting recovery", () => {
     "manual-result",
     "blank-link",
     "primitive-update-error",
+    "primitive-update-no-link",
   ] as const)("meeting dispatch handles %s", async (scenario) => {
     const updating =
-      scenario === "missing-update" || scenario === "primitive-update-error";
+      scenario === "missing-update" || scenario.startsWith("primitive-update");
     const attempt = {
       meeting: {
         provider: "google_meet",
         externalEventId:
           updating || scenario === "missing-cancel" ? "event1" : null,
         scheduleVersion: 1,
-        meetingUrl: "https://meet.example/link",
+        meetingUrl:
+          scenario === "primitive-update-no-link"
+            ? null
+            : "https://meet.example/link",
         creationGeneration: 1,
       },
       session: {
@@ -299,26 +306,24 @@ describe("academy class service reads and meeting recovery", () => {
       tutorName: "Tutor",
       tutorEmail: "tutor@example.test",
     };
-    const providers =
-      scenario === "primitive-update-error"
+    const providers = scenario.startsWith("primitive-update")
+      ? {
+          updateAcademyClassEvent: mock(async () => {
+            throw "provider unavailable";
+          }),
+        }
+      : scenario === "manual-result" || scenario === "blank-link"
         ? {
-            updateAcademyClassEvent: mock(async () => {
-              throw "provider unavailable";
-            }),
+            createAcademyClassEvent: mock(async () => ({
+              provider: scenario === "manual-result" ? "manual" : "google_meet",
+              status: "created",
+              externalEventId: "event1",
+              meetingUrl:
+                scenario === "blank-link" ? " " : "https://meet.example/link",
+              errorReason: null,
+            })),
           }
-        : scenario === "manual-result" || scenario === "blank-link"
-          ? {
-              createAcademyClassEvent: mock(async () => ({
-                provider:
-                  scenario === "manual-result" ? "manual" : "google_meet",
-                status: "created",
-                externalEventId: "event1",
-                meetingUrl:
-                  scenario === "blank-link" ? " " : "https://meet.example/link",
-                errorReason: null,
-              })),
-            }
-          : {};
+        : {};
     const f = fixture(
       [
         [{ id: "meeting1" }],
@@ -613,10 +618,13 @@ describe("academy class service reads and meeting recovery", () => {
     "mode",
     "missing-room",
     "room-capacity",
+    "missing-room-id",
     "new-session-id",
   ] as const)("draft validation rejects %s before writes", async (scenario) => {
     const inPerson =
-      scenario === "missing-room" || scenario === "room-capacity";
+      scenario === "missing-room" ||
+      scenario === "room-capacity" ||
+      scenario === "missing-room-id";
     const session = {
       id: scenario === "new-session-id" ? "existing-session" : undefined,
       startAt: new Date("2040-01-01T00:00:00Z"),
@@ -625,7 +633,7 @@ describe("academy class service reads and meeting recovery", () => {
       capacity: 4,
       tutorId: "tutor1",
       mode: inPerson ? "in_person" : "online",
-      roomId: inPerson ? "room1" : null,
+      roomId: inPerson && scenario !== "missing-room-id" ? "room1" : null,
     };
     const profile = {
       userId: "tutor1",
@@ -676,6 +684,7 @@ describe("academy class service reads and meeting recovery", () => {
       "tutor-capacity":
         "Session capacity exceeds the tutor's maximum class size",
       "missing-room": "Select an active room for every in-person session",
+      "missing-room-id": "Select an active room for every in-person session",
       "room-capacity": "Session capacity exceeds the selected room's capacity",
       "new-session-id":
         "New class sessions cannot include existing session IDs",
@@ -712,16 +721,21 @@ describe("academy class service reads and meeting recovery", () => {
     "online-room",
     "missing-room",
     "room-capacity",
+    "missing-room-id",
     "overlapping-sessions",
     "room-booking-overlap",
     "room-class-overlap",
     "tutor-booking-overlap",
     "tutor-class-overlap",
+    "inactive-specialization",
+    "zero-fee",
   ] as const)(
     "publication validates locked reference data: %s",
     async (scenario) => {
       const inPerson =
-        scenario === "missing-room" || scenario.startsWith("room-");
+        scenario === "missing-room" ||
+        scenario === "missing-room-id" ||
+        scenario.startsWith("room-");
       const session = {
         id: "session1",
         tutorId: "tutor1",
@@ -735,8 +749,17 @@ describe("academy class service reads and meeting recovery", () => {
         curriculumEn: "Problem solving",
         capacity: 4,
         mode: inPerson ? "in_person" : "online",
-        roomId: inPerson || scenario === "online-room" ? "room1" : null,
-        tutorFeeIdr: scenario === "fee-mismatch" ? 300000 : 400000,
+        roomId:
+          (inPerson || scenario === "online-room") &&
+          scenario !== "missing-room-id"
+            ? "room1"
+            : null,
+        tutorFeeIdr:
+          scenario === "zero-fee"
+            ? 0
+            : scenario === "fee-mismatch"
+              ? 300000
+              : 400000,
       };
       const profile = {
         userId: "tutor1",
@@ -775,19 +798,32 @@ describe("academy class service reads and meeting recovery", () => {
           scenario === "tutor-booking-overlap" ? [{ id: "booking1" }] : [],
           scenario === "tutor-class-overlap" ? [{ id: "session2" }] : [],
         );
-      const f = fixture(selects, [
-        {
-          ...published,
-          state: "draft",
-          version: 1,
-          minimumCheckAt: new Date(session.startAt.getTime() - 86400000),
-          minimumEnrollment: 1,
-          sessions:
-            scenario === "overlapping-sessions"
-              ? [session, { ...session, id: "session2" }]
-              : [session],
-        },
-      ]);
+      const f = fixture(
+        selects,
+        [
+          {
+            ...published,
+            state: "draft",
+            version: 1,
+            minimumCheckAt: new Date(session.startAt.getTime() - 86400000),
+            minimumEnrollment: 1,
+            sessions:
+              scenario === "overlapping-sessions"
+                ? [session, { ...session, id: "session2" }]
+                : [session],
+          },
+        ],
+        [],
+        [],
+        scenario === "inactive-specialization"
+          ? {
+              id: "competition1",
+              isActive: true,
+              parentId: "parent1",
+              parent: { isActive: false },
+            }
+          : undefined,
+      );
       await expect(
         f.service.publish("admin1", {
           id: published.id,
@@ -809,10 +845,16 @@ describe("academy class service reads and meeting recovery", () => {
             "Session capacity exceeds the tutor's maximum class size",
           "fee-mismatch":
             "Every session must use the class's approved flat tutor fee",
+          "zero-fee":
+            "Every session must use the class's approved flat tutor fee",
+          "inactive-specialization":
+            "The assigned competition or specialization is archived",
           "past-session":
             "Sessions must start in the future when the class is published",
           "online-room": "Online sessions cannot be assigned an in-person room",
           "missing-room":
+            "Select an active managed room for every in-person session",
+          "missing-room-id":
             "Select an active managed room for every in-person session",
           "room-capacity":
             "Session capacity exceeds the selected room's capacity",
@@ -1109,4 +1151,517 @@ describe("academy class service reads and meeting recovery", () => {
     });
     expect(f.meeting.createMeeting).not.toHaveBeenCalled();
   });
+});
+
+describe("publication optimistic-write recovery", () => {
+  test.each([false, true])(
+    "failed versioned write rereads existence: %s",
+    async (exists) => {
+      const session = {
+        id: "session1",
+        tutorId: "tutor1",
+        mode: "online",
+        roomId: null,
+        startAt: new Date("2040-01-01T00:00:00Z"),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+        curriculumEn: "Topic",
+        capacity: 4,
+        tutorFeeIdr: 400000,
+      };
+      const record = {
+        ...published,
+        competitionId: "competition1",
+        state: "draft",
+        version: 1,
+        minimumCheckAt: new Date("2039-12-31"),
+        minimumEnrollment: 1,
+        sessions: [session],
+      };
+      const f = fixture(
+        [
+          [{ id: record.id }],
+          [{ id: "competition1", parentId: null }],
+          [{ id: "competition1" }],
+          [
+            {
+              userId: "tutor1",
+              role: "tutor",
+              onboardingStatus: "published",
+              modality: "both",
+            },
+          ],
+          [],
+          [],
+        ],
+        [record, exists ? { ...record, version: 2 } : null],
+      );
+      await expect(
+        f.service.publish("admin1", {
+          id: record.id,
+          expectedVersion: 1,
+          reason: "Publish",
+        }),
+      ).rejects.toMatchObject({
+        code: exists
+          ? "ACADEMY_CLASS_VERSION_CONFLICT"
+          : "ACADEMY_CLASS_NOT_FOUND",
+      });
+      expect(f.updates).toHaveLength(1);
+      expect(f.audit.record).not.toHaveBeenCalled();
+      expect(f.meeting.createMeeting).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("replacement tutor reference and write guards", () => {
+  test.each([
+    "missing-profile",
+    "wrong-role",
+    "unpublished",
+    "unsupported",
+    "too-small",
+    "booking-overlap",
+    "class-overlap",
+    "lost-write",
+  ] as const)("rejects %s without audit", async (scenario) => {
+    const session = {
+      id: "session1",
+      tutorId: "old",
+      version: 2,
+      state: "scheduled",
+      mode: "in_person",
+      capacity: 4,
+      startAt: new Date("2040-01-01"),
+      endAt: new Date("2040-01-01T01:00:00Z"),
+    };
+    const profile = {
+      userId: "replacement",
+      role: scenario === "wrong-role" ? "student" : "tutor",
+      onboardingStatus: scenario === "unpublished" ? "draft" : "published",
+      modality: scenario === "unsupported" ? "online" : "offline",
+      offlineMaxClassSize: scenario === "too-small" ? 3 : 5,
+    };
+    const f = fixture([
+      [{ classId: "class1" }],
+      [{ id: "class1", state: "published" }],
+      [session],
+      [],
+      [],
+      [],
+      scenario === "missing-profile" ? [] : [profile],
+      scenario === "booking-overlap" ? [{ id: "booking1" }] : [],
+      scenario === "class-overlap" ? [{ id: "session2" }] : [],
+    ]);
+    await expect(
+      f.service.replaceAbsentTutor("admin1", {
+        sessionId: session.id,
+        expectedVersion: 2,
+        replacementTutorId: "replacement",
+        reason: "Replacement",
+      }),
+    ).rejects.toMatchObject({
+      code:
+        scenario === "lost-write"
+          ? "ACADEMY_CLASS_STATE_CONFLICT"
+          : "ACADEMY_CLASS_INVALID_OPERATION",
+    });
+    expect(f.audit.record).not.toHaveBeenCalled();
+    expect(f.updates).toHaveLength(scenario === "lost-write" ? 1 : 0);
+  });
+});
+
+describe("published class dispatch recovery", () => {
+  test.each([false, true])(
+    "dispatch failure preserves publication and rereads class: %s",
+    async (disappears) => {
+      const session = {
+        id: "session1",
+        tutorId: "tutor1",
+        mode: "in_person",
+        roomId: "room1",
+        startAt: new Date("2040-01-01"),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+        curriculumEn: "Topic",
+        capacity: 4,
+        tutorFeeIdr: 400000,
+      };
+      const record = {
+        ...published,
+        competitionId: "competition1",
+        state: "draft",
+        version: 1,
+        minimumCheckAt: new Date("2039-12-31"),
+        minimumEnrollment: 1,
+        sessions: [session],
+      };
+      const after = { ...record, state: "published", version: 2 };
+      const f = fixture(
+        [
+          [{ id: record.id }],
+          [{ id: "competition1", parentId: null }],
+          [{ id: "competition1" }],
+          [
+            {
+              userId: "tutor1",
+              role: "tutor",
+              onboardingStatus: "published",
+              modality: "offline",
+            },
+          ],
+          [{ id: "room1", capacity: 4 }],
+          [],
+          [],
+          [],
+          [],
+        ],
+        [record, after, disappears ? null : after],
+        [],
+        [[after], [session]],
+      );
+      const result = f.service.publish("admin1", {
+        id: record.id,
+        expectedVersion: 1,
+        reason: "Publish reviewed schedule",
+      });
+      expect(await result).toEqual(after);
+      expect(f.audit.record).toHaveBeenCalledTimes(1);
+      expect(f.audit.record.mock.calls[0]?.[0]).toMatchObject({
+        action: "academy_class.published",
+        details: { onlineMeetingCount: 0 },
+      });
+      expect(f.updates).toHaveLength(2);
+    },
+  );
+});
+
+describe("replacement completion", () => {
+  test.each([false, true])(
+    "audits absence context and detects missing final class: %s",
+    async (reported) => {
+      const session = {
+        id: "session1",
+        tutorId: "old",
+        version: 2,
+        state: "scheduled",
+        mode: "online",
+        capacity: 4,
+        titleEn: "Session",
+        startAt: new Date("2040-01-01"),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+      };
+      const updated = { ...session, tutorId: "replacement", version: 3 };
+      const f = fixture(
+        [
+          [{ classId: "class1" }],
+          [{ id: "class1", state: "published", titleEn: "Class" }],
+          [session],
+          reported ? [{ reportedAt: new Date("2039-12-31") }] : [],
+          [],
+          [],
+          [
+            {
+              userId: "replacement",
+              role: "tutor",
+              onboardingStatus: "published",
+              modality: "online",
+              onlineMaxClassSize: null,
+            },
+          ],
+          [],
+          [],
+          [{ studentId: "student1" }],
+          [],
+        ],
+        [null],
+        [],
+        [[updated], []],
+      );
+      await expect(
+        f.service.replaceAbsentTutor("admin1", {
+          sessionId: session.id,
+          expectedVersion: 2,
+          replacementTutorId: "replacement",
+          reason: "Replacement",
+        }),
+      ).rejects.toMatchObject({ code: "ACADEMY_CLASS_NOT_FOUND" });
+      expect(f.audit.record).toHaveBeenCalledTimes(1);
+      expect(f.audit.record.mock.calls[0]?.[0]).toMatchObject({
+        details: {
+          absenceReportedAt: reported ? "2039-12-31T00:00:00.000Z" : null,
+          sameSchedule: true,
+        },
+      });
+      expect(f.updates).toHaveLength(2);
+    },
+  );
+});
+
+describe("draft post-write lookup", () => {
+  test.each([false, true])(
+    "a missing final record aborts draft audit: existing=%s",
+    async (existing) => {
+      const session = {
+        id: existing ? "session1" : undefined,
+        tutorId: "tutor1",
+        mode: "online",
+        roomId: null,
+        titleEn: "Session",
+        startAt: new Date("2040-01-01"),
+        endAt: new Date("2040-01-01T01:00:00Z"),
+        capacity: 4,
+      };
+      const before = {
+        ...published,
+        kind: "masterclass",
+        state: "draft",
+        version: 1,
+      };
+      const f = fixture(
+        [
+          [
+            {
+              userId: "tutor1",
+              role: "tutor",
+              onboardingStatus: "published",
+              modality: "both",
+            },
+          ],
+          ...(existing ? [[session]] : []),
+        ],
+        existing ? [before, null] : [null],
+        [],
+        [[{ id: published.id, version: 2 }], [{ id: "session1" }]],
+      );
+      await expect(
+        f.service.saveDraft("admin1", {
+          ...(existing ? { id: published.id, expectedVersion: 1 } : {}),
+          kind: "masterclass",
+          competitionId: "competition1",
+          titleEn: "Class",
+          descriptionEn: "Description",
+          masterclassRateMarks: 25,
+          tutorFeeIdr: 400000,
+          sessions: [session],
+          reason: "Save reviewed draft",
+        } as Parameters<typeof f.service.saveDraft>[1]),
+      ).rejects.toMatchObject({ code: "ACADEMY_CLASS_NOT_FOUND" });
+      expect(f.audit.record).not.toHaveBeenCalled();
+    },
+  );
+});
+
+test("cancelling a never-created meeting records cancellation without provider work", async () => {
+  const f = fixture(
+    [
+      [{ id: "meeting1" }],
+      [],
+      [],
+      [
+        {
+          meeting: {
+            provider: "google_meet",
+            externalEventId: null,
+            creationGeneration: 1,
+          },
+          session: { id: "session1", state: "cancelled" },
+          academyClass: { state: "published" },
+        },
+      ],
+    ],
+    [],
+    [],
+    [
+      [{ scheduleVersion: 1, attemptCount: 1, lockedAt: new Date() }],
+      [{ status: "cancelled" }],
+    ],
+  );
+  expect(await f.service.processReadyMeetings()).toEqual({
+    processed: 1,
+    created: 0,
+    failed: 0,
+    cancelled: 1,
+  });
+  expect(f.meeting.createMeeting).not.toHaveBeenCalled();
+});
+
+test("lost meeting-save lease leaves no processed outcome", async () => {
+  const f = fixture(
+    [[{ id: "meeting1" }], [], [], []],
+    [],
+    [],
+    [[{ scheduleVersion: 1, attemptCount: 1, lockedAt: new Date() }], [], []],
+  );
+  expect(await f.service.processReadyMeetings()).toEqual({
+    processed: 0,
+    created: 0,
+    failed: 0,
+    cancelled: 0,
+  });
+});
+
+test("publication aborts audit when the final persisted class is absent", async () => {
+  const session = {
+    id: "session1",
+    tutorId: "tutor1",
+    mode: "online",
+    roomId: null,
+    capacity: 4,
+    tutorFeeIdr: 400000,
+    startAt: new Date("2040-01-01"),
+    endAt: new Date("2040-01-01T01:00:00Z"),
+  };
+  const before = {
+    ...published,
+    kind: "masterclass",
+    state: "draft",
+    version: 1,
+    competitionId: "competition1",
+    sessions: [session],
+  };
+  const f = fixture(
+    [
+      [{ id: before.id }],
+      [{ id: "competition1", parentId: null }],
+      [{ id: "competition1" }],
+      [
+        {
+          userId: "tutor1",
+          role: "tutor",
+          onboardingStatus: "published",
+          modality: "both",
+        },
+      ],
+      [],
+      [],
+    ],
+    [before, null],
+    [],
+    [[{ id: before.id, version: 2 }], []],
+  );
+  await expect(
+    f.service.publish("admin1", {
+      id: before.id,
+      expectedVersion: 1,
+      reason: "Publish reviewed draft",
+    }),
+  ).rejects.toMatchObject({ code: "ACADEMY_CLASS_NOT_FOUND" });
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test.each([false, true])(
+  "rescheduling detects a class removed after session updates, managedRoom=%s",
+  async (managedRoom) => {
+    const session = {
+      id: "session1",
+      classId: "class1",
+      tutorId: "tutor1",
+      version: 1,
+      state: "scheduled",
+      sequenceNumber: 1,
+      titleEn: "Session",
+      roomId: managedRoom ? "room1" : null,
+      capacity: 4,
+      startAt: new Date("2040-01-01"),
+      endAt: new Date("2040-01-01T01:00:00Z"),
+    };
+    const f = fixture(
+      [
+        [{ classId: "class1" }],
+        [
+          {
+            id: "class1",
+            state: "published",
+            kind: "cohort",
+            freeExitUntil: null,
+            minimumCheckAt: null,
+          },
+        ],
+        [session],
+        [session],
+        [],
+        [],
+        [],
+        [],
+        ...(managedRoom ? [[{ id: "room1", capacity: 4 }], [], []] : []),
+        [],
+      ],
+      [null],
+      [],
+      [[{ ...session, version: 2, scheduleChangeVersion: 2 }], []],
+    );
+    await expect(
+      f.service.rescheduleSession("admin1", {
+        sessionId: session.id,
+        expectedVersion: 1,
+        startAt: new Date("2040-01-02"),
+        endAt: new Date("2040-01-02T01:00:00Z"),
+        reason: "Move scheduled session",
+      }),
+    ).rejects.toMatchObject({ code: "ACADEMY_CLASS_NOT_FOUND" });
+    expect(f.audit.record).toHaveBeenCalledTimes(1);
+  },
+);
+
+test("late tutor absence includes a late notice in the audit", async () => {
+  const session = {
+    id: "session1",
+    classId: "class1",
+    tutorId: "tutor1",
+    version: 2,
+    state: "scheduled",
+    titleEn: "Session",
+    startAt: new Date(0),
+  };
+  const f = fixture([
+    [{ classId: "class1" }],
+    [{ id: "class1", state: "published", titleEn: "Class" }],
+    [session],
+    [],
+    [],
+    [{ id: "admin1" }],
+  ]);
+  await expect(
+    f.service.reportTutorAbsence("tutor1", {
+      sessionId: session.id,
+      reason: "Illness",
+      requestKey: "absence1",
+    }),
+  ).resolves.toEqual({ id: published.id });
+  expect(f.audit.record).toHaveBeenCalledWith(
+    expect.objectContaining({
+      details: expect.objectContaining({ late: true }),
+    }),
+  );
+});
+
+test("absence retries reuse an existing assignment notice after the request-key lookup misses", async () => {
+  const existing = {
+    id: "notice1",
+    tutorId: "tutor1",
+    requestKey: "request1",
+    reason: "Illness",
+  };
+  const session = {
+    id: "session1",
+    tutorId: "tutor1",
+    version: 2,
+    state: "scheduled",
+    startAt: new Date("2040-01-01"),
+  };
+  const f = fixture([
+    [{ classId: "class1" }],
+    [{ id: "class1", state: "published" }],
+    [session],
+    [],
+    [existing],
+  ]);
+  expect(
+    await f.service.reportTutorAbsence("tutor1", {
+      sessionId: session.id,
+      requestKey: "request1",
+      reason: "Illness",
+    }),
+  ).toEqual(existing);
+  expect(f.audit.record).not.toHaveBeenCalled();
+  expect(f.updates).toEqual([]);
 });

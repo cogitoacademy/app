@@ -9,6 +9,7 @@ import {
   getBookingStateHistoryInput,
   adminRefundInput,
   setMeetingLinkInput,
+  retryMeetingInput,
   cancelSeriesSessionInput,
 } from "./admin-booking.types";
 
@@ -17,6 +18,7 @@ type ListOverridesInput = z.infer<typeof listOverridesInput>;
 type GetBookingStateHistoryInput = z.infer<typeof getBookingStateHistoryInput>;
 type AdminRefundInput = z.infer<typeof adminRefundInput>;
 type SetMeetingLinkInput = z.infer<typeof setMeetingLinkInput>;
+type RetryMeetingInput = z.infer<typeof retryMeetingInput>;
 type CancelSeriesSessionInput = z.infer<typeof cancelSeriesSessionInput>;
 
 export type AdminBookingHandler = ReturnType<typeof createAdminBookingHandler>;
@@ -121,6 +123,22 @@ export function createAdminBookingHandler(
         mapAdminBookingError,
       );
     },
+
+    retryMeeting: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: RetryMeetingInput;
+    }) =>
+      withDomainMap(
+        () =>
+          adminBookingService.retryMeeting(
+            context.session!.user.id,
+            input.bookingId,
+          ),
+        mapAdminBookingError,
+      ),
 
     cancelSeriesSession: async ({
       context,

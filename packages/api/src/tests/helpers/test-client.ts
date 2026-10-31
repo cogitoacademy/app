@@ -10,7 +10,7 @@ import {
   tutorProfileSubject,
   user,
 } from "@cogito-app/db/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 import { appRouter } from "../../routers";
@@ -86,41 +86,34 @@ export function createTestClient(
 
 export async function ensureTestTutorSubject(tutorId: string) {
   const profile = await db.query.tutorProfile.findFirst({
-    columns: { id: true },
     where: eq(tutorProfile.userId, tutorId),
+    columns: { id: true },
+    with: {
+      subjects: {
+        with: {
+          subject: { with: { parent: true } },
+        },
+      },
+    },
   });
 
-  let assigned: { subjectId: string }[] = [];
-  if (profile) {
-    assigned = await db
-      .select({ subjectId: tutorProfileSubject.subjectId })
-      .from(tutorProfileSubject)
-      .innerJoin(
-        subjectCategory,
-        eq(tutorProfileSubject.subjectId, subjectCategory.id),
-      )
-      .where(
-        and(
-          eq(tutorProfileSubject.tutorProfileId, profile.id),
-          eq(subjectCategory.isActive, true),
-          isNotNull(subjectCategory.parentId),
-        ),
-      )
-      .limit(1);
-  }
-  if (assigned[0]) return assigned[0].subjectId;
+  const assigned = profile?.subjects.find(
+    ({ subject }) =>
+      subject?.isActive && subject.parentId && subject.parent?.isActive,
+  );
+  if (assigned?.subject) return assigned.subject.id;
 
-  const [subject] = await db
-    .select({ id: subjectCategory.id })
-    .from(subjectCategory)
-    .where(
-      and(
-        eq(subjectCategory.isActive, true),
-        isNotNull(subjectCategory.parentId),
-        eq(subjectCategory.slug, "competition-debate-law"),
-      ),
-    )
-    .limit(1);
+  const subjects = await db.query.subjectCategory.findMany({
+    where: and(
+      eq(subjectCategory.isActive, true),
+      isNotNull(subjectCategory.parentId),
+    ),
+    with: { parent: true },
+  });
+  const subject =
+    subjects.find(
+      (row) => row.slug === "competition-debate-law" && row.parent?.isActive,
+    ) ?? subjects.find((row) => row.parent?.isActive);
   if (!subject) throw new Error("V3 test specialization seed is missing");
 
   if (!profile) return subject.id;
@@ -248,6 +241,16 @@ export async function resetDatabase() {
       .insert(subjectCategory)
       .values(taxonomySpecializations)
       .onConflictDoNothing({ target: subjectCategory.id });
+  }
+  const seededCatalogIds = taxonomy
+    .filter((entry) => /^(30000000|40000000)-0000-4000-8000-/.test(entry.id))
+    .map((entry) => entry.id);
+  if (seededCatalogIds.length) {
+    // Catalog integration tests archive seed rows; each isolated suite needs canonical defaults.
+    await db
+      .update(subjectCategory)
+      .set({ isActive: true, version: 1 })
+      .where(inArray(subjectCategory.id, seededCatalogIds));
   }
   await seedMarkPackages();
   await db.insert(economyV3Revision).values({

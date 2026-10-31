@@ -9,19 +9,15 @@ export const activityFields = z
     coverUrl: z
       .url()
       .max(2000)
-      .refine((v) => /^https?:\/\//.test(v)),
+      .refine((v) => /^https?:\/\//.test(v))
+      .nullable(),
     location: z.string().trim().min(1).max(1000),
     startAt: z.iso.datetime({ offset: true }),
-    endAt: z.iso.datetime({ offset: true }),
     bodyEn: faqAnswerRichTextSchema,
     bodyId: faqAnswerRichTextSchema.nullable(),
     state: z.enum(["draft", "published", "cancelled", "postponed"]),
   })
-  .strict()
-  .refine((v) => Date.parse(v.endAt) >= Date.parse(v.startAt), {
-    message: "End must follow start",
-    path: ["endAt"],
-  });
+  .strict();
 export const saveActivityInput = activityFields
   .safeExtend({
     id: z.string().optional(),

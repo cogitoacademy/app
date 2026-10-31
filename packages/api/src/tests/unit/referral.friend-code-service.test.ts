@@ -553,3 +553,403 @@ test("signup rejects a choice that the database did not persist", async () => {
   expect(f.inserted).toHaveLength(1);
   expect(f.wallet.getOrCreate).not.toHaveBeenCalled();
 });
+
+test("settings refuses a missing persisted revision without auditing success", async () => {
+  const f = fixture([[]], false);
+  await expect(
+    f.service.updateSettings("admin-id", {
+      expectedVersion: 0,
+      welcomeMarks: 10,
+      friendRewardMarks: 20,
+      semesterCapMarks: 80,
+      reason: "Updated policy",
+    }),
+  ).rejects.toThrow("Referral settings were not saved.");
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test("Google choice refuses an unpersisted decision without clearing pending", async () => {
+  const f = fixture(
+    [
+      [{ role: "student", referralChoicePending: true }],
+      [],
+      [{ role: "student" }],
+      [],
+      [],
+    ],
+    false,
+  );
+  await expect(
+    f.service.saveGoogleChoice("student-id", { code: null }),
+  ).rejects.toThrow("Referral choice was not saved.");
+  expect(f.updates).toEqual([]);
+});
+
+test.each(["campaign", "code"] as const)(
+  "campaign creation requires persisted %s",
+  async (missing) => {
+    const f = fixture([], missing !== "campaign");
+    if (missing === "code") {
+      let inserts = 0;
+      Object.assign(f.db, {
+        insert: () => ({
+          values: (value: unknown) => ({
+            returning: async () =>
+              ++inserts === 1
+                ? [{ id: "campaign-id", ...(value as object) }]
+                : [],
+          }),
+        }),
+      });
+    }
+    await expect(
+      f.service.createKolCampaign("admin-id", {
+        name: "Campaign",
+        code: "KOL123",
+        expiresAt: new Date("2026-11-01T00:00:00Z"),
+        attributionWindowDays: 90,
+        flatAmountIdr: 10000,
+        percentBps: 0,
+      }),
+    ).rejects.toThrow(
+      missing === "campaign"
+        ? "KOL campaign was not saved."
+        : "KOL campaign code was not saved.",
+    );
+    expect(f.audit.record).not.toHaveBeenCalled();
+  },
+);
+
+const settlementDecision = {
+  id: "decision-id",
+  commissionAmountIdr: 10000,
+  paymentStatusSnapshot: "SUCCESS",
+  providerSuccessTimeState: "resolved",
+};
+
+test("settlement rejects a decision removed before its snapshot", async () => {
+  const f = fixture([[], []]);
+  await expect(
+    f.service.getKolSettlement({ decisionId: "missing" }),
+  ).rejects.toMatchObject({ code: "KOL_SETTLEMENT_INVALID" });
+  expect(f.results).toEqual([]);
+});
+
+test.each(["refunded", "unresolved", "negative"] as const)(
+  "adjustment rejects %s obligation",
+  async (scenario) => {
+    const decision = {
+      ...settlementDecision,
+      ...(scenario === "refunded" ? { paymentStatusSnapshot: "REFUNDED" } : {}),
+      ...(scenario === "unresolved"
+        ? { providerSuccessTimeState: "unresolved" }
+        : {}),
+    };
+    const f = fixture([[], [decision], [], []]);
+    await expect(
+      f.service.adjustKolCommission("admin-id", {
+        decisionId: decision.id,
+        operationId: "adjust-1",
+        amountIdr: -10001,
+        expectedObligationIdr: scenario === "negative" ? 10000 : 0,
+        reason: "Reconcile",
+      }),
+    ).rejects.toMatchObject({ code: "KOL_SETTLEMENT_INVALID" });
+    expect(f.inserted).toEqual([]);
+    expect(f.audit.record).not.toHaveBeenCalled();
+  },
+);
+
+test("transfer rejects future payment dates before inserting", async () => {
+  const f = fixture([[], [settlementDecision], [], []]);
+  await expect(
+    f.service.recordKolTransfer("admin-id", {
+      decisionId: settlementDecision.id,
+      operationId: "transfer-1",
+      amountIdr: 1000,
+      paidAt: new Date("2026-10-29T00:00:00Z"),
+      reference: "bank-ref",
+    }),
+  ).rejects.toMatchObject({ code: "KOL_SETTLEMENT_INVALID" });
+  expect(f.inserted).toEqual([]);
+});
+
+test("a concurrent settlement operation conflict does not audit a transfer", async () => {
+  const f = fixture([[], [settlementDecision], [], []]);
+  Object.assign(f.db, {
+    insert: () => ({
+      values: () => ({
+        onConflictDoNothing: () => ({ returning: async () => [] }),
+      }),
+    }),
+  });
+  await expect(
+    f.service.recordKolTransfer("admin-id", {
+      decisionId: settlementDecision.id,
+      operationId: "transfer-1",
+      amountIdr: 1000,
+      paidAt: new Date("2026-10-27T00:00:00Z"),
+      reference: "bank-ref",
+    }),
+  ).rejects.toMatchObject({ code: "KOL_SETTLEMENT_CONFLICT" });
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test("monthly settlement export rejects an oversized selection", async () => {
+  const f = fixture([Array.from({ length: 5001 }, () => ({ id: "decision" }))]);
+  await expect(
+    f.service.exportKolMonthly({ month: "2026-10" }),
+  ).rejects.toMatchObject({ code: "KOL_SETTLEMENT_INVALID" });
+  expect(f.results).toEqual([]);
+});
+
+const kolPayment = {
+  id: "payment-1",
+  userId: "student-id",
+  status: "PAID",
+  amountIdr: 100000,
+  providerSuccessAt: new Date("2026-10-27T00:00:00Z"),
+};
+const kolChoice = {
+  id: "choice-id",
+  kind: "kol",
+  campaignId: "campaign-id",
+  kolAttributionExpiresAt: new Date("2026-11-01T00:00:00Z"),
+};
+
+test.each([
+  "missing",
+  "pending",
+  "missing-student",
+  "tutor",
+  "missing-time",
+] as const)("KOL purchase refuses %s evidence", async (scenario) => {
+  const rows: unknown[][] =
+    scenario === "missing"
+      ? [[]]
+      : scenario === "pending"
+        ? [[{ ...kolPayment, status: "PENDING" }]]
+        : [
+            [
+              {
+                ...kolPayment,
+                ...(scenario === "missing-time"
+                  ? { providerSuccessAt: new Date("invalid") }
+                  : {}),
+              },
+            ],
+            [kolChoice],
+            scenario === "missing-student"
+              ? []
+              : [{ role: scenario === "tutor" ? "tutor" : "student" }],
+          ];
+  const f = fixture(rows);
+  const result = f.service.recordSuccessfulKolTopUp(f.db, {
+    paymentId: kolPayment.id,
+  });
+  if (scenario === "missing-time")
+    await expect(result).rejects.toThrow(
+      "explicitly marked as missing provider time",
+    );
+  else await expect(result).resolves.toBeNull();
+  expect(f.inserted).toEqual([]);
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test.each(["hold-insert", "hold-update", "decision", "correction"] as const)(
+  "KOL reconciliation requires persisted %s",
+  async (scenario) => {
+    const existing =
+      scenario.endsWith("update") || scenario === "correction"
+        ? [{ id: "old-decision", paymentId: "old-payment" }]
+        : [];
+    const held = scenario.startsWith("hold");
+    const f = fixture(
+      [
+        [kolPayment],
+        [kolChoice],
+        [{ role: "student" }],
+        existing,
+        held ? [{ ...kolPayment, providerSuccessAt: null }] : [],
+        ...(held ? [] : [[kolPayment]]),
+      ],
+      false,
+    );
+    if (existing.length)
+      Object.assign(f.db, {
+        update: () => ({
+          set: () => ({ where: () => ({ returning: async () => [] }) }),
+        }),
+      });
+    await expect(
+      f.service.recordSuccessfulKolTopUp(f.db, { paymentId: kolPayment.id }),
+    ).rejects.toThrow(
+      held
+        ? "KOL commission hold was not saved."
+        : scenario === "correction"
+          ? "KOL commission correction was not saved."
+          : "KOL commission decision was not saved.",
+    );
+    expect(f.audit.record).not.toHaveBeenCalled();
+    expect(f.results).toEqual([]);
+  },
+);
+
+test("a first purchase outside attribution does not create a commission", async () => {
+  const f = fixture([
+    [kolPayment],
+    [kolChoice],
+    [{ role: "student" }],
+    [],
+    [],
+    [{ ...kolPayment, providerSuccessAt: kolChoice.kolAttributionExpiresAt }],
+  ]);
+  await expect(
+    f.service.recordSuccessfulKolTopUp(f.db, { paymentId: kolPayment.id }),
+  ).resolves.toBeNull();
+  expect(f.inserted).toEqual([]);
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test("Google referral does not clear pending if the account changes role during choice save", async () => {
+  const f = fixture([
+    [{ role: "student", referralChoicePending: true }],
+    [],
+    [{ role: "tutor" }],
+  ]);
+  await expect(
+    f.service.saveGoogleChoice("student-id", { code: null }),
+  ).rejects.toThrow("Referral choice was not saved.");
+  expect(f.updates).toEqual([]);
+});
+
+test("friend code allocation preserves unexpected storage failures", async () => {
+  const failure = new Error("Storage unavailable");
+  const f = fixture([[{ role: "student", name: "Andre" }], [], [], [], [], []]);
+  Object.assign(f.db, {
+    insert: () => {
+      throw failure;
+    },
+  });
+  await expect(f.service.getMine("student-id")).rejects.toBe(failure);
+});
+
+test("welcome reward without a returned ledger row leaves ledger link unset", async () => {
+  const f = fixture([
+    [{ role: "student", referralChoicePending: true }],
+    [],
+    [{ role: "student" }],
+    [],
+    [],
+    [{ id: "code-id", kind: "friend", referrerUserId: "referrer-id" }],
+    [{ role: "student" }],
+    [],
+  ]);
+  expect(
+    await f.service.saveGoogleChoice("student-id", { code: "ABC123" }),
+  ).not.toHaveProperty("welcomeLedgerEntryId");
+  expect(f.wallet.credit).toHaveBeenCalledTimes(1);
+  expect(f.updates).toEqual([{ referralChoicePending: false }]);
+});
+
+test("empty monthly export produces a CSV header without querying entries", async () => {
+  const f = fixture([[]]);
+  const result = await f.service.exportKolMonthly({ month: "2026-10" });
+  expect(result).toBeDefined();
+  expect(f.results).toEqual([]);
+});
+
+test.each(["missing-reward", "missing-ledger"] as const)(
+  "first completion handles %s snapshot",
+  async (scenario) => {
+    const choice = {
+      id: "choice-id",
+      kind: "friend",
+      referrerUserId: "referrer-id",
+      ...(scenario === "missing-ledger"
+        ? { friendRewardMarksSnapshot: 15 }
+        : {}),
+    };
+    const f = fixture([
+      [choice],
+      [],
+      [
+        { id: "student-id", role: "student" },
+        { id: "referrer-id", role: "student" },
+      ],
+      [],
+      [{ id: "usage-id", creditedMarks: 0 }],
+      ...(scenario === "missing-ledger" ? [[]] : []),
+    ]);
+    const result = await f.service.recordEligibleFirstCompletion(f.db, {
+      studentId: "student-id",
+      completionType: "solo",
+      completionId: "booking-id",
+      completedAt: new Date("2026-10-28T00:00:00Z"),
+      chargedMarks: 10,
+    });
+    expect(result).toMatchObject({
+      creditedMarks: scenario === "missing-ledger" ? 15 : 0,
+    });
+    expect(result).not.toHaveProperty("ledgerEntryId");
+    expect(f.wallet.credit).toHaveBeenCalledTimes(
+      scenario === "missing-ledger" ? 1 : 0,
+    );
+    expect(f.results).toEqual([]);
+  },
+);
+
+test.each(["refunded", "partial", "missing-time"] as const)(
+  "a held KOL purchase audits %s reconciliation",
+  async (scenario) => {
+    const unresolved = {
+      ...kolPayment,
+      status: scenario === "refunded" ? "REFUNDED" : "PAID",
+      providerSuccessAt: null,
+      providerRefundKind: scenario === "partial" ? "partial" : null,
+      providerRefundAmountIdr: 100,
+      providerRefundIdentity: "refund-id",
+    };
+    const f = fixture([
+      [kolPayment],
+      [kolChoice],
+      [{ role: "student" }],
+      [
+        {
+          id: "decision-id",
+          paymentId: "older-payment",
+          paymentStatusSnapshot: "PAID",
+        },
+      ],
+      [unresolved],
+    ]);
+    Object.assign(f.db, {
+      update: () => ({
+        set: (value: object) => ({
+          where: () => ({
+            returning: async () => [{ id: "decision-id", ...value }],
+          }),
+        }),
+      }),
+    });
+    expect(
+      await f.service.recordSuccessfulKolTopUp(f.db, {
+        paymentId: kolPayment.id,
+      }),
+    ).toMatchObject({
+      providerSuccessTimeState: "unresolved",
+      commissionAmountIdr: 0,
+    });
+    expect(f.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action:
+          scenario === "refunded"
+            ? "kol_commission_refund_invalidation"
+            : scenario === "partial"
+              ? "kol_commission_partial_refund_reconciliation"
+              : "kol_commission_provider_time_unresolved",
+      }),
+    );
+    expect(f.results).toEqual([]);
+  },
+);

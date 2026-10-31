@@ -937,3 +937,144 @@ describe("legacy booking missing-report reminders", () => {
     ).toBe("Review the ended booking before reporting.");
   });
 });
+
+test("reminder processor uses the real clock when no custom clock is supplied", async () => {
+  const times: Date[] = [];
+  const processor = createBookingReportReminderProcessor({
+    db: {} as DbType,
+    appBaseUrl: "https://cogito.example",
+    notification: { write: async () => undefined },
+    repo: {
+      findDue: async (_db, nowAt) => {
+        times.push(nowAt);
+        return [];
+      },
+      writeIfPending: async () => false,
+    },
+  });
+  const before = Date.now();
+  await expect(processor.processPendingReportReminders()).resolves.toEqual({
+    checked: 0,
+    queued: 0,
+    skipped: 0,
+    failed: 0,
+  });
+  expect(times).toHaveLength(1);
+  expect(times[0]!.getTime()).toBeGreaterThanOrEqual(before);
+  expect(times[0]!.getTime()).toBeLessThanOrEqual(Date.now());
+});
+
+test("series cursor orders equal-time siblings by their session ids", async () => {
+  const queries: Array<{ sql: string; params: unknown[] }> = [];
+  const database = drizzle(async (sql, params) => {
+    queries.push({ sql, params });
+    return { rows: [] };
+  });
+  const candidate = makeProductionCandidate({
+    bookingType: "series",
+    sessionId: "session-2",
+  });
+  await createBookingReportReminderRepo().findDue(
+    database as unknown as DbType,
+    new Date("2026-10-21T03:00:00Z"),
+    100,
+    candidate,
+  );
+  const seriesQuery = queries.find(({ sql }) =>
+    sql.includes('inner join "booking_session"'),
+  )!;
+  expect(seriesQuery.params).toContain("session-2");
+  expect(seriesQuery.sql).toContain('"booking_session"."id" >');
+});
+
+test.each(["solo", "series"] as const)(
+  "future %s timestamps decode a null period and prevent a stale reminder",
+  async (type) => {
+    const candidate = makeProductionCandidate({
+      bookingType: type,
+      sessionId: type === "series" ? "session1" : null,
+    });
+    let writes = 0;
+    const database = drizzle(async (sql) => ({
+      rows: sql.includes('from "booking_session"')
+        ? [
+            [
+              "session1",
+              "scheduled",
+              null,
+              candidate.scheduledStartAtEpoch,
+              candidate.scheduledEndAtEpoch,
+              null,
+            ],
+          ]
+        : [
+            [
+              candidate.bookingId,
+              type,
+              candidate.tutorId,
+              "scheduled",
+              null,
+              candidate.scheduledStartAtEpoch,
+              candidate.scheduledEndAtEpoch,
+              null,
+            ],
+          ],
+    }));
+    const db = {
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback(database),
+    } as unknown as DbType;
+    await expect(
+      createBookingReportReminderRepo().writeIfPending(
+        db,
+        candidate,
+        new Date("2026-10-21T03:00:00Z"),
+        "stale-reminder",
+        async () => {
+          writes++;
+        },
+      ),
+    ).resolves.toBe(false);
+    expect(writes).toBe(0);
+  },
+);
+
+test("candidate ordering is deterministic for equal timestamps, ids, and series siblings", async () => {
+  const end = "2026-10-20 03:00:00+00";
+  const raw = (id: string, type: string, sessionId: string | null) => [
+    id,
+    type,
+    "tutor1",
+    sessionId,
+    "2026-10-20 02:00:00+00",
+    end,
+    "1792461600",
+    "1792465200",
+    "0",
+    end,
+  ];
+  // Repeated equal candidates exercise comparator reflexivity, while series siblings exercise its final ordering key.
+  const single = raw("booking-a", "solo", null);
+  const database = drizzle(async (sql) => ({
+    rows: sql.includes('inner join "booking_session"')
+      ? [
+          raw("booking-b", "series", "session-2"),
+          raw("booking-b", "series", "session-1"),
+        ]
+      : [single, [...single], raw("booking-z", "solo", null)],
+  }));
+  const rows = await createBookingReportReminderRepo().findDue(
+    database as unknown as DbType,
+    new Date("2026-10-21T03:00:00Z"),
+    100,
+  );
+  expect(
+    rows.map(({ bookingId, sessionId }) => [bookingId, sessionId]),
+  ).toEqual([
+    ["booking-a", null],
+    ["booking-a", null],
+    ["booking-b", "session-1"],
+    ["booking-b", "session-2"],
+    ["booking-z", null],
+  ]);
+});

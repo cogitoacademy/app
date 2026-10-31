@@ -340,3 +340,31 @@ describe("public content tutor projection", () => {
     await expect(client.tutors.list({})).rejects.toBe(failure);
   });
 });
+
+test("public tutor mapping rejects incomplete experience dates and nonarray awards", () => {
+  const row = makeSensitiveRow();
+  const dto = toPublicTutorDto({
+    ...row,
+    achievements: [{ competitionName: "Olympiad", year: 2026, awards: null }],
+    experiences: [
+      {
+        role: "Tutor",
+        organization: "School",
+        startYear: 2020,
+        endYear: 2021.5,
+        description: "Teaching",
+      },
+      {
+        role: "Tutor",
+        organization: "School",
+        startYear: 2020,
+        endYear: 2021,
+        description: null,
+      },
+    ],
+  } as unknown as PublicTutorRow);
+  expect(dto.achievements).toEqual([
+    { competitionName: "Olympiad", year: 2026, awards: [] },
+  ]);
+  expect(dto.experiences).toEqual([]);
+});

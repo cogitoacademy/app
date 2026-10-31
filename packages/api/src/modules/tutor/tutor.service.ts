@@ -497,8 +497,8 @@ export function createTutorService(deps: {
         beforeState,
         afterState,
         details: {
-          profileImageUrl:
-            (profile as TutorProfileWithSubjectRelations).user?.image ?? null,
+          profileImageUrl: (profile as TutorProfileWithSubjectRelations).user!
+            .image!,
           stage: "source_submitted",
           termsOfServiceAccepted: acceptsTermsForFirstSubmission,
           termsOfServiceVersion:
@@ -700,9 +700,8 @@ export function createTutorService(deps: {
         const overlapsEarlierOccurrence = occurrences
           .slice(0, occurrenceIndex)
           .some(
-            (earlier) =>
-              occurrence.startDate < earlier.endDate &&
-              occurrence.endDate > earlier.startDate,
+            // Generated windows have equal durations and ascending starts.
+            (earlier) => occurrence.startDate < earlier.endDate,
           );
         return overlapsExisting || overlapsEarlierOccurrence;
       });

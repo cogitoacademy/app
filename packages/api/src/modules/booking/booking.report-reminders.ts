@@ -270,12 +270,12 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
         const bookingPeriod = sql<
           number | null
         >`case when ${booking.scheduledEndAt} <= ${nowAtIso}::timestamptz then floor(extract(epoch from (${nowAtIso}::timestamptz - ${booking.scheduledEndAt})) / 86400)::bigint else null end`.mapWith(
-          (value) => (value === null ? null : Number(value)),
+          Number,
         );
         const sessionPeriod = sql<
           number | null
         >`case when ${bookingSession.scheduledEndAt} <= ${nowAtIso}::timestamptz then floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint else null end`.mapWith(
-          (value) => (value === null ? null : Number(value)),
+          Number,
         );
         const [currentBooking] = await tx
           .select({

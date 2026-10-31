@@ -298,7 +298,8 @@ export function createAdminClassSessionCancellation(deps: {
           !["pending", "checkout_pending"].includes(installment.state)
         )
           continue;
-        const remaining = (allocationsByInstallment.get(installment.id) ?? [])
+        const remaining = allocationsByInstallment
+          .get(installment.id)!
           .filter(
             (row) =>
               row.sessionId !== session.id &&

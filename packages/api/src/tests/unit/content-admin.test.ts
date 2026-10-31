@@ -490,5 +490,21 @@ describe("calendar authoring without a manual reason", () => {
         "admin",
       ),
     ).rejects.toThrow("Enter a reason for change");
+    await expect(
+      service.update(
+        {
+          entry: { kind: "resource", values: resourceFields.parse(resource) },
+          id: "resource",
+          expectedVersion: 1,
+        },
+        "admin",
+      ),
+    ).rejects.toThrow("Enter a reason for change");
+    await expect(
+      service.remove(
+        { kind: "resource", id: "resource", expectedVersion: 1 },
+        "admin",
+      ),
+    ).rejects.toThrow("Enter a reason for change");
   });
 });

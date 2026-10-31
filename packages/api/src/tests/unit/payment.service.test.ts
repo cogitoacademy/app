@@ -3705,3 +3705,506 @@ describe("PaymentService targeted guard boundaries", () => {
     expect(provider.getPaymentRequestStatus).not.toHaveBeenCalled();
   });
 });
+
+describe("Payment recovery boundary coverage", () => {
+  test.each([false, true])(
+    "missing payment after top-up recovery/create is rejected (existing=%s)",
+    async (existing) => {
+      const quote = makeTopUpQuote();
+      const record = {
+        id: "vanished-payment",
+        status: "PENDING",
+        quoteChoice: "package",
+        checkoutUrl: "https://checkout.test/old",
+        amountIdr: 350000,
+        providerReference: "stub:v3:vanished-payment",
+      };
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findTopUpQuoteById: mock(async () => quote) as any,
+        findPaymentByQuote: mock(async () => (existing ? record : null)) as any,
+        insertPayment: mock(async () => record) as any,
+        updatePaymentIntent: mock(async () => undefined) as any,
+        findPaymentById: mock(async () => null),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+      await expect(
+        service.createPurchaseFromTopUpQuote(
+          "user1",
+          "w1",
+          quote.id,
+          "package",
+        ),
+      ).rejects.toBeInstanceOf(PaymentNotFoundError);
+      expect(provider.createIntent).toHaveBeenCalledTimes(existing ? 0 : 1);
+    },
+  );
+
+  test("partial refund first observed before success credits and notifies exactly once", async () => {
+    const record: any = {
+      id: "partial-first",
+      userId: "user1",
+      walletId: "w1",
+      status: "PENDING",
+      provider: "midtrans",
+      amountIdr: 50000,
+      marks: 100,
+      providerReference: "midtrans:partial-first",
+    };
+    const wallet = makeWallet();
+    const notification = { writeBestEffort: mock(async () => undefined) };
+    const repo = makeRepo({
+      findPaymentByProviderReference: mock(async () => record),
+      updatePaymentStatus: mock(async (_id: string, update: any) => {
+        Object.assign(record, update);
+      }),
+    });
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: wallet as any,
+      repo,
+      provider: makeProvider() as any,
+      providerName: "midtrans",
+      notification: notification as any,
+    });
+    const input = {
+      provider: "midtrans",
+      providerReference: record.providerReference,
+      providerEventId: "partial-event",
+      status: "REFUNDED" as PaymentStatus,
+      amountIdr: 50000,
+      refundAmountIdr: 10000,
+      currency: "IDR",
+      refundKind: "partial" as const,
+    };
+    await expect(service.confirmFromWebhook(input)).resolves.toEqual({
+      status: "SETTLED",
+    });
+    await expect(service.confirmFromWebhook(input)).resolves.toEqual({
+      status: "SETTLED",
+    });
+    expect(wallet.credit).toHaveBeenCalledTimes(1);
+    expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+    expect(notification.writeBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventKey: "payment.partial-first.credited",
+        body: expect.stringContaining(
+          "partial refund needs manual reconciliation",
+        ),
+      }),
+    );
+  });
+
+  test("unknown persisted status cannot authorize a new credit", async () => {
+    const record: any = {
+      id: "unknown-state",
+      userId: "user1",
+      walletId: "w1",
+      status: "CORRUPT",
+      provider: "stub",
+      amountIdr: 50000,
+      marks: 100,
+      providerReference: "stub:unknown-state",
+    };
+    const wallet = makeWallet();
+    const repo = makeRepo({
+      findPaymentByProviderReference: mock(async () => record),
+    });
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: wallet as any,
+      repo,
+      provider: makeProvider() as any,
+      providerName: "stub",
+    });
+    await expect(
+      service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: record.providerReference,
+        status: "PAID",
+        providerEventId: "unknown-event",
+      }),
+    ).resolves.toEqual({ status: "CORRUPT" as PaymentStatus });
+    expect(wallet.credit).not.toHaveBeenCalled();
+    expect(repo.updatePaymentStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("Top-up insert race recovery", () => {
+  test.each(["missing", "conflicting", "same"] as const)(
+    "handles %s winner after losing the insert race",
+    async (scenario) => {
+      const quote = makeTopUpQuote();
+      const winner = {
+        id: "race-winner",
+        userId: "user1",
+        walletId: "w1",
+        quoteId: quote.id,
+        quoteChoice: scenario === "conflicting" ? "custom" : "package",
+        status: "PENDING",
+        checkoutUrl: "https://checkout.test/race",
+        amountIdr: 350000,
+        marks: 50,
+      };
+      let lookups = 0;
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findTopUpQuoteById: mock(async () => quote) as any,
+        findPaymentByQuote: mock(async () =>
+          ++lookups === 1 || scenario === "missing" ? null : winner,
+        ) as any,
+        insertPayment: mock(async () => undefined) as any,
+        findPaymentById: mock(async () => winner) as any,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+      const purchase = service.createPurchaseFromTopUpQuote(
+        "user1",
+        "w1",
+        quote.id,
+        "package",
+      );
+      if (scenario === "same")
+        await expect(purchase).resolves.toMatchObject({
+          paymentId: winner.id,
+          checkoutUrl: winner.checkoutUrl,
+        });
+      else
+        await expect(purchase).rejects.toThrow(
+          scenario === "missing"
+            ? "Top-up payment could not be saved"
+            : "different top-up choice",
+        );
+      expect(provider.createIntent).not.toHaveBeenCalled();
+      expect(lookups).toBe(2);
+    },
+  );
+});
+
+describe("Payment optional adapter boundaries", () => {
+  test.each(["provider", "currency", "amount"] as const)(
+    "stub adapter enforces %s integrity without Midtrans metrics",
+    async (scenario) => {
+      const record: any = {
+        id: "stub-check",
+        status: "PENDING",
+        provider: scenario === "provider" ? "midtrans" : "stub",
+        amountIdr: 50000,
+        marks: 100,
+        providerReference: "stub-check",
+      };
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findPaymentByProviderReference: mock(async () => record),
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        service.confirmFromWebhook({
+          provider: "stub",
+          providerReference: record.providerReference,
+          status: "PAID",
+          amountIdr: scenario === "amount" ? 1 : 50000,
+          currency: scenario === "currency" ? "USD" : "IDR",
+        }),
+      ).rejects.toThrow("mismatch");
+    },
+  );
+
+  test.each([null, 12000])(
+    "stub partial refund retains stored refund amount %s when incoming evidence omits it",
+    async (storedAmount) => {
+      const record: any = {
+        id: "partial-stub",
+        status: "PAID",
+        provider: "stub",
+        amountIdr: 50000,
+        marks: 100,
+        walletId: "w1",
+        providerReference: "partial-stub",
+        providerRefundAmountIdr: storedAmount,
+      };
+      const refundRecord = { insertRefundRecord: mock(async () => undefined) };
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findPaymentByProviderReference: mock(async () => record),
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+        refundRecord: refundRecord as any,
+      });
+      await expect(
+        service.confirmFromWebhook({
+          provider: "stub",
+          providerReference: record.providerReference,
+          providerEventId: "partial-stub-event",
+          status: "REFUNDED",
+          refundKind: "partial",
+        }),
+      ).resolves.toEqual({ status: "PAID" });
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amountIdr: storedAmount ?? 0 }),
+      );
+    },
+  );
+
+  test.each([true, false])(
+    "refund with missing wallet remains reconciliable (audit=%s)",
+    async (hasAudit) => {
+      const record: any = {
+        id: "wallet-gone",
+        status: "PAID",
+        provider: "stub",
+        amountIdr: 50000,
+        marks: 100,
+        walletId: "w1",
+        userId: "user1",
+        providerReference: "wallet-gone",
+      };
+      const wallet = { ...makeWallet(), getByUserId: mock(async () => null) };
+      const audit = { record: mock(async () => undefined) };
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo: makeRepo({
+          findPaymentByProviderReference: mock(async () => record),
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+        ...(hasAudit ? { audit: audit as any } : {}),
+      });
+      await expect(
+        service.confirmFromWebhook({
+          provider: "stub",
+          providerReference: record.providerReference,
+          status: "REFUNDED",
+        }),
+      ).resolves.toEqual({ status: "REFUNDED" });
+      expect(wallet.compensate).not.toHaveBeenCalled();
+      if (hasAudit)
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            details: expect.objectContaining({
+              availableBalance: 0,
+              heldBalance: 0,
+              spent: 100,
+            }),
+          }),
+        );
+    },
+  );
+});
+
+describe("Payment quote and reconciliation edge contracts", () => {
+  test.each([
+    null,
+    {},
+    { ...makeTopUpQuote().termsSnapshot, exactSurchargeIdr: "invalid" },
+  ])("rejects corrupt persisted quote terms", async (termsSnapshot) => {
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo: makeRepo({
+        findTopUpQuoteByRequestKey: mock(async () =>
+          makeTopUpQuote({ termsSnapshot }),
+        ) as any,
+      }),
+      provider: makeProvider() as any,
+      providerName: "stub",
+    });
+    await expect(
+      service.createTopUpQuote("user1", { requestKey: "request-1", marks: 50 }),
+    ).rejects.toThrow("Stored V3 top-up quote terms are invalid");
+  });
+
+  test.each([null, "missing"])(
+    "returns recommendation and no exact package for code %s",
+    async (exactPackageCode) => {
+      const recommendation = { code: "learner", marks: 150, priceIdr: 975000 };
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findTopUpQuoteByRequestKey: mock(async () =>
+            makeTopUpQuote({
+              termsSnapshot: {
+                ...makeTopUpQuote().termsSnapshot,
+                exactPackageCode,
+                recommendation,
+              },
+            }),
+          ) as any,
+        }),
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+      await expect(
+        service.createTopUpQuote("user1", {
+          requestKey: "request-1",
+          marks: 50,
+        }),
+      ).resolves.toMatchObject({
+        exactPackage: null,
+        recommendedPackage: { ...recommendation, label: "Learner package" },
+      });
+    },
+  );
+
+  test("new quote is unavailable without an economy adapter", async () => {
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo: makeRepo({
+        findTopUpQuoteByRequestKey: mock(async () => null) as any,
+      }),
+      provider: makeProvider() as any,
+      providerName: "stub",
+    });
+    await expect(
+      service.createTopUpQuote("user1", {
+        requestKey: "new-request",
+        marks: 50,
+      }),
+    ).rejects.toThrow("V3 top-ups are not active");
+  });
+
+  test("uncertain stub creation without status capability preserves the same recoverable row", async () => {
+    const quote = makeTopUpQuote();
+    const record: any = {
+      id: "stub-uncertain",
+      userId: "user1",
+      walletId: "w1",
+      quoteChoice: "package",
+      status: "PENDING",
+      amountIdr: 350000,
+      marks: 50,
+      providerReference: "stub-uncertain",
+      checkoutUrl: null,
+    };
+    const provider = {
+      ...makeProvider(),
+      createIntent: mock(async () => {
+        throw new Error("timeout");
+      }),
+      getPaymentRequestStatus: undefined,
+    };
+    const repo = makeRepo({
+      findTopUpQuoteById: mock(async () => quote) as any,
+      findPaymentByQuote: mock(async () => null) as any,
+      insertPayment: mock(async () => record) as any,
+      updatePaymentIntent: mock(async () => undefined) as any,
+      findPaymentById: mock(async () => record),
+    });
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo,
+      provider: provider as any,
+      providerName: "stub",
+    });
+    await expect(
+      service.createPurchaseFromTopUpQuote("user1", "w1", quote.id, "package"),
+    ).resolves.toMatchObject({ paymentId: record.id, recoveryRequired: true });
+    expect(repo.updatePaymentIntent).toHaveBeenCalledWith(record.id, {
+      providerIntentState: "UNCERTAIN",
+    });
+  });
+
+  test("stub reconciliation counts outcomes and falls back to the stored provider reference", async () => {
+    const records: any[] = ["pending", "paid", "error"].map((id) => ({
+      id,
+      userId: "user1",
+      walletId: "w1",
+      provider: "stub",
+      providerRequestId: id,
+      providerReference: `stub-${id}`,
+      status: "PENDING",
+      amountIdr: 50000,
+      marks: 100,
+    }));
+    const provider = {
+      ...makeProvider(),
+      getPaymentRequestStatus: mock(async (id: string) => {
+        if (id === "error") throw new Error("provider down");
+        return {
+          providerReference: "",
+          status: id === "pending" ? "PENDING" : "PAID",
+        };
+      }),
+    };
+    const repo = makeRepo({
+      findPaymentsForReconciliation: mock(async () => records),
+      findPaymentByProviderReference: mock(async (reference: string) =>
+        records.find((row) => row.providerReference === reference),
+      ) as any,
+    });
+    const wallet = makeWallet();
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: wallet as any,
+      repo,
+      provider: provider as any,
+      providerName: "stub",
+    });
+    await expect(service.reconcilePendingPayments()).resolves.toEqual({
+      checked: 3,
+      reconciled: 1,
+      pending: 1,
+      failed: 1,
+    });
+    expect(repo.findPaymentByProviderReference).toHaveBeenCalledWith(
+      "stub-paid",
+      expect.anything(),
+      true,
+    );
+    expect(wallet.credit).toHaveBeenCalledTimes(1);
+  });
+
+  test("terminal failure without a provider reason persists a null reason", async () => {
+    const record: any = {
+      id: "failed-no-reason",
+      provider: "stub",
+      providerReference: "failed-no-reason",
+      status: "PENDING",
+    };
+    const repo = makeRepo({
+      findPaymentByProviderReference: mock(async () => record),
+    });
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo,
+      provider: makeProvider() as any,
+      providerName: "stub",
+    });
+    await expect(
+      service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: record.providerReference,
+        status: "FAILED",
+      }),
+    ).resolves.toEqual({ status: "FAILED" });
+    expect(repo.updatePaymentStatus).toHaveBeenCalledWith(
+      record.id,
+      expect.objectContaining({ failureReason: null }),
+      expect.anything(),
+    );
+  });
+});

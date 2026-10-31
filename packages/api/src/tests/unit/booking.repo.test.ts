@@ -1,3 +1,4 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, test, expect, mock } from "bun:test";
 import { createBookingRepo } from "../../modules/booking/booking.repo";
 import {
@@ -1407,5 +1408,433 @@ describe("booking repository uncovered safety boundaries", () => {
     const decoded = decodeBookingCursor("not-a-date|");
     expect(Number.isNaN(decoded.scheduledStartAt.getTime())).toBe(true);
     expect(decoded.id).toBeNull();
+  });
+});
+
+function makeTrackedSelectConn(rows: unknown[]) {
+  const query: any = Promise.resolve(rows);
+  for (const name of [
+    "from",
+    "where",
+    "limit",
+    "orderBy",
+    "leftJoin",
+    "innerJoin",
+    "for",
+  ])
+    query[name] = mock(() => query);
+  return { select: mock(() => query), query };
+}
+
+function trackedWhere(conn: ReturnType<typeof makeTrackedSelectConn>) {
+  return new PgDialect().sqlToQuery(conn.query.where.mock.calls.at(-1)[0]);
+}
+
+describe("booking repository payout and report reads", () => {
+  test.each([undefined, { id: "default", version: 3 }])(
+    "tax configuration returns the persisted default or null: %j",
+    async (row) => {
+      const findFirst = mock(async () => row);
+      const repo = makeBookingRepo();
+      await expect(
+        repo.findTutorTaxConfig({
+          query: { tutorTaxConfig: { findFirst } },
+        } as any),
+      ).resolves.toEqual(row ?? null);
+      expect(
+        new PgDialect().sqlToQuery(findFirst.mock.calls[0]![0].where).params,
+      ).toEqual(["default"]);
+    },
+  );
+
+  test.each([false, true])(
+    "payout lookup returns a persisted row and locks only when requested: %s",
+    async (locked) => {
+      const row = { id: "payout1", status: "prepared" };
+      const conn = makeTrackedSelectConn([row]);
+      const repo = makeBookingRepo();
+      if (locked)
+        await expect(
+          repo.findTutorPayoutById(conn as any, "payout1", true),
+        ).resolves.toBe(row);
+      else
+        await expect(
+          repo.findTutorPayoutById(conn as any, "payout1"),
+        ).resolves.toBe(row);
+      expect(conn.query.for).toHaveBeenCalledTimes(locked ? 1 : 0);
+      if (locked) expect(conn.query.for).toHaveBeenCalledWith("update");
+      expect(trackedWhere(conn).params).toEqual(["payout1"]);
+    },
+  );
+
+  test("payout and idempotency lookups return null when no row survives", async () => {
+    const repo = makeBookingRepo();
+    const conn = makeTrackedSelectConn([]);
+    await expect(
+      repo.findTutorPayoutById(conn as any, "missing", true),
+    ).resolves.toBeNull();
+    await expect(
+      repo.findTutorPayoutByIdempotencyKey(conn as any, "request1"),
+    ).resolves.toBeNull();
+    expect(trackedWhere(conn).params).toEqual(["request1"]);
+    const row = { id: "payout1" };
+    const found = makeTrackedSelectConn([row]);
+    await expect(
+      repo.findTutorPayoutByIdempotencyKey(found as any, "request1"),
+    ).resolves.toBe(row);
+  });
+
+  test("payout history applies default and explicit limits to its tutor scope", async () => {
+    const rows = [{ id: "payout1" }];
+    const conn = makeTrackedSelectConn(rows);
+    const repo = makeBookingRepo();
+    await expect(
+      repo.listTutorPayoutsByTutorId(conn as any, "tutor1"),
+    ).resolves.toEqual(rows);
+    expect(conn.query.limit).toHaveBeenLastCalledWith(100);
+    await expect(
+      repo.listTutorPayoutsByTutorId(conn as any, "tutor1", 5),
+    ).resolves.toEqual(rows);
+    expect(conn.query.limit).toHaveBeenLastCalledWith(5);
+    expect(trackedWhere(conn).params).toEqual(["tutor1"]);
+  });
+
+  test("reconciliation sources include the tutor and outstanding reconciliation predicate", async () => {
+    const rows = [{ sourceKey: "fee1", payoutId: "payout1" }];
+    const conn = makeTrackedSelectConn(rows);
+    await expect(
+      makeBookingRepo().listTutorPayoutReconciliationSourceKeys(
+        conn as any,
+        "tutor1",
+      ),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["tutor1", "required"]);
+    expect(conn.query.innerJoin).toHaveBeenCalledTimes(1);
+  });
+
+  test("active payout allocations return source keys and nonempty writes return allocations", async () => {
+    const conn = makeTrackedSelectConn([
+      { sourceKey: "fee1" },
+      { sourceKey: "fee2" },
+    ]);
+    const repo = makeBookingRepo();
+    await expect(
+      repo.listTutorPayoutAllocatedSourceKeys(conn as any, "tutor1"),
+    ).resolves.toEqual(["fee1", "fee2"]);
+    expect(trackedWhere(conn).params).toEqual(["tutor1", true]);
+    const rows = [{ payoutId: "payout1", sourceKey: "fee1", active: true }];
+    const write = makeInsertConn(rows);
+    await expect(
+      repo.insertTutorPayoutAllocations(write as any, rows),
+    ).resolves.toEqual(rows);
+    expect(write.values).toHaveBeenCalledWith(rows);
+  });
+
+  test.each(["scheduledStartAt", "completedAt"] as const)(
+    "session fee date bounds use %s",
+    async (basis) => {
+      const row = { eventKey: "fee1" };
+      const conn = makeTrackedSelectConn([row]);
+      const from = new Date("2026-08-01T00:00:00Z");
+      const to = new Date("2026-09-01T00:00:00Z");
+      const repo = makeBookingRepo();
+      await expect(
+        repo.findTutorSessionFeesByTutor(
+          conn as any,
+          "tutor1",
+          from,
+          to,
+          basis,
+        ),
+      ).resolves.toEqual([row]);
+      const where = trackedWhere(conn);
+      expect(where.params).toEqual([
+        "tutor1",
+        from.toISOString(),
+        to.toISOString(),
+      ]);
+      expect(where.sql).toContain(
+        basis === "completedAt" ? '"earned_at"' : '"scheduled_start_at"',
+      );
+      expect(conn.query.leftJoin).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  test("session fee reads omit date bounds by default", async () => {
+    const conn = makeTrackedSelectConn([]);
+    await expect(
+      makeBookingRepo().findTutorSessionFeesByTutor(conn as any, "tutor1"),
+    ).resolves.toEqual([]);
+    expect(trackedWhere(conn).params).toEqual(["tutor1"]);
+  });
+
+  test.each([null, "s1"])(
+    "completion feedback lookup scopes nullable session %s and optional lock",
+    async (sessionId) => {
+      const row = { id: "report1", sessionId };
+      const conn = makeTrackedSelectConn([row]);
+      const repo = makeBookingRepo();
+      await expect(
+        repo.findCompletionFeedback(conn as any, "b1", sessionId),
+      ).resolves.toBe(row);
+      expect(conn.query.for).not.toHaveBeenCalled();
+      const where = trackedWhere(conn);
+      expect(where.params).toEqual(sessionId ? ["b1", sessionId] : ["b1"]);
+      if (!sessionId) expect(where.sql).toContain("is null");
+      const missing = makeTrackedSelectConn([]);
+      await expect(
+        repo.findCompletionFeedback(missing as any, "b1", sessionId, {
+          forUpdate: true,
+        }),
+      ).resolves.toBeNull();
+      expect(missing.query.for).toHaveBeenCalledWith("update");
+    },
+  );
+
+  test("request-key history lookup distinguishes an absent report from a persisted replay", async () => {
+    const repo = makeBookingRepo();
+    const empty = makeTrackedSelectConn([]);
+    await expect(
+      repo.findCompletionFeedbackHistoryByRequestKey(empty as any, "request1"),
+    ).resolves.toBeNull();
+    const row = { id: "event1" };
+    const conn = makeTrackedSelectConn([row]);
+    await expect(
+      repo.findCompletionFeedbackHistoryByRequestKey(conn as any, "request1"),
+    ).resolves.toBe(row);
+    expect(trackedWhere(conn).params).toEqual(["request1"]);
+  });
+
+  test("feedback and history listings scope to their booking or report", async () => {
+    const rows = [{ id: "report1" }];
+    const conn = makeTrackedSelectConn(rows);
+    const repo = makeBookingRepo();
+    await expect(
+      repo.listCompletionFeedbackByBooking(conn as any, "b1"),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["b1"]);
+    await expect(
+      repo.listCompletionFeedbackHistoryByBooking(conn as any, "b1"),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["b1"]);
+    await expect(
+      repo.listCompletionFeedbackHistoryByFeedback(conn as any, "report1"),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["report1"]);
+  });
+});
+
+describe("booking repository financial integrity", () => {
+  test.each([false, true])(
+    "failed meeting detection scopes the provider and state: %s",
+    async (exists) => {
+      const conn = makeTrackedSelectConn(exists ? [{ id: "meeting1" }] : []);
+      await expect(
+        makeBookingRepo().hasFailedGoogleMeeting(conn as any, "b1"),
+      ).resolves.toBe(exists);
+      expect(trackedWhere(conn).params).toEqual([
+        "b1",
+        "google_meet",
+        "failed",
+      ]);
+    },
+  );
+
+  test("ledger amount reads preserve event identity and booking scope", async () => {
+    const conn = makeTrackedSelectConn([
+      { eventKey: "deduct1", amount: 42 },
+      { eventKey: "forfeit1", amount: 12 },
+    ]);
+    await expect(
+      makeBookingRepo().findLedgerEventAmounts(conn as any, "b1", [
+        "deduct1",
+        "forfeit1",
+      ]),
+    ).resolves.toEqual(
+      new Map([
+        ["deduct1", 42],
+        ["forfeit1", 12],
+      ]),
+    );
+    expect(trackedWhere(conn).params).toEqual(["b1", "deduct1", "forfeit1"]);
+  });
+
+  test("recipient lookup uses only explicitly requested user ids", async () => {
+    const rows = [{ id: "u1", email: "u1@example.test", name: "User" }];
+    const conn = makeTrackedSelectConn(rows);
+    await expect(
+      makeBookingRepo().findUserEmails(conn as any, ["u1"]),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["u1"]);
+  });
+
+  test("session and participant locks are explicit and confirmed participants lock in stable order", async () => {
+    const rows = [{ id: "row1" }];
+    const conn = makeTrackedSelectConn(rows);
+    const repo = makeBookingRepo();
+    await expect(
+      repo.findSessionById(conn as any, "s1", { forUpdate: true }),
+    ).resolves.toBe(rows[0]);
+    await expect(
+      repo.findParticipant(conn as any, "b1", "u1", { forUpdate: true }),
+    ).resolves.toBe(rows[0]);
+    await expect(
+      repo.findConfirmedParticipants(conn as any, "b1", "excluded-user", {
+        forUpdate: true,
+      }),
+    ).resolves.toEqual(rows);
+    expect(conn.query.for).toHaveBeenCalledTimes(3);
+    expect(conn.query.orderBy).toHaveBeenCalledTimes(1);
+    expect(trackedWhere(conn).params).toContain("excluded-user");
+  });
+
+  test.each([false, true])(
+    "feedback entitlement requires a matching deduction for the participant: %s",
+    async (charged) => {
+      const participant = makeTrackedSelectConn([{ role: "invitee" }]);
+      const entry = makeTrackedSelectConn(charged ? [{ id: "entry1" }] : []);
+      const select = mock()
+        .mockImplementationOnce(participant.select)
+        .mockImplementationOnce(entry.select);
+      await expect(
+        makeBookingRepo().hasChargeableFeedbackEntitlement(
+          { select } as any,
+          "b1",
+          "u1",
+          ["deduct1"],
+        ),
+      ).resolves.toBe(charged);
+      expect(trackedWhere(entry).params).toEqual([
+        "b1",
+        "deduct",
+        "u1",
+        "deduct1",
+      ]);
+    },
+  );
+
+  test("report insert returns its persisted identity and copies only feedback columns", async () => {
+    const values = {
+      bookingId: "b1",
+      sessionId: null,
+      authorId: "t1",
+      discussion: ["Discussed"],
+      strengths: ["Clear"],
+      improvements: ["Practise"],
+    };
+    const persisted = { ...values, id: "report1", version: 1 };
+    const conn = makeInsertConn([persisted]);
+    await expect(
+      makeBookingRepo().insertCompletionFeedback(conn as any, values),
+    ).resolves.toBe(persisted);
+    expect(conn.values).toHaveBeenCalledWith(values);
+  });
+
+  test("report audit insertion returns its persisted identity", async () => {
+    const input = {
+      feedbackId: "report1",
+      bookingId: "b1",
+      sessionId: null,
+      version: 1,
+      status: "submitted",
+      actorId: "admin1",
+      actorRole: "admin",
+      deliveryConfirmed: true,
+      discussion: ["Discussed"],
+      strengths: ["Clear"],
+      improvements: ["Practise"],
+    };
+    const row = { ...input, id: "event1" };
+    const conn = makeInsertConn([row]);
+    await expect(
+      makeBookingRepo().insertCompletionFeedbackHistory(
+        conn as any,
+        input as any,
+      ),
+    ).resolves.toBe(row);
+    expect(conn.values).toHaveBeenCalledWith(input);
+  });
+
+  test("deadline updates retain booking scope and record update time", async () => {
+    const conn = makeUpdateConn();
+    const deadline = new Date("2026-09-01T00:00:00Z");
+    await makeBookingRepo().updateBookingDeadline(conn as any, "b1", deadline);
+    expect(conn.set).toHaveBeenCalledWith({
+      deadlineAt: deadline,
+      updatedAt: expect.any(Date),
+    });
+    expect(
+      new PgDialect().sqlToQuery(conn.where.mock.calls[0]![0]).params,
+    ).toEqual(["b1"]);
+  });
+
+  test("allocation details are restricted to the requested payout", async () => {
+    const rows = [{ id: "allocation1", sourceKey: "fee1" }];
+    const conn = makeTrackedSelectConn(rows);
+    await expect(
+      makeBookingRepo().listTutorPayoutAllocationsByPayoutId(
+        conn as any,
+        "payout1",
+      ),
+    ).resolves.toEqual(rows);
+    expect(trackedWhere(conn).params).toEqual(["payout1"]);
+    expect(conn.query.leftJoin).toHaveBeenCalledTimes(1);
+  });
+
+  test("new fee sources return the inserted row without a retry lookup", async () => {
+    const row = { id: "fee1" };
+    const returning = mock(async () => [row]);
+    const select = mock();
+    const conn = {
+      select,
+      insert: mock(() => ({
+        values: mock(() => ({
+          onConflictDoNothing: mock(() => ({ returning })),
+        })),
+      })),
+    };
+    await expect(
+      makeBookingRepo().insertTutorSessionFee(conn as any, {} as any),
+    ).resolves.toBe(row);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    "missing",
+    "booking",
+    "session",
+    "tutor",
+    "amount",
+    "start",
+    "snapshot",
+  ] as const)("fee retry rejects changed %s identity", async (difference) => {
+    const input = {
+      eventKey: "fee1",
+      bookingId: "b1",
+      bookingSessionId: "s1",
+      tutorId: "t1",
+      grossHonorariumIdr: 10000,
+      scheduledStartAt: new Date("2026-08-01T00:00:00Z"),
+      priceSnapshot: { engine: "v3", collectedMarks: 42 },
+    };
+    const existing = { ...input };
+    if (difference === "booking") existing.bookingId = "other";
+    if (difference === "session") existing.bookingSessionId = "other";
+    if (difference === "tutor") existing.tutorId = "other";
+    if (difference === "amount") existing.grossHonorariumIdr++;
+    if (difference === "start") existing.scheduledStartAt = new Date(0);
+    if (difference === "snapshot")
+      existing.priceSnapshot = { engine: "v3", collectedMarks: 99 };
+    const conn = {
+      ...makeTrackedSelectConn(difference === "missing" ? [] : [existing]),
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({ returning: async () => [] }),
+        }),
+      }),
+    };
+    await expect(
+      makeBookingRepo().insertTutorSessionFee(conn as any, input as any),
+    ).rejects.toThrow("conflicts with an existing source");
   });
 });

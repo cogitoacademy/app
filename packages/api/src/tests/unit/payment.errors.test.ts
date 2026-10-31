@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { DomainError } from "../../lib/domain-errors";
 import {
   PackageNotFoundError,
+  PaymentNotFoundError,
   PackageAlreadyPurchasedError,
   PaymentProviderError,
   WebhookSignatureError,
@@ -147,5 +148,13 @@ describe("payment.errors", () => {
       const result = mapPaymentError(new TestDomainError());
       expect(result.status).toBe(500);
     });
+  });
+});
+
+it("maps an owned payment lookup failure to NOT_FOUND", () => {
+  const error = new PaymentNotFoundError("missing-owned-payment");
+  expect(mapPaymentError(error)).toMatchObject({
+    code: "NOT_FOUND",
+    message: error.message,
   });
 });

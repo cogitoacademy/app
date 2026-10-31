@@ -36,7 +36,6 @@ const empty = {
   coverUrl: "",
   location: "",
   startAt: "",
-  endAt: "",
   state: "draft" as "draft" | "published" | "cancelled" | "postponed",
   bodyEn: emptyBody,
   bodyId: null as FaqRichTextDocument | null,
@@ -114,6 +113,7 @@ export function ActivitiesPage() {
                           ...row,
                           titleId: row.titleId ?? "",
                           descriptionId: row.descriptionId ?? "",
+                          coverUrl: row.coverUrl ?? "",
                           state: row.state as typeof empty.state,
                           startAt: new Intl.DateTimeFormat("sv-SE", {
                             dateStyle: "short",
@@ -121,13 +121,6 @@ export function ActivitiesPage() {
                             timeZone: "Asia/Jakarta",
                           })
                             .format(new Date(row.startAt))
-                            .replace(" ", "T"),
-                          endAt: new Intl.DateTimeFormat("sv-SE", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                            timeZone: "Asia/Jakarta",
-                          })
-                            .format(new Date(row.endAt))
                             .replace(" ", "T"),
                         });
                       }}
@@ -167,10 +160,9 @@ export function ActivitiesPage() {
                   titleId: null,
                   descriptionEn: form.descriptionEn,
                   descriptionId: null,
-                  coverUrl: form.coverUrl,
+                  coverUrl: form.coverUrl.trim() || null,
                   location: form.location,
                   startAt: new Date(form.startAt + "+07:00").toISOString(),
-                  endAt: new Date(form.endAt + "+07:00").toISOString(),
                   bodyEn: form.bodyEn,
                   bodyId: null,
                   state: form.state,
@@ -190,7 +182,6 @@ export function ActivitiesPage() {
                         "coverUrl",
                         "location",
                         "startAt",
-                        "endAt",
                       ] as const
                     ).map((key) => (
                       <Field key={key}>
@@ -199,10 +190,9 @@ export function ActivitiesPage() {
                             {
                               titleEn: "Title",
                               descriptionEn: "Short description",
-                              coverUrl: "Cover image URL",
+                              coverUrl: "Cover image URL (optional)",
                               location: "Location / online link",
-                              startAt: "Starts at (WIB)",
-                              endAt: "Ends at (WIB)",
+                              startAt: "Date & time (WIB)",
                             }[key]
                           }
                         </FieldLabel>
@@ -222,11 +212,7 @@ export function ActivitiesPage() {
                               required
                             />
                             <MinuteTimeInput
-                              ariaLabel={
-                                key === "startAt"
-                                  ? "Start time (WIB)"
-                                  : "End time (WIB)"
-                              }
+                              ariaLabel="Time (WIB)"
                               showIcon={false}
                               required
                               value={form[key].split("T")[1] ?? ""}
@@ -243,7 +229,7 @@ export function ActivitiesPage() {
                           <Input
                             id={"activity-" + key}
                             type={key === "coverUrl" ? "url" : "text"}
-                            required={!key.endsWith("Id")}
+                            required={key !== "coverUrl" && !key.endsWith("Id")}
                             value={form[key]}
                             onChange={(e) =>
                               setForm({ ...form, [key]: e.target.value })
@@ -252,35 +238,38 @@ export function ActivitiesPage() {
                         )}
                       </Field>
                     ))}
-                  </div>
-                  <Field>
-                    <FieldLabel>Publication</FieldLabel>
-                    <Select
-                      value={form.state}
-                      onValueChange={(value) => {
-                        if (value)
-                          setForm({
-                            ...form,
-                            state: value as typeof form.state,
-                          });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectList>
-                          {["draft", "published", "cancelled", "postponed"].map(
-                            (state) => (
+                    <Field>
+                      <FieldLabel>Publication</FieldLabel>
+                      <Select
+                        value={form.state}
+                        onValueChange={(value) => {
+                          if (value)
+                            setForm({
+                              ...form,
+                              state: value as typeof form.state,
+                            });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectList>
+                            {[
+                              "draft",
+                              "published",
+                              "cancelled",
+                              "postponed",
+                            ].map((state) => (
                               <SelectItem key={state} value={state}>
                                 {formatPublicationState(state)}
                               </SelectItem>
-                            ),
-                          )}
-                        </SelectList>
-                      </SelectPopup>
-                    </Select>
-                  </Field>
+                            ))}
+                          </SelectList>
+                        </SelectPopup>
+                      </Select>
+                    </Field>
+                  </div>
                 </div>
                 <div className="min-w-0 space-y-5 lg:[&_.tiptap]:min-h-80">
                   <FaqRichTextEditor

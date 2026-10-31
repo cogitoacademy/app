@@ -15,7 +15,6 @@ export const activityRouter = {
       const values = {
         ...fields,
         startAt: new Date(fields.startAt),
-        endAt: new Date(fields.endAt),
         updatedAt: new Date(),
       };
       if (id) {
@@ -79,11 +78,10 @@ export const activityRouter = {
             ? r.descriptionId
             : r.descriptionEn,
         body: input.locale === "id" && r.bodyId ? r.bodyId : r.bodyEn,
-        imageUrl: r.coverUrl,
+        imageUrl: r.coverUrl?.trim() || null,
         location: r.location,
         startAt: r.startAt.toISOString(),
-        endAt: r.endAt.toISOString(),
-        status: r.endAt.getTime() < Date.now() ? "completed" : "upcoming",
+        status: r.startAt.getTime() < Date.now() ? "completed" : "upcoming",
       }));
     }),
 };

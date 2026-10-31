@@ -1,5 +1,11 @@
 import { expect, mock, test } from "bun:test";
-import { academyClass } from "@cogito-app/db/schema";
+import {
+  academyClass,
+  academyClassSession,
+  academyClassEnrollmentAllocation,
+  academyClassEnrollment,
+  auditLog,
+} from "@cogito-app/db/schema";
 import { createAdminClassCancellation } from "../../modules/class-enrollment/class-enrollment.admin-cancellation";
 
 const classId = "f27dcb3e-e7e4-46d0-8a9d-291a473ff4b2";
@@ -9,17 +15,24 @@ const input = {
   reason: "Class cannot proceed",
 };
 
-function fixture(record: Record<string, unknown> | null) {
+function fixture(
+  record: Record<string, unknown> | null,
+  tableRows = new Map<object, unknown[]>(),
+) {
   const tx = {
+    update: () => ({ set: () => ({ where: async () => undefined }) }),
     select: () => {
       let rows: unknown[] = [];
       const query = {
         from: (table: object) => {
-          rows = table === academyClass && record ? [record] : [];
+          rows =
+            tableRows.get(table) ??
+            (table === academyClass && record ? [record] : []);
           return query;
         },
         where: () => query,
         orderBy: () => query,
+        limit: () => Promise.resolve(rows),
         for: () => Promise.resolve(rows),
         // eslint-disable-next-line unicorn/no-thenable -- Drizzle query builders are PromiseLike.
         then: (resolve: (rows: unknown[]) => unknown) =>
@@ -79,4 +92,65 @@ test("a published class with no enrollments can preview cancellation", async () 
     cancelledSessionIds: [],
     releasedAllocationIds: [],
   });
+});
+
+test("admin class cancellation replays its receipt and rejects reused keys with changed reason", async () => {
+  const record = { id: classId, state: "published", version: 1 };
+  const quote = await fixture(record).preview("admin1", input);
+  const tableRows = new Map<object, unknown[]>([
+    [auditLog, [{ details: { quote, reason: input.reason } }]],
+  ]);
+  const service = fixture(record, tableRows);
+  const confirmation = {
+    ...input,
+    requestKey: "66adbbbc-34e2-4b3f-9f56-a48aa14edc04",
+    quoteVersion: quote.quoteVersion,
+  };
+  await expect(service.confirm("admin1", confirmation)).resolves.toEqual(quote);
+  await expect(
+    service.confirm("admin1", { ...confirmation, reason: "Different reason" }),
+  ).rejects.toThrow("request key was already used");
+});
+
+test("admin class cancellation refuses to release funded Marks without a student wallet", async () => {
+  const allocationId = "e66102c3-31bf-4bcc-8461-345695c8c7c0";
+  const enrollmentId = "d1e8c16d-9c2e-4a4f-b765-3ebbb9b3892f";
+  const tableRows = new Map<object, unknown[]>([
+    [
+      academyClassSession,
+      [{ id: "s1", state: "scheduled", startAt: new Date("2099-01-01") }],
+    ],
+    [
+      academyClassEnrollment,
+      [{ id: enrollmentId, studentId: "student1", state: "active" }],
+    ],
+    [
+      academyClassEnrollmentAllocation,
+      [
+        {
+          id: allocationId,
+          enrollmentId,
+          studentId: "student1",
+          sessionId: "s1",
+          state: "funded",
+          rateMarks: 20,
+          fundedMarks: 20,
+          spentMarks: 0,
+          releasedMarks: 0,
+        },
+      ],
+    ],
+  ]);
+  const service = fixture(
+    { id: classId, state: "published", version: 1 },
+    tableRows,
+  );
+  const quote = await service.preview("admin1", input);
+  await expect(
+    service.confirm("admin1", {
+      ...input,
+      requestKey: "66adbbbc-34e2-4b3f-9f56-a48aa14edc04",
+      quoteVersion: quote.quoteVersion,
+    }),
+  ).rejects.toThrow("wallet is unavailable");
 });

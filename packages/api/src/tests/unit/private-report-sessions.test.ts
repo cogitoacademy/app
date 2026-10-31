@@ -117,3 +117,25 @@ describe("private reporting catalog", () => {
     });
   });
 });
+
+test.each(["completed", "no_show", "cancelled"])(
+  "admin reporting eligibility for %s private session",
+  async (state) => {
+    const f = fixture([
+      {
+        ...base,
+        state,
+        parentState: "completed",
+        learningGoal: "",
+        modality: "in_person",
+      },
+    ]);
+    const [row] = await listPrivateReportSessions(f.db, "admin", "admin");
+    expect(row).toMatchObject({
+      title: "Private session",
+      mode: "in_person",
+      canRecord: state !== "cancelled",
+      canEdit: false,
+    });
+  },
+);

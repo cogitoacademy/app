@@ -8,7 +8,6 @@ const value = {
   coverUrl: "https://example.com/cover.jpg",
   location: "Online",
   startAt: "2026-11-14T03:00:00Z",
-  endAt: "2026-11-14T05:00:00Z",
   state: "draft",
   bodyEn: {
     type: "doc",
@@ -27,13 +26,16 @@ describe("Activity article validation", () => {
   test("accepts rich text registration links without a separate registration field", () => {
     expect(saveActivityInput.safeParse(value).success).toBe(true);
     expect(
+      saveActivityInput.safeParse({ ...value, coverUrl: null }).success,
+    ).toBe(true);
+    expect(
       saveActivityInput.safeParse({
         ...value,
         registrationLink: "https://example.com",
       }).success,
     ).toBe(false);
   });
-  test("requires English and a valid schedule", () => {
+  test("requires English and one valid date", () => {
     expect(
       saveActivityInput.safeParse({ ...value, titleEn: " " }).success,
     ).toBe(false);

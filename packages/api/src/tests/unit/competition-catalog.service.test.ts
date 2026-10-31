@@ -694,3 +694,24 @@ describe("competition catalog service", () => {
     expect(repo.setCompetitionCatalogEntryActive).not.toHaveBeenCalled();
   });
 });
+
+test("an absent optional calendar count does not mark a competition as used", async () => {
+  const { service, repo } = setup({
+    countCompetitionCatalogReferences: async () => ({
+      tutorAssignments: 0,
+      pendingProfileEdits: 0,
+      bookings: 0,
+      bookingSessions: 0,
+      historicalTutorProfileAudits: 0,
+      economyRevisions: 0,
+      defaultRates: 0,
+      calendarEvents: undefined,
+    }),
+  });
+  await service.remove("admin-1", {
+    id: parent.id,
+    expectedVersion: parent.version,
+    reason: "Remove unused competition",
+  });
+  expect(repo.deleteCompetitionCatalogEntry).toHaveBeenCalledTimes(1);
+});

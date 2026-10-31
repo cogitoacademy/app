@@ -875,3 +875,199 @@ describe("Admin Service", () => {
     });
   });
 });
+
+function makeAdminBoundaryService(extra: Record<string, unknown> = {}) {
+  return createAdminService({
+    db: {
+      transaction: mock(async (fn: any) =>
+        fn({ execute: mock(async () => undefined) }),
+      ),
+    },
+    adminRepo: {},
+    wallet: {},
+    payout: {},
+    auditPort: { record: mock(async () => undefined) },
+    ...extra,
+  } as any);
+}
+
+describe("Admin service adapter boundaries", () => {
+  test("search trims query and defaults its limit", async () => {
+    const adminRepo = { searchUsers: mock(async () => [{ id: "u1" }]) };
+    const service = makeAdminBoundaryService({ adminRepo });
+    await expect(
+      service.searchUsers({ query: "  student  " }),
+    ).resolves.toEqual([{ id: "u1" }]);
+    expect(adminRepo.searchUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      "student",
+      10,
+      undefined,
+    );
+    await service.searchUsers({ query: " tutor ", limit: 4, role: "tutor" });
+    expect(adminRepo.searchUsers).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "tutor",
+      4,
+      "tutor",
+    );
+  });
+
+  test("missing target fails role update before a write", async () => {
+    const adminRepo = {
+      getById: mock(async () => null),
+      updateRoleWithExpected: mock(async () => []),
+    };
+    await expect(
+      makeAdminBoundaryService({ adminRepo }).setRole("admin1", {
+        userId: "gone",
+        role: "student",
+        expectedRole: "tutor",
+      }),
+    ).rejects.toBeInstanceOf(UserNotFoundError);
+    expect(adminRepo.updateRoleWithExpected).not.toHaveBeenCalled();
+  });
+
+  test("payout date filters are optional and preserve valid boundaries", async () => {
+    const payout = {
+      getTutorPayouts: mock(async () => []),
+      getTutorPayoutReport: mock(async () => ({ items: [] })),
+    };
+    const service = makeAdminBoundaryService({ payout });
+    await service.getTutorPayouts({ tutorId: "t1" });
+    expect(payout.getTutorPayouts).toHaveBeenLastCalledWith({
+      tutorId: "t1",
+      dateFrom: undefined,
+      dateTo: undefined,
+    });
+    await service.getTutorPayouts({
+      tutorId: "t1",
+      dateFrom: "2026-01-01T00:00:00Z",
+      dateTo: "2026-01-02T00:00:00Z",
+    });
+    expect(payout.getTutorPayouts).toHaveBeenLastCalledWith({
+      tutorId: "t1",
+      dateFrom: new Date("2026-01-01"),
+      dateTo: new Date("2026-01-02"),
+    });
+    await service.getTutorPayoutReport();
+    expect(payout.getTutorPayoutReport).toHaveBeenCalledWith({
+      dateFrom: undefined,
+      dateTo: undefined,
+    });
+    await expect(
+      service.getTutorPayoutReport({ dateFrom: "invalid" }),
+    ).rejects.toBeInstanceOf(InvalidLedgerFilterError);
+  });
+
+  test("available payout adapters forward void, reconciliation and preview arguments", async () => {
+    const payout = {
+      voidTutorPayout: mock(async () => ({ status: "voided" })),
+      resolveTutorPayoutReconciliation: mock(async () => ({ resolved: true })),
+      previewTutorPayout: mock(async () => ({ amountIdr: 100 })),
+    };
+    const service = makeAdminBoundaryService({ payout });
+    const reason = { payoutId: "p1", reason: "Reviewed" };
+    await expect(service.voidTutorPayout("admin1", reason)).resolves.toEqual({
+      status: "voided",
+    });
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", reason),
+    ).resolves.toEqual({ resolved: true });
+    await expect(
+      service.previewTutorPayout({ tutorId: "t1", sourceKeys: ["session:s1"] }),
+    ).resolves.toEqual({ amountIdr: 100 });
+    expect(payout.voidTutorPayout).toHaveBeenCalledWith("admin1", reason);
+    expect(payout.resolveTutorPayoutReconciliation).toHaveBeenCalledWith(
+      "admin1",
+      reason,
+    );
+    expect(payout.previewTutorPayout).toHaveBeenCalledWith("t1", [
+      "session:s1",
+    ]);
+  });
+
+  test.each([
+    "missing-services",
+    "missing-revision",
+    "unknown-competition",
+  ] as const)(
+    "activation rejects %s without auditing success",
+    async (scenario) => {
+      const auditPort = { record: mock(async () => undefined) };
+      const economy = {
+        getV3ConfigByVersion: mock(async () =>
+          scenario === "missing-revision"
+            ? null
+            : {
+                values: {
+                  ...DEFAULT_V3_ECONOMY_CONFIG,
+                  competitionRates: {
+                    unknown: { soloMarks: 40, soloFeeIdr: 150000 },
+                  },
+                },
+              },
+        ),
+        activateV3Config: mock(async () => ({})),
+      };
+      const competitionCatalog = { listParents: mock(async () => []) };
+      const service = makeAdminBoundaryService({
+        auditPort,
+        ...(scenario === "missing-services"
+          ? {}
+          : { economy, competitionCatalog }),
+      });
+      await expect(
+        service.activateV3EconomySettings("admin1", {
+          version: 1,
+          expectedActiveRevision: null,
+          reason: "Approved",
+        }),
+      ).rejects.toThrow();
+      expect(auditPort.record).not.toHaveBeenCalled();
+      expect(economy.activateV3Config).not.toHaveBeenCalled();
+    },
+  );
+});
+
+test("admin listUsers preserves default and explicit pagination", async () => {
+  const adminRepo = {
+    listUsers: mock(async () => [{ id: "u1" }]),
+    countUsers: mock(async () => 3),
+  };
+  const service = makeAdminBoundaryService({ adminRepo });
+  const defaults = await service.listUsers();
+  expect(defaults).toMatchObject({
+    users: [{ id: "u1" }],
+    total: 3,
+    offset: 0,
+  });
+  expect(defaults.limit).toBeGreaterThan(0);
+  await expect(
+    service.listUsers({ limit: 5, offset: 2 }),
+  ).resolves.toMatchObject({ limit: 5, offset: 2 });
+  expect(adminRepo.listUsers).toHaveBeenLastCalledWith(expect.anything(), 5, 2);
+});
+
+test("admin analytics sanitizes a non-finite aggregate rather than exposing it", async () => {
+  const adminRepo = {
+    getDashboardAnalytics: mock(async () => ({
+      bookingSummary: { bookings: "NaN" },
+      userSummary: {},
+      bookingTrend: [],
+      userTrend: [],
+      stateBreakdown: [],
+      modalityBreakdown: [],
+      categoryBreakdown: [],
+      accountSummary: {},
+      marksSummary: {},
+      paymentSummary: {},
+      refundSummary: {},
+      operationsSummary: emptyOperations,
+    })),
+  };
+  const result = await makeAdminBoundaryService({
+    adminRepo,
+  }).getDashboardAnalytics();
+  expect(result.summary.bookings).toBe(0);
+});

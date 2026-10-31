@@ -142,3 +142,9 @@ describe("tutor payout calculation", () => {
     );
   });
 });
+
+it("legal name without a NIK cannot receive a tax status", () => {
+  expect(
+    tutorTaxStatus({ legalName: "Tutor", nik: undefined, npwp: null }),
+  ).toBe("missing");
+});

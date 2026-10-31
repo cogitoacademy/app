@@ -1039,13 +1039,8 @@ export function createPaymentService(deps: {
         return { status: record.status };
       }
 
-      const shouldCredit =
-        record.status !== PAYMENT_STATUS.PAID &&
-        record.status !== PAYMENT_STATUS.SETTLED &&
-        record.status !== PAYMENT_STATUS.REFUNDED &&
-        (input.status === PAYMENT_STATUS.PAID ||
-          input.status === PAYMENT_STATUS.SETTLED);
-
+      // Existing credited states returned above; every allowed success here
+      // is the first credit for this payment.
       if (
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED
@@ -1063,7 +1058,7 @@ export function createPaymentService(deps: {
           providerSuccessTimeStatus,
         });
 
-        if (shouldCredit) {
+        {
           await wallet.credit(tx, {
             walletId: record.walletId,
             actorType: "student",
@@ -1074,7 +1069,7 @@ export function createPaymentService(deps: {
           });
         }
 
-        if (notification && shouldCredit) {
+        if (notification) {
           await notification.writeBestEffort({
             db: tx,
             userId: record.userId,
@@ -1206,10 +1201,8 @@ export function createPaymentService(deps: {
               emailRequired: true,
             });
           }
-        } else if (
-          input.status === PAYMENT_STATUS.FAILED ||
-          input.status === PAYMENT_STATUS.EXPIRED
-        ) {
+        } else {
+          // The allowed-transition check leaves only FAILED or EXPIRED here.
           // H3: after a re-purchase the row is reset to PENDING with a NEW
           // providerRequestId (the current attempt's generation). A late
           // FAILED/EXPIRED webhook for the OLD attempt would otherwise flip the

@@ -1849,5 +1849,92 @@ describe("Tutor Service", () => {
         "slot1",
       );
     });
+
+    test("profile projection omits catalog competitions with no configured economy rate", async () => {
+      const profile = makeProfile();
+      profile.subjects[0].subject.parent.slug = "unpriced-competition";
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+        },
+        pricingPort: {
+          ...mockPricingPort,
+          getActiveV3Config: async () => ({
+            version: 1,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          }),
+        },
+      });
+      expect(
+        (await createTutorService(deps as any).getMyProfile("u1"))
+          .v3FeeProjection?.competitions,
+      ).toEqual([]);
+      profile.subjects = undefined;
+      expect(
+        (await createTutorService(deps as any).getMyProfile("u1")).subjects,
+      ).toEqual([]);
+    });
+    test("profile update projects and audits the returned row if the reread disappears", async () => {
+      const profile = makeProfile();
+      const updated = makeProfile({ shortBio: "Saved bio" });
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => undefined).mockResolvedValueOnce(
+            profile,
+          ),
+          updateProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      expect(
+        await createTutorService(deps as any).updateMyProfile("u1", {
+          shortBio: "Saved bio",
+          version: 1,
+        }),
+      ).toMatchObject({ shortBio: "Saved bio" });
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          afterState: expect.objectContaining({ shortBio: "Saved bio" }),
+        }),
+      );
+    });
+    test("submission without an update row records no fabricated terms version", async () => {
+      const profile = makeProfile({
+        termsOfServiceAcceptedAt: null,
+        termsOfServiceVersion: null,
+      });
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus: mock(async () => undefined),
+        },
+      });
+      await createTutorService(deps as any).submitForReview("u1", {
+        acceptTerms: true,
+      });
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({ termsOfServiceVersion: null }),
+        }),
+      );
+    });
+    test.each(["dateFrom", "dateTo"] as const)(
+      "payouts forward one-sided %s filters",
+      async (key) => {
+        const deps = makeDeps();
+        await createTutorService(deps as any).getMyPayouts("u1", {
+          [key]: "2026-10-01T00:00:00Z",
+        });
+        expect(deps.payout.getTutorPayouts).toHaveBeenCalledWith({
+          tutorId: "u1",
+          dateFrom:
+            key === "dateFrom" ? new Date("2026-10-01T00:00:00Z") : undefined,
+          dateTo:
+            key === "dateTo" ? new Date("2026-10-01T00:00:00Z") : undefined,
+        });
+      },
+    );
   });
 });

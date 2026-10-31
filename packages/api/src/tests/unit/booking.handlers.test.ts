@@ -697,3 +697,67 @@ describe("tutorActionsHandler", () => {
     });
   });
 });
+
+describe("booking handler optional scheduling fields", () => {
+  test.each([createBookingHandler, createTutorActionsHandler])(
+    "reschedule supplies ninety-minute end when the client omits it",
+    async (createHandler) => {
+      const booking = makeBookingService();
+      const handler = createHandler(booking as any);
+      const start = new Date("2026-11-10T10:00:00Z");
+      await handler.proposeReschedule({
+        context: makeContext("tutor1"),
+        input: {
+          bookingId: "b1",
+          proposedStartAt: start,
+          reason: "New time",
+        } as any,
+      });
+      expect(booking.proposeReschedule).toHaveBeenCalledWith(
+        "tutor1",
+        "b1",
+        start,
+        new Date("2026-11-10T11:30:00Z"),
+        "New time",
+        undefined,
+        undefined,
+      );
+    },
+  );
+
+  test("group series without an optional subject still forwards its input and keeps request identity", async () => {
+    const createGroupSeries = mock(async () => ({
+      id: "series-optional-subject",
+    }));
+    const handler = createBookingHandler({
+      ...makeBookingService(),
+      createGroupSeries,
+    } as any);
+    const context = makeContext("student1");
+    context.headers = makeHeaders("optional-subject-coverage");
+    const input = {
+      tutorId: "tutor1",
+      availabilitySlotId: "slot1",
+      modality: "online",
+      targetGroupSize: 2,
+      inviteeUserIds: ["student2"],
+      sessions: [
+        { scheduledStartAt: new Date("2026-11-10T10:00:00Z") },
+        { scheduledStartAt: new Date("2026-11-11T10:00:00Z") },
+      ],
+      timezone: "Asia/Jakarta",
+    };
+    await expect(
+      handler.createGroupSeries({ context, input: input as any }),
+    ).resolves.toEqual({ id: "series-optional-subject" });
+    await handler.createGroupSeries({ context, input: input as any });
+    expect(createGroupSeries).toHaveBeenCalledTimes(1);
+    expect(createGroupSeries).toHaveBeenCalledWith(
+      "student1",
+      expect.objectContaining({
+        subjectId: undefined,
+        sessions: input.sessions,
+      }),
+    );
+  });
+});

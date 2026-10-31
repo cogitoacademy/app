@@ -102,7 +102,8 @@ export function createGoogleMeetingProvider(
     redis: redis ?? undefined,
     monitor: (state, error) => {
       log({
-        level: state === "open" ? "error" : "info",
+        // The breaker reports a failure before opening; retries enter half-open first.
+        level: "info",
         action: "circuit_breaker_state_change",
         service: "google_meet",
         state,

@@ -105,3 +105,12 @@ describe("db", () => {
     );
   });
 });
+
+test("production connections enable verified TLS", async () => {
+  const { createDb } = await import("../../index");
+  mockEnv.NODE_ENV = "production";
+  mockEnv.DB_SSL_ENABLED = true;
+  mockEnv.DB_SSL_REJECT_UNAUTHORIZED = true;
+  createDb();
+  expect(postgresOptions.at(-1)?.ssl).toEqual({ rejectUnauthorized: true });
+});

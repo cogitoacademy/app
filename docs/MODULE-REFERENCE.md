@@ -2799,3 +2799,7 @@ V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive 
 
 
 FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
+
+## Admin retry for failed Google Meet creation
+
+Admin booking detail exposes an icon-only retry action when an online booking is confirmed, has no meeting URL, and its meeting status is failed. The admin procedure verifies those conditions under a booking row lock, retries using the existing meeting finalization flow, records the state transition as admin when successful, and audits the retry result. Academy Classes retains its class-level failed-meeting retry action, now shown as an accessible retry icon.

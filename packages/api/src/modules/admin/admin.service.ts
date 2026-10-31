@@ -203,8 +203,8 @@ function buildPeriodDateKeys(periodStart: Date, periodEnd: Date): string[] {
 }
 
 function toAnalyticsWindow(
-  input: DashboardAnalyticsInput = {},
-  now = new Date(),
+  input: DashboardAnalyticsInput,
+  now: Date,
 ): {
   period: DashboardAnalyticsSelection;
   periodStart: Date;

@@ -501,3 +501,17 @@ describe("checkCircuitBreakers", () => {
     expect(result.status).toBe("ok");
   });
 });
+
+test("healthCheck uses the default database when no override is supplied", async () => {
+  const { db } = await import("@cogito-app/db");
+  const original = db.execute;
+  const failure = new Error("default connection unavailable");
+  db.execute = (() => Promise.reject(failure)) as typeof db.execute;
+  try {
+    const result = await healthCheck();
+    expect(result.status).toBe("error");
+    expect(result.checks.database).toBe("error");
+  } finally {
+    db.execute = original;
+  }
+});

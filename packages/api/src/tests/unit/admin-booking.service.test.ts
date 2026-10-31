@@ -1988,3 +1988,332 @@ describe("AdminBookingService additional guards", () => {
     expect(repo.updateParticipantHeldAmount).toHaveBeenCalledTimes(2);
   });
 });
+
+function makeBoundaryService(extra: Record<string, unknown> = {}) {
+  return createAdminBookingService({
+    db: makeDb(),
+    repo: mockRepo(),
+    auditPort: makeAuditPort(),
+    wallet: makeWalletPort() as any,
+    refund: makeRefundPort(),
+    ...extra,
+  } as any);
+}
+
+describe("Admin booking recovery and concurrency boundaries", () => {
+  test.each([null, { raced: true }])(
+    "override refuses a lost update",
+    async (updateResult) => {
+      const wallet = makeWalletPort();
+      const repo = mockRepo({
+        updateBookingWithOverride: mock(async () => updateResult),
+      });
+      const service = makeBoundaryService({ repo, wallet });
+      await expect(
+        service.applyOverride("admin1", {
+          bookingId: "b1",
+          category: "force_cancel",
+          reason: "lost update",
+        }),
+      ).rejects.toThrow();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(repo.insertStateHistoryEntry).not.toHaveBeenCalled();
+    },
+  );
+
+  test("override reports a booking removed after the committed update", async () => {
+    let reads = 0;
+    const repo = mockRepo({
+      findBookingById: mock(async () =>
+        ++reads === 1
+          ? {
+              id: "b1",
+              tutorId: "t1",
+              currentState: "confirmed",
+              holdAmount: 0,
+            }
+          : null,
+      ),
+    });
+    await expect(
+      makeBoundaryService({ repo }).applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "gone",
+      }),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+  });
+
+  test("override escapes user note before notifying participants", async () => {
+    const notification = makeNotificationPort();
+    await makeBoundaryService({ notification }).applyOverride("admin1", {
+      bookingId: "b1",
+      category: "force_cancel",
+      reason: "admin correction",
+      userNote: "<script>bad</script>",
+    });
+    expect(notification.writeBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("&lt;script&gt;bad&lt;/script&gt;"),
+      }),
+    );
+  });
+
+  test.each([null, {}, { overriddenAt: "invalid-date" }])(
+    "invalid override metadata has no deadline",
+    async (overrideMeta) => {
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => [{ id: "b1", overrideMeta }]),
+      });
+      const result = await makeBoundaryService({ repo }).listBookings();
+      expect(result.items[0]).toMatchObject({
+        reportedAt: null,
+        slaDeadline: null,
+        escalated: false,
+      });
+    },
+  );
+
+  test.each([
+    null,
+    { id: "b1", modality: "online", currentState: "completed" },
+  ])("meeting link rejects an absent or terminal booking", async (booking) => {
+    const meeting = {
+      setManualLink: mock(async () => ({})),
+      cancelEvent: mock(async () => undefined),
+    };
+    const service = makeBoundaryService({
+      repo: mockRepo({ findBookingById: mock(async () => booking) }),
+      meeting,
+    });
+    await expect(
+      service.setMeetingLink("admin1", {
+        bookingId: "b1",
+        url: "https://meet.example.com/one",
+      }),
+    ).rejects.toThrow();
+    expect(meeting.setManualLink).not.toHaveBeenCalled();
+  });
+
+  test("meeting link notifies only confirmed and reconfirmed seats", async () => {
+    const notification = makeNotificationPort();
+    const repo = mockRepo({
+      findBookingById: mock(async () => ({
+        id: "b1",
+        modality: "online",
+        currentState: "scheduled",
+      })),
+      findParticipantsByBookingId: mock(async () => [
+        { userId: "a", confirmationState: "confirmed" },
+        { userId: "b", confirmationState: "reconfirmed" },
+        { userId: "pending", confirmationState: "pending" },
+      ]),
+    });
+    const meeting = {
+      setManualLink: mock(async () => ({
+        meetingUrl: "https://meet.example.com/one",
+        status: "created",
+      })),
+      cancelEvent: mock(async () => undefined),
+    };
+    await expect(
+      makeBoundaryService({ repo, meeting, notification }).setMeetingLink(
+        "admin1",
+        { bookingId: "b1", url: "https://meet.example.com/one" },
+      ),
+    ).resolves.toMatchObject({ status: "created" });
+    expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
+    expect(notification.writeBestEffort).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "pending" }),
+    );
+  });
+
+  test("meeting retry requires its port", async () => {
+    await expect(
+      makeBoundaryService().retryMeeting("admin1", "b1"),
+    ).rejects.toThrow("Meeting retry is unavailable");
+  });
+
+  test("meeting retry audits its scheduling result", async () => {
+    const auditPort = makeAuditPort();
+    const meetingRetry = {
+      retryMeetingByAdmin: mock(async () => ({ scheduled: true })),
+    };
+    await expect(
+      makeBoundaryService({ auditPort, meetingRetry }).retryMeeting(
+        "admin1",
+        "b1",
+      ),
+    ).resolves.toEqual({ scheduled: true });
+    expect(meetingRetry.retryMeetingByAdmin).toHaveBeenCalledWith(
+      "admin1",
+      "b1",
+    );
+    expect(auditPort.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "admin1",
+        action: "admin_retry_meeting",
+        afterState: { scheduled: true },
+      }),
+    );
+  });
+
+  test.each([
+    "session-missing",
+    "parent-missing",
+    "session-removed",
+    "session-moved",
+    "parent-terminal",
+  ] as const)(
+    "session cancellation rejects %s before moving Marks",
+    async (scenario) => {
+      let sessionReads = 0;
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: "scheduled",
+        holdAmount: 50,
+      };
+      const repo = mockRepo({
+        findBookingById: mock(async () =>
+          scenario === "parent-missing"
+            ? null
+            : {
+                id: "b1",
+                currentState:
+                  scenario === "parent-terminal" ? "completed" : "scheduled",
+              },
+        ),
+        findSessionById: mock(async () => {
+          sessionReads++;
+          if (
+            scenario === "session-missing" ||
+            (scenario === "session-removed" && sessionReads > 1)
+          )
+            return null;
+          return {
+            ...session,
+            seriesBookingId:
+              scenario === "session-moved" && sessionReads > 1
+                ? "other-parent"
+                : "b1",
+          };
+        }),
+      });
+      const wallet = makeWalletPort();
+      await expect(
+        makeBoundaryService({ repo, wallet }).cancelSeriesSession("admin1", {
+          sessionId: "s1",
+          marksAction: "release",
+        }),
+      ).rejects.toThrow();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.cancelSession).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["partial", "forfeit"] as const)(
+    "session %s updates holds and participant notification",
+    async (marksAction) => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "scheduled",
+        })),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          holdAmount: 50,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          {
+            id: "p1",
+            userId: "u1",
+            confirmationState: "confirmed",
+            heldAmount: 100,
+          },
+          {
+            id: "p0",
+            userId: "u0",
+            confirmationState: "reconfirmed",
+            heldAmount: 0,
+          },
+        ]),
+      });
+      const wallet = makeWalletPort();
+      const notification = makeNotificationPort();
+      const auditPort = makeAuditPort();
+      await makeBoundaryService({
+        repo,
+        wallet,
+        notification,
+        auditPort,
+      }).cancelSeriesSession("admin1", {
+        sessionId: "s1",
+        marksAction,
+        amount: 20,
+      });
+      const amount = marksAction === "partial" ? 20 : 50;
+      expect(
+        marksAction === "forfeit" ? wallet.deduct : wallet.release,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amount }),
+      );
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        100 - amount,
+      );
+      expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "admin_cancel_series_session",
+          afterState: expect.objectContaining({ marksAction }),
+        }),
+      );
+    },
+  );
+
+  test.each(["wallet-missing", "cancel-race"] as const)(
+    "session cancellation propagates %s",
+    async (scenario) => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "scheduled",
+        })),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          holdAmount: 50,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          {
+            id: "p1",
+            userId: "u1",
+            confirmationState: "confirmed",
+            heldAmount: 50,
+          },
+        ]),
+        cancelSession: mock(async () => false),
+      });
+      const wallet = makeWalletPort(
+        scenario === "wallet-missing"
+          ? { getByUserId: mock(async () => null) }
+          : {},
+      );
+      await expect(
+        makeBoundaryService({ repo, wallet }).cancelSeriesSession("admin1", {
+          sessionId: "s1",
+          marksAction: "release",
+        }),
+      ).rejects.toThrow();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+    },
+  );
+});

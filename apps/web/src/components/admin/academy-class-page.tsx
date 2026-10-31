@@ -16,6 +16,7 @@ import {
   IconEdit,
   IconMapPin,
   IconPlus,
+  IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
 import {
@@ -458,15 +459,31 @@ export function AcademyClassPage() {
             input: { state: "postponed" },
           }),
         });
+        const onlineSessions = record.sessions.filter(
+          (session) => session.mode === "online",
+        );
+        const failed = onlineSessions.filter(
+          (session) => session.meeting?.status === "failed",
+        ).length;
+        const ready = onlineSessions.filter(
+          (session) => session.meeting?.status === "created",
+        ).length;
+        const pending = onlineSessions.length - failed - ready;
         toastManager.add({
-          title: "Meeting setup retried",
-          description: `${record.titleEn} meeting setup has been retried.`,
-          type: "success",
+          title: failed
+            ? ready
+              ? "Some meeting links could not be created"
+              : "Meeting links could not be created"
+            : pending
+              ? "Meeting links are still pending"
+              : "Meeting links created",
+          description: `${record.titleEn}: ${ready} ready${failed ? ` · ${failed} failed` : ""}${pending ? ` · ${pending} pending` : ""}.`,
+          type: failed ? "error" : pending ? "info" : "success",
         });
       },
       onError: (error: Error) => {
         toastManager.add({
-          title: "Meeting retry could not be started",
+          title: "Meeting link could not be created",
           description: getUserFacingError(error),
           type: "error",
         });
@@ -540,6 +557,15 @@ export function AcademyClassPage() {
     (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
   );
   const competitions = competitionsQuery.data ?? [];
+  const sortedCompetitions = [...competitions].sort((a, b) => {
+    const parentA = a.parent?.name ?? a.name;
+    const parentB = b.parent?.name ?? b.name;
+    return (
+      parentA.localeCompare(parentB) ||
+      (a.parent ? 1 : b.parent ? -1 : 0) ||
+      a.name.localeCompare(b.name)
+    );
+  });
   const tutors = tutorsQuery.data ?? [];
   const rooms = roomsQuery.data ?? [];
 
@@ -948,6 +974,9 @@ export function AcademyClassPage() {
                         <Button
                           type="button"
                           variant="secondary"
+                          size="xs"
+                          aria-label="Retry failed meeting setup"
+                          title="Retry failed meeting setup"
                           disabled={
                             retryClassMeetings.isPending ||
                             retryReason.trim().length < 3
@@ -959,7 +988,7 @@ export function AcademyClassPage() {
                             })
                           }
                         >
-                          Retry failed meeting setup
+                          <IconRefresh aria-hidden="true" />
                         </Button>
                       </div>
                     ) : pendingMeetings > 0 ? (
@@ -1432,7 +1461,7 @@ export function AcademyClassPage() {
                             onValueChange={(value) =>
                               updateForm("competitionId", String(value ?? ""))
                             }
-                            items={competitions.map((competition) => ({
+                            items={sortedCompetitions.map((competition) => ({
                               value: competition.id,
                               label: competition.name,
                             }))}
@@ -1441,8 +1470,8 @@ export function AcademyClassPage() {
                               <SelectValue placeholder="Choose a competition" />
                             </SelectTrigger>
                             <SelectPopup>
-                              <SelectList>
-                                {competitions.map((competition) => (
+                              <SelectList className="max-h-56">
+                                {sortedCompetitions.map((competition) => (
                                   <SelectItem
                                     key={competition.id}
                                     value={competition.id}

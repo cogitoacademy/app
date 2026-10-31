@@ -26,7 +26,6 @@ function articleInput(overrides: Record<string, unknown> = {}) {
     coverUrl: "https://example.com/cover.jpg",
     location: "Online",
     startAt,
-    endAt: new Date(Date.parse(startAt) + 60 * 60 * 1000).toISOString(),
     bodyEn: body,
     bodyId: null,
     state: "draft" as const,
@@ -54,11 +53,12 @@ describe("activity router", () => {
   test("lists, creates, version-checks, updates, and deletes admin articles", async () => {
     expect(await admin.adminActivities.list()).toBeArray();
 
-    const created = await admin.adminActivities.save(articleInput());
+    const created = await admin.adminActivities.save(
+      articleInput({ coverUrl: null }),
+    );
     createdIds.push(created.id);
     expect(created.version).toBe(1);
     expect(created.startAt).toBeInstanceOf(Date);
-    expect(created.endAt).toBeInstanceOf(Date);
 
     const updated = await admin.adminActivities.save({
       ...articleInput({ titleEn: "Updated discussion" }),
@@ -99,7 +99,6 @@ describe("activity router", () => {
         bodyId: body,
         state: "published",
         startAt: new Date(now + 60 * 60 * 1000).toISOString(),
-        endAt: new Date(now + 2 * 60 * 60 * 1000).toISOString(),
       }),
     );
     createdIds.push(translated.id);
@@ -107,8 +106,8 @@ describe("activity router", () => {
     const fallback = await admin.adminActivities.save(
       articleInput({
         state: "published",
+        coverUrl: null,
         startAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
-        endAt: new Date(now - 60 * 60 * 1000).toISOString(),
       }),
     );
     createdIds.push(fallback.id);
@@ -130,13 +129,16 @@ describe("activity router", () => {
       imageUrl: "https://example.com/cover.jpg",
       status: "upcoming",
     });
+    expect(translatedResult).not.toHaveProperty("endAt");
     const fallbackResult = indonesian.find((row) => row.id === fallback.id)!;
     expect(fallbackResult).toMatchObject({
       title: "Community discussion",
       description: "A discussion",
+      imageUrl: null,
       body,
       status: "completed",
     });
+    expect(fallbackResult).not.toHaveProperty("endAt");
 
     const english = await admin.publicContent.activities.list({ locale: "en" });
     expect(english.find((row) => row.id === translated.id)?.title).toBe(

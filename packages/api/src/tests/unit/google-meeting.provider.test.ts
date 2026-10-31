@@ -2568,3 +2568,338 @@ describe("durable class event deletion", () => {
     ).toBe(true);
   });
 });
+
+const emptyDb = () => ({
+  insert: () => ({ values: () => ({ returning: async () => [] }) }),
+});
+
+describe("provider sparse responses and error evidence", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.test",
+    privateKey: "synthetic",
+    calendarId: "primary",
+  };
+
+  test.each(["provider-id", null])(
+    "missing local row uses external identity %s",
+    async (id) => {
+      mockCalendarEventsInsert.mockReset();
+      mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+        data: {
+          ...(id ? { id } : {}),
+          conferenceData: {
+            entryPoints: [{ uri: "https://meet.google.com/sparse" }],
+          },
+        },
+      }));
+      const result = await createGoogleMeetingProvider(
+        config,
+        emptyDb() as never,
+      ).createEvent("booking-sparse");
+      expect(result.id).toBe(id ?? "");
+      expect(result.externalEventId).toBe(id);
+      expect(result.meetingUrl).toBe("https://meet.google.com/sparse");
+    },
+  );
+  test.each(["primitive-failure", null, {}])(
+    "create retains a failed result for sparse thrown evidence %j",
+    async (failure) => {
+      mockCalendarEventsInsert.mockReset();
+      mockCalendarEventsInsert.mockImplementationOnce(async () => {
+        throw failure;
+      });
+      const result = await createGoogleMeetingProvider(
+        config,
+        emptyDb() as never,
+      ).createEvent("booking-failed");
+      expect(result.id).toBe("");
+      expect(result.status).toBe("failed");
+      expect(result.errorReason).toBe(String(failure));
+    },
+  );
+  test("class creation preserves its explicit title", async () => {
+    mockCalendarEventsInsert.mockReset();
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: "class-event",
+        conferenceData: {
+          entryPoints: [{ uri: "https://meet.google.com/title" }],
+        },
+      },
+    }));
+    const result = await createGoogleMeetingProvider(config, {} as never)
+      .createAcademyClassEvent!(
+      "session-title",
+      new Date("2030-01-01T10:00:00Z"),
+      new Date("2030-01-01T11:00:00Z"),
+      undefined,
+      { title: "Explicit workshop" },
+    );
+    expect(result.status).toBe("created");
+    expect(
+      mockCalendarEventsInsert.mock.calls[0]?.[0]?.requestBody?.summary,
+    ).toBe("Explicit workshop");
+  });
+  test("OAuth token response with no token or error gets the default failure", async () => {
+    globalThis.fetch = mock(
+      async () => new Response("{}", { status: 200 }),
+    ) as typeof fetch;
+    const provider = createGoogleMeetingProvider(
+      {
+        authType: "oauth_refresh_token",
+        clientId: "id",
+        clientSecret: "secret",
+        refreshToken: "refresh",
+        calendarId: "primary",
+      },
+      emptyDb() as never,
+    );
+    const result = await provider.createEvent("missing-token");
+    expect(result.status).toBe("failed");
+    expect(result.errorReason).toContain("Google OAuth token refresh failed");
+  });
+});
+
+describe("provider focused calendar mutation fallbacks", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.test",
+    privateKey: "synthetic",
+    calendarId: "primary",
+  };
+  const oauthConfig = {
+    authType: "oauth_refresh_token" as const,
+    clientId: "id",
+    clientSecret: "secret",
+    refreshToken: "refresh",
+    calendarId: "primary",
+  };
+  const start = new Date("2030-01-01T10:00:00Z");
+  const end = new Date("2030-01-01T11:00:00Z");
+  test.each(["primitive", {}])(
+    "class insert rejects sparse duplicate evidence %j",
+    async (failure) => {
+      mockCalendarEventsInsert.mockReset();
+      mockCalendarEventsInsert.mockImplementationOnce(async () => {
+        throw failure;
+      });
+      const result = await createGoogleMeetingProvider(config, {} as never)
+        .createAcademyClassEvent!("session-sparse", start, end);
+      expect(result.status).toBe("failed");
+      expect(result.errorReason).toBe(String(failure));
+    },
+  );
+  test("class update propagates a primitive lookup failure without treating it as missing", async () => {
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsGet.mockImplementationOnce(async () => {
+      throw "lookup-unavailable";
+    });
+    const provider = createGoogleMeetingProvider(config, {} as never);
+    await expect(
+      provider.updateAcademyClassEvent!(null, "session-no-id", start, end),
+    ).rejects.toBe("lookup-unavailable");
+  });
+  test.each(["service", "oauth"] as const)(
+    "class update with unnamed attendee uses %s API",
+    async (auth) => {
+      mockCalendarEventsGet.mockReset();
+      mockCalendarEventsUpdate.mockReset();
+      mockCalendarEventsGet.mockImplementationOnce(async () => ({
+        data: { id: "event", summary: "Existing" },
+      }));
+      mockCalendarEventsUpdate.mockImplementationOnce(async () => ({
+        data: { id: "event" },
+      }));
+      const requests: { method?: string; body?: string }[] = [];
+      globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
+        if (String(input).includes("oauth2.googleapis.com"))
+          return new Response(JSON.stringify({ access_token: "token" }));
+        requests.push({ method: init?.method, body: init?.body as string });
+        return new Response(
+          JSON.stringify({ id: "event", summary: "Existing" }),
+        );
+      }) as typeof fetch;
+      await createGoogleMeetingProvider(
+        auth === "oauth" ? oauthConfig : config,
+        {} as never,
+      ).updateAcademyClassEvent!("event", "session", start, end, {
+        email: "student@example.test",
+      });
+      const body =
+        auth === "oauth"
+          ? JSON.parse(requests.find((r) => r.method === "PUT")!.body!)
+          : mockCalendarEventsUpdate.mock.calls[0]?.[0]?.requestBody;
+      expect(body.attendees).toEqual([{ email: "student@example.test" }]);
+    },
+  );
+  test("OAuth room-only update preserves provider schedule while replacing location and description", async () => {
+    const current = {
+      id: "event",
+      start: { dateTime: start.toISOString() },
+      end: { dateTime: end.toISOString() },
+    };
+    let sent: any;
+    globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
+      if (String(input).includes("oauth2.googleapis.com"))
+        return new Response(JSON.stringify({ access_token: "token" }));
+      if (init?.method === "PUT") sent = JSON.parse(init.body as string);
+      return new Response(JSON.stringify(current));
+    }) as typeof fetch;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: async () => [
+                { externalEventId: "event", status: "created" },
+              ],
+            }),
+          }),
+        }),
+      }),
+    };
+    await createGoogleMeetingProvider(oauthConfig, db as never).updateEvent(
+      "booking",
+      { location: "Room B", description: "Bring notes" },
+    );
+    expect(sent).toMatchObject({
+      ...current,
+      location: "Room B",
+      description: "Bring notes",
+    });
+  });
+  test("OAuth offline creation derives event identity from booking and supplies room", async () => {
+    let sent: any;
+    globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
+      if (String(input).includes("oauth2.googleapis.com"))
+        return new Response(JSON.stringify({ access_token: "token" }));
+      sent = JSON.parse(init?.body as string);
+      return new Response(JSON.stringify({ id: sent.id }));
+    }) as typeof fetch;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+        }),
+      }),
+      insert: () => ({ values: () => ({ returning: async () => [] }) }),
+    };
+    const result = await createGoogleMeetingProvider(
+      oauthConfig,
+      db as never,
+    ).createEvent("offline-booking", start, end, undefined, undefined, {
+      createConference: false,
+      location: " Room C ",
+    });
+    expect(sent.location).toBe("Room C");
+    expect(sent.id).toBe(
+      `cogito${createHash("sha256").update("offline-booking").digest("hex")}`,
+    );
+    expect(sent).not.toHaveProperty("conferenceData");
+    expect(result.status).toBe("created");
+  });
+});
+
+describe("provider retry evidence", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.test",
+    privateKey: "synthetic",
+    calendarId: "primary",
+  };
+  test("duplicate class insert with primitive lookup failure stays retryable", async () => {
+    mockCalendarEventsInsert.mockReset();
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsInsert.mockImplementationOnce(async () => {
+      throw { code: 409 };
+    });
+    mockCalendarEventsGet.mockImplementationOnce(async () => {
+      throw "lookup-offline";
+    });
+    const result = await createGoogleMeetingProvider(config, {} as never)
+      .createAcademyClassEvent!(
+      "lookup-fail",
+      new Date("2030-01-01T10:00:00Z"),
+      new Date("2030-01-01T11:00:00Z"),
+    );
+    expect(result.status).toBe("failed");
+    expect(result.errorReason).toBe("lookup-offline");
+    expect(result).not.toHaveProperty("missingEvent");
+  });
+  test("fallback with no count result retains failed Google attempt", async () => {
+    mockCalendarEventsInsert.mockReset();
+    mockCalendarEventsInsert.mockImplementationOnce(async () => {
+      throw new Error("offline");
+    });
+    const db = {
+      insert: () => ({
+        values: () => ({ returning: async () => [{ id: "failed-row" }] }),
+      }),
+      select: () => ({ from: () => ({ where: async () => [] }) }),
+    };
+    const result = await createGoogleMeetingProviderWithFallback(
+      config,
+      db as never,
+    ).createEvent("missing-count");
+    expect(result.provider).toBe("google_meet");
+    expect(result.status).toBe("failed");
+    expect(result.id).toBe("failed-row");
+  });
+  test("OAuth creation polls a pending conference until the URL is ready", async () => {
+    let gets = 0;
+    globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
+      if (String(input).includes("oauth2.googleapis.com"))
+        return new Response(JSON.stringify({ access_token: "token" }));
+      if (init?.method === "POST")
+        return new Response(JSON.stringify({ id: "pending-event" }));
+      gets++;
+      return new Response(
+        JSON.stringify({
+          id: "pending-event",
+          conferenceData: {
+            entryPoints: [
+              {
+                entryPointType: "video",
+                uri: "https://meet.google.com/polled",
+              },
+            ],
+          },
+        }),
+      );
+    }) as typeof fetch;
+    const originalTimer = globalThis.setTimeout;
+    globalThis.setTimeout = ((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 750 && typeof callback === "function") {
+        callback(...(args as []));
+        return 0;
+      }
+      return originalTimer(callback, delay, ...(args as []));
+    }) as typeof setTimeout;
+    try {
+      const provider = createGoogleMeetingProvider(
+        {
+          authType: "oauth_refresh_token",
+          clientId: "id",
+          clientSecret: "secret",
+          refreshToken: "refresh",
+          calendarId: "primary",
+        },
+        {} as never,
+      );
+      const result = await provider.createAcademyClassEvent!(
+        "pending-session",
+        new Date("2030-01-01T10:00:00Z"),
+        new Date("2030-01-01T11:00:00Z"),
+      );
+      expect(result.meetingUrl).toBe("https://meet.google.com/polled");
+      expect(gets).toBe(1);
+    } finally {
+      globalThis.setTimeout = originalTimer;
+    }
+  });
+});

@@ -246,7 +246,7 @@ export function resolveMidtransConfig(input: MidtransConfigInput) {
   if (input.testAllowedEmails === undefined) return base;
   return {
     ...base,
-    testAllowedEmails: (input.testAllowedEmails ?? "")
+    testAllowedEmails: input.testAllowedEmails
       .split(",")
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),
@@ -491,6 +491,7 @@ function createServices() {
     },
     notification: notification.service,
     meeting,
+    meetingRetry: booking.service,
   });
 
   const support = createSupportModule({

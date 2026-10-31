@@ -1138,3 +1138,85 @@ describe("AdminTutor Service", () => {
     });
   });
 });
+
+test.each(["request", "photo", "proposed"] as const)(
+  "review audit handles %s edits and an absent refreshed profile",
+  async (scenario) => {
+    const profile = {
+      ...makeProfile({ onboardingStatus: "published" }),
+      pendingProfileChanges: {
+        shortBio: "New bio",
+        ...(scenario === "proposed"
+          ? { profileImageUrl: "https://example.test/proposed.jpg" }
+          : {}),
+      },
+    };
+    const updated = { ...profile, version: 2, shortBio: "Saved profile" };
+    const deps = makeDeps({
+      adminTutorRepo: {
+        ...makeDeps().adminTutorRepo,
+        getTutorProfileById: mock(async () => undefined).mockResolvedValueOnce(
+          profile,
+        ),
+        updateTutorProfile: mock(async () => updated),
+      },
+    });
+    await createAdminTutorService(deps as any).reviewTutorProfile("admin1", {
+      tutorProfileId: "p1",
+      action: "request_edit_changes",
+      ...(scenario === "photo"
+        ? { profileImageUrl: "https://example.test/input.jpg" }
+        : {}),
+    });
+    expect(deps.auditPort.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        afterState: expect.objectContaining({ shortBio: "Saved profile" }),
+        details: expect.objectContaining({
+          photoStage:
+            scenario === "photo"
+              ? "edited"
+              : scenario === "proposed"
+                ? "proposed"
+                : null,
+        }),
+      }),
+    );
+  },
+);
+
+test("achievement audit falls back to the saved row if reread disappears", async () => {
+  const profile = makeProfile();
+  const updated = { ...profile, version: 2, shortBio: "Saved profile" };
+  const deps = makeDeps({
+    adminTutorRepo: {
+      ...makeDeps().adminTutorRepo,
+      getTutorProfileById: mock(async () => undefined).mockResolvedValueOnce(
+        profile,
+      ),
+      updateTutorProfileWithVersion: mock(async () => [updated]),
+    },
+  });
+  expect(
+    await createAdminTutorService(deps as any).updateTutorAchievements(
+      "admin1",
+      { tutorProfileId: "p1", version: 1, education: [], achievements: [] },
+    ),
+  ).toBe(updated);
+  expect(deps.auditPort.record).toHaveBeenCalledWith(
+    expect.objectContaining({
+      afterState: expect.objectContaining({ shortBio: "Saved profile" }),
+    }),
+  );
+});
+
+test("explicit invitation sending reports a skipped delivery", async () => {
+  const deps = makeDeps({
+    emailPort: { send: mock(async () => ({ skipped: true })) },
+  });
+  const result = await createAdminTutorService(deps as any).sendInviteAgain(
+    "admin1",
+    "inv1",
+  );
+  expect(result).toMatchObject({ emailDelivery: "skipped" });
+  expect(deps.emailPort.send).toHaveBeenCalledTimes(1);
+});

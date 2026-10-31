@@ -1323,7 +1323,7 @@ export function createClassEnrollmentService(deps: {
           tx,
           enrollment,
           "insufficient",
-          shortfallMarks || first.amountMarks,
+          wallet ? shortfallMarks : first.amountMarks,
           availableMarks,
         );
       }
@@ -1488,7 +1488,7 @@ export function createClassEnrollmentService(deps: {
           tx,
           enrollment,
           "insufficient",
-          shortfallMarks || installment.amountMarks,
+          wallet ? shortfallMarks : installment.amountMarks,
           availableMarks,
         );
       }

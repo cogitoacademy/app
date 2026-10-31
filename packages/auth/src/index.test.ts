@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, mock, spyOn } from "bun:test";
 import * as betterAuthModule from "better-auth";
 import { createHmac } from "node:crypto";
+import * as nodeCrypto from "node:crypto";
 import { db } from "@cogito-app/db";
 
 import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "@cogito-app/env/admin";
@@ -565,3 +566,454 @@ describe("OAuth state cookie security", () => {
     });
   });
 });
+
+describe("pre-account signup outcome reconciliation", () => {
+  test.each([
+    "other-email",
+    "expired-outcome",
+    "existing-account",
+    "welcome-failure",
+    "no-welcome",
+    "production-signup",
+  ] as const)(
+    "reconciles %s without duplicate signup side effects",
+    async (scenario) => {
+      const email = "reconcile@example.com";
+      const originalNodeEnv = env.NODE_ENV;
+      if (scenario === "production-signup")
+        (env as { NODE_ENV: string }).NODE_ENV = "production";
+      const attempt = crypto.randomUUID();
+      const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+        .update(`${email}\0${"123456"}`)
+        .digest("hex");
+      const results: unknown[][] = [
+        scenario === "other-email"
+          ? [
+              {
+                value: "other@example.com",
+                expiresAt: new Date(Date.now() + 60000),
+              },
+            ]
+          : scenario === "expired-outcome"
+            ? [{ id: "expired-outcome", value: email, expiresAt: new Date(0) }]
+            : [],
+        ...(scenario === "other-email"
+          ? []
+          : [
+              [
+                {
+                  id: "proof-id",
+                  value: `${digest}:0:${attempt}`,
+                  expiresAt: new Date(Date.now() + 60000),
+                },
+              ],
+              scenario === "existing-account" ? [{ id: "existing-user" }] : [],
+            ]),
+      ];
+      const removed: unknown[] = [];
+      const saved: unknown[] = [];
+      const tx = {
+        execute: async () => undefined,
+        select: () => {
+          const query = {
+            from: () => query,
+            where: () => query,
+            orderBy: () => query,
+            limit: async () => {
+              if (!results.length) throw new Error("Unexpected select");
+              return results.shift();
+            },
+          };
+          return query;
+        },
+        delete: () => ({
+          where: async (condition: unknown) => {
+            removed.push(condition);
+          },
+        }),
+        insert: () => ({
+          values: async (row: unknown) => {
+            saved.push(row);
+          },
+        }),
+      };
+      const transaction = spyOn(db, "transaction").mockImplementation((async (
+        fn: (conn: unknown) => Promise<unknown>,
+      ) => fn(tx)) as any);
+      let signupOptions: any;
+      const signup = mock(async () => {
+        const hook = signupOptions.databaseHooks.user.create.before;
+        expect((await hook({ ...user, email })).data.emailVerified).toBe(true);
+        expect(
+          (await hook({ ...user, email: "unverified-other@example.com" })).data
+            .emailVerified,
+        ).toBe(false);
+        return new Response(JSON.stringify({ user }), { status: 200 });
+      });
+      const factory = spyOn(betterAuthModule, "betterAuth").mockImplementation(
+        ((options: unknown) => {
+          signupOptions = options;
+          return { api: { signUpEmail: signup } };
+        }) as any,
+      );
+      const referral = mock(async () => undefined);
+      const welcome = mock(async () => {
+        throw new Error("private-mail-diagnostic");
+      });
+      setSignupReferralChoiceWriter(referral);
+      setSignupWelcomeEmailSender(
+        scenario === "welcome-failure" ? welcome : null,
+      );
+      const consoleError = spyOn(console, "error").mockImplementation(
+        () => undefined,
+      );
+      try {
+        const result = await completePreAccountSignup({
+          email,
+          password: "ValidPassword123!",
+          name: "Student",
+          otp: "123456",
+          signupAttemptId: attempt,
+          headers: new Headers(),
+        });
+        if (scenario === "other-email" || scenario === "existing-account") {
+          expect(result).toMatchObject({ ok: false, status: 409 });
+          expect(signup).not.toHaveBeenCalled();
+          expect(referral).not.toHaveBeenCalled();
+          expect(saved).toEqual([]);
+        } else {
+          expect(result.ok).toBe(true);
+          expect(signup).toHaveBeenCalledTimes(1);
+          expect(referral).toHaveBeenCalledTimes(1);
+          expect(saved).toHaveLength(1);
+          expect(removed).toHaveLength(scenario === "expired-outcome" ? 2 : 1);
+          if (scenario === "welcome-failure") {
+            expect(welcome).toHaveBeenCalledTimes(1);
+            expect(consoleError).toHaveBeenCalledWith(
+              expect.stringContaining("signup_welcome_email_send_failed"),
+            );
+            expect(consoleError).not.toHaveBeenCalledWith(
+              expect.stringContaining("private-mail-diagnostic"),
+            );
+          }
+        }
+        expect(results).toEqual([]);
+      } finally {
+        transaction.mockRestore();
+        factory.mockRestore();
+        consoleError.mockRestore();
+        (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
+      }
+    },
+  );
+  test("a malformed transaction result cannot produce a successful signup", async () => {
+    const transaction = spyOn(db, "transaction").mockResolvedValue({
+      kind: "created",
+      user: null,
+      response: null,
+    } as never);
+    setSignupReferralChoiceWriter(async () => undefined);
+    try {
+      expect(
+        await completePreAccountSignup({
+          email: "defensive@example.com",
+          password: "ValidPassword123!",
+          name: "Student",
+          otp: "123456",
+          signupAttemptId: crypto.randomUUID(),
+          headers: new Headers(),
+        }),
+      ).toMatchObject({
+        ok: false,
+        status: 500,
+        error: "We couldn't complete signup.",
+      });
+    } finally {
+      transaction.mockRestore();
+    }
+  });
+});
+
+describe("captured signup proof lifecycle", () => {
+  test.each([
+    "expired",
+    "deleted",
+    "delivery-deleted",
+    "production",
+    "production-failure",
+    "random-collision",
+  ] as const)(
+    "handles %s proof lifecycle without a real DB",
+    async (scenario) => {
+      const email = `lifecycle-${crypto.randomUUID()}@example.com`;
+      const attempt = crypto.randomUUID();
+      const originalEnv = env.NODE_ENV;
+      let inserted: any;
+      let proofExists = true;
+      const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+        .update(`${email}\0${"123456"}`)
+        .digest("hex");
+      const tx = {
+        execute: async () => undefined,
+        select: () => {
+          const query = {
+            from: () => query,
+            where: () => query,
+            orderBy: () => query,
+            limit: async () =>
+              scenario === "random-collision"
+                ? [{ value: `${digest}:0:${attempt}`, createdAt: new Date(0) }]
+                : [],
+          };
+          return query;
+        },
+        delete: () => ({ where: async () => undefined }),
+        insert: () => ({
+          values: async (value: unknown) => {
+            inserted = value;
+          },
+        }),
+      };
+      const transaction = spyOn(db, "transaction").mockImplementation((async (
+        fn: (conn: unknown) => Promise<unknown>,
+      ) => fn(tx)) as any);
+      const select = spyOn(db, "select").mockImplementation((() => {
+        const query = {
+          from: () => query,
+          where: () => query,
+          limit: async () => (proofExists ? [inserted] : []),
+        };
+        return query;
+      }) as any);
+      const deletion = spyOn(db, "delete").mockImplementation((() => ({
+        where: async () => undefined,
+      })) as any);
+      const errorLog = spyOn(console, "error").mockImplementation(
+        () => undefined,
+      );
+      let random: ReturnType<typeof spyOn> | undefined;
+      let time: ReturnType<typeof spyOn> | undefined;
+      const sender = mock(async () => {
+        if (scenario === "production-failure")
+          throw new Error("private-provider-diagnostic");
+        if (scenario === "delivery-deleted") proofExists = false;
+      });
+      setPreAccountSignupEmailSender(sender);
+      try {
+        if (scenario.startsWith("production"))
+          (env as { NODE_ENV: string }).NODE_ENV = "production";
+        if (scenario === "random-collision")
+          random = spyOn(nodeCrypto, "randomInt")
+            .mockReturnValueOnce(123456)
+            .mockReturnValueOnce(654321) as any;
+        const result = await sendPreAccountSignupOtp({
+          email,
+          signupAttemptId: attempt,
+        });
+        if (scenario === "production-failure") {
+          expect(result).toMatchObject({ ok: false, status: 502 });
+          expect(errorLog).not.toHaveBeenCalled();
+          return;
+        }
+        expect(result.ok).toBe(true);
+        expect(sender).toHaveBeenCalledTimes(1);
+        if (scenario === "expired")
+          time = spyOn(Date, "now").mockReturnValue(
+            Date.now() + 3600000,
+          ) as any;
+        if (scenario === "deleted") proofExists = false;
+        const captured = await getPreAccountSignupOtpForTest(email);
+        if (scenario === "random-collision") expect(captured).toBe("654321");
+        else expect(captured).toBeNull();
+        if (scenario === "expired")
+          expect(await getPreAccountSignupOtpForTest(email)).toBeNull();
+      } finally {
+        random?.mockRestore();
+        time?.mockRestore();
+        transaction.mockRestore();
+        select.mockRestore();
+        deletion.mockRestore();
+        errorLog.mockRestore();
+        (env as { NODE_ENV: string }).NODE_ENV = originalEnv;
+      }
+    },
+  );
+});
+
+test("a late delivery failure preserves a newer successfully captured proof", async () => {
+  const email = `delivery-race-${crypto.randomUUID()}@example.com`;
+  let inserted: any;
+  let rejectFirst!: (reason: Error) => void;
+  let signalFirst!: () => void;
+  const firstStarted = new Promise<void>((resolve) => {
+    signalFirst = resolve;
+  });
+  let sends = 0;
+  let newerOtp: string | undefined;
+  const tx = {
+    execute: async () => undefined,
+    select: () => {
+      const query = {
+        from: () => query,
+        where: () => query,
+        orderBy: () => query,
+        limit: async () => [],
+      };
+      return query;
+    },
+    delete: () => ({ where: async () => undefined }),
+    insert: () => ({
+      values: async (value: unknown) => {
+        inserted = value;
+      },
+    }),
+  };
+  const transaction = spyOn(db, "transaction").mockImplementation((async (
+    fn: (conn: unknown) => Promise<unknown>,
+  ) => fn(tx)) as any);
+  const select = spyOn(db, "select").mockImplementation((() => {
+    const query = {
+      from: () => query,
+      where: () => query,
+      limit: async () => [inserted],
+    };
+    return query;
+  }) as any);
+  const deletion = spyOn(db, "delete").mockImplementation((() => ({
+    where: async () => undefined,
+  })) as any);
+  const errors = spyOn(console, "error").mockImplementation(() => undefined);
+  setPreAccountSignupEmailSender(async ({ otp }) => {
+    sends++;
+    if (sends === 1) {
+      signalFirst();
+      await new Promise<void>((_resolve, reject) => {
+        rejectFirst = reject;
+      });
+    } else newerOtp = otp;
+  });
+  try {
+    const first = sendPreAccountSignupOtp({
+      email,
+      signupAttemptId: crypto.randomUUID(),
+    });
+    await firstStarted;
+    expect(
+      await sendPreAccountSignupOtp({
+        email,
+        signupAttemptId: crypto.randomUUID(),
+      }),
+    ).toMatchObject({ ok: true });
+    expect(await getPreAccountSignupOtpForTest(email)).toBe(newerOtp!);
+    rejectFirst(new Error("late provider delivery failure"));
+    expect(await first).toMatchObject({ ok: false, status: 502 });
+    expect(await getPreAccountSignupOtpForTest(email)).toBe(newerOtp!);
+    expect(deletion).toHaveBeenCalledTimes(1);
+  } finally {
+    transaction.mockRestore();
+    select.mockRestore();
+    deletion.mockRestore();
+    errors.mockRestore();
+  }
+});
+
+test.each([
+  "completed",
+  "missing",
+  "expired",
+  "malformed",
+  "foreign-attempt",
+  "limited",
+  "wrong",
+  "last-wrong",
+] as const)(
+  "signup proof rejection %s does not create a new account",
+  async (scenario) => {
+    const email = "reject-proof@example.com";
+    const attempt = crypto.randomUUID();
+    const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+      .update(`${email}\0${"123456"}`)
+      .digest("hex");
+    const results: unknown[][] = [
+      scenario === "completed"
+        ? [{ value: email, expiresAt: new Date(Date.now() + 60000) }]
+        : [],
+      ...(scenario === "completed"
+        ? []
+        : [
+            scenario === "missing"
+              ? []
+              : [
+                  {
+                    id: "proof",
+                    value:
+                      scenario === "malformed"
+                        ? "invalid"
+                        : `${digest}:${scenario === "limited" ? 3 : scenario === "last-wrong" ? 2 : 0}:${scenario === "foreign-attempt" ? crypto.randomUUID() : attempt}`,
+                    expiresAt:
+                      scenario === "expired"
+                        ? new Date(0)
+                        : new Date(Date.now() + 60000),
+                  },
+                ],
+          ]),
+    ];
+    const updated: unknown[] = [];
+    const tx = {
+      execute: async () => undefined,
+      select: () => {
+        const query = {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: async () => {
+            if (!results.length) throw new Error("Unexpected select");
+            return results.shift();
+          },
+        };
+        return query;
+      },
+      update: () => ({
+        set: (value: unknown) => ({
+          where: async () => {
+            updated.push(value);
+          },
+        }),
+      }),
+    };
+    const transaction = spyOn(db, "transaction").mockImplementation((async (
+      fn: (conn: unknown) => Promise<unknown>,
+    ) => fn(tx)) as any);
+    const referral = mock(async () => undefined);
+    setSignupReferralChoiceWriter(referral);
+    try {
+      const result = await completePreAccountSignup({
+        email,
+        password: "ValidPassword123!",
+        name: "Student",
+        otp:
+          scenario === "wrong" || scenario === "last-wrong"
+            ? "654321"
+            : "123456",
+        signupAttemptId: attempt,
+        headers: new Headers(),
+      });
+      expect(result.ok).toBe(false);
+      expect(result).toHaveProperty(
+        "status",
+        scenario === "completed"
+          ? 409
+          : scenario === "limited" || scenario === "last-wrong"
+            ? 429
+            : 400,
+      );
+      expect(referral).not.toHaveBeenCalled();
+      expect(updated).toHaveLength(
+        scenario === "wrong" || scenario === "last-wrong" ? 1 : 0,
+      );
+      expect(results).toEqual([]);
+    } finally {
+      transaction.mockRestore();
+    }
+  },
+);

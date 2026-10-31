@@ -167,7 +167,6 @@ function assertTutorCapacity(
 }
 
 function stableSerialize(value: unknown): string {
-  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Array.isArray(value)) {
     return `[${value.map(stableSerialize).join(",")}]`;
   }
@@ -217,15 +216,6 @@ function getPerStudentMarks(
   if (snapshot.engine !== "v3")
     throw new BookingV3PricingRevisionUnavailableError(0);
   return snapshot.perStudentMarks;
-}
-
-function getCollectedMarks(
-  snapshot: BookingPriceSnapshot,
-  _headcount: number,
-): number {
-  if (snapshot.engine !== "v3")
-    throw new BookingV3PricingRevisionUnavailableError(0);
-  return snapshot.collectedMarks;
 }
 
 function seriesNoShowEventKey(
@@ -870,7 +860,7 @@ export function createBookingService(deps: {
           actorType,
           reason: "Group repricing: increased hold for new headcount",
         });
-      } else if (newPerStudent < p.heldAmount) {
+      } else {
         // eslint-disable-next-line no-await-in-loop
         await wallet.release(tx, {
           walletId: w.id,
@@ -1037,7 +1027,7 @@ export function createBookingService(deps: {
   ) {
     if (!subjectId) throw new BookingV3CompetitionRequiredError();
     const topic = await repo.findTutorSubjectTopic(conn, tutorId, subjectId);
-    if (subjectId && !topic) {
+    if (!topic) {
       throw new BookingNotEditableError(subjectId);
     }
     if (
@@ -1109,10 +1099,9 @@ export function createBookingService(deps: {
     modality: Modality,
     headcount: GroupSize,
     topic: Awaited<ReturnType<typeof resolveSessionTopic>>,
-  ): Promise<BookingPriceSnapshot> {
+  ): Promise<V3BookingPriceSnapshot> {
     const active = await pricing.getActiveV3Config?.(conn);
     if (!active) throw new BookingV3PricingRevisionUnavailableError(0);
-    if (!topic) throw new BookingV3CompetitionRequiredError();
     const competition = topic.categorySlug;
     if (!Object.hasOwn(active.values.competitionRates, competition)) {
       throw new BookingV3CompetitionUnavailableError(competition);
@@ -2478,9 +2467,9 @@ export function createBookingService(deps: {
     b: BookingRow,
     bookingId: string,
     tutorId: string,
-    sessionId?: string,
-    feedback?: CompletionFeedback,
-    reportAudit?: CompletionReportAudit,
+    sessionId: string | undefined,
+    feedback: CompletionFeedback,
+    reportAudit: CompletionReportAudit,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -2490,9 +2479,6 @@ export function createBookingService(deps: {
       );
     }
     if (!sessionId) throw new BookingSessionRequiredError(bookingId);
-    if (!feedback || !reportAudit) {
-      throw new BookingCompletionFeedbackRequiredError(bookingId);
-    }
 
     const session = await repo.findSessionById(tx, sessionId, {
       forUpdate: true,
@@ -3064,7 +3050,7 @@ export function createBookingService(deps: {
       if (isSeries && !session)
         throw new BookingSessionNotFoundError(sessionId ?? "");
       if (session && session.seriesBookingId !== bookingId) {
-        throw new BookingSessionNotFoundError(sessionId ?? "");
+        throw new BookingSessionNotFoundError(sessionId!);
       }
 
       const participant = await repo.findParticipant(
@@ -3178,7 +3164,7 @@ export function createBookingService(deps: {
           0,
         );
         await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
-      } else if (!isSeries) {
+      } else {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
         await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
           actorId: tutorId,
@@ -3806,7 +3792,7 @@ export function createBookingService(deps: {
       const { profile, sessionTopic, priceSnapshot } =
         await resolveNewBookingTerms(tx, input, size as GroupSize);
       assertTutorCapacity(profile, input.modality, size);
-      const totalMarks = getCollectedMarks(priceSnapshot, size);
+      const totalMarks = priceSnapshot.collectedMarks;
 
       await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
@@ -6293,7 +6279,8 @@ export function createBookingService(deps: {
   async function finalizeMeetingSchedule(
     tx: DbOrTx,
     b: BookingRow,
-    tutorId: string,
+    actorId: string,
+    actorType: "tutor" | "admin" = ACTOR_TYPE.TUTOR,
   ): Promise<{ scheduled: boolean; booking: BookingRow }> {
     const bookingId = b.id;
     try {
@@ -6335,9 +6322,12 @@ export function createBookingService(deps: {
       }
 
       const updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
-        actorId: tutorId,
-        actorType: ACTOR_TYPE.TUTOR,
-        reason: "Meeting created automatically",
+        actorId,
+        actorType,
+        reason:
+          actorType === ACTOR_TYPE.ADMIN
+            ? "Admin retried Google Meet creation"
+            : "Meeting created automatically",
       });
 
       await repo.updateBookingDeadline(
@@ -6400,7 +6390,7 @@ export function createBookingService(deps: {
           "Meeting creation or scheduled transition failed; booking left CONFIRMED and will be retried by the scheduler",
         error: { message: String(error) },
         bookingId,
-        tutorId,
+        actorId,
       });
       // L2: the local meetingEvent row is inside the booking tx and rolls back
       // with it — but the provider-side Google event cannot be rolled back. If
@@ -6429,6 +6419,32 @@ export function createBookingService(deps: {
         booking: (await repo.findBookingById(tx, bookingId)) ?? b,
       };
     }
+  }
+
+  async function retryMeetingByAdmin(adminId: string, bookingId: string) {
+    return db.transaction(async (tx) => {
+      const bookingRow = await repo.findBookingById(tx, bookingId, {
+        forUpdate: true,
+      });
+      if (!bookingRow) throw new BookingNotFoundError(bookingId);
+      if (
+        bookingRow.currentState !== BOOKING_STATE.CONFIRMED ||
+        bookingRow.modality !== MODALITY.ONLINE ||
+        !(await repo.hasFailedGoogleMeeting(tx, bookingId))
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Only confirmed online bookings with a failed Google Meet can be retried",
+        );
+      }
+      const result = await finalizeMeetingSchedule(
+        tx,
+        bookingRow,
+        adminId,
+        ACTOR_TYPE.ADMIN,
+      );
+      return { bookingId, scheduled: result.scheduled };
+    });
   }
 
   /**
@@ -6980,6 +6996,7 @@ export function createBookingService(deps: {
     releaseExpiredHolds,
     checkTutorLateness,
     retryFailedMeetings,
+    retryMeetingByAdmin,
     transition,
     canTransition,
     transitionBookingToScheduled,

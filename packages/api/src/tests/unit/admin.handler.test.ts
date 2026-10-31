@@ -446,3 +446,15 @@ describe("validateRoleChange", () => {
     expect(result.previousRole).toBe("admin");
   });
 });
+
+test("admin optional list and payout-report handler inputs default to empty objects", async () => {
+  const service = {
+    listUsers: mock(async () => ({ users: [], total: 0 })),
+    getTutorPayoutReport: mock(async () => ({ items: [] })),
+  };
+  const handler = createAdminHandler(service as any);
+  await handler.listUsers({ input: undefined } as any);
+  await handler.getTutorPayoutReport({ input: undefined } as any);
+  expect(service.listUsers).toHaveBeenCalledWith({});
+  expect(service.getTutorPayoutReport).toHaveBeenCalledWith({});
+});

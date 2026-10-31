@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 
+import { createPaymentRouter } from "../../modules/payment/payment.router";
 import { createPaymentHandler } from "../../modules/payment/payment.handler";
 import {
   createPurchaseInput,
@@ -425,4 +426,27 @@ describe("paymentHandler", () => {
       expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
     });
   });
+});
+
+test("payment router binds every public operation to its handler and route", () => {
+  const handler = Object.fromEntries(
+    [
+      "getConfig",
+      "createPurchase",
+      "getTopUpCatalog",
+      "createTopUpQuote",
+      "createPurchaseFromQuote",
+      "simulatePurchase",
+      "getPurchase",
+    ].map((name) => [name, mock(async () => undefined)]),
+  );
+  const router = createPaymentRouter(handler as any);
+  expect(Object.keys(router)).toEqual(Object.keys(handler));
+  expect(router.createTopUpQuote["~orpc"].route.path).toBe(
+    "/payment/top-up/quote",
+  );
+  expect(router.createPurchaseFromQuote["~orpc"].route.path).toBe(
+    "/payment/top-up/purchase",
+  );
+  expect(router.getPurchase["~orpc"].route.method).toBe("POST");
 });

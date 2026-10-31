@@ -66,13 +66,6 @@ function parseMidtransTimestamp(value: unknown): Date | undefined {
   )
     ? `${value.replace(" ", "T")}+07:00`
     : value;
-  if (
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
-      normalized,
-    )
-  ) {
-    return undefined;
-  }
   const parts = normalized.match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/,
   );
@@ -87,7 +80,7 @@ function parseMidtransTimestamp(value: unknown): Date | undefined {
     Number(parts[4]),
     Number(parts[5]),
     Number(parts[6]),
-    Number((parts[7] ?? "").padEnd(3, "0").slice(0, 3) || 0),
+    Number((parts[7] ?? "").padEnd(3, "0").slice(0, 3)),
   );
   if (
     wallTime.getUTCFullYear() !== Number(parts[1]) ||
@@ -310,7 +303,8 @@ export function createMidtransPaymentProvider(opts: {
     redis: opts.redis ?? undefined,
     monitor: (state, error) => {
       log({
-        level: state === "open" ? "error" : "info",
+        // The breaker monitors failures before it transitions to open.
+        level: "info",
         action: "circuit_breaker_state_change",
         service: "midtrans",
         midtransMode: opts.mode,
@@ -512,7 +506,8 @@ export function createMidtransPaymentProvider(opts: {
       throw badRequest("Invalid webhook payment amount or currency");
     }
 
-    const orderId = body.order_id ?? "";
+    // Signature verification above requires a string order_id.
+    const orderId = body.order_id!;
     const status = mapMidtransStatus(
       body.transaction_status ?? "",
       body.fraud_status,
@@ -567,8 +562,7 @@ export function createMidtransPaymentProvider(opts: {
       amountIdr,
       refundAmountIdr: parseIdrAmount(body.refund_amount),
       currency: body.currency,
-      refundKind:
-        body.transaction_status === "partial_refund" ? "partial" : undefined,
+      refundKind: undefined,
     };
   }
 

@@ -5,6 +5,7 @@ import {
   countUsers,
   getById,
   countAdmins,
+  lockAdminRows,
   getDashboardAnalytics,
   searchUsers,
   updateRoleWithExpected,
@@ -21,6 +22,7 @@ function makeQueryChain(resolvedValue: any) {
     "offset",
     "orderBy",
     "groupBy",
+    "for",
   ];
   const promise = Promise.resolve(resolvedValue);
 
@@ -264,4 +266,31 @@ describe("updateRoleWithExpected", () => {
 
     expect(result).toEqual([]);
   });
+});
+
+test("analytics returns zero aggregate defaults when queries return no rows", async () => {
+  const conn = {
+    select: makeSelectSequence(Array.from({ length: 11 }, () => [])),
+    execute: mock(async () => [{}]),
+  } as any;
+  const result = await getDashboardAnalytics(conn, {
+    periodStart: new Date("2026-01-01"),
+    periodEnd: new Date("2026-01-02"),
+    activeSince: new Date("2026-01-01"),
+    previousActiveSince: new Date("2025-12-01"),
+    now: new Date("2026-01-02"),
+  });
+  expect(result.bookingSummary.bookings).toBe(0);
+  expect(result.userSummary.newStudents).toBe(0);
+  expect(result.accountSummary.totalAccounts).toBe(0);
+  expect(result.marksSummary.studentsWithMarks).toBe(0);
+  expect(result.paymentSummary.grossReceiptsIdr).toBe(0);
+  expect(result.refundSummary.refundedIdr).toBe(0);
+});
+
+test("counting absent admin aggregates returns zero and locks use FOR UPDATE", async () => {
+  const conn = makeSelectConn([]);
+  await expect(countAdmins({ select: conn.select } as any)).resolves.toBe(0);
+  await lockAdminRows({ select: conn.select } as any);
+  expect(conn.chain.for).toHaveBeenCalledWith("update");
 });

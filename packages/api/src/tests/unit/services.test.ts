@@ -221,3 +221,42 @@ describe("Services conditional logic", () => {
     expect(useGoogleMeet).toBe(false);
   });
 });
+
+test("service-account configuration defaults the primary calendar", () => {
+  expect(
+    resolveGoogleMeetConfig({
+      clientEmail: "service@example.test",
+      privateKey: "key",
+    }),
+  ).toMatchObject({
+    calendarId: "primary",
+    sendUpdates: "none",
+  });
+});
+
+test("production service wiring tolerates enabled Meet without credentials", async () => {
+  const keys = [
+    "NODE_ENV",
+    "GOOGLE_MEET_ENABLED",
+    "GOOGLE_MEET_CLIENT_ID",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_MEET_CLIENT_SECRET",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_MEET_REFRESH_TOKEN",
+    "GOOGLE_CLIENT_EMAIL",
+    "GOOGLE_PRIVATE_KEY",
+  ] as const;
+  const original = Object.fromEntries(keys.map((key) => [key, env[key]]));
+  try {
+    Object.assign(
+      env,
+      Object.fromEntries(keys.map((key) => [key, undefined])),
+      { NODE_ENV: "production", GOOGLE_MEET_ENABLED: true },
+    );
+    const fresh = await import("../../services?production-no-meet-credentials");
+    expect(fresh.services.meeting).toBeDefined();
+    expect(fresh.resolveGoogleMeetConfig({})).toBeUndefined();
+  } finally {
+    Object.assign(env, original);
+  }
+});

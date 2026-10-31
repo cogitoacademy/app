@@ -137,7 +137,7 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
 function bookingViewCondition(
   view: BookingListView | undefined,
   now: Date,
-  opts: { completionCondition?: SQL<unknown> } = {},
+  opts: { completionCondition?: SQL<unknown> },
 ): SQL<unknown> | undefined {
   if (!view || view === "all") return undefined;
   const pending = inArray(booking.currentState, [...BOOKING_ACTION_STATES]);
@@ -184,6 +184,21 @@ async function findBookingById(
     .limit(1);
   const [b] = options.forUpdate ? await query.for("update") : await query;
   return (b as BookingRow | undefined) ?? null;
+}
+
+async function hasFailedGoogleMeeting(conn: DbOrTx, bookingId: string) {
+  const [failed] = await conn
+    .select({ id: meetingEvent.id })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, bookingId),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    )
+    .limit(1);
+  return Boolean(failed);
 }
 
 /**
@@ -1278,7 +1293,7 @@ async function findCompletedBookingsByTutor(
             ),
           )
         : gte(booking.scheduledStartAt, dateFrom);
-    if (condition) conditions.push(condition);
+    conditions.push(condition!);
   }
   if (dateTo) {
     const condition =
@@ -1291,7 +1306,7 @@ async function findCompletedBookingsByTutor(
             ),
           )
         : lte(booking.scheduledStartAt, dateTo);
-    if (condition) conditions.push(condition);
+    conditions.push(condition!);
   }
   return conn
     .select({ ...getTableColumns(booking) })
@@ -1935,6 +1950,7 @@ export function createBookingRepo(db: DbType) {
 
   return {
     findBookingById,
+    hasFailedGoogleMeeting,
     findBookingWithParticipants,
     findBookingTutorFees,
     listBookingsByProposer,
