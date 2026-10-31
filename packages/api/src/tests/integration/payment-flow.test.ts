@@ -19,29 +19,13 @@ import {
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
+import { createV3PackagePurchase } from "../helpers/v3-payment";
 import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
+import { createEconomyService } from "../../modules/economy/economy.service";
 import { createPaymentService } from "../../modules/payment/payment.service";
-import type { PaymentService } from "../../modules/payment/payment.service";
 import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
 import { createWalletService } from "../../modules/wallet/wallet.service";
-
-async function createV3PackagePurchase(
-  payment: PaymentService,
-  userId: string,
-  walletId: string,
-) {
-  const quote = await payment.createTopUpQuote(userId, {
-    requestKey: crypto.randomUUID(),
-    marks: 50,
-  });
-  return payment.createPurchaseFromTopUpQuote(
-    userId,
-    walletId,
-    quote.quoteId,
-    "package",
-  );
-}
 
 describe("PaymentService", () => {
   beforeAll(async () => {
@@ -87,6 +71,7 @@ describe("PaymentService", () => {
       services.payment,
       user.id,
       walletRow.id,
+      150,
     );
 
     await services.payment.confirmFromWebhook({
@@ -103,7 +88,7 @@ describe("PaymentService", () => {
     });
 
     const w = await services.wallet.getByUserId(db, user.id);
-    expect(w!.totalBalance).toBe(120);
+    expect(w!.totalBalance).toBe(150);
 
     const entries = await db
       .select()
@@ -368,6 +353,7 @@ describe("PaymentService", () => {
   const midtransWallet = createWalletService(createWalletRepo(), db);
   const midtransPayment = createPaymentService({
     db,
+    economy: createEconomyService({ db }),
     wallet: midtransWallet,
     repo: createPaymentRepo(db),
     provider: midtransProvider,

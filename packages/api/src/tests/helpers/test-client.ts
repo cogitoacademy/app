@@ -75,7 +75,7 @@ export function createTestClient(
             if (input.subjectId || typeof input.tutorId !== "string") {
               return method(input);
             }
-            const subjectId = await ensureTutorSubject(input.tutorId);
+            const subjectId = await ensureTestTutorSubject(input.tutorId);
             return method({ ...input, subjectId });
           };
         },
@@ -84,7 +84,7 @@ export function createTestClient(
   }) as typeof client;
 }
 
-async function ensureTutorSubject(tutorId: string) {
+export async function ensureTestTutorSubject(tutorId: string) {
   const profile = await db.query.tutorProfile.findFirst({
     columns: { id: true },
     where: eq(tutorProfile.userId, tutorId),
@@ -117,6 +117,7 @@ async function ensureTutorSubject(tutorId: string) {
       and(
         eq(subjectCategory.isActive, true),
         isNotNull(subjectCategory.parentId),
+        eq(subjectCategory.slug, "competition-debate-law"),
       ),
     )
     .limit(1);

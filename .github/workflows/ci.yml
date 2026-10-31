@@ -294,6 +294,11 @@ jobs:
         run: bun run db:migrate
         env:
           ENV_FILE: ../../apps/server/.env.test-payout
+      - name: Seed V3 defaults for payout coverage
+        run: bun --env-file=.env.test-payout run seed --defaults-only
+        working-directory: apps/server
+        env:
+          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Test with coverage
         id: coverage
         run: bun .github/scripts/coverage-runner.ts --collect-only

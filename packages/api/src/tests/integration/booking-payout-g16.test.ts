@@ -145,6 +145,42 @@ async function insertBookingRow(
   return row!;
 }
 
+async function insertV3FeeBooking(
+  overrides: Partial<typeof bookingTable.$inferInsert>,
+) {
+  const priceSnapshot = {
+    engine: "v3" as const,
+    v3Revision: 1,
+    competition: "competition-debate",
+    modality: "online" as const,
+    headcount: 1,
+    perStudentMarks: 20,
+    collectedMarks: 20,
+    tutorHonorariumIdr: 50_000,
+  };
+  const row = await insertBookingRow({
+    ...overrides,
+    priceSnapshot,
+    originalMarks: 20,
+  });
+  const [fee] = await db
+    .insert(tutorSessionFee)
+    .values({
+      bookingId: row.id,
+      bookingSessionId: null,
+      academyClassSessionId: null,
+      tutorId: row.tutorId,
+      scheduledStartAt: row.scheduledStartAt,
+      earnedAt: row.completedAt ?? new Date(),
+      eventKey: `tutor-session-fee:booking:${row.id}`,
+      grossHonorariumIdr: priceSnapshot.tutorHonorariumIdr,
+      collectedMarks: priceSnapshot.collectedMarks,
+      priceSnapshot,
+    })
+    .returning();
+  return { booking: row, fee: fee! };
+}
+
 function assertPayoutIntegrationDatabase() {
   let databaseUrl: URL | undefined;
   try {
@@ -788,7 +824,7 @@ describe("Tutor payouts (G16)", () => {
     expect(pendingAfterPay.tutorPayoutIdr).toBe(0);
   });
 
-  test("a selected source payout leaves other legacy and later sources payable", async () => {
+  test("a selected source payout leaves other fee events payable", async () => {
     const isolatedTutor = await createPublishedTutor(
       `tutor.pay.selected.${ts}@cogito.test`,
       ts + 3,
@@ -809,31 +845,29 @@ describe("Tutor payouts (G16)", () => {
       })
       .where(eq(tutorProfile.userId, payoutTutorId));
 
-    const firstLegacy = await insertBookingRow({
+    const firstSource = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(Date.now() - 6 * 60_000),
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
-    const secondLegacy = await insertBookingRow({
+    const secondSource = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(Date.now() - 5 * 60_000),
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
     const before = await adminClient.admin.getPendingTutorPayouts({
       tutorId: payoutTutorId,
     });
     expect(before.items).toHaveLength(2);
-    const firstSource = before.items.find(
-      (item) => item.bookingId === firstLegacy.id,
+    const firstItem = before.items.find(
+      (item) => item.bookingId === firstSource.booking.id,
     )!;
-    const secondSource = before.items.find(
-      (item) => item.bookingId === secondLegacy.id,
+    const secondItem = before.items.find(
+      (item) => item.bookingId === secondSource.booking.id,
     )!;
     const firstPreview = await adminClient.admin.previewTutorPayout({
       tutorId: payoutTutorId,
-      sourceKeys: [firstSource.sourceKey],
+      sourceKeys: [firstItem.sourceKey],
     });
     const firstBatch = await adminClient.admin.prepareTutorPayout({
       tutorId: payoutTutorId,
@@ -875,36 +909,35 @@ describe("Tutor payouts (G16)", () => {
       .where(eq(tutorSessionFee.bookingId, feeBooking.id));
     expect(fee).toBeDefined();
 
-    const laterLegacy = await insertBookingRow({
+    const laterSource = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(),
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
     const after = await adminClient.admin.getPendingTutorPayouts({
       tutorId: payoutTutorId,
     });
     expect(after.items.map((item) => item.sourceKey)).toEqual(
       expect.arrayContaining([
-        secondSource.sourceKey,
+        secondItem.sourceKey,
         fee!.eventKey,
-        after.items.find((item) => item.bookingId === laterLegacy.id)!
+        after.items.find((item) => item.bookingId === laterSource.booking.id)!
           .sourceKey,
       ]),
     );
     expect(after.items).toHaveLength(3);
-    expect(after.items.some((item) => item.bookingId === firstLegacy.id)).toBe(
-      false,
-    );
-    expect(after.items.some((item) => item.bookingId === secondLegacy.id)).toBe(
-      true,
-    );
+    expect(
+      after.items.some((item) => item.bookingId === firstSource.booking.id),
+    ).toBe(false);
+    expect(
+      after.items.some((item) => item.bookingId === secondSource.booking.id),
+    ).toBe(true);
     expect(after.items.some((item) => item.sourceKey === fee!.eventKey)).toBe(
       true,
     );
-    expect(after.items.some((item) => item.bookingId === laterLegacy.id)).toBe(
-      true,
-    );
+    expect(
+      after.items.some((item) => item.bookingId === laterSource.booking.id),
+    ).toBe(true);
 
     const nextPreview = await adminClient.admin.previewTutorPayout({
       tutorId: payoutTutorId,
@@ -920,7 +953,7 @@ describe("Tutor payouts (G16)", () => {
     expect(nextBatch.sourceKeys).toHaveLength(3);
   });
 
-  test("pre-T03 allocated payout rows do not cut off unrelated sessions and reconciliation blocks released sources", async () => {
+  test("pre-T03 allocations do not cut off unrelated fee events and reconciliation blocks released sources", async () => {
     const isolatedTutor = await createPublishedTutor(
       `tutor.pay.pre-t03-allocation.${ts}@cogito.test`,
       ts + 5,
@@ -942,12 +975,12 @@ describe("Tutor payouts (G16)", () => {
       .where(eq(tutorProfile.userId, payoutTutorId));
 
     const cutoffAt = new Date(Date.now() - 60_000);
-    const firstLegacy = await insertBookingRow({
+    const firstSourceBooking = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(cutoffAt.getTime() - 30_000),
     });
-    const secondLegacy = await insertBookingRow({
+    const secondSourceBooking = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(cutoffAt.getTime() - 15_000),
@@ -956,10 +989,10 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     const firstSource = available.items.find(
-      (item) => item.bookingId === firstLegacy.id,
+      (item) => item.bookingId === firstSourceBooking.booking.id,
     )!;
     const secondSource = available.items.find(
-      (item) => item.bookingId === secondLegacy.id,
+      (item) => item.bookingId === secondSourceBooking.booking.id,
     )!;
 
     // Models a T02-era manually paid row: its T03 preview fields are NULL,
@@ -999,7 +1032,7 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     expect(afterPaidAllocation.items.map((item) => item.bookingId)).toEqual([
-      secondLegacy.id,
+      secondSourceBooking.booking.id,
     ]);
 
     const voided = await adminClient.admin.voidTutorPayout({
@@ -1011,7 +1044,7 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     expect(whileUnresolved.items.map((item) => item.bookingId)).toEqual([
-      secondLegacy.id,
+      secondSourceBooking.booking.id,
     ]);
     await expect(
       adminClient.admin.previewTutorPayout({
@@ -1036,7 +1069,10 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     expect(afterResolution.items.map((item) => item.bookingId)).toEqual(
-      expect.arrayContaining([firstLegacy.id, secondLegacy.id]),
+      expect.arrayContaining([
+        firstSourceBooking.booking.id,
+        secondSourceBooking.booking.id,
+      ]),
     );
     const repaymentPreview = await adminClient.admin.previewTutorPayout({
       tutorId: payoutTutorId,
@@ -1059,14 +1095,16 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     expect(afterRepayment.items.map((item) => item.bookingId)).toEqual([
-      secondLegacy.id,
+      secondSourceBooking.booking.id,
     ]);
     expect(
-      afterRepayment.items.some((item) => item.bookingId === firstLegacy.id),
+      afterRepayment.items.some(
+        (item) => item.bookingId === firstSourceBooking.booking.id,
+      ),
     ).toBe(false);
   });
 
-  test("unresolved allocationless legacy payout retains its cutoff until audited reconciliation", async () => {
+  test("unresolved allocationless payout retains its cutoff until audited reconciliation", async () => {
     const isolatedTutor = await createPublishedTutor(
       `tutor.pay.legacy-reconcile.${ts}@cogito.test`,
       ts + 4,
@@ -1088,7 +1126,7 @@ describe("Tutor payouts (G16)", () => {
       .where(eq(tutorProfile.userId, payoutTutorId));
 
     const oldCutoffAt = new Date(Date.now() - 5 * 60_000);
-    const previouslyCovered = await insertBookingRow({
+    const previouslyCovered = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(oldCutoffAt.getTime() - 60_000),
@@ -1104,7 +1142,7 @@ describe("Tutor payouts (G16)", () => {
       paidAt: oldCutoffAt,
       paidBy: adminId,
     });
-    const potentiallyRepayable = await insertBookingRow({
+    const potentiallyRepayable = await insertV3FeeBooking({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(oldCutoffAt.getTime() + 60_000),
@@ -1113,7 +1151,7 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
     });
     expect(initiallyPending.items.map((item) => item.bookingId)).toEqual([
-      potentiallyRepayable.id,
+      potentiallyRepayable.booking.id,
     ]);
     const stalePreview = await adminClient.admin.previewTutorPayout({
       tutorId: payoutTutorId,
@@ -1190,11 +1228,11 @@ describe("Tutor payouts (G16)", () => {
         tutorId: payoutTutorId,
       });
     expect(eligibleAfterResolution.items.map((item) => item.bookingId)).toEqual(
-      [potentiallyRepayable.id],
+      [potentiallyRepayable.booking.id],
     );
     expect(
       eligibleAfterResolution.items.some(
-        (item) => item.bookingId === previouslyCovered.id,
+        (item) => item.bookingId === previouslyCovered.booking.id,
       ),
     ).toBe(false);
     const resolvedPreview = await adminClient.admin.previewTutorPayout({

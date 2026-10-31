@@ -380,12 +380,12 @@ describe("Booking group series flow (FR-20)", () => {
     expect(b.disclaimer).toContain("full-series commitment");
     expect(b.disclaimer).toContain("cannot opt out");
 
-    // Proposer holds the full package up front: 40 marks × 3 sessions.
+    // Proposer holds the full package up front: 23 Marks × 3 sessions.
     const [proposerWallet] = await db
       .select()
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
-    expect(proposerWallet!.heldBalance).toBe(120);
+    expect(proposerWallet!.heldBalance).toBe(69);
     expect(proposerWallet!.totalBalance).toBe(500);
 
     // Each session carries the per-participant per-session amount.
@@ -395,7 +395,7 @@ describe("Booking group series flow (FR-20)", () => {
       .where(eq(bookingSession.seriesBookingId, bookingId));
     expect(sessionsRows.length).toBe(3);
     for (const s of sessionsRows) {
-      expect(s.holdAmount).toBe(40);
+      expect(s.holdAmount).toBe(23);
     }
 
     // Invitation notifications carry the G15 disclaimer per TC-25.
@@ -411,8 +411,8 @@ describe("Booking group series flow (FR-20)", () => {
     const body = inviteNotifs[0]!.body;
     expect(body).toContain("full-series commitment");
     expect(body).toContain("cannot opt out");
-    expect(body).toContain("40 Marks");
-    expect(body).toContain("120");
+    expect(body).toContain("23 Marks");
+    expect(body).toContain("69");
     expect(body).toMatch(/schedule/i);
     expect(body).toContain("/bookings/");
     expect(inviteNotifs[0]!.severity).toBe("action");
@@ -491,8 +491,8 @@ describe("Booking group series flow (FR-20)", () => {
       .select()
       .from(wallet)
       .where(eq(wallet.userId, invitee1Id));
-    expect(w!.heldBalance).toBe(120);
-    expect(w!.availableBalance).toBe(380);
+    expect(w!.heldBalance).toBe(69);
+    expect(w!.availableBalance).toBe(431);
   });
 
   test("all confirm → tutor accepts → each completed session deducts per participant (P1-8)", async () => {
@@ -598,8 +598,8 @@ describe("Booking group series flow (FR-20)", () => {
         .select()
         .from(wallet)
         .where(eq(wallet.userId, userId));
-      // 3 sessions × 40 marks deducted per participant.
-      expect(w!.totalBalance).toBe(500 - 120);
+      // 3 sessions × 23 Marks deducted per participant.
+      expect(w!.totalBalance).toBe(500 - 69);
       expect(w!.heldBalance).toBe(0);
     }
 

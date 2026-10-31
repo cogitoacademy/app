@@ -113,83 +113,6 @@ const paletteBackfillCases = [
       darkBackgroundColor: "oklch(0.773372 0.101596 354.57)",
     },
   },
-  {
-    id: "10000000-0000-4000-8000-000000000001",
-    slug: "model-united-nations",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.695641 0.132326 232.54)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.695641 0.132326 232.54)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000004",
-    slug: "world-scholars-cup",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.884795 0.181642 94.9)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.884795 0.181642 94.9)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000005",
-    slug: "essay-scientific-writing",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.698358 0.202646 44.07)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.698358 0.202646 44.07)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000006",
-    slug: "debate",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.581114 0.199813 315.44)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.581114 0.199813 315.44)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000007",
-    slug: "business-plan",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(0.2036 0.0029 247.97)",
-      lightBackgroundColor: "oklch(0.804266 0.214364 151.41)",
-      darkTextColor: "oklch(0.2036 0.0029 247.97)",
-      darkBackgroundColor: "oklch(0.804266 0.214364 151.41)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000003",
-    slug: "olympiad",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.566845 0.202167 31.43)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.566845 0.202167 31.43)",
-    },
-  },
-  {
-    id: "10000000-0000-4000-8000-000000000002",
-    slug: "public-speaking",
-    isActive: false,
-    palette: {
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.773372 0.101596 354.57)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.773372 0.101596 354.57)",
-    },
-  },
 ] as const;
 
 async function waitForBlockedQuery(fragment: string) {
@@ -278,7 +201,7 @@ describe("competition catalog PostgreSQL CRUD", () => {
     admin = createTestClient(await createTestContext(account.cookie));
   });
 
-  test("backfills known palettes and carries parent colors through two-level CRUD", async () => {
+  test("uses current parent palettes and carries colors through two-level CRUD", async () => {
     const paletteRows = await Promise.all(
       paletteBackfillCases.map((expected) =>
         getCompetitionCatalogEntryBySlug(db, expected.slug),
@@ -310,15 +233,6 @@ describe("competition catalog PostgreSQL CRUD", () => {
     });
     expect(legacyRoot).toBeDefined();
     expect(legacyRoot).toMatchObject({
-      lightTextColor: "oklch(1 0 0)",
-      lightBackgroundColor: "oklch(0.695641 0.132326 232.54)",
-      darkTextColor: "oklch(1 0 0)",
-      darkBackgroundColor: "oklch(0.695641 0.132326 232.54)",
-    });
-    const oldRoot = await db.query.subjectCategory.findFirst({
-      where: eq(subjectCategory.slug, "model-united-nations"),
-    });
-    expect(oldRoot).toMatchObject({
       lightTextColor: "oklch(1 0 0)",
       lightBackgroundColor: "oklch(0.695641 0.132326 232.54)",
       darkTextColor: "oklch(1 0 0)",
