@@ -16,6 +16,16 @@ import {
 import { notificationEmailHtml } from "../../modules/notification/notification.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+test.each([0, -1])(
+  "nonpositive reminder limits avoid database access (%s)",
+  async (limit) => {
+    const repo = createBookingReportReminderRepo();
+    expect(await repo.findDue(undefined as never, new Date(), limit)).toEqual(
+      [],
+    );
+  },
+);
+
 const epochSeconds = (date: Date) => String(date.getTime() / 1000);
 const datePeriodForTest = (endAt: Date, nowAt: Date) => {
   const elapsed = nowAt.getTime() - endAt.getTime();

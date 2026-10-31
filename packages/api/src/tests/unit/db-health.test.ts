@@ -21,6 +21,18 @@ function makeDb(behavior: { ok?: boolean; ms?: number } = {}) {
 }
 
 describe("healthCheck", () => {
+  test("reports degraded when Redis is slow but reachable", async () => {
+    const redis = new InMemoryRedis();
+    redis.ping = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+      return "PONG";
+    };
+    const result = await healthCheck(redis, makeDb({ ms: 0 }));
+    expect(result.checks.redis).toBe("degraded");
+    expect(result.checks.scheduler).toBe("ok");
+    expect(result.status).toBe("degraded");
+  });
+
   test("returns ok when database responds quickly", async () => {
     const result = await healthCheck(undefined, makeDb({ ms: 5 }));
     expect(result.checks.database).toBe("ok");
@@ -368,6 +380,13 @@ describe("checkDlqHealth", () => {
 });
 
 describe("checkCircuitBreakers", () => {
+  test("defaults missing breaker states to closed and ignores unknown states", async () => {
+    const redis = new InMemoryRedis();
+    await redis.hset("cogito:cb:missing", ["failureCount", "1"]);
+    await redis.hset("cogito:cb:invalid", ["state", "corrupt"]);
+    expect(await checkCircuitBreakers(redis)).toEqual({ missing: "closed" });
+  });
+
   test("reports closed when no breaker keys exist", async () => {
     const redis = new InMemoryRedis();
     const result = await checkCircuitBreakers(redis);

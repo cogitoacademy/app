@@ -37,6 +37,7 @@ import {
   BookingTutorCapacityError,
   TutorPayoutPreviewStaleError,
   TutorPayoutTaxProfileIncompleteError,
+  TutorPayoutNotFoundError,
   BookingV3CompetitionRequiredError,
   BookingV3CompetitionUnavailableError,
   BookingV3PricingRevisionUnavailableError,
@@ -10842,6 +10843,74 @@ describe("Tutor payout safety guards", () => {
       }),
     ).rejects.toThrow("Payout state changed; reload and retry");
     expect(set).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["initial", "locked"] as const)(
+    "transfer recording rejects a missing %s payout without side effects",
+    async (missingLookup) => {
+      const findTutorPayoutById = mock(
+        async (_tx: unknown, _id: string, locked?: boolean) =>
+          missingLookup === "initial" || locked
+            ? null
+            : { id: "payout1", tutorId: "tutor1" },
+      );
+      const { service, audit, notification, db } = createService({
+        repo: { findTutorPayoutById },
+      });
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", {
+          payoutId: "payout1",
+          previewVersion: "v1",
+          actualAmountIdr: 10000,
+          paidAt: new Date("2026-10-28T00:00:00Z"),
+        }),
+      ).rejects.toBeInstanceOf(TutorPayoutNotFoundError);
+      expect(findTutorPayoutById).toHaveBeenCalledTimes(
+        missingLookup === "initial" ? 1 : 2,
+      );
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(notification.write).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
+    },
+  );
+
+  test("void rejects blank reason and missing initial or locked payout without side effects", async () => {
+    const blank = createService();
+    await expect(
+      blank.service.voidTutorPayout("admin1", {
+        payoutId: "payout1",
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Void reason is required");
+    expect(blank.db.transaction).not.toHaveBeenCalled();
+    expect(blank.audit.record).not.toHaveBeenCalled();
+    expect(blank.notification.write).not.toHaveBeenCalled();
+    expect(blank.notification.writeBestEffort).not.toHaveBeenCalled();
+
+    for (const missingLookup of ["initial", "locked"] as const) {
+      const findTutorPayoutById = mock(
+        async (_tx: unknown, _id: string, locked?: boolean) =>
+          missingLookup === "initial" || locked
+            ? null
+            : { id: "payout1", tutorId: "tutor1" },
+      );
+      const { service, audit, notification } = createService({
+        repo: { findTutorPayoutById },
+      });
+      await expect(
+        service.voidTutorPayout("admin1", {
+          payoutId: "payout1",
+          reason: "Duplicate",
+        }),
+      ).rejects.toBeInstanceOf(TutorPayoutNotFoundError);
+      expect(findTutorPayoutById).toHaveBeenCalledTimes(
+        missingLookup === "initial" ? 1 : 2,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(notification.write).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
+    }
   });
 
   test.each(["identical", "different-tutor", "different-preview"] as const)(
