@@ -1133,10 +1133,11 @@ another file's fixtures; the remaining API, unit, and fixture partitions retain
 parallel execution. Guarded manual acceptance suites that reject reset flags
 stay outside this coverage run. The reset helper snapshots and restores the
 seed-owned competition taxonomy around `TRUNCATE ... CASCADE`. CI writes its
-LCOV output to the configured path because the custom `--coverage-dir` paths
-were not produced. The four raw profiles are merged before the existing gate.
-The merge rejects missing, empty, or
-recordless LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
+LCOV output to the configured path because Bun does not produce the custom
+`--coverage-dir` paths here. The four raw profiles are merged before the
+existing gate. The test job has a 20-minute timeout for the serialized reset
+suite and remaining partitions. The merge rejects missing, empty, or recordless
+LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
 function identities, the merger preserves maximum summary counts and the exact
 named-function union, then writes a sidecar identifying sources whose function
 identity is incomplete. The PR comment labels these counts as lower bounds and

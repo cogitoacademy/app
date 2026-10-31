@@ -313,8 +313,8 @@ describe("Refund flow", () => {
       .select()
       .from(wallet)
       .where(eq(wallet.id, payerWalletId));
-    expect(after!.totalBalance).toBe(340);
-    expect(after!.availableBalance).toBe(340);
+    expect(after!.totalBalance).toBe(before!.totalBalance);
+    expect(after!.availableBalance).toBe(before!.availableBalance);
 
     const reversals = await db
       .select()

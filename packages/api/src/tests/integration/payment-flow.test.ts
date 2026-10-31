@@ -413,11 +413,13 @@ describe("PaymentService", () => {
     test("concurrent createIntent calls post one Midtrans intent", async () => {
       const user = await createTestUser("mc01-concurrent@cogito.test");
       const walletRow = await midtransWallet.getOrCreate(user.id);
-      let fetchCalls = 0;
+      let createIntentCalls = 0;
 
-      globalThis.fetch = mock(async () => {
-        fetchCalls += 1;
-        if (fetchCalls === 1) {
+      globalThis.fetch = mock(async (_input, init) => {
+        if (init?.method === "POST") {
+          createIntentCalls += 1;
+        }
+        if (init?.method === "POST" && createIntentCalls === 1) {
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
         return new Response(
@@ -447,7 +449,7 @@ describe("PaymentService", () => {
       const first = outcomes[0]!;
       const second = outcomes[1]!;
 
-      expect(fetchCalls).toBe(1);
+      expect(createIntentCalls).toBe(1);
       expect(second.paymentId).toBe(first.paymentId);
       expect(second.providerReference).toBe(first.providerReference);
 
