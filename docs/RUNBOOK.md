@@ -3743,23 +3743,19 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
+Resettable integration files run sequentially in separate Bun processes with a unique
+counter profile per file. Do not collect multiple isolated worker files into one
+COUNTER_COVERAGE_FILE: each worker flushes its own coverage global and overwrites
+the previous worker's profile. The runner merges every per-file profile with the
+unit, fixture, and payout profiles. This also releases crypto allocations between
+files. Coverage counter and merger regression tests enforce distinct partitions.
+
 The workflow runs resettable API/env/auth/DB/OpenAPI tests, reset-free report
 fixture suites, and payout integration tests against their exact database. It
 then runs the server suite in a separate process because its webhook test uses
 module mocking. The previous duplicate uninstrumented API pass is
 intentionally not run. Test + Coverage starts independently from lint and
-typecheck. After every process, the workflow copies the fresh configured
-`coverage/lcov.info` to its partition path (`coverage/api-resettable/`,
-`coverage/api-fixtures/`, or `coverage/api-payout/`) and requires that profile
-to be non-empty. It clears the default profile before the next process so no
-partition can reuse stale coverage. The merger unions all three raw profiles
-into `coverage/lcov.merged.info` and leaves the final Bun-generated
-`coverage/lcov.info` untouched. Named functions retain their exact union. If a
-Bun profile supplies `FNF`/`FNH` without function identities, the merger uses
-the maximum profile counts and known named counts as lower bounds, and writes
-`coverage/lcov.function-identity.json` to record incomplete identities. The
-coverage comment labels these counts as lower bounds and blocks the gate when
-unidentified functions remain uncovered. It enforces the unchanged 100% for
+typecheck. Each process writes a fresh coverage/<partition>/counters.json. The collector removes stale outputs before execution; the reporter validates source hashes and counter identities across all profiles before merging coverage/counters.merged.json and coverage/lcov.merged.info. Stable function identities include declaration positions so nested functions with identical names remain distinct. Missing or stale partitions fail collection. It enforces the unchanged 100% for
 `packages/api` lines, overall lines, functions, and branches; a 0/0 branch total
 is treated as 100%. It runs only after successful test and merge commands, so
 an incomplete raw profile cannot be reported as merged coverage. A failed

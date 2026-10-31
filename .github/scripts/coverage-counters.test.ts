@@ -3,6 +3,30 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "bun:test";
 import { coverageSources } from "./coverage-sources";
+import { isolatedIntegrationPartitions } from "./coverage-partitions";
+
+test("resettable integration files own distinct process profiles and reset targets", () => {
+  const files = ["./integration/b.test.ts", "./integration/a.test.ts"];
+  const target = "postgresql://postgres:test@localhost:6769/cogito-test";
+  const partitions = isolatedIntegrationPartitions(files, target);
+  expect(partitions.map((partition) => partition.arguments)).toEqual(
+    files.toSorted().map((file) => [file]),
+  );
+  expect(new Set(partitions.map((partition) => partition.name)).size).toBe(
+    files.length,
+  );
+  expect(
+    partitions.every((partition) => partition.arguments.length === 1),
+  ).toBe(true);
+  expect(
+    partitions.every(
+      (partition) =>
+        partition.env.TEST_DATABASE_RESET_TARGET === target &&
+        partition.env.TEST_DATABASE_ALLOW_RESET === "true",
+    ),
+  ).toBe(true);
+  expect(isolatedIntegrationPartitions([], target)).toEqual([]);
+});
 
 const preload = resolve(import.meta.dir, "coverage-instrument.ts");
 const reporter = resolve(import.meta.dir, "coverage-report.ts");

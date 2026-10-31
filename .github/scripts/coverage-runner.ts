@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { isolatedIntegrationPartitions } from "./coverage-partitions";
 
 function assertTarget(
   value: string | undefined,
@@ -87,14 +88,10 @@ async function main() {
         TEST_DATABASE_RESET_TARGET: process.env.DATABASE_URL,
       },
     },
-    {
-      name: "api-resettable-sequential",
-      arguments: ["--parallel=1", ...resettableIntegrationFiles],
-      env: {
-        TEST_DATABASE_ALLOW_RESET: "true",
-        TEST_DATABASE_RESET_TARGET: process.env.DATABASE_URL,
-      },
-    },
+    ...isolatedIntegrationPartitions(
+      resettableIntegrationFiles,
+      process.env.DATABASE_URL!,
+    ),
     {
       name: "api-fixtures",
       arguments: fixtures,
