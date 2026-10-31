@@ -122,10 +122,7 @@ describe("FAQ repository", () => {
   });
 
   test("updates versioned rows, skips stale/missing rows, and enforces landing limit", async () => {
-    const { repo, update, returning } = makeRepo([
-      [{ version: 2 }],
-      [],
-    ]);
+    const { repo, update, returning } = makeRepo([[{ version: 2 }], []]);
     expect(await repo.updateIfVersion("faq-1", 2, { isActive: false })).toEqual(
       {
         id: "faq-1",
