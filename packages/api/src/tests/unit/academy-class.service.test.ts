@@ -50,6 +50,7 @@ function fixture(
     parentId: null,
     isActive: true,
   },
+  lateCounts: unknown[] = [],
 ) {
   const updates: unknown[] = [];
   const db = {
@@ -65,7 +66,7 @@ function fixture(
       },
     },
     select: (columns?: { count?: unknown }) => {
-      if (columns?.count) return query([]);
+      if (columns?.count) return query(lateCounts);
       const rows = selects.shift();
       if (!rows) throw new Error("Unexpected select");
       return query(rows);
@@ -91,7 +92,218 @@ function fixture(
   return { service, audit, meeting, selects, records, updates };
 }
 
+describe("tutor absence and replacement boundaries", () => {
+  const session = {
+    id: "session-1",
+    classId: "class-1",
+    tutorId: "tutor-1",
+    version: 2,
+    state: "scheduled",
+    startAt: new Date("2040-01-01T00:00:00Z"),
+    titleEn: "Session",
+    mode: "online",
+    capacity: 4,
+  };
+  const absenceInput = {
+    sessionId: session.id,
+    reason: "Ill",
+    requestKey: "req-1",
+  };
+  const baseClass = { id: "class-1", state: "published", titleEn: "Class" };
+
+  test.each([
+    ["missing identity", [[]], []],
+    ["missing class", [[{ classId: "class-1" }], [], [session]], []],
+    ["missing session", [[{ classId: "class-1" }], [baseClass], []], []],
+    [
+      "wrong tutor",
+      [
+        [{ classId: "class-1" }],
+        [baseClass],
+        [{ ...session, tutorId: "other" }],
+      ],
+      [],
+    ],
+  ])("absence report rejects %s", async (_name, selects) => {
+    const f = fixture(selects as unknown[][]);
+    await expect(
+      f.service.reportTutorAbsence("tutor-1", absenceInput),
+    ).rejects.toMatchObject({
+      code:
+        _name === "missing class"
+          ? "ACADEMY_CLASS_INVALID_OPERATION"
+          : "ACADEMY_CLASS_NOT_FOUND",
+    });
+  });
+
+  test.each([
+    ["class state", { ...baseClass, state: "draft" }, session],
+    ["session state", baseClass, { ...session, state: "completed" }],
+  ])("absence report rejects invalid %s", async (_name, record, row) => {
+    const f = fixture([[{ classId: "class-1" }], [record], [row]]);
+    await expect(
+      f.service.reportTutorAbsence("tutor-1", absenceInput),
+    ).rejects.toMatchObject({ code: "ACADEMY_CLASS_INVALID_OPERATION" });
+  });
+
+  test.each(["changed-content", "matching-retry"] as const)(
+    "absence request key %s",
+    async (scenario) => {
+      const prior = {
+        ...absenceInput,
+        tutorId: "tutor-1",
+        assignmentVersion: 2,
+        ...(scenario === "changed-content" ? { reason: "Other" } : {}),
+        id: "notice-1",
+      };
+      const f = fixture([
+        [{ classId: "class-1" }],
+        [baseClass],
+        [session],
+        [prior],
+      ]);
+      if (scenario === "matching-retry")
+        await expect(
+          f.service.reportTutorAbsence("tutor-1", absenceInput),
+        ).resolves.toEqual(prior);
+      else
+        await expect(
+          f.service.reportTutorAbsence("tutor-1", absenceInput),
+        ).rejects.toBeInstanceOf(AcademyClassStateConflictError);
+    },
+  );
+
+  test("absence collision for a different request key conflicts", async () => {
+    const existing = {
+      tutorId: "tutor-1",
+      assignmentVersion: 2,
+      requestKey: "old",
+      reason: "Ill",
+    };
+    const f = fixture([
+      [{ classId: "class-1" }],
+      [baseClass],
+      [session],
+      [],
+      [existing],
+    ]);
+    await expect(
+      f.service.reportTutorAbsence("tutor-1", absenceInput),
+    ).rejects.toBeInstanceOf(AcademyClassStateConflictError);
+  });
+
+  test.each([
+    ["missing identity", [[]], []],
+    ["missing class", [[{ classId: "class-1" }], [], [session]], []],
+    ["missing session", [[{ classId: "class-1" }], [baseClass], []], []],
+    [
+      "class state",
+      [
+        [{ classId: "class-1" }],
+        [{ ...baseClass, state: "completed" }],
+        [session],
+      ],
+      [],
+    ],
+    [
+      "session state",
+      [
+        [{ classId: "class-1" }],
+        [baseClass],
+        [{ ...session, state: "completed" }],
+      ],
+      [],
+    ],
+    [
+      "version",
+      [[{ classId: "class-1" }], [baseClass], [session]],
+      { expectedVersion: 1 },
+    ],
+    [
+      "same tutor",
+      [[{ classId: "class-1" }], [baseClass], [session], []],
+      { replacementTutorId: "tutor-1" },
+    ],
+    [
+      "existing report",
+      [
+        [{ classId: "class-1" }],
+        [baseClass],
+        [session],
+        [],
+        [{ id: "report" }],
+        [],
+      ],
+      {},
+    ],
+  ] as const)("replacement rejects %s", async (name, selects, override) => {
+    const f = fixture(selects as unknown[][]);
+    await expect(
+      f.service.replaceAbsentTutor("admin-1", {
+        sessionId: session.id,
+        expectedVersion: 2,
+        replacementTutorId: "tutor-2",
+        reason: "Coverage",
+        ...(override as object),
+      }),
+    ).rejects.toMatchObject({
+      code: name.startsWith("missing")
+        ? "ACADEMY_CLASS_NOT_FOUND"
+        : name === "same tutor"
+          ? "ACADEMY_CLASS_INVALID_OPERATION"
+          : "ACADEMY_CLASS_STATE_CONFLICT",
+    });
+    expect(f.updates).toEqual([]);
+  });
+});
+
 describe("academy class service reads and meeting recovery", () => {
+  test("admin list matches absence notices to current assignment and counts late history", async () => {
+    const current = { id: "current", tutorId: "tutor-a", assignmentVersion: 2 };
+    const prior = { id: "prior", tutorId: "tutor-a", assignmentVersion: 1 };
+    const other = { id: "other", tutorId: "tutor-b", assignmentVersion: 2 };
+    const uncounted = {
+      id: "uncounted",
+      tutorId: "tutor-c",
+      assignmentVersion: 1,
+    };
+    const record = {
+      ...published,
+      sessions: [
+        {
+          id: "s1",
+          tutorId: "tutor-a",
+          version: 2,
+          tutorAbsences: [other, prior, current],
+        },
+        {
+          id: "s2",
+          tutorId: "tutor-c",
+          version: 1,
+          tutorAbsences: [uncounted],
+        },
+        { id: "s3", tutorId: "tutor-d", version: 1, tutorAbsences: [] },
+      ],
+    };
+    const f = fixture([], [], [[record]], [], undefined, [
+      { tutorId: "tutor-a", count: 3 },
+    ]);
+    const rows = await f.service.list({});
+    expect(rows[0]?.sessions[0]?.tutorAbsence).toEqual({
+      ...current,
+      tutorLateNoticeCount: 3,
+    });
+    expect(rows[0]?.sessions[0]?.tutorAbsences).toEqual([
+      { ...other, tutorLateNoticeCount: 0 },
+      { ...prior, tutorLateNoticeCount: 3 },
+      { ...current, tutorLateNoticeCount: 3 },
+    ]);
+    expect(rows[0]?.sessions[1]?.tutorAbsence).toEqual({
+      ...uncounted,
+      tutorLateNoticeCount: 0,
+    });
+    expect(rows[0]?.sessions[2]?.tutorAbsence).toBeNull();
+  });
   test("getPublished returns published catalog records and hides drafts", async () => {
     const f = fixture([], [published]);
     await expect(f.service.getPublished("class-1")).resolves.toMatchObject({
@@ -538,6 +750,91 @@ describe("academy class service reads and meeting recovery", () => {
     const catalog = await f.service.listPublished();
     expect(catalog.map((row) => row.id)).toEqual([postponed.id, published.id]);
     expect(catalog[0]).not.toHaveProperty("tutorFeeIdr");
+  });
+
+  test("published catalog maps optional public fields and session order", async () => {
+    const base = {
+      ...published,
+      competition: {
+        name: "Competition",
+        parent: {
+          name: "Parent",
+          lightTextColor: "#111",
+          lightBackgroundColor: "#eee",
+          darkTextColor: "#fff",
+          darkBackgroundColor: "#222",
+        },
+        lightTextColor: "#111",
+        lightBackgroundColor: "#eee",
+        darkTextColor: "#fff",
+        darkBackgroundColor: "#222",
+      },
+      sessions: [
+        {
+          id: "session-2",
+          sequenceNumber: 2,
+          startAt: new Date("2026-11-02"),
+          titleEn: "Second",
+          curriculumEn: null,
+          mode: "in_person",
+          tutor: null,
+        },
+        {
+          id: "session-1",
+          sequenceNumber: 1,
+          startAt: new Date("2026-11-01"),
+          titleEn: "First",
+          curriculumEn: "Topic",
+          mode: "online",
+          tutor: { name: "Tutor" },
+        },
+      ],
+    };
+    const optional = {
+      ...base,
+      id: "optional",
+      createdAt: new Date("2026-10-03"),
+      titleId: undefined,
+      descriptionId: null,
+      coverKey: "cover/key",
+      cohortFullRateMarks: null,
+      cohortHalfRateMarks: 0,
+      cohortSingleRateMarks: null,
+      masterclassRateMarks: 15,
+      competition: { name: "Solo", parent: null },
+      sessions: [],
+    };
+    const f = fixture([], [], [[base], [optional]]);
+    const rows = await f.service.listPublished();
+    expect(rows[0]).toMatchObject({
+      id: "optional",
+      titleId: null,
+      descriptionId: null,
+      coverKey: "cover/key",
+      cohortFullRateMarks: null,
+      cohortHalfRateMarks: 0,
+      cohortSingleRateMarks: null,
+      masterclassRateMarks: 15,
+      competition: {
+        name: "Solo",
+        lightTextColor: null,
+        lightBackgroundColor: null,
+        darkTextColor: null,
+        darkBackgroundColor: null,
+        parent: null,
+      },
+      sessions: [],
+    });
+    expect(rows[1]).toMatchObject({
+      competition: { parent: { name: "Parent", lightTextColor: "#111" } },
+      sessions: [
+        { id: "session-2", tutor: null, curriculumEn: null },
+        { id: "session-1", tutor: { name: "Tutor" }, curriculumEn: "Topic" },
+      ],
+    });
+    expect(rows[1].sessions.map((session) => session.sequenceNumber)).toEqual([
+      2, 1,
+    ]);
   });
 
   test.each([

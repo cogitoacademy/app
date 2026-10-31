@@ -18,6 +18,7 @@ import {
   sendPreAccountSignupOtp,
   completePreAccountSignup,
   getPreAccountSignupOtpForTest,
+  getPreAccountSignupOutcome,
 } from "./index";
 
 const user = {
@@ -48,6 +49,141 @@ afterEach(() => {
 const acceptedSignupBody = JSON.stringify({ user: { id: "new-student" } });
 
 describe("auth email hooks", () => {
+  test("signup outcome recovery validates identity, email ownership, and expiry", async () => {
+    const attempt = crypto.randomUUID();
+    const future = new Date(Date.now() + 60000);
+    const results = [
+      [],
+      [{ value: "other@example.com", expiresAt: future }],
+      [{ value: "student@example.com", expiresAt: new Date(0) }],
+      [{ value: "student@example.com", expiresAt: future }],
+    ];
+    const select = spyOn(db, "select").mockImplementation((() => {
+      const query = {
+        from: () => query,
+        where: () => query,
+        limit: async () => results.shift() ?? [],
+      };
+      return query;
+    }) as any);
+    try {
+      expect(
+        await getPreAccountSignupOutcome({
+          email: "invalid",
+          signupAttemptId: attempt,
+        }),
+      ).toBe(false);
+      expect(
+        await getPreAccountSignupOutcome({
+          email: "student@example.com",
+          signupAttemptId: "invalid",
+        }),
+      ).toBe(false);
+      expect(select).not.toHaveBeenCalled();
+      for (const expected of [false, false, false, true]) {
+        expect(
+          await getPreAccountSignupOutcome({
+            email: " Student@Example.com ",
+            signupAttemptId: attempt,
+          }),
+        ).toBe(expected);
+      }
+      expect(results).toEqual([]);
+    } finally {
+      select.mockRestore();
+    }
+  });
+
+  test.each([
+    "initial",
+    "resend",
+    "cooldown-matching",
+    "cooldown-other",
+    "mail-failure",
+  ] as const)("pre-account OTP delivery %s", async (scenario) => {
+    const email = `otp-${crypto.randomUUID()}@example.com`;
+    const signupAttemptId = crypto.randomUUID();
+    const priorDigest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+      .update(`${email}\0${"123456"}`)
+      .digest("hex");
+    const current =
+      scenario === "initial" || scenario === "mail-failure"
+        ? []
+        : [
+            {
+              id: "old-proof",
+              value: `${priorDigest}:0:${scenario === "cooldown-other" ? crypto.randomUUID() : signupAttemptId}`,
+              createdAt: new Date(
+                Date.now() - (scenario === "resend" ? 120000 : 0),
+              ),
+            },
+          ];
+    let inserted: any;
+    const remove = mock(async () => undefined);
+    const tx = {
+      execute: async () => undefined,
+      select: () => {
+        const query = {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: async () => current,
+        };
+        return query;
+      },
+      delete: () => ({ where: remove }),
+      insert: () => ({
+        values: async (row: unknown) => {
+          inserted = row;
+        },
+      }),
+    };
+    const transaction = spyOn(db, "transaction").mockImplementation((async (
+      fn: (tx: unknown) => Promise<unknown>,
+    ) => fn(tx)) as any);
+    const select = spyOn(db, "select").mockImplementation((() => {
+      const query = {
+        from: () => query,
+        where: () => query,
+        limit: async () => (inserted ? [inserted] : []),
+      };
+      return query;
+    }) as any);
+    const deletion = spyOn(db, "delete").mockImplementation((() => ({
+      where: remove,
+    })) as any);
+    const sender = mock(async (_params: { email: string; otp: string }) => {
+      if (scenario === "mail-failure") throw new Error("provider failed");
+    });
+    setPreAccountSignupEmailSender(sender);
+    try {
+      const result = await sendPreAccountSignupOtp({ email, signupAttemptId });
+      if (scenario.startsWith("cooldown")) {
+        expect(result).toMatchObject({ ok: false, status: 429 });
+        expect("signupAttemptId" in result).toBe(
+          scenario === "cooldown-matching",
+        );
+        expect(sender).not.toHaveBeenCalled();
+        expect(inserted).toBeUndefined();
+      } else if (scenario === "mail-failure") {
+        expect(result).toMatchObject({ ok: false, status: 502 });
+        expect(remove).toHaveBeenCalledTimes(2);
+      } else {
+        expect(result).toMatchObject({ ok: true, signupAttemptId });
+        expect(sender).toHaveBeenCalledTimes(1);
+        const sent = sender.mock.calls[0]![0];
+        expect(sent.email).toBe(email);
+        expect(sent.otp).toMatch(/^\d{6}$/);
+        if (scenario === "resend") expect(sent.otp).not.toBe("123456");
+        expect(inserted.value).not.toContain(sent.otp);
+        expect(inserted.value).toContain(signupAttemptId);
+      }
+    } finally {
+      transaction.mockRestore();
+      select.mockRestore();
+      deletion.mockRestore();
+    }
+  });
   test.each([
     {
       name: "non-JSON provider failure",

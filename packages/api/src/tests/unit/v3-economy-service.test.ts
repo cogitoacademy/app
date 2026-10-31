@@ -15,6 +15,97 @@ import type { EconomyRepo } from "../../modules/economy/economy.repo";
 import type { Context } from "../../context";
 
 describe("V3 economy draft service", () => {
+  test("save validates a draft before appending and preserves optimistic version metadata", async () => {
+    const tx = {} as DbOrTx;
+    const appendV3Revision = mock(async () => ({ version: 3 }));
+    const service = createEconomyService({
+      db: {} as DbType,
+      repo: { appendV3Revision } as unknown as EconomyRepo,
+    });
+    const input = {
+      expectedVersion: 2,
+      values: structuredClone(DEFAULT_V3_ECONOMY_CONFIG),
+      reason: "Adjusted rates",
+      createdBy: "admin",
+    };
+    expect(await service.saveV3Config(tx, input)).toEqual({ version: 3 });
+    expect(appendV3Revision).toHaveBeenCalledWith(tx, input);
+    await expect(
+      service.saveV3Config(tx, { ...input, values: { invalid: true } }),
+    ).rejects.toThrow();
+    expect(appendV3Revision).toHaveBeenCalledTimes(1);
+  });
+  test("active revisions are nullable, parsed, and resolved against the requested transaction", async () => {
+    const db = {} as DbType;
+    const tx = {} as DbOrTx;
+    const getActiveV3Revision = mock(async (): Promise<unknown> => null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ version: 4, values: DEFAULT_V3_ECONOMY_CONFIG })
+      .mockResolvedValueOnce({ version: 5, values: { invalid: true } });
+    const service = createEconomyService({
+      db,
+      repo: { getActiveV3Revision } as unknown as EconomyRepo,
+    });
+    expect(await service.getActiveV3Config()).toBeNull();
+    expect(getActiveV3Revision).toHaveBeenLastCalledWith(db);
+    expect(await service.getActiveV3Config(tx)).toEqual({
+      version: 4,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+    });
+    expect(getActiveV3Revision).toHaveBeenLastCalledWith(tx);
+    await expect(service.getActiveV3Config()).rejects.toThrow();
+  });
+
+  test("config reads honor explicit connections and optimistic updates return conflicts as null", async () => {
+    const db = {} as DbType;
+    const tx = {} as DbOrTx;
+    const getOrCreate = mock(async () => ({ version: 1 }));
+    const updateWithVersion = mock(
+      async (): Promise<unknown[]> => [],
+    ).mockResolvedValueOnce([{ version: 2 }]);
+    const service = createEconomyService({
+      db,
+      repo: { getOrCreate, updateWithVersion } as unknown as EconomyRepo,
+    });
+    expect(await service.getConfig()).toEqual({ version: 1 });
+    expect(getOrCreate).toHaveBeenLastCalledWith(db);
+    expect(await service.getConfig(tx)).toEqual({ version: 1 });
+    expect(getOrCreate).toHaveBeenLastCalledWith(tx);
+    const input = {
+      expectedVersion: 1,
+      updatedBy: "admin",
+      values: {} as Parameters<typeof service.updateConfig>[1]["values"],
+    };
+    expect(await service.updateConfig(tx, input)).toEqual({ version: 2 });
+    expect(updateWithVersion).toHaveBeenLastCalledWith(
+      tx,
+      1,
+      "admin",
+      input.values,
+    );
+    expect(await service.updateConfig(tx, input)).toBeNull();
+  });
+
+  test("stored draft metadata is returned without falling back to revision zero", async () => {
+    const createdAt = new Date();
+    const row = {
+      version: 2,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+      createdAt,
+      createdBy: "admin",
+      reason: "New rates",
+    };
+    const service = createEconomyService({
+      db: {} as DbType,
+      repo: {
+        getLatestV3Revision: mock(async () => row),
+      } as unknown as EconomyRepo,
+    });
+    expect(await service.getV3Config({} as DbOrTx)).toMatchObject({
+      ...row,
+      status: "draft",
+    });
+  });
   test("historical revisions are parsed and unavailable versions stay unavailable", async () => {
     const db = {} as DbType;
     const tx = {} as DbOrTx;
