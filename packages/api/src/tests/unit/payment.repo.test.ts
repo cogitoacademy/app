@@ -44,6 +44,21 @@ function makeSelectConn(resolvedValue: any) {
 }
 
 describe("findPackageByCode", () => {
+  test("bound latest-package lookup honors an explicit transaction instead of its default database", async () => {
+    const base = makeSelectConn([{ id: "base" }]);
+    const tx = makeSelectConn([{ id: "transaction" }]);
+    const repo = createPaymentRepo({ select: base.select } as any);
+    expect(
+      await repo.findLatestPaymentByUserAndPackage("u1", "pkg1", "midtrans"),
+    ).toEqual({ id: "base" });
+    expect(
+      await repo.findLatestPaymentByUserAndPackage("u1", "pkg1", "midtrans", {
+        select: tx.select,
+      } as any),
+    ).toEqual({ id: "transaction" });
+    expect(base.select).toHaveBeenCalledTimes(1);
+    expect(tx.select).toHaveBeenCalledTimes(1);
+  });
   test("returns package when found", async () => {
     const row = { id: "pkg1", code: "starter", isActive: true };
     const { select, chain } = makeSelectConn([row]);

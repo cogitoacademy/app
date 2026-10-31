@@ -35,14 +35,21 @@ test("absence notices and same-time replacement preserve assignment history and 
   try {
     await db.transaction(async (tx) => {
       const adminId = crypto.randomUUID();
+      const studentId = crypto.randomUUID();
       const tutorIds = [crypto.randomUUID(), crypto.randomUUID()];
-      createdUserIds = [adminId, ...tutorIds];
+      createdUserIds = [adminId, studentId, ...tutorIds];
       await tx.insert(s.user).values([
         {
           id: adminId,
           name: "Absence test admin",
           email: `absence-admin-${tag}@example.invalid`,
           role: "admin",
+        },
+        {
+          id: studentId,
+          name: "Enrolled student",
+          email: `absence-student-${tag}@example.invalid`,
+          role: "student",
         },
         ...tutorIds.map((id, index) => ({
           id,
@@ -126,6 +133,51 @@ test("absence notices and same-time replacement preserve assignment history and 
         status: "created",
         scheduleVersion: 1,
       });
+      const enrollmentId = crypto.randomUUID();
+      const installmentId = crypto.randomUUID();
+      await tx
+        .insert(s.academyClassEnrollment)
+        .values({
+          id: enrollmentId,
+          classId,
+          studentId,
+          requestKey: crypto.randomUUID(),
+          plan: "masterclass",
+          state: "active",
+          sessionCount: 1,
+          firstRateMarks: 5,
+          firstInstallmentMarks: 5,
+          secondInstallmentMarks: 0,
+          totalMarks: 5,
+        });
+      await tx
+        .insert(s.academyClassEnrollmentInstallment)
+        .values({
+          id: installmentId,
+          enrollmentId,
+          ordinal: 1,
+          rateMarks: 5,
+          sessionCount: 1,
+          amountMarks: 5,
+          state: "funded",
+        });
+      await tx
+        .insert(s.academyClassEnrollmentAllocation)
+        .values({
+          enrollmentId,
+          installmentId,
+          classId,
+          sessionId,
+          studentId,
+          ordinal: 1,
+          sequenceNumber: 1,
+          rateMarks: 5,
+          state: "funded",
+          fundedMarks: 5,
+          fundedAt: new Date(),
+          fundingEventKey: `funding-${tag}`,
+          fundingSourceReference: `source-${tag}`,
+        });
       const feeSessionId = crypto.randomUUID();
       await tx.insert(s.academyClassSession).values({
         id: feeSessionId,
@@ -260,6 +312,24 @@ test("absence notices and same-time replacement preserve assignment history and 
       expect(attendees.length).toBe(3);
       expect(audits).toHaveLength(6);
       expect(notifications.length).toBeGreaterThanOrEqual(6);
+      expect(
+        notifications.filter(
+          (notice) => (notice as { userId: string }).userId === studentId,
+        ),
+      ).toHaveLength(3);
+      const [seat] = await tx
+        .select()
+        .from(s.academyClassEnrollmentAllocation)
+        .where(
+          eq(s.academyClassEnrollmentAllocation.enrollmentId, enrollmentId),
+        );
+      expect(seat).toMatchObject({
+        state: "funded",
+        fundedMarks: 5,
+        spentMarks: 0,
+        releasedMarks: 0,
+        scheduleChangeVersion: null,
+      });
       checked = true;
       throw rollback;
     });

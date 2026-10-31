@@ -77,6 +77,44 @@ function fakeQueryBuilder(result: unknown[]) {
   return query;
 }
 describe("content admin boundaries", () => {
+  test("PDF preview reads the private storage key and returns encoded bytes without exposing metadata", async () => {
+    const read = mock(async () => new Uint8Array([37, 80, 68, 70]));
+    const preview = createContentAdminService({
+      repo: {
+        file: mock(async () => ({
+          fileName: "notes.pdf",
+          storageKey: "private/notes",
+        })),
+      } as unknown as ContentAdminRepo,
+      storage: () => ({ read }) as any,
+      enabled: () => true,
+    });
+    expect(await preview.previewPdf("file1")).toEqual({
+      fileName: "notes.pdf",
+      base64: "JVBERg==",
+    });
+    expect(read).toHaveBeenCalledWith("private/notes");
+    await expect(
+      service({ file: mock(async () => null) }).previewPdf("missing"),
+    ).rejects.toBeInstanceOf(ContentInvalidError);
+  });
+
+  test("category lookup returns public taxonomy fields only", async () => {
+    const categories = service({
+      categories: mock(async () => [
+        {
+          id: "category1",
+          name: "Category",
+          isActive: true,
+          parentId: null,
+          sourceHash: "private",
+        },
+      ]),
+    } as unknown as Partial<ContentAdminRepo>);
+    expect(await categories.categories()).toEqual([
+      { id: "category1", name: "Category", isActive: true, parentId: null },
+    ]);
+  });
   test("maps content domain errors to conflict, bad request, and internal error", () => {
     expect(mapContentAdminError(new ContentConflictError())).toMatchObject({
       code: "CONFLICT",

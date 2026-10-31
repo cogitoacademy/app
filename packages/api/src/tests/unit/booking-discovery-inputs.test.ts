@@ -1,6 +1,32 @@
 import { expect, test } from "bun:test";
 import { listPublishedInput } from "../../modules/tutor-discovery/discovery.types";
 import { cancelSeriesSessionInput } from "../../modules/admin-booking/admin-booking.types";
+import { rescheduleAcademyClassSessionInput } from "../../modules/academy-class/academy-class.types";
+
+test("academy rescheduling requires an end after the start", () => {
+  const input = {
+    sessionId: crypto.randomUUID(),
+    expectedVersion: 1,
+    startAt: "2040-01-01T10:00:00Z",
+    endAt: "2040-01-01T11:00:00Z",
+    reason: "Schedule update",
+  };
+  expect(rescheduleAcademyClassSessionInput.safeParse(input).success).toBe(
+    true,
+  );
+  expect(
+    rescheduleAcademyClassSessionInput.safeParse({
+      ...input,
+      endAt: input.startAt,
+    }).success,
+  ).toBe(false);
+  expect(
+    rescheduleAcademyClassSessionInput.safeParse({
+      ...input,
+      endAt: "2040-01-01T09:00:00Z",
+    }).success,
+  ).toBe(false);
+});
 
 test("discovery allows distinct filter IDs and rejects duplicate category or subject filters", () => {
   expect(

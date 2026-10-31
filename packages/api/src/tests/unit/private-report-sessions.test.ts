@@ -40,6 +40,22 @@ function fixture(single: object[], series: object[] = []) {
   return { db: db as unknown as DbType, conditions, reads: () => reads };
 }
 describe("private reporting catalog", () => {
+  test("report rows sort newest first and use identity as the tie breaker", async () => {
+    const f = fixture([
+      { ...base, bookingId: "booking-b" },
+      { ...base, bookingId: "booking-a" },
+      { ...base, bookingId: "booking-new", startAt: new Date("2026-02-01") },
+    ]);
+    expect(
+      (await listPrivateReportSessions(f.db, "admin", "admin")).map(
+        (row) => row.id,
+      ),
+    ).toEqual([
+      "private:booking-new",
+      "private:booking-a",
+      "private:booking-b",
+    ]);
+  });
   test("denies students before reading any bookings", async () => {
     const f = fixture([]);
     await expect(
