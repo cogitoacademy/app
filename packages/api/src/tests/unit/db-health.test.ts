@@ -200,16 +200,72 @@ describe("checkDlqHealth", () => {
     await expect(checkDlqHealth(redis as any)).resolves.toBe(0);
   });
 
+  test("ignores malformed and non-object Lua payloads and counts only timestamps after the cutoff", async () => {
+    const redis = {
+      ping: async () => "PONG",
+      eval: async (
+        _script: string,
+        _keys: string[],
+        args: (string | number)[],
+      ) => {
+        const cutoff = Number(args[0]);
+        const rawEntries = [
+          "not-json",
+          JSON.stringify("string"),
+          JSON.stringify(42),
+          JSON.stringify(null),
+          JSON.stringify([]),
+          JSON.stringify({ failedAt: cutoff }), // inclusive stale edge
+          JSON.stringify({ failedAt: cutoff + 1 }), // future of cutoff
+        ];
+        return rawEntries.reduce((depth, raw) => {
+          let entry: unknown;
+          try {
+            entry = JSON.parse(raw);
+          } catch {
+            return depth;
+          }
+          if (
+            typeof entry === "object" &&
+            entry !== null &&
+            !Array.isArray(entry) &&
+            "failedAt" in entry &&
+            typeof entry.failedAt === "number" &&
+            entry.failedAt > cutoff
+          ) {
+            return depth + 1;
+          }
+          return depth;
+        }, 0);
+      },
+    };
+    await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+  });
+
+  test("returns the Lua null result unchanged", async () => {
+    const redis = {
+      ping: async () => "PONG",
+      eval: async () => null,
+    };
+    await expect(checkDlqHealth(redis as any)).resolves.toBeNull();
+  });
+
   test("boundary: an entry exactly at the 24h edge counts as STALE (strict >)", async () => {
     const now = Date.now();
-    const redis = makeEvalRedis([
-      { failedAt: now - DLQ_FRESH_WINDOW_MS }, // exactly at the edge
-      { failedAt: now - DLQ_FRESH_WINDOW_MS + 1 }, // 1ms fresher
-      { failedAt: now - DLQ_FRESH_WINDOW_MS - 1 }, // 1ms staler
-    ]);
-    // Documented boundary: failedAt == cutoff (exactly 24h old) is stale;
-    // only entries strictly inside the window are fresh.
-    await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+    const originalNow = Date.now;
+    Date.now = () => now;
+    try {
+      const redis = makeEvalRedis([
+        { failedAt: now - DLQ_FRESH_WINDOW_MS }, // exactly at the edge
+        { failedAt: now - DLQ_FRESH_WINDOW_MS + 1 }, // 1ms fresher
+        { failedAt: now - DLQ_FRESH_WINDOW_MS - 1 }, // 1ms staler
+      ]);
+      // Documented boundary: failedAt == cutoff (exactly 24h old) is stale;
+      // only entries strictly inside the window are fresh.
+      await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 
   test("env override DLQ_FRESH_WINDOW_HOURS widens the window", async () => {
