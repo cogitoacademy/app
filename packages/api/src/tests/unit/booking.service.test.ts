@@ -11890,8 +11890,8 @@ describe("V3-only booking and payout", () => {
 describe("Booking report listing authorization", () => {
   test("rejects report access for roles outside admin and tutor", async () => {
     const { service } = createService();
-    await expect(service.listReportSessions("student1", "student")).rejects.toThrow(
-      BookingNotOwnedError,
-    );
+    await expect(
+      service.listReportSessions("student1", "student"),
+    ).rejects.toThrow(BookingNotOwnedError);
   });
 });
