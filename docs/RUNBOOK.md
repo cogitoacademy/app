@@ -4733,7 +4733,6 @@ V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive 
 
 The rollback-only academy absence integration suite runs in the coverage fixture partition against loopback port 6769, database cogito-test, with NODE_ENV=test and no reset overrides. It also retains the explicit development acceptance opt-in for 6767/cogito-app. The suite rolls back its own fixtures and verifies cleanup; it exercises absence reporting and repeated tutor replacement.
 
-
 FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
 
 ## Meeting creation failures
@@ -4741,7 +4740,6 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 For a confirmed online booking with a failed Google Meet event, an admin can trigger a one-booking retry from booking detail. The action is audited. If the retry continues to fail, use the existing manual meeting-link control or check API runtime DNS/egress to `oauth2.googleapis.com:443`. Academy class failures use the retry control on the admin Classes page.
 
 ## API test groups
-
 
 Observed retry recovery (31 October): `EAI_AGAIN oauth2.googleapis.com` and a subsequent `Circuit breaker is open` were recorded for a dev Academy class session. After DNS and HTTPS recovered, the admin retry handler created the Meet URL and event successfully. No Google Cloud Console change was needed. If recurring, fix DNS/egress from the API runtime; the Google Meet circuit breaker permits a half-open probe after its 60-second reset window.
 
