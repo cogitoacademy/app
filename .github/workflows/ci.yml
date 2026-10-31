@@ -333,6 +333,7 @@ jobs:
           name: api-coverage-profiles-${{ github.run_id }}
           path: |
             coverage/api-resettable/counters.json
+            coverage/api-resettable-sequential/counters.json
             coverage/api-fixtures/counters.json
             coverage/api-payout/counters.json
             coverage/counters.merged.json

@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 function assertTarget(
@@ -49,10 +49,23 @@ async function main() {
   ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
   const payout =
     "./packages/api/src/tests/integration/booking-payout-g16.test.ts";
+  const resettableIntegrationFiles = [
+    ...new Bun.Glob("**/*.test.ts").scanSync({
+      cwd: "packages/api/src/tests/integration",
+    }),
+  ]
+    .filter((path) =>
+      /\bresetDatabase\s*\(/.test(
+        readFileSync(`packages/api/src/tests/integration/${path}`, "utf8"),
+      ),
+    )
+    .map((path) => `./packages/api/src/tests/integration/${path}`)
+    .filter((path) => path !== payout);
   const partitions = [
     {
       name: "api-resettable",
       arguments: [...fixtures, payout]
+        .concat(resettableIntegrationFiles)
         .flatMap((path) => [
           "--path-ignore-patterns",
           `**/packages/api/src/tests/integration/${path.split("/").at(-1)}`,
@@ -64,6 +77,14 @@ async function main() {
           "./packages/db/src/",
           "./apps/server/src/openapi.test.ts",
         ]),
+      env: {
+        TEST_DATABASE_ALLOW_RESET: "true",
+        TEST_DATABASE_RESET_TARGET: process.env.DATABASE_URL,
+      },
+    },
+    {
+      name: "api-resettable-sequential",
+      arguments: ["--parallel=1", ...resettableIntegrationFiles],
       env: {
         TEST_DATABASE_ALLOW_RESET: "true",
         TEST_DATABASE_RESET_TARGET: process.env.DATABASE_URL,
