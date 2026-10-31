@@ -10,10 +10,11 @@ function connection(
       const rows = selectResults.shift() ?? [];
       const query = {
         from: () => query,
+        innerJoin: () => query,
         where: () => query,
         orderBy: () => query,
         for: async () => rows,
-        limit: async () => rows,
+        limit: () => query,
         // eslint-disable-next-line unicorn/no-thenable -- Drizzle query builders are PromiseLike.
         then: (resolve: (value: unknown[]) => unknown) =>
           Promise.resolve(rows).then(resolve),
@@ -52,6 +53,66 @@ function reservedAllocation(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+test("session checkout expiry rechecks candidates and skips records no longer expired", async () => {
+  const repo = createClassEnrollmentRepo();
+  expect(
+    await repo.expireStaleCheckoutsForSessions(
+      connection([
+        [{ enrollmentId: "enrollment1" }],
+        [{ id: "enrollment1", state: "active", checkoutExpiresAt: now }],
+      ]),
+      ["session1"],
+      now,
+    ),
+  ).toBe(0);
+});
+
+test("lookup results and locks work for existing and missing wallet, installment, and top-up rows", async () => {
+  const repo = createClassEnrollmentRepo();
+  for (const rows of [[], [{ id: "found" }]]) {
+    for (const lock of [undefined, false, true]) {
+      expect(
+        await repo.getWalletByUser(connection([rows]), "student1", lock),
+      ).toEqual(rows[0] ?? null);
+      expect(
+        await repo.findInstallment(connection([rows]), "enrollment1", 1, lock),
+      ).toEqual(rows[0] ?? null);
+      expect(
+        await repo.findInstallments(connection([rows]), "enrollment1", lock),
+      ).toEqual(rows);
+      expect(
+        await repo.findTopUpAttemptByRequestKey(
+          connection([rows]),
+          "installment1",
+          "request1",
+          lock,
+        ),
+      ).toEqual(rows[0] ?? null);
+      expect(
+        await repo.findTopUpAttemptForStudent(
+          connection([rows]),
+          "student1",
+          "attempt1",
+          lock,
+        ),
+      ).toEqual(rows[0] ?? null);
+    }
+  }
+  expect(await repo.countBlockingSeats(connection([[]]), "session1")).toBe(0);
+  expect(
+    await repo.updateTopUpAttempt(
+      connection([], [[{ id: "updated" }]]),
+      "attempt1",
+      { paymentId: "payment1" },
+    ),
+  ).toEqual({ id: "updated" });
+  expect(
+    await repo.updateTopUpAttempt(connection([], [[]]), "missing", {
+      paymentId: "payment1",
+    }),
+  ).toBeNull();
+});
 
 test("stale checkout expiry exits for empty session and enrollment sets", async () => {
   const repo = createClassEnrollmentRepo();
@@ -289,4 +350,83 @@ test("markInstallmentDefaulted releases its unfunded seats", async () => {
       now,
     ),
   ).resolves.toBe(true);
+});
+
+test("lock and lookup helpers return empty or null records without locking", async () => {
+  const repo = createClassEnrollmentRepo();
+  await expect(repo.lockSessions(connection(), [])).resolves.toEqual([]);
+  await expect(
+    repo.getClassForEnrollment(connection([[]]), "class-missing"),
+  ).resolves.toBeNull();
+  await expect(
+    repo.getSessionDueInfo(connection([[]]), "session-missing"),
+  ).resolves.toBeNull();
+  await expect(
+    repo.findEnrollmentById(connection([[]]), "enrollment-missing"),
+  ).resolves.toBeNull();
+});
+
+test("empty enrollment records and availability avoid follow-up allocation queries", async () => {
+  const repo = createClassEnrollmentRepo();
+  await expect(
+    repo.findStudentClassRecords(connection([[]]), "student-1", "class-1"),
+  ).resolves.toEqual({ enrollments: [], installments: [], allocations: [] });
+  await expect(
+    repo.listAvailableSessions(connection([[]]), "class-1", "student-1", now),
+  ).resolves.toEqual([]);
+});
+
+test("blocking allocation lookup and checkout expiry short circuit empty inputs", async () => {
+  const repo = createClassEnrollmentRepo();
+  await expect(
+    repo.findBlockingAllocationForSessions(connection(), "student-1", []),
+  ).resolves.toEqual([]);
+  await expect(
+    repo.expireStaleCheckoutsForSessions(connection([[]]), ["session-1"], now),
+  ).resolves.toBe(0);
+});
+
+test("insert helpers accept empty batches without database calls", async () => {
+  const repo = createClassEnrollmentRepo();
+  const conn = connection();
+  await expect(repo.insertInstallments(conn, [])).resolves.toEqual([]);
+  await expect(repo.insertAllocations(conn, [])).resolves.toEqual([]);
+});
+
+test("funding and activation mutations report stale state conflicts", async () => {
+  const repo = createClassEnrollmentRepo();
+  await expect(
+    repo.markInstallmentFunded(connection([], [[]]), "installment-1", 1, now),
+  ).resolves.toBe(false);
+  await expect(
+    repo.activateEnrollmentFromCheckout(
+      connection([], [[]]),
+      "enrollment-1",
+      now,
+    ),
+  ).resolves.toBe(false);
+  await expect(
+    repo.markInstallmentDefaulted(connection([], [[]]), "installment-1", now),
+  ).resolves.toBe(false);
+});
+
+test("saveCancellation reports a quote allocation missing from locked enrollment data", async () => {
+  const repo = createClassEnrollmentRepo();
+  await expect(
+    repo.saveCancellation(
+      connection(),
+      "student-1",
+      {
+        enrollmentId: "enrollment-1",
+        scope: "session",
+        allocations: [
+          { allocationId: "absent", chargeMarks: 0, returnMarks: 10 },
+        ],
+        unpaidAllocationIds: [],
+      } as never,
+      "request-key",
+      [] as never,
+      now,
+    ),
+  ).rejects.toThrow("Cancellation allocation missing");
 });

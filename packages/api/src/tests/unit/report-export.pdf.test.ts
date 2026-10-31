@@ -112,6 +112,22 @@ describe("student report PDF layout", () => {
     expect(await pageCount(bytes)).toBe(1);
   });
 
+  test("renders unknown feedback labels and metadata while normalizing tabs and line endings", async () => {
+    const entry = makeEntry({
+      discussion: ["first\tline\r\nsecond line"],
+      strengths: [],
+      improvements: ["Next step"],
+    });
+    entry.metadata.push({ label: "Custom field", value: "Custom value" });
+    entry.sections[0]!.label = "Tutor note";
+    const bytes = await createStudentReportPdf({
+      studentName: "Student Name",
+      generatedAt: new Date("2026-10-22T04:30:00.000Z"),
+      reports: [entry],
+    });
+    expect(await pageCount(bytes)).toBe(1);
+  });
+
   test("paginates dense bullet fields within the reference layout without dropping text", async () => {
     const bullets = Array.from({ length: 300 }, () => "x");
     const entry = makeEntry({

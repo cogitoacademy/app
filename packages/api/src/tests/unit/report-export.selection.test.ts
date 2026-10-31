@@ -44,4 +44,19 @@ describe("bulk report selection", () => {
       [sources[1]],
     );
   });
+
+  test("allows the maximum selection size and rejects a missing requested id", () => {
+    const maximum = Array.from({ length: 100 }, (_, index) => ({
+      id: `r${index}`,
+    }));
+    expect(
+      selectReports(
+        maximum,
+        maximum.map(({ id }) => id),
+      ),
+    ).toHaveLength(100);
+    expect(() => selectReports(reports, ["private:missing"])).toThrow(
+      "Some selected reports are no longer available. Refresh the list and select reports again.",
+    );
+  });
 });

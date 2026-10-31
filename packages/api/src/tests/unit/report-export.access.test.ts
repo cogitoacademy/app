@@ -32,4 +32,16 @@ describe("private report export access", () => {
       authorizeReportExport({ id: "tutor-a", role: "tutor" }, "tutor-a"),
     ).toEqual({ ok: false, status: 403 });
   });
+
+  test("students cannot use an empty requested id to bypass their own scope", () => {
+    expect(
+      authorizeReportExport({ id: "student-a", role: "student" }, ""),
+    ).toEqual({ ok: true, studentId: "student-a" });
+    expect(authorizeReportExport({ id: "admin-a", role: "admin" }, "")).toEqual(
+      { ok: false, status: 400 },
+    );
+    expect(
+      authorizeReportExport({ id: "unknown", role: "guardian" }, "student-a"),
+    ).toEqual({ ok: false, status: 403 });
+  });
 });

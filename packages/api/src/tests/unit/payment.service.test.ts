@@ -1222,6 +1222,99 @@ describe("PaymentService", () => {
   });
 
   describe("confirmFromWebhook", () => {
+    test.each([
+      PAYMENT_STATUS.REFUNDED,
+      PAYMENT_STATUS.PAID,
+      PAYMENT_STATUS.FAILED,
+      PAYMENT_STATUS.SETTLED,
+      PAYMENT_STATUS.EXPIRED,
+    ])(
+      "ignores incoming PENDING when local status is %s",
+      async (localStatus) => {
+        const updatePaymentStatus = mock(async () => {});
+        const wallet = makeWallet();
+        const repo = makeRepo({
+          findPaymentByProviderReference: mock(async () => ({
+            id: "pay1",
+            status: localStatus,
+            provider: "midtrans",
+            providerReference: "midtrans:user1:pkg1",
+            amountIdr: 50000,
+            walletId: "w1",
+            marks: 50,
+          })),
+          updatePaymentStatus,
+        });
+        const service = createPaymentService({
+          db: makeDb(),
+          wallet: wallet as any,
+          repo,
+          provider: makeProvider() as any,
+          providerName: "midtrans",
+        });
+
+        const result = await service.confirmFromWebhook({
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          status: PAYMENT_STATUS.PENDING as PaymentStatus,
+        });
+
+        expect(result.status).toBe(localStatus);
+        expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+        expect(wallet.credit).toHaveBeenCalledTimes(0);
+      },
+    );
+
+    test("updates refund evidence for an already REFUNDED payment without crediting", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const wallet = makeWallet();
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.REFUNDED,
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          amountIdr: 50000,
+          walletId: "w1",
+          marks: 50,
+          providerRefundKind: "full",
+          providerRefundAmountIdr: 50000,
+          providerRefundIdentity: "a".repeat(64),
+        })),
+        updatePaymentStatus,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: "midtrans:user1:pkg1",
+        providerEventId: "evt_refund_update",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+        amountIdr: 50000,
+        refundAmountIdr: 50000,
+        currency: "IDR",
+        providerRefundIdentity: "b".repeat(64),
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        "pay1",
+        expect.objectContaining({
+          status: PAYMENT_STATUS.REFUNDED,
+          providerRefundIdentity: "b".repeat(64),
+        }),
+        expect.anything(),
+      );
+      expect(wallet.credit).toHaveBeenCalledTimes(0);
+    });
+
     test("throws PaymentNotFoundError for unknown provider reference", async () => {
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => null),
@@ -3484,5 +3577,131 @@ describe("PaymentService", () => {
       const result = await service.getPurchase("pay1", "user1");
       expect(result).toEqual(paymentRecord);
     });
+  });
+});
+
+describe("PaymentService targeted guard boundaries", () => {
+  test.each([
+    { incoming: undefined, changed: false },
+    { incoming: new Date("2040-01-01T00:00:00Z"), changed: true },
+    { incoming: new Date("2040-01-03T00:00:00Z"), changed: false },
+  ])(
+    "retains the earliest verified success time ($changed)",
+    async ({ incoming, changed }) => {
+      const current = new Date("2040-01-02T00:00:00Z");
+      const record = {
+        id: "pay-time",
+        userId: "user1",
+        walletId: "w1",
+        status: "PAID",
+        provider: "midtrans",
+        providerReference: "ref-time",
+        amountIdr: 50000,
+        marks: 50,
+        providerSuccessAt: current,
+        providerRefundKind: "partial",
+        providerRefundAmountIdr: 1000,
+        providerRefundIdentity: "a".repeat(64),
+      };
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => record),
+      });
+      const wallet = makeWallet();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+      expect(
+        await service.confirmFromWebhook({
+          provider: "midtrans",
+          providerReference: "ref-time",
+          status: "PAID",
+          providerSuccessAt: incoming,
+        }),
+      ).toEqual({ status: "PAID" });
+      expect(wallet.credit).not.toHaveBeenCalled();
+      expect(repo.updatePaymentStatus).toHaveBeenCalledTimes(changed ? 1 : 0);
+      if (changed)
+        expect(repo.updatePaymentStatus).toHaveBeenCalledWith(
+          "pay-time",
+          expect.objectContaining({
+            providerSuccessAt: incoming,
+            providerRefundKind: "partial",
+            providerRefundAmountIdr: 1000,
+          }),
+          expect.anything(),
+        );
+    },
+  );
+
+  test("rejects a missing owned purchase without querying the provider", async () => {
+    const provider = makeProvider();
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo: makeRepo(),
+      provider: provider as any,
+      providerName: "midtrans",
+    });
+    await expect(
+      service.reconcilePurchase("missing", "user1"),
+    ).rejects.toBeInstanceOf(PaymentNotFoundError);
+    expect(provider.getPaymentRequestStatus).not.toHaveBeenCalled();
+  });
+
+  test("keeps a pending purchase unchanged when provider status is pending", async () => {
+    const record = {
+      id: "pay-pending",
+      userId: "user1",
+      walletId: "w1",
+      status: "PENDING",
+      providerRequestId: "req-1",
+    };
+    const provider = makeProvider();
+    provider.getPaymentRequestStatus.mockImplementation(async () => ({
+      providerReference: "ref-1",
+      providerEventId: "evt-pending",
+      status: "PENDING" as PaymentStatus,
+      receiptUrl: null,
+      failureReason: null,
+    }));
+    const repo = makeRepo({ findPaymentById: mock(async () => record) });
+    const wallet = makeWallet();
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: wallet as any,
+      repo,
+      provider: provider as any,
+      providerName: "midtrans",
+    });
+    await expect(
+      service.reconcilePurchase(record.id, record.userId),
+    ).resolves.toMatchObject({ status: "PENDING" });
+    expect(repo.updatePaymentStatus).not.toHaveBeenCalled();
+    expect(wallet.credit).not.toHaveBeenCalled();
+  });
+
+  test("does not reconcile a pending purchase without a provider request id", async () => {
+    const record = {
+      id: "pay-no-request",
+      userId: "user1",
+      status: "PENDING",
+      providerRequestId: null,
+    };
+    const provider = makeProvider();
+    const service = createPaymentService({
+      db: makeDb(),
+      wallet: makeWallet() as any,
+      repo: makeRepo({ findPaymentById: mock(async () => record) }),
+      provider: provider as any,
+      providerName: "midtrans",
+    });
+    await expect(
+      service.reconcilePurchase(record.id, record.userId),
+    ).resolves.toMatchObject({ status: "PENDING" });
+    expect(provider.getPaymentRequestStatus).not.toHaveBeenCalled();
   });
 });
