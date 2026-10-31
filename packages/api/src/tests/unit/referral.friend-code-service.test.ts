@@ -546,10 +546,7 @@ test("signup preserves an existing choice without validating a replacement", asy
 });
 
 test("signup rejects a choice that the database did not persist", async () => {
-  const f = fixture(
-    [[{ id: "student-id", role: "student" }], [], []],
-    false,
-  );
+  const f = fixture([[{ id: "student-id", role: "student" }], [], []], false);
   await expect(
     f.service.applyEmailSignupChoice(f.db, { userId: "student-id" }),
   ).rejects.toThrow("Referral choice was not saved.");
