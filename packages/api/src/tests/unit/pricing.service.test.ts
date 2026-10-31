@@ -1,5 +1,8 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import { createPricingService } from "../../modules/pricing/pricing.service";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+import type { EconomyService } from "../../modules/economy/economy.service";
+import type { DbType } from "../../lib/db";
 import {
   ONLINE_FLOOR_PRICES,
   OFFLINE_FLOOR_PRICES,
@@ -7,6 +10,46 @@ import {
 
 describe("Pricing Service", () => {
   const pricing = createPricingService();
+
+  test("V3 config reads require a connection only when economy is configured", async () => {
+    await expect(pricing.getActiveV3Config()).resolves.toBeNull();
+    await expect(pricing.getV3ConfigByVersion(7)).resolves.toBeNull();
+    const configured = createPricingService({ economy: {} as EconomyService });
+    await expect(configured.getActiveV3Config()).rejects.toThrow(
+      "database connection is required",
+    );
+    await expect(configured.getV3ConfigByVersion(7)).rejects.toThrow(
+      "database connection is required",
+    );
+  });
+
+  test("pricing pins the requested revision and honors an explicit transaction", async () => {
+    const db = {} as DbType;
+    const tx = {} as DbType;
+    const revision = { version: 7, values: DEFAULT_V3_ECONOMY_CONFIG };
+    const config = await pricing.getEconomyConfig();
+    const economy = {
+      getConfig: mock(async () => config),
+      getActiveV3Config: mock(async () => revision),
+      getV3ConfigByVersion: mock(async () => revision),
+    };
+    const configured = createPricingService({
+      db,
+      economy: economy as unknown as EconomyService,
+    });
+    expect(await configured.getV3ConfigByVersion(7)).toBe(revision);
+    expect(economy.getV3ConfigByVersion).toHaveBeenLastCalledWith(7, db);
+    expect(await configured.getV3ConfigByVersion(7, tx)).toBe(revision);
+    expect(economy.getV3ConfigByVersion).toHaveBeenLastCalledWith(7, tx);
+    expect(await configured.getActiveV3Config(tx)).toBe(revision);
+    expect(economy.getActiveV3Config).toHaveBeenCalledWith(tx);
+    expect(await configured.getActiveV3Config()).toBe(revision);
+    expect(economy.getActiveV3Config).toHaveBeenLastCalledWith(db);
+    expect(await configured.getEconomyConfig(tx)).toBe(config);
+    expect(economy.getConfig).toHaveBeenCalledWith(tx);
+    expect(await configured.getEconomyConfig()).toBe(config);
+    expect(economy.getConfig).toHaveBeenLastCalledWith(db);
+  });
 
   describe("validatePrices", () => {
     test("returns null for valid online prices", () => {
@@ -213,4 +256,10 @@ describe("Pricing Service", () => {
       );
     });
   });
+});
+
+test("base honorarium validation uses the default economy configuration", () => {
+  expect(createPricingService().validateBaseRates({}, "online")).toBe(
+    "At least one IDR base honorarium is required",
+  );
 });

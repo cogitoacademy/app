@@ -3,6 +3,7 @@ import { DomainError } from "../../lib/domain-errors";
 import {
   RoomNotFoundError,
   RoomBookingConflictError,
+  RoomBookingNotFoundError,
   RoomBookingStateError,
   mapRoomError,
 } from "../../modules/room/room.errors";
@@ -87,6 +88,10 @@ describe("room.errors", () => {
         new RoomBookingConflictError("rm_1", "2025-01-01", "2025-01-02"),
       );
       expect(result.status).toBe(409);
+    });
+    it("should map RoomBookingNotFoundError to NOT_FOUND", () => {
+      const result = mapRoomError(new RoomBookingNotFoundError("b_1"));
+      expect(result.status).toBe(404);
     });
     it("should map RoomBookingStateError to CONFLICT", () => {
       const result = mapRoomError(

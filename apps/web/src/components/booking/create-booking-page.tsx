@@ -92,8 +92,6 @@ import {
 import { formatBookingDateOnly } from "@/components/booking/booking-ui";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
-const DEFAULT_SOLO_PRICE = 42;
-
 type Modality = "online" | "offline";
 type StudentMatch = { id: string; name: string; image: string | null };
 type SelectedSession = {
@@ -196,6 +194,53 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
   );
   const walletQuery = useQuery(orpc.wallet.get.queryOptions());
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const quoteTopUp = useMutation(
+    orpc.payment.createTopUpQuote.mutationOptions({
+      onSuccess: () => setTopUpOpen(true),
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Top-up unavailable",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const purchaseTopUp = useMutation(
+    orpc.payment.createPurchaseFromQuote.mutationOptions({
+      onSuccess: (purchase) => {
+        if (purchase.checkoutUrl) {
+          window.open(
+            purchase.checkoutUrl,
+            "cogito-booking-payment",
+            "noopener",
+          );
+        } else {
+          toastManager.add({
+            title: "Payment is being confirmed",
+            description: "Return here to check your balance before continuing.",
+            type: "warning",
+          });
+        }
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Checkout could not be started",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({
+        queryKey: orpc.wallet.get.queryKey(),
+      });
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [queryClient]);
+
   const selectedBookingModality: Modality =
     profileQuery.data?.modality === "offline" ? "offline" : selectedModality;
   const maxClassSize =
@@ -465,28 +510,36 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         toSessionStart(b.startDate, b.time, BOOKING_TIMEZONE).getTime(),
     );
   const selectedSlot = selectedSlots[0] ?? null;
-  const pricesForModality =
-    profile.pricesByModality?.[effectiveModality] ?? profile.prices;
-  const perSessionPrice = Number(
-    pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE,
-  );
+  const selectedCompetitionPrices = selectedSubject
+    ? profile.pricesByCompetition?.[selectedSubject.parent.slug]?.[
+        effectiveModality
+      ]
+    : undefined;
+  const pricesForModality = selectedCompetitionPrices;
+  const perSessionPrice = pricesForModality?.["1"];
   const baseSessionPrice = isGroupBooking
-    ? Number(
-        pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice,
-      )
+    ? pricesForModality?.[String(invitees.length + 1)]
     : perSessionPrice;
-  const { displayPrice: price, requiredHold } = getBookingPriceSummary({
-    perStudentPrice: baseSessionPrice,
-    sessionCount: selectedSlots.length,
-    isGroupBooking,
-    groupSize: invitees.length + 1,
-    isGroupSeries: isGroupBooking && selectedSlots.length > 1,
-  });
+  const priceAvailable =
+    typeof baseSessionPrice === "number" &&
+    Number.isSafeInteger(baseSessionPrice) &&
+    baseSessionPrice > 0;
+  const priceSummary = priceAvailable
+    ? getBookingPriceSummary({
+        perStudentPrice: baseSessionPrice,
+        sessionCount: selectedSlots.length,
+        isGroupBooking,
+        groupSize: invitees.length + 1,
+        isGroupSeries: isGroupBooking && selectedSlots.length > 1,
+      })
+    : null;
+  const price = priceSummary?.displayPrice ?? null;
+  const requiredHold = priceSummary?.requiredHold ?? 0;
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
-  const hasEnoughMarks = availableBalance >= requiredHold;
+  const hasEnoughMarks = priceAvailable && availableBalance >= requiredHold;
   const tutorName = profile.user?.name ?? "Cogito tutor";
   const subjectSummary = selectedSubject
-    ? `${selectedSubject.parent.name} — ${selectedSubject.name}`
+    ? `${selectedSubject.parent.name} · ${selectedSubject.name}`
     : "Not specified";
   const participantSummary = isGroupBooking
     ? `You + ${invitees.length} ${invitees.length === 1 ? "invitee" : "invitees"}`
@@ -519,6 +572,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     !selectedSlot ||
     hasInvalidStartTime ||
     createPending ||
+    !priceAvailable ||
     !sessionNotes.trim() ||
     (subjects.length > 0 && !effectiveSubjectId) ||
     invitees.length > maxInvitees;
@@ -537,7 +591,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedSlot) return;
+    if (!selectedSlot || !effectiveSubjectId) return;
 
     const buildSessionStart = (slot: (typeof selectedSlots)[number]) =>
       toSessionStart(slot.startDate, slot.time, BOOKING_TIMEZONE);
@@ -545,12 +599,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
     const baseInput = {
       tutorId: profile.userId,
-      subjectId: effectiveSubjectId || undefined,
+      subjectId: effectiveSubjectId,
       availabilitySlotId: selectedSlot.id,
       modality: effectiveModality,
       timezone: BOOKING_TIMEZONE,
-      // Keep the existing API field for compatibility while the booking UI
-      // presents this as one flexible Session Notes field.
+      // Session Notes use the learningGoal storage field.
       learningGoal: sessionNotes.trim(),
     };
     if (isGroupBooking) {
@@ -608,7 +661,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Heading level={1} size="md">
               Book {tutorName}
             </Heading>
-            <Text className="mt-1 text-muted">
+            <Text className="max-w-full text-muted">
               Choose your session details and review the cost before sending
               your request.
             </Text>
@@ -674,7 +727,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         <SelectList>
                           {subjects.map((subject) => (
                             <SelectItem key={subject.id} value={subject.id}>
-                              {subject.parent.name} — {subject.name}
+                              {subject.parent.name} · {subject.name}
                             </SelectItem>
                           ))}
                         </SelectList>
@@ -1204,6 +1257,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               />
               <BookingScheduleSummary selectedSlots={selectedSlots} />
               <Separator />
+              {selectedSubject && !priceAvailable ? (
+                <Text role="status" className="text-sm text-warning">
+                  Pricing is unavailable for this competition until a valid rate
+                  is active.
+                </Text>
+              ) : null}
               <SummaryRow
                 label={
                   selectedSlots.length > 1
@@ -1212,11 +1271,23 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                       ? "Price per student"
                       : "Session price"
                 }
-                value={<CogitoMarks value={price} size="3" />}
+                value={
+                  price === null ? (
+                    "Unavailable"
+                  ) : (
+                    <CogitoMarks value={price} size="3" />
+                  )
+                }
               />
               <SummaryRow
                 label="Reserved now"
-                value={<CogitoMarks value={requiredHold} size="3" />}
+                value={
+                  priceAvailable ? (
+                    <CogitoMarks value={requiredHold} size="3" />
+                  ) : (
+                    "Pricing unavailable"
+                  )
+                }
               />
               <SummaryRow
                 label="Available balance"
@@ -1229,7 +1300,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 }
                 icon={<IconWallet />}
               />
-              {!walletQuery.isPending && hasEnoughMarks ? (
+              {!walletQuery.isPending && priceAvailable && hasEnoughMarks ? (
                 <SummaryRow
                   label="Balance after reserve"
                   value={<CogitoMarks value={balanceAfterHold} size="3" />}
@@ -1247,7 +1318,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   cover their share.
                 </Text>
               ) : null}
-              {!walletQuery.isPending && !hasEnoughMarks ? (
+              {!walletQuery.isPending && priceAvailable && !hasEnoughMarks ? (
                 <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                   <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
                     <span>You need</span>
@@ -1265,6 +1336,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <Button block size="md" disabled progress>
                   Checking balance…
                 </Button>
+              ) : !priceAvailable ? (
+                <Button block size="md" disabled>
+                  Pricing unavailable
+                </Button>
               ) : hasEnoughMarks ? (
                 <Button
                   type="submit"
@@ -1279,8 +1354,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <Button
                   block
                   size="md"
-                  nativeButton={false}
-                  render={<Link to="/balance" aria-label="Top up balance" />}
+                  type="button"
+                  progress={quoteTopUp.isPending}
+                  disabled={quoteTopUp.isPending || submitDisabled}
+                  onClick={() =>
+                    quoteTopUp.mutate({
+                      requestKey: crypto.randomUUID(),
+                      marks: requiredHold - availableBalance,
+                    })
+                  }
                 >
                   Top up balance
                 </Button>
@@ -1312,7 +1394,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               {scheduleSummary}
             </Text>
             <Text className="font-semibold">
-              <CogitoMarks value={price} />
+              {price === null ? (
+                "Pricing unavailable"
+              ) : (
+                <CogitoMarks value={price} />
+              )}
             </Text>
           </div>
           <Button
@@ -1324,6 +1410,72 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </Button>
         </div>
       </div>
+
+      <Drawer open={topUpOpen} onOpenChange={setTopUpOpen}>
+        <DrawerPopup>
+          <DrawerHeader>
+            <DrawerTitle>
+              {hasEnoughMarks
+                ? "Your balance is ready"
+                : `Top up ${quoteTopUp.data?.marks ?? 0} Marks?`}
+            </DrawerTitle>
+            <DrawerDescription>
+              Complete payment in the payment tab, then return here. Your
+              booking selections stay on this page. The slot is reserved only
+              after you send the booking request.
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody>
+            {hasEnoughMarks ? (
+              <Text>You can continue with your booking.</Text>
+            ) : (
+              <Text>
+                Exact top-up: Rp
+                {(
+                  quoteTopUp.data?.exactPackage?.priceIdr ??
+                  quoteTopUp.data?.customAmountIdr ??
+                  0
+                ).toLocaleString("id-ID")}
+              </Text>
+            )}
+          </DrawerBody>
+          <DrawerFooter>
+            {hasEnoughMarks ? (
+              <Button
+                onClick={() => {
+                  setTopUpOpen(false);
+                  setSummaryOpen(true);
+                }}
+              >
+                Continue booking
+              </Button>
+            ) : (
+              <Button
+                progress={purchaseTopUp.isPending}
+                disabled={purchaseTopUp.isPending || !quoteTopUp.data}
+                onClick={() => {
+                  const quote = quoteTopUp.data;
+                  if (quote)
+                    purchaseTopUp.mutate({
+                      quoteId: quote.quoteId,
+                      choice: quote.exactPackage ? "package" : "custom",
+                    });
+                }}
+              >
+                Continue to Midtrans
+              </Button>
+            )}
+            <Button
+              variant="plain"
+              onClick={() => {
+                void walletQuery.refetch();
+              }}
+            >
+              Check balance
+            </Button>
+          </DrawerFooter>
+        </DrawerPopup>
+      </Drawer>
 
       <TutorDrawer
         tutor={profile}
@@ -1360,6 +1512,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             />
             <BookingScheduleSummary selectedSlots={selectedSlots} />
             <Separator />
+            {selectedSubject && !priceAvailable ? (
+              <Text role="status" className="text-sm text-warning">
+                Pricing is unavailable for this competition until a valid rate
+                is active.
+              </Text>
+            ) : null}
             <SummaryRow
               label={
                 selectedSlots.length > 1
@@ -1368,11 +1526,19 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     ? "Price per student"
                     : "Session price"
               }
-              value={<CogitoMarks value={price} />}
+              value={
+                price === null ? "Unavailable" : <CogitoMarks value={price} />
+              }
             />
             <SummaryRow
               label="Reserved now"
-              value={<CogitoMarks value={requiredHold} />}
+              value={
+                priceAvailable ? (
+                  <CogitoMarks value={requiredHold} />
+                ) : (
+                  "Pricing unavailable"
+                )
+              }
             />
             <SummaryRow
               label="Available balance"
@@ -1385,7 +1551,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
               icon={<IconWallet />}
             />
-            {!walletQuery.isPending && hasEnoughMarks ? (
+            {!walletQuery.isPending && priceAvailable && hasEnoughMarks ? (
               <SummaryRow
                 label="Balance after reserve"
                 value={<CogitoMarks value={balanceAfterHold} />}
@@ -1403,7 +1569,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 cover their share.
               </Text>
             ) : null}
-            {!walletQuery.isPending && !hasEnoughMarks ? (
+            {!walletQuery.isPending && priceAvailable && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
                   <span>You need</span>
@@ -1417,6 +1583,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             {walletQuery.isPending ? (
               <Button block size="lg" disabled progress>
                 Checking balance…
+              </Button>
+            ) : !priceAvailable ? (
+              <Button block size="lg" disabled>
+                Pricing unavailable
               </Button>
             ) : hasEnoughMarks ? (
               <Button
@@ -1433,8 +1603,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <Button
                 block
                 size="lg"
-                nativeButton={false}
-                render={<Link to="/balance" aria-label="Top up balance" />}
+                type="button"
+                progress={quoteTopUp.isPending}
+                disabled={quoteTopUp.isPending || submitDisabled}
+                onClick={() =>
+                  quoteTopUp.mutate({
+                    requestKey: crypto.randomUUID(),
+                    marks: requiredHold - availableBalance,
+                  })
+                }
               >
                 Top up balance
               </Button>

@@ -17,11 +17,7 @@ export function BalanceBadge() {
       title="Balance"
     >
       {/* <IconWallet className="size-4 text-muted" /> */}
-      {isLoading ? (
-        <span className="text-muted">—</span>
-      ) : (
-        <CogitoMarks value={balance} size="3" />
-      )}
+      <CogitoMarks value={balance} loading={isLoading} size="3" />
     </div>
   );
 }

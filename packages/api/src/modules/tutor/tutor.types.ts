@@ -6,6 +6,7 @@ import {
   tutorEducationInput,
 } from "./tutor-achievements";
 import { tutorExperiencesInput } from "./tutor-experiences";
+import { tutorTaxProfileInput } from "./tutor-tax-profile";
 
 export const MAX_TUTOR_SHORT_BIO_WORDS = 50;
 export const TUTOR_TERMS_OF_SERVICE_VERSION = "2026-09";
@@ -65,6 +66,7 @@ export const updateMyProfileInput = z.object({
   bankAccountOpeningCity: z.string().trim().min(2).max(100).optional(),
   bankAccountOwnership: z.enum(["self", "trusted_person"]).optional(),
   bankTransferDisclaimerAccepted: z.boolean().optional(),
+  ...tutorTaxProfileInput.shape,
   prices: z
     .record(z.string(), z.number())
     .refine(

@@ -111,6 +111,38 @@ export interface DispatchResult {
   failed: number;
 }
 
+export function notificationEmailHtml(notification: {
+  body: string;
+  metadata: Record<string, unknown> | null;
+}) {
+  const action = notification.metadata?.action;
+  const actionUrlValue = notification.metadata?.actionUrl;
+  const linkLabel =
+    action === "class-session-report"
+      ? "Open your tutor report workspace"
+      : action === "booking-session-report"
+        ? "Open this booking"
+        : null;
+  if (!linkLabel || typeof actionUrlValue !== "string") {
+    return notification.body;
+  }
+
+  try {
+    const actionUrl = new URL(actionUrlValue);
+    if (actionUrl.protocol !== "https:" && actionUrl.protocol !== "http:") {
+      return notification.body;
+    }
+    const href = actionUrl.href
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+    return `${notification.body}<p><a href="${href}">${linkLabel}</a></p>`;
+  } catch {
+    return notification.body;
+  }
+}
+
 export type DispatchConsumer = (limit?: number) => Promise<DispatchResult>;
 
 /**
@@ -261,7 +293,7 @@ export function createNotificationService(
         const res = await emailPort.send({
           to: row.recipientEmail,
           subject: notif.title,
-          html: notif.body,
+          html: notificationEmailHtml(notif),
           category: notif.category as
             | "booking"
             | "payment"

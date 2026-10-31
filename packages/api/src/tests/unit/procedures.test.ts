@@ -60,6 +60,64 @@ describe("procedures", () => {
     expect(nextCalled).toBe(true);
   });
 
+  test("protected app access rejects a student with an unsaved referral choice", async () => {
+    const { requireReferralChoiceSaved } = await import("../../procedures");
+
+    await expect(
+      (requireReferralChoiceSaved as any)({
+        context: {
+          session: {
+            user: {
+              id: "new-google-student",
+              role: "student",
+              referralChoicePending: true,
+            },
+          },
+          services: {},
+        },
+        next: async () => "should not reach",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "REFERRAL_CHOICE_REQUIRED",
+    });
+  });
+
+  test("requireReferralChoiceSaved rejects an unauthenticated request", async () => {
+    const { requireReferralChoiceSaved } = await import("../../procedures");
+
+    await expect(
+      (requireReferralChoiceSaved as any)({
+        context: { session: null, services: {} },
+        next: async () => "should not reach",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  test("referral choice gate does not block non-student accounts", async () => {
+    const { requireReferralChoiceSaved } = await import("../../procedures");
+    let nextCalled = false;
+
+    await (requireReferralChoiceSaved as any)({
+      context: {
+        session: {
+          user: {
+            id: "tutor1",
+            role: "tutor",
+            referralChoicePending: true,
+          },
+        },
+        services: {},
+      },
+      next: async () => {
+        nextCalled = true;
+        return "ok";
+      },
+    });
+
+    expect(nextCalled).toBe(true);
+  });
+
   test("requireEmailVerified rejects an unverified user", async () => {
     const { requireEmailVerified } = await import("../../procedures");
 

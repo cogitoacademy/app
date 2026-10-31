@@ -4,7 +4,7 @@ import { fetchProxyFile } from "../content-proxy";
 import type { Elysia } from "elysia";
 
 /**
- * /content/knowledge-bank/:resourceId/file — streams a published Sanity
+ * /content/knowledge-bank/:resourceId/file — streams an active private or legacy Sanity
  * asset server-side behind the role + Knowledge Bank access gate. Hardened proxy:
  * host allowlist (cdn.sanity.io / *.sanity.io), 10s timeout, 5MB cap
  * (content-length pre-check + streamed byte counter).
@@ -14,6 +14,8 @@ export function registerContentRoutes(app: Elysia) {
     "/content/knowledge-bank/:resourceId/file",
     async (routeContext) => {
       const { params, set } = routeContext;
+      set.headers["Cache-Control"] = "private, no-store";
+      set.headers["X-Content-Type-Options"] = "nosniff";
       const context = await createContext({ context: routeContext });
       const sessionUser = context.session?.user as
         | { id: string; role?: string }
@@ -46,12 +48,14 @@ export function registerContentRoutes(app: Elysia) {
       const file = await context.services.content.getStudentResourceFile(
         params.resourceId,
       );
-      if (!file?.fileUrl) {
+      if (!file || (!file.fileUrl && !file.bytes)) {
         set.status = 404;
         return { error: "Not found" };
       }
 
-      const proxy = await fetchProxyFile(file.fileUrl);
+      const proxy = file.bytes
+        ? { ok: true as const, body: new Uint8Array(file.bytes).buffer }
+        : await fetchProxyFile(file.fileUrl);
       if (!proxy.ok) {
         set.status = proxy.reason;
         return { error: "Unable to retrieve resource" };

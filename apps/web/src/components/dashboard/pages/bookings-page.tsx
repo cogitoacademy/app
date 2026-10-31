@@ -6,7 +6,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
-  IconCalendarPlus,
+  IconPlus,
   IconChevronDown,
   IconInbox,
 } from "@tabler/icons-react";
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
-import { cn } from "@cogito-app/ui/lib/utils";
+import { FilterTabBar } from "@/components/filter-tab-bar";
 
 import {
   BookingListCard,
@@ -144,16 +144,6 @@ export function BookingsPage() {
           <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
         <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
-          {role === "student" ? (
-            <Button
-              render={<Link to="/tutors" aria-label="Find a tutor" />}
-              nativeButton={false}
-              className="w-fit max-[363.98px]:size-9.5 max-[363.98px]:px-0 sm:w-auto sm:shrink-0"
-            >
-              <IconCalendarPlus />
-              <span className="max-[363.98px]:sr-only">Book a session</span>
-            </Button>
-          ) : null}
           <div className="max-w-full sm:hidden">
             <BookingSortSelect
               value={activeSort}
@@ -165,11 +155,28 @@ export function BookingsPage() {
       </div>
 
       <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <BookingTabBar
-          activeTab={activeTab}
-          counts={tabCounts}
-          onChange={selectTab}
-        />
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <div className="min-w-0 flex-1 sm:flex-initial">
+            <BookingTabBar
+              activeTab={activeTab}
+              counts={tabCounts}
+              onChange={selectTab}
+            />
+          </div>
+          {role === "student" ? (
+            <Button
+              variant="plain"
+              size="sm-icon"
+              className="shrink-0 text-muted"
+              aria-label="Book a session"
+              title="Book a session"
+              render={<Link to="/tutors" aria-label="Book a session" />}
+              nativeButton={false}
+            >
+              <IconPlus aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
         <div className="hidden sm:block">
           <BookingSortSelect value={activeSort} onChange={selectSort} />
         </div>
@@ -293,38 +300,13 @@ function BookingTabBar({
   onChange: (tab: BookingTab) => void;
 }) {
   return (
-    <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
-      <div className="w-full min-[520px]:w-fit min-w-0 max-w-full overflow-hidden rounded-full bg-tabs p-1 inset-shadow-xs inset-shadow-black/10 dark:inset-shadow-none">
-        <div
-          data-slot="booking-tab-scroller"
-          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain p-px scrollbar-hidden"
-          role="tablist"
-          aria-label="Booking status"
-        >
-          <div className="flex min-w-max items-center whitespace-nowrap">
-            {BOOKING_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.value}
-                className={cn(
-                  "flex h-8 flex-none cursor-pointer items-center justify-center gap-2.5 rounded-full px-3 py-1 font-medium transition-colors text-sm xl:text-base",
-                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                  activeTab === tab.value
-                    ? "bg-tabs-accent text-foreground shadow ring ring-tabs-border inset-shadow-2xs inset-shadow-white/15 dark:inset-shadow-black/15"
-                    : "text-muted hover:text-foreground",
-                )}
-                onClick={() => onChange(tab.value)}
-              >
-                {tab.label}
-                <span className="text-xs text-dimmed">{counts[tab.value]}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+    <FilterTabBar
+      tabs={BOOKING_TABS.map((tab) => ({ ...tab, count: counts[tab.value] }))}
+      activeTab={activeTab}
+      onChange={onChange}
+      label="Booking status"
+      scrollerSlot="booking-tab-scroller"
+    />
   );
 }
 

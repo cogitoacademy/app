@@ -9,8 +9,11 @@ import {
   TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   InvalidDateRangeError,
+  OptimisticLockError,
+  TutorPayoutFinanceUnavailableError,
   mapTutorError,
 } from "../../modules/tutor/tutor.errors";
+import { InvalidTutorSubjectSelectionError } from "../../modules/tutor-subjects/subject-selection";
 
 class TestDomainError extends DomainError {
   readonly domain = "test";
@@ -20,6 +23,27 @@ class TestDomainError extends DomainError {
 }
 
 describe("tutor.errors", () => {
+  it("maps unavailable payout finance to an internal API error", () => {
+    const error = new TutorPayoutFinanceUnavailableError();
+    expect(error.code).toBe("TUTOR_PAYOUT_FINANCE_UNAVAILABLE");
+    expect(mapTutorError(error)).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+    });
+  });
+  it("maps invalid subject selections and optimistic conflicts", () => {
+    expect(
+      mapTutorError(
+        new InvalidTutorSubjectSelectionError({ reason: "inactive" }),
+      ).status,
+    ).toBe(400);
+    expect(mapTutorError(new OptimisticLockError("tp_1", 2)).status).toBe(409);
+  });
+  it("handles absent details on profile errors", () => {
+    const error = new TutorProfileIncompleteError("tp_1", []);
+    Object.defineProperty(error, "details", { value: undefined });
+    expect(mapTutorError(error).data).toEqual({});
+  });
   describe("TutorProfileNotFoundError", () => {
     it("should be instance of DomainError", () => {
       const err = new TutorProfileNotFoundError("tp_1");

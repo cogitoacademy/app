@@ -19,10 +19,8 @@ const FIELD_LABELS: Record<string, string> = {
   experiences: "Experiences",
   subjectIds: "Specializations",
   modality: "Teaching mode",
-  baseRatesIdr: "Base rates",
   onlineMaxClassSize: "Online class capacity",
   offlineMaxClassSize: "Offline class capacity",
-  prices: "Marks prices",
   bankName: "Bank",
   bankAccountNumber: "Bank account number",
   bankAccountHolderName: "Account holder",
@@ -49,8 +47,6 @@ export type TutorProfileFieldKind =
   | "experiences"
   | "urls"
   | "modality"
-  | "money"
-  | "marks"
   | "capacity"
   | "status"
   | "date"
@@ -80,12 +76,6 @@ export function getTutorProfileFieldLabel(path: string) {
   const [root, index, child] = normalizedPath.split(".");
   const rootLabel = FIELD_LABELS[root] ?? humanize(root);
 
-  if (root === "prices" && index) {
-    return `${rootLabel} · ${index} ${index === "1" ? "student" : "students"}`;
-  }
-  if (root === "baseRatesIdr" && index) {
-    return `${index === "online" ? "Online" : "Offline"} base rate`;
-  }
   if (root === "education" && index && child) {
     return `Education ${Number(index) + 1} · ${child === "university" ? "University" : "Degree"}`;
   }
@@ -124,8 +114,6 @@ export function getTutorProfileFieldKind(path: string): TutorProfileFieldKind {
     return "urls";
   }
   if (root === "modality") return "modality";
-  if (root === "baseRatesIdr") return "money";
-  if (root === "prices") return "marks";
   if (root === "onlineMaxClassSize" || root === "offlineMaxClassSize") {
     return "capacity";
   }

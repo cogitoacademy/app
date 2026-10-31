@@ -75,12 +75,17 @@ export interface ListOverridesQueryOptions {
  * @param bookingId - the booking id
  * @returns the booking row, or null when not found
  */
-export async function findBookingById(conn: DbOrTx, bookingId: string) {
-  const [row] = await conn
+export async function findBookingById(
+  conn: DbOrTx,
+  bookingId: string,
+  options: { forUpdate?: boolean } = {},
+) {
+  const query = conn
     .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
+  const [row] = options.forUpdate ? await query.for("update") : await query;
   return row ?? null;
 }
 
@@ -247,27 +252,43 @@ export async function insertStateHistoryEntry(
 export async function findParticipantsByBookingId(
   conn: DbOrTx,
   bookingId: string,
+  options: { forUpdate?: boolean } = {},
 ) {
-  return conn
+  const query = conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(eq(bookingParticipant.bookingId, bookingId));
+  return options.forUpdate
+    ? query.orderBy(asc(bookingParticipant.userId)).for("update")
+    : query;
 }
 
-export async function findSessionById(conn: DbOrTx, sessionId: string) {
-  const [row] = await conn
+export async function findSessionById(
+  conn: DbOrTx,
+  sessionId: string,
+  options: { forUpdate?: boolean } = {},
+) {
+  const query = conn
     .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.id, sessionId))
     .limit(1);
+  const [row] = options.forUpdate ? await query.for("update") : await query;
   return row ?? null;
 }
 
 export async function cancelSession(conn: DbOrTx, sessionId: string) {
-  await conn
+  const [cancelled] = await conn
     .update(bookingSession)
     .set({ currentState: "cancelled", holdAmount: 0 })
-    .where(eq(bookingSession.id, sessionId));
+    .where(
+      and(
+        eq(bookingSession.id, sessionId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    )
+    .returning({ id: bookingSession.id });
+  return Boolean(cancelled);
 }
 
 /**

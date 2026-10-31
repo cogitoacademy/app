@@ -1,5 +1,6 @@
-import { describe, test, expect, mock } from "bun:test";
+import { describe, test, expect, mock, spyOn } from "bun:test";
 import { auth } from "@cogito-app/auth";
+import { db } from "@cogito-app/db";
 import { createContext, refreshSessionUser } from "../../context";
 
 describe("refreshSessionUser (N4)", () => {
@@ -7,6 +8,7 @@ describe("refreshSessionUser (N4)", () => {
     const findFirst = mock(async () => ({
       role: "student",
       emailVerified: true,
+      referralChoicePending: false,
     }));
     const sessionUser = {
       id: "u1",
@@ -14,6 +16,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -23,10 +26,15 @@ describe("refreshSessionUser (N4)", () => {
 
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(findFirst.mock.calls[0]![0]).toMatchObject({
-      columns: { role: true, emailVerified: true },
+      columns: {
+        role: true,
+        emailVerified: true,
+        referralChoicePending: true,
+      },
     });
     expect(sessionUser.role).toBe("student");
     expect(sessionUser.emailVerified).toBe(true);
+    expect(sessionUser.referralChoicePending).toBe(false);
   });
 
   test("keeps the cookie values when the DB row is missing", async () => {
@@ -37,6 +45,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -46,12 +55,14 @@ describe("refreshSessionUser (N4)", () => {
 
     expect(sessionUser.emailVerified).toBe(false);
     expect(sessionUser.role).toBe("student");
+    expect(sessionUser.referralChoicePending).toBe(true);
   });
 
   test("overwrites a stale cached emailVerified with the DB value", async () => {
     const findFirst = mock(async () => ({
       role: "tutor",
       emailVerified: true,
+      referralChoicePending: false,
     }));
     const sessionUser = {
       id: "u1",
@@ -59,6 +70,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -85,6 +97,7 @@ describe("createContext (N4 wiring)", () => {
     const findFirst = mock(async () => ({
       role: "student",
       emailVerified: true,
+      referralChoicePending: false,
     }));
 
     const ctx = await createContext(
@@ -101,6 +114,7 @@ describe("createContext (N4 wiring)", () => {
     expect(getSession).toHaveBeenCalledTimes(1);
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(ctx.session!.user.emailVerified).toBe(true);
+    expect(ctx.session!.user.referralChoicePending).toBe(false);
     expect(ctx.services).toBeDefined();
     expect(ctx.headers.get("cookie")).toBe("better-auth.session_token=abc");
   });
@@ -137,6 +151,44 @@ describe("createContext (N4 wiring)", () => {
       expect(getSession).toHaveBeenCalledTimes(1);
     } finally {
       (auth.api as any).getSession = originalGetSession;
+    }
+  });
+
+  test("uses the default database connection when refreshing the session user", async () => {
+    const findFirst = spyOn(db.query.user, "findFirst").mockResolvedValue({
+      role: "admin",
+      emailVerified: true,
+      referralChoicePending: false,
+    } as never);
+    const getSession = mock(async () => ({
+      user: {
+        id: "u1",
+        email: "student@cogito.test",
+        name: "Student",
+        role: "student",
+        emailVerified: false,
+        referralChoicePending: true,
+      },
+    }));
+
+    try {
+      const ctx = await createContext(
+        {
+          context: {
+            request: new Request("http://localhost/rpc/auth.getSession"),
+          },
+        } as any,
+        { getSession } as any,
+      );
+
+      expect(findFirst).toHaveBeenCalledTimes(1);
+      expect(ctx.session!.user).toMatchObject({
+        role: "admin",
+        emailVerified: true,
+        referralChoicePending: false,
+      });
+    } finally {
+      findFirst.mockRestore();
     }
   });
 });

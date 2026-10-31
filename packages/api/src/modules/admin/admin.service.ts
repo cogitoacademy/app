@@ -2,7 +2,7 @@ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort, AdminWalletPort } from "./index";
-import type { BookingPayoutPort } from "../booking";
+import type { BookingPayoutPort, TutorTaxConfigUpdate } from "../booking";
 import {
   UserNotFoundError,
   LastAdminError,
@@ -10,9 +10,18 @@ import {
   WalletNotFoundError,
   InvalidLedgerFilterError,
   EconomyConfigConflictError,
+  EconomyCompetitionNotInCatalogError,
   TutorPayoutNotAvailableError,
 } from "./admin.errors";
 import type { EconomyService } from "../economy";
+import type { CompetitionCatalogService } from "../competition-catalog";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
+import {
+  adminSaveV3EconomyInput,
+  adminActivateV3EconomyInput,
+  adminPreviewV3EconomyInput,
+} from "./admin.types";
+import type { z } from "zod";
 
 export const DASHBOARD_ANALYTICS_PERIODS = ["7d", "30d", "90d"] as const;
 export type DashboardAnalyticsPeriod =
@@ -46,17 +55,11 @@ export interface DashboardAnalytics {
     activeLearners: number;
     newStudents: number;
     newTutors: number;
-    grossMarks: number;
-    platformTakeMarks: number;
-    grossIdr: number;
-    platformTakeIdr: number;
   };
   bookingTrend: Array<{
     date: string;
     bookings: number;
     completed: number;
-    grossMarks: number;
-    platformTakeMarks: number;
   }>;
   userTrend: Array<{ date: string; students: number; tutors: number }>;
   stateBreakdown: Array<{ state: string; count: number }>;
@@ -66,6 +69,26 @@ export interface DashboardAnalytics {
     bookings: number;
     completed: number;
   }>;
+  operationsSummary: {
+    delivered: {
+      privateMarks: number;
+      privateSessions: number;
+      academyMarks: number;
+      academySeatSessions: number;
+    };
+    upcoming: {
+      privateFundedMarks: number;
+      privateUnfundedMarks: number;
+      privateSeatSessions: number;
+      academyFundedMarks: number;
+      academyUnfundedMarks: number;
+      academySeatSessions: number;
+    };
+    tutorFees: { earnedIdr: number; paidIdr: number; unpaidIdr: number };
+    unavailablePrivateRates: number;
+    unavailablePaymentDates: number;
+    asOf: string;
+  };
   businessSummary: {
     totalAccounts: number;
     totalStudents: number;
@@ -80,9 +103,9 @@ export interface DashboardAnalytics {
     studentsWithMarksRate: number;
     payingStudents: number;
     paidConversionRate: number;
-    grossRevenueIdr: number;
+    grossReceiptsIdr: number;
     refundedIdr: number;
-    netRevenueIdr: number;
+    netReceiptsIdr: number;
   };
 }
 
@@ -101,6 +124,7 @@ export interface ListUsersResult {
 export interface SearchUsersInput {
   query: string;
   limit?: number;
+  role?: UserRole;
 }
 
 export interface SetRoleInput {
@@ -179,8 +203,8 @@ function buildPeriodDateKeys(periodStart: Date, periodEnd: Date): string[] {
 }
 
 function toAnalyticsWindow(
-  input: DashboardAnalyticsInput = {},
-  now = new Date(),
+  input: DashboardAnalyticsInput,
+  now: Date,
 ): {
   period: DashboardAnalyticsSelection;
   periodStart: Date;
@@ -213,14 +237,6 @@ export interface GetTutorPayoutReportInput {
   dateTo?: string;
 }
 
-export interface UpdateEconomySettingsInput {
-  expectedVersion: number;
-  onlineCogitoBaseIdr: number;
-  onlineCogitoIncrementIdr: number;
-  offlineCogitoBaseIdr: number;
-  offlineCogitoIncrementIdr: number;
-}
-
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
@@ -228,6 +244,7 @@ export function createAdminService(deps: {
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
   economy?: EconomyService;
+  competitionCatalog?: Pick<CompetitionCatalogService, "listParents">;
 }) {
   const { adminRepo, auditPort, db, wallet, payout, economy } = deps;
 
@@ -246,7 +263,12 @@ export function createAdminService(deps: {
   }
 
   async function searchUsers(input: SearchUsersInput) {
-    return adminRepo.searchUsers(db, input.query.trim(), input.limit ?? 10);
+    return adminRepo.searchUsers(
+      db,
+      input.query.trim(),
+      input.limit ?? 10,
+      input.role,
+    );
   }
 
   async function getDashboardAnalytics(
@@ -280,7 +302,7 @@ export function createAdminService(deps: {
     );
     const studentsWithWalletState = studentsWithMarks + studentsWithoutMarks;
     const payingStudents = toNumber(raw.paymentSummary.payingStudents);
-    const grossRevenueIdr = toNumber(raw.paymentSummary.grossRevenueIdr);
+    const grossReceiptsIdr = toNumber(raw.paymentSummary.grossReceiptsIdr);
     const refundedIdr = toNumber(raw.refundSummary.refundedIdr);
     const dateKeys = buildPeriodDateKeys(periodStart, periodEnd);
     const bookingTrendByDate = new Map(
@@ -305,10 +327,6 @@ export function createAdminService(deps: {
         activeLearners: toNumber(bookingSummary.activeLearners),
         newStudents: toNumber(userSummary.newStudents),
         newTutors: toNumber(userSummary.newTutors),
-        grossMarks: toNumber(bookingSummary.grossMarks),
-        platformTakeMarks: toNumber(bookingSummary.platformTakeMarks),
-        grossIdr: toNumber(bookingSummary.grossIdr),
-        platformTakeIdr: toNumber(bookingSummary.platformTakeIdr),
       },
       bookingTrend: dateKeys.map((date) => {
         const row = bookingTrendByDate.get(date);
@@ -316,8 +334,6 @@ export function createAdminService(deps: {
           date,
           bookings: toNumber(row?.bookings),
           completed: toNumber(row?.completed),
-          grossMarks: toNumber(row?.grossMarks),
-          platformTakeMarks: toNumber(row?.platformTakeMarks),
         };
       }),
       userTrend: dateKeys.map((date) => {
@@ -341,6 +357,48 @@ export function createAdminService(deps: {
         bookings: toNumber(row.bookings),
         completed: toNumber(row.completed),
       })),
+      operationsSummary: {
+        delivered: {
+          privateMarks: toNumber(raw.operationsSummary.privateMarks),
+          privateSessions: toNumber(raw.operationsSummary.privateSessions),
+          academyMarks: toNumber(raw.operationsSummary.academyMarks),
+          academySeatSessions: toNumber(
+            raw.operationsSummary.academySeatSessions,
+          ),
+        },
+        upcoming: {
+          privateFundedMarks: toNumber(
+            raw.operationsSummary.privateFundedMarks,
+          ),
+          privateUnfundedMarks: toNumber(
+            raw.operationsSummary.privateUnfundedMarks,
+          ),
+          privateSeatSessions: toNumber(
+            raw.operationsSummary.privateSeatSessions,
+          ),
+          academyFundedMarks: toNumber(
+            raw.operationsSummary.academyFundedMarks,
+          ),
+          academyUnfundedMarks: toNumber(
+            raw.operationsSummary.academyUnfundedMarks,
+          ),
+          academySeatSessions: toNumber(
+            raw.operationsSummary.academyUpcomingSeatSessions,
+          ),
+        },
+        tutorFees: {
+          earnedIdr: toNumber(raw.operationsSummary.earnedIdr),
+          paidIdr: toNumber(raw.operationsSummary.paidIdr),
+          unpaidIdr: toNumber(raw.operationsSummary.unpaidIdr),
+        },
+        unavailablePrivateRates: toNumber(
+          raw.operationsSummary.unavailablePrivateRates,
+        ),
+        unavailablePaymentDates: toNumber(
+          raw.operationsSummary.unavailablePaymentDates,
+        ),
+        asOf: now.toISOString(),
+      },
       businessSummary: {
         totalAccounts: toNumber(raw.accountSummary.totalAccounts),
         totalStudents,
@@ -365,9 +423,9 @@ export function createAdminService(deps: {
           totalStudents > 0
             ? Math.round((payingStudents / totalStudents) * 1000) / 10
             : 0,
-        grossRevenueIdr,
+        grossReceiptsIdr,
         refundedIdr,
-        netRevenueIdr: grossRevenueIdr - refundedIdr,
+        netReceiptsIdr: grossReceiptsIdr - refundedIdr,
       },
     };
   }
@@ -509,97 +567,216 @@ export function createAdminService(deps: {
     return payout.getPendingTutorPayouts(input.tutorId);
   }
 
-  async function markTutorPayoutPaid(
-    adminId: string,
-    input: { tutorId: string },
-  ) {
-    if (!payout.markTutorPayoutPaid) {
+  async function getTutorPayoutAllocations(input: { payoutId: string }) {
+    if (!payout.getTutorPayoutAllocations) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.getTutorPayoutAllocations(input.payoutId);
+  }
+
+  async function previewTutorPayout(input: {
+    tutorId: string;
+    sourceKeys: string[];
+  }) {
+    if (!payout.previewTutorPayout) {
       throw new TutorPayoutNotAvailableError(input.tutorId);
     }
-    const result = await payout.markTutorPayoutPaid(input.tutorId, adminId);
-    if (!result) throw new TutorPayoutNotAvailableError(input.tutorId);
-    await deps.auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: "admin",
-      action: "tutor_payout_paid",
-      targetId: result.id,
-      targetType: "tutor_payout",
-      beforeState: { tutorId: result.tutorId },
-      afterState: result,
-      details: { transferFeeIdr: result.transferFeeIdr },
-    });
-    return result;
+    return payout.previewTutorPayout(input.tutorId, input.sourceKeys);
   }
 
-  async function getEconomySettings() {
-    if (!economy) throw new Error("Economy service is not configured");
-    return economy.getConfig(db);
-  }
-
-  async function updateEconomySettings(
+  async function prepareTutorPayout(
     adminId: string,
-    input: UpdateEconomySettingsInput,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      previewVersion: string;
+      operationId: string;
+    },
+  ) {
+    if (!payout.prepareTutorPayout) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    return payout.prepareTutorPayout(adminId, input);
+  }
+
+  async function recordTutorPayoutTransfer(
+    adminId: string,
+    input: {
+      payoutId: string;
+      previewVersion: string;
+      actualAmountIdr: number;
+      paidAt: string;
+      reference?: string;
+      proofUrl?: string;
+    },
+  ) {
+    if (!payout.recordTutorPayoutTransfer) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.recordTutorPayoutTransfer(adminId, {
+      ...input,
+      paidAt: assertValidDateFilter(input.paidAt, "paidAt"),
+    });
+  }
+
+  async function voidTutorPayout(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    if (!payout.voidTutorPayout) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.voidTutorPayout(adminId, input);
+  }
+
+  async function resolveTutorPayoutReconciliation(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    if (!payout.resolveTutorPayoutReconciliation) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.resolveTutorPayoutReconciliation(adminId, input);
+  }
+
+  async function getTutorTaxConfig() {
+    if (!payout.getTutorTaxConfig) {
+      throw new TutorPayoutNotAvailableError("tax config");
+    }
+    return payout.getTutorTaxConfig();
+  }
+
+  async function updateTutorTaxConfig(
+    adminId: string,
+    input: TutorTaxConfigUpdate,
+  ) {
+    if (!payout.updateTutorTaxConfig) {
+      throw new TutorPayoutNotAvailableError("tax config");
+    }
+    return payout.updateTutorTaxConfig(adminId, input);
+  }
+
+  async function setTutorTaxRateOverride(
+    adminId: string,
+    input: { tutorId: string; rateBps: number | null; reason: string },
+  ) {
+    if (!payout.setTutorTaxRateOverride) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    return payout.setTutorTaxRateOverride(adminId, input);
+  }
+
+  async function getV3EconomySettings() {
+    if (!economy) throw new Error("Economy service is not configured");
+    if (!deps.competitionCatalog)
+      throw new Error("Competition catalog service is not configured");
+    const [settings, parents, active] = await Promise.all([
+      economy.getV3Config(db),
+      deps.competitionCatalog.listParents(db),
+      economy.getActiveV3Config(db),
+    ]);
+    return {
+      ...settings,
+      activeRevision: active?.version ?? null,
+      competitions: parents.map((parent) => ({
+        id: parent.id,
+        slug: parent.slug,
+        name: parent.name,
+        isActive: parent.isActive,
+        rateConfigured: parent.rateConfigured,
+        rate: settings.values.competitionRates[parent.slug] ?? null,
+      })),
+    };
+  }
+
+  function previewV3EconomySettings(
+    input: z.infer<typeof adminPreviewV3EconomyInput>,
   ) {
     if (!economy) throw new Error("Economy service is not configured");
+    const parsed = adminPreviewV3EconomyInput.parse(input);
+    return economy.previewV3Config(parsed.values, parsed.exactMarks);
+  }
 
-    const updated = await db.transaction(async (tx) => {
-      const before = await economy.getConfig(tx);
-      if (before.version !== input.expectedVersion) {
-        throw new EconomyConfigConflictError(input.expectedVersion);
-      }
-
-      const nextValues = {
-        onlineCogitoBaseIdr: input.onlineCogitoBaseIdr,
-        onlineCogitoIncrementIdr: input.onlineCogitoIncrementIdr,
-        offlineCogitoBaseIdr: input.offlineCogitoBaseIdr,
-        offlineCogitoIncrementIdr: input.offlineCogitoIncrementIdr,
-      };
-
-      const hasChanges = Object.entries(nextValues).some(
-        ([key, value]) => value !== before[key as keyof typeof nextValues],
+  async function saveV3EconomySettings(
+    adminId: string,
+    input: z.infer<typeof adminSaveV3EconomyInput>,
+  ) {
+    if (!economy) throw new Error("Economy service is not configured");
+    if (!deps.competitionCatalog)
+      throw new Error("Competition catalog service is not configured");
+    const competitionCatalog = deps.competitionCatalog;
+    const parsed = adminSaveV3EconomyInput.parse(input);
+    return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      const parentSlugs = new Set(
+        (await competitionCatalog.listParents(tx)).map((parent) => parent.slug),
       );
-      if (!hasChanges) return before;
-
-      const result = await economy.updateConfig(tx, {
-        expectedVersion: input.expectedVersion,
-        updatedBy: adminId,
-        values: nextValues,
-      });
-      if (!result) {
-        throw new EconomyConfigConflictError(input.expectedVersion);
+      for (const slug of Object.keys(parsed.values.competitionRates)) {
+        if (!parentSlugs.has(slug)) {
+          throw new EconomyCompetitionNotInCatalogError(slug);
+        }
       }
-
+      const before = await economy.getV3Config(tx);
+      const result = await economy.saveV3Config(tx, {
+        ...parsed,
+        createdBy: adminId,
+      });
+      if (!result) throw new EconomyConfigConflictError(parsed.expectedVersion);
       await auditPort.record({
         db: tx,
         actorId: adminId,
         actorType: USER_ROLE.ADMIN,
-        action: "economy_config_updated",
-        targetId: result.id,
-        targetType: "economy_config",
-        beforeState: {
-          onlineCogitoBaseIdr: before.onlineCogitoBaseIdr,
-          onlineCogitoIncrementIdr: before.onlineCogitoIncrementIdr,
-          offlineCogitoBaseIdr: before.offlineCogitoBaseIdr,
-          offlineCogitoIncrementIdr: before.offlineCogitoIncrementIdr,
-          version: before.version,
-        },
-        afterState: {
-          onlineCogitoBaseIdr: result.onlineCogitoBaseIdr,
-          onlineCogitoIncrementIdr: result.onlineCogitoIncrementIdr,
-          offlineCogitoBaseIdr: result.offlineCogitoBaseIdr,
-          offlineCogitoIncrementIdr: result.offlineCogitoIncrementIdr,
-          version: result.version,
-        },
+        action: "economy_v3_revision_created",
+        targetType: "economy_v3_revision",
+        targetId: String(result.version),
+        beforeState: { version: before.version, values: before.values },
+        afterState: { version: result.version, values: result.values },
+        details: { reason: parsed.reason, status: "draft" },
       });
-
-      return result;
+      return { ...result, status: "draft" as const };
     });
+  }
 
-    return updated;
+  async function activateV3EconomySettings(
+    adminId: string,
+    input: z.infer<typeof adminActivateV3EconomyInput>,
+  ) {
+    if (!economy || !deps.competitionCatalog)
+      throw new Error("Economy services are not configured");
+    const catalog = deps.competitionCatalog;
+    const parsed = adminActivateV3EconomyInput.parse(input);
+    return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      const revision = await economy.getV3ConfigByVersion(parsed.version, tx);
+      if (!revision) throw new EconomyConfigConflictError(parsed.version);
+      const parents = await catalog.listParents(tx);
+      const slugs = new Set(parents.map((parent) => parent.slug));
+      for (const slug of Object.keys(revision.values.competitionRates)) {
+        if (!slugs.has(slug))
+          throw new EconomyCompetitionNotInCatalogError(slug);
+      }
+      const result = await economy.activateV3Config(tx, {
+        ...parsed,
+        updatedBy: adminId,
+      });
+      if (!result) throw new EconomyConfigConflictError(parsed.version);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "economy_v3_revision_activated",
+        targetType: "economy_v3_revision",
+        targetId: String(parsed.version),
+        beforeState: { activeRevision: parsed.expectedActiveRevision },
+        afterState: { activeRevision: parsed.version },
+        details: { reason: parsed.reason },
+      });
+      return { activeRevision: parsed.version };
+    });
   }
 
   return {
+    activateV3EconomySettings,
     listUsers,
     searchUsers,
     getDashboardAnalytics,
@@ -609,9 +786,18 @@ export function createAdminService(deps: {
     getTutorPayouts,
     getTutorPayoutReport,
     getPendingTutorPayouts,
-    markTutorPayoutPaid,
-    getEconomySettings,
-    updateEconomySettings,
+    getTutorPayoutAllocations,
+    previewTutorPayout,
+    prepareTutorPayout,
+    recordTutorPayoutTransfer,
+    voidTutorPayout,
+    resolveTutorPayoutReconciliation,
+    getTutorTaxConfig,
+    updateTutorTaxConfig,
+    setTutorTaxRateOverride,
+    getV3EconomySettings,
+    previewV3EconomySettings,
+    saveV3EconomySettings,
   };
 }
 

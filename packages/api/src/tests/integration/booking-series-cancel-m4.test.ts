@@ -158,9 +158,9 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
     });
     expect(sessions).toHaveLength(2);
     const [s1, s2] = sessions;
-    expect(s1!.holdAmount).toBe(50);
+    expect(s1!.holdAmount).toBe(44);
 
-    // A second booking holds another 50 marks in the SAME pooled wallet. Any
+    // A second booking holds another 44 marks in the SAME pooled wallet. Any
     // over-release from session 2's cancellation would draw from this hold.
     const otherStart = new Date(Date.now() + 96 * 3600_000);
     const otherBooking = await studentClient.booking.createSolo({
@@ -177,7 +177,7 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
 
     // Simulate the reduced state M4 describes: an admin `cancelSeriesSession`
     // already released part of the participant's hold, so the participant now
-    // holds LESS than session 2's holdAmount (50). Set participant.heldAmount
+    // holds LESS than session 2's holdAmount (44). Set participant.heldAmount
     // and booking.holdAmount to 20 (the real admin path decrements these).
     const [participant] = await db
       .select()
@@ -197,10 +197,10 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
       .from(wallet)
       .where(eq(wallet.userId, studentId))
       .limit(1);
-    const heldBefore = wBefore[0]!.heldBalance; // 20 (booking) + 50 (other) = 70
+    const heldBefore = wBefore[0]!.heldBalance; // 20 (booking) + 44 (other) = 64
 
     // Student cancels session 2 pre-H2 → releases at most the participant's
-    // remaining held amount (20), NOT session.holdAmount (50).
+    // remaining held amount (20), NOT session.holdAmount (44).
     await studentClient.booking.cancelSession({ sessionId: s2!.id });
 
     const wAfter = await db
@@ -208,7 +208,7 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
       .from(wallet)
       .where(eq(wallet.userId, studentId))
       .limit(1);
-    // Only 20 released; the other booking's 50 hold is untouched.
+    // Only 20 released; the other booking's 44 hold is untouched.
     expect(wAfter[0]!.heldBalance).toBe(heldBefore - 20);
 
     const [pAfter] = await db

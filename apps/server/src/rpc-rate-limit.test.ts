@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { rateLimit, resetRateLimitStore } from "@cogito-app/api/lib/rate-limit";
 
 import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
 
@@ -63,6 +64,11 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/content/competitions")).toBeNull();
   });
 
+  test("student report export endpoints share the reportExport bucket", () => {
+    expect(matchRateLimitPath("/reports/student/summary")).toBe("reportExport");
+    expect(matchRateLimitPath("/reports/student/pdf")).toBe("reportExport");
+  });
+
   test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
     expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
     expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);
@@ -80,6 +86,43 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchAuthPath("/api/auth/sign-up/email")).toBe(true);
     expect(matchAuthPath("/api/auth/change-email")).toBe(true);
     expect(matchAuthPath("/api/auth/sign-in/social")).toBe(true);
+  });
+
+  test("encoded auth signup paths share the same per-IP auth budget", async () => {
+    const paths = [
+      "/api/auth/sign-up/email-otp",
+      "/api/auth/sign-up%2Femail-otp",
+      "/api/auth/sign-up%252Femail-otp",
+      "/API/AUTH/SIGN-UP/EMAIL-OTP",
+      "/api/auth/sign-up/email-otp///",
+    ];
+    const authLimiter = rateLimit({
+      windowMs: 60_000,
+      maxRequests: 10,
+      keyPrefix: "auth",
+    });
+    const ip = "198.51.100.42";
+
+    resetRateLimitStore();
+    try {
+      for (let index = 0; index < 10; index += 1) {
+        const path = paths[index % paths.length]!;
+        expect(matchAuthPath(path), path).toBe(true);
+        // eslint-disable-next-line no-await-in-loop -- Preserve one ordered IP budget.
+        expect((await authLimiter(ip)).allowed, path).toBe(true);
+      }
+      expect(matchAuthPath(paths[0]!)).toBe(true);
+      expect((await authLimiter(ip)).allowed).toBe(false);
+    } finally {
+      resetRateLimitStore();
+    }
+  });
+
+  test("malformed or excessively encoded auth paths fail closed for limiting", () => {
+    expect(matchAuthPath("/api/auth/sign-up%ZZ")).toBe(true);
+    expect(matchAuthPath(`/api/auth/${"%25252525".repeat(12)}sign-up`)).toBe(
+      true,
+    );
   });
 
   test("other paths are not rate limited", () => {
@@ -102,5 +145,11 @@ describe("routes/rate-limits.ts uses the slash-key patterns", () => {
     expect(routes).not.toContain(
       'path.startsWith("/rpc/auth.students/search")',
     );
+  });
+
+  test("all matched auth paths use one ten-per-minute IP bucket", () => {
+    expect(routes).toContain("auth: { windowMs: 60_000, maxRequests: 10 }");
+    expect(routes).toContain('limiters.get("auth")!(ip)');
+    expect(routes).toContain("if (matchAuthPath(path))");
   });
 });

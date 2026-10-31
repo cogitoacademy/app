@@ -41,11 +41,9 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
-import { useRole } from "@/hooks/use-role";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
-import { SanityStudioEditButton } from "./sanity-studio-button";
 
 type Resource = {
   id: string;
@@ -58,7 +56,9 @@ function resourceFileUrl(resourceId: string) {
   return `${serverUrl}/content/knowledge-bank/${encodeURIComponent(resourceId)}/file`;
 }
 
-export function KnowledgeBankPage() {
+export function KnowledgeBankPage({
+  onManage,
+}: { onManage?: () => void } = {}) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [selectedResource, setSelectedResource] = useState<Resource | null>(
@@ -66,8 +66,6 @@ export function KnowledgeBankPage() {
   );
   const [isDesktop, setIsDesktop] = useState(false);
   const resources = useQuery(orpc.content.listStudentResources.queryOptions());
-  const { role, isLoading: isRoleLoading } = useRole();
-  const isAdmin = !isRoleLoading && role === "admin";
 
   const resourceItems = resources.data?.items;
   const items = useMemo(
@@ -157,19 +155,18 @@ export function KnowledgeBankPage() {
       <Stack direction="column" spacing="lg">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <Heading>Learn from curated resources</Heading>
-            </div>
-            <Text className="mt-1 max-w-2xl text-muted">
+            <Heading level={1} size="md">
+              Learn from curated resources
+            </Heading>
+            <Text className="max-w-full text-muted">
               Find focused materials to strengthen your academic and competition
               preparation.
             </Text>
           </div>
-          {isAdmin ? (
-            <SanityStudioEditButton
-              type="studentResource"
-              label="Edit resources"
-            />
+          {onManage ? (
+            <Button variant="secondary" onClick={onManage}>
+              Manage resources
+            </Button>
           ) : null}
         </div>
 

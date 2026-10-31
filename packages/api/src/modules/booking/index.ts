@@ -11,6 +11,8 @@ import type {
   Modality,
   PriceSnapshot,
   EconomyPriceSnapshot,
+  V3SessionPrice,
+  V3ConfigRevision,
 } from "../pricing/pricing.service";
 import type { EconomyParameters } from "../economy";
 import type { NotificationWriteParams } from "../notification/notification.service";
@@ -20,14 +22,22 @@ import type {
   ReleaseParams,
   DeductParams,
 } from "../wallet/wallet.service";
+import type { EligibleReferralCompletion } from "../referral/referral.service";
 import { createBookingRepo } from "./booking.repo";
 import { createBookingService } from "./booking.service";
+import {
+  createBookingReportReminderProcessor,
+  createBookingReportReminderRepo,
+} from "./booking.report-reminders";
 import {
   createBookingHandler,
   createTutorActionsHandler,
 } from "./booking.handler";
-import type { BookingService } from "./booking.service";
-import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+import type {
+  TutorPayoutAllocationDetail,
+  TutorPayoutSourceItem,
+} from "./booking.service";
+import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 
 export type BookingModule = ReturnType<typeof createBookingModule>;
 
@@ -36,6 +46,13 @@ export interface BookingWalletPort {
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
   deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+}
+
+export interface BookingReferralPort {
+  recordEligibleFirstCompletion(
+    db: DbOrTx,
+    input: EligibleReferralCompletion,
+  ): Promise<unknown>;
 }
 
 export interface BookingPricingPort {
@@ -51,6 +68,19 @@ export interface BookingPricingPort {
     config: EconomyParameters,
   ): EconomyPriceSnapshot;
   getEconomyConfig?(conn?: DbOrTx): Promise<EconomyParameters>;
+  calculateV3SessionPrice?(
+    input: {
+      competition: string;
+      modality: "online" | "offline";
+      headcount: GroupSize;
+    },
+    values: V3ConfigRevision["values"],
+  ): V3SessionPrice;
+  getActiveV3Config?(conn?: DbOrTx): Promise<V3ConfigRevision | null>;
+  getV3ConfigByVersion?(
+    version: number,
+    conn?: DbOrTx,
+  ): Promise<V3ConfigRevision | null>;
 }
 
 export interface BookingAuditPort {
@@ -149,24 +179,152 @@ export interface BookingPayoutPort {
     tutorPayout: number;
     tutorPayoutIdr: number;
     lastPaidAt: Date | null;
+    items: TutorPayoutSourceItem[];
   }>;
-  markTutorPayoutPaid?(
+  getTutorPayoutAllocations?(payoutId: string): Promise<{
+    detailsAvailable: boolean;
+    items: TutorPayoutAllocationDetail[];
+  }>;
+  previewTutorPayout?(
     tutorId: string,
+    sourceKeys: string[],
+  ): Promise<TutorPayoutPreview>;
+  prepareTutorPayout?(
     adminId: string,
-  ): Promise<{
-    id: string;
-    tutorId: string;
-    grossHonorariumIdr: number;
-    transferFeeIdr: number;
-    netHonorariumIdr: number;
-    bankName: string;
-    bankAccountNumber: string;
-    bankAccountHolderName: string;
-    paidAt: Date;
-  } | null>;
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      previewVersion: string;
+      operationId: string;
+    },
+  ): Promise<TutorPayoutMutationResult>;
+  recordTutorPayoutTransfer?(
+    adminId: string,
+    input: {
+      payoutId: string;
+      previewVersion: string;
+      actualAmountIdr: number;
+      paidAt: Date;
+      reference?: string;
+      proofUrl?: string;
+    },
+  ): Promise<TutorPayoutMutationResult>;
+  voidTutorPayout?(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ): Promise<TutorPayoutMutationResult>;
+  resolveTutorPayoutReconciliation?(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ): Promise<TutorPayoutMutationResult>;
+  getTutorTaxConfig?(): Promise<TutorTaxConfigView>;
+  updateTutorTaxConfig?(
+    adminId: string,
+    input: TutorTaxConfigUpdate,
+  ): Promise<TutorTaxConfigView>;
+  setTutorTaxRateOverride?(
+    adminId: string,
+    input: { tutorId: string; rateBps: number | null; reason: string },
+  ): Promise<Record<string, unknown>>;
+  getTutorPayoutFinance?(tutorId: string): Promise<TutorPayoutFinance>;
 }
 
-export type TutorPayoutReportStatus = "paid" | "pending";
+export interface TutorTaxConfigView {
+  id: "default";
+  version: number;
+  nikNpwpRateBps: number;
+  nikOnlyRateBps: number;
+  missingRateBps: number;
+}
+
+export interface TutorTaxConfigUpdate {
+  expectedVersion: number;
+  nikNpwpRateBps: number;
+  nikOnlyRateBps: number;
+  missingRateBps: number;
+  reason: string;
+}
+
+export interface TutorPayoutPreview {
+  previewVersion: string;
+  tutorId: string;
+  profileVersion: number;
+  taxConfigVersion: number;
+  sourceKeys: string[];
+  items: TutorPayoutSourceItem[];
+  grossHonorariumIdr: number;
+  taxStatus: "nik_npwp" | "nik_only" | "missing";
+  taxRateBps: number;
+  taxRateSource: string;
+  taxHonorariumIdr: number;
+  transferFeeIdr: number;
+  netHonorariumIdr: number;
+  legalName: string | null;
+  nik: string | null;
+  npwp: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountHolderName: string | null;
+}
+
+export interface TutorPayoutMutationResult {
+  id: string;
+  tutorId: string;
+  status: "prepared" | "paid" | "void";
+  sourceKeys: string[];
+  grossHonorariumIdr: number;
+  taxStatus: string | null;
+  taxRateBps: number | null;
+  taxRateSource: string | null;
+  taxHonorariumIdr: number | null;
+  transferFeeIdr: number;
+  netHonorariumIdr: number;
+  actualAmountIdr: number | null;
+  actualReference: string | null;
+  actualProofUrl: string | null;
+  transferRecordedAt: Date | null;
+  transferRecordedBy: string | null;
+  paidAt: Date | null;
+  preparedAt: Date | null;
+  voidedAt: Date | null;
+  voidReason: string | null;
+  reconciliationStatus: string;
+  reconciliationReason: string | null;
+}
+
+export interface TutorPayoutFinance {
+  pending: {
+    completedSessions: number;
+    grossHonorariumIdr: number;
+    taxStatus: "nik_npwp" | "nik_only" | "missing";
+    taxRateBps: number;
+    taxRateSource: string;
+    taxHonorariumIdr: number | null;
+    transferFeeIdr: number;
+    netHonorariumIdr: number | null;
+    payoutAccountComplete: boolean;
+    taxProfileComplete: boolean;
+    items: TutorPayoutSourceItem[];
+  };
+  history: Array<{
+    id: string;
+    status: "prepared" | "paid" | "void";
+    grossHonorariumIdr: number;
+    taxStatus: string | null;
+    taxRateBps: number | null;
+    taxRateSource: string | null;
+    taxHonorariumIdr: number | null;
+    transferFeeIdr: number;
+    netHonorariumIdr: number;
+    actualAmountIdr: number | null;
+    paidAt: Date | null;
+    actualReference: string | null;
+    reconciliationStatus: string;
+    items: TutorPayoutAllocationDetail[];
+  }>;
+}
+
+export type TutorPayoutReportStatus = "paid" | "pending" | "prepared" | "void";
 
 export interface TutorPayoutReportRow {
   id: string;
@@ -177,22 +335,45 @@ export interface TutorPayoutReportRow {
   bankAccountHolderName: string | null;
   bankAccountOpeningCity: string | null;
   bankAccountOwnership: "self" | "trusted_person" | null;
+  taxLegalName: string | null;
+  taxNik: string | null;
+  taxNpwp: string | null;
   grossHonorariumIdr: number;
   transferFeeIdr: number;
-  netHonorariumIdr: number;
+  netHonorariumIdr: number | null;
   status: TutorPayoutReportStatus;
   paidAt: Date | null;
   payoutAccountComplete: boolean;
+  taxProfileComplete: boolean;
+  taxStatus: "nik_npwp" | "nik_only" | "missing" | null;
+  taxRateBps: number | null;
+  taxRateSource: string | null;
+  taxHonorariumIdr: number | null;
+  actualAmountIdr: number | null;
+  actualReference: string | null;
+  actualProofUrl: string | null;
+  transferRecordedAt: Date | null;
+  transferRecordedBy: string | null;
+  preparedAt: Date | null;
+  voidedAt: Date | null;
+  voidReason: string | null;
+  reconciliationStatus: string;
+  reconciliationReason: string | null;
+  previewVersion: string | null;
+  coveredSessionCount: number;
 }
 
 export function createBookingModule(deps: {
   db: DbType;
+  appBaseUrl: string;
   wallet: BookingWalletPort;
   pricing: BookingPricingPort;
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
+  referralPort?: BookingReferralPort;
 }) {
   const repo = createBookingRepo(deps.db);
   const service = createBookingService({
@@ -203,11 +384,23 @@ export function createBookingModule(deps: {
     audit: deps.audit,
     notification: deps.notification,
     meeting: deps.meeting,
+    competitionPalette: deps.competitionPalette,
     roomPort: deps.roomPort,
+    referralPort: deps.referralPort,
   });
   const handler = createBookingHandler(service);
   const tutorActionsHandler = createTutorActionsHandler(service);
-  return { service, handler, tutorActionsHandler };
+  const reportReminders = createBookingReportReminderProcessor({
+    db: deps.db,
+    repo: createBookingReportReminderRepo(),
+    notification: deps.notification,
+    appBaseUrl: deps.appBaseUrl,
+  });
+  return { service, handler, tutorActionsHandler, reportReminders };
 }
 
-export type { BookingService, BookingHandler, TutorActionsHandler };
+export type { BookingService } from "./booking.service";
+export type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+export type BookingReportReminderService = ReturnType<
+  typeof createBookingReportReminderProcessor
+>;

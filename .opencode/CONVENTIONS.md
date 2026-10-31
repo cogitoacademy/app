@@ -28,6 +28,13 @@ origin/main..HEAD` must be 0 before pushing a PR).
   `origin/main` with Conventional Commits, opens a PR with a full body
   (Summary/Why/Implementation/Testing/Risks/Rollback), waits for CI
   (`gh pr checks --watch`), then squash-merges. No direct-to-main commits.
+- **Release v3 exception (owner-authorized 19 Oct 2026):** use `f/release-v3`
+  as the temporary integration branch. Create one short-lived branch per
+  independently reviewable v3 slice from its latest commit; merge it back by
+  PR after review, tests and docs. After all v3 acceptance/release gates pass,
+  open a PR from `f/release-v3` to `main`. Keep `main` as the production/default
+  branch; this exception changes the v3 integration base, not the PR-only,
+  squash-merge or no-direct-to-main rules.
 - Conventional Commits: `type(scope): description` + body with why/what.
 - If a PR's `gh pr view <n> --json files` shows files you did not intend to
   change, the base is stale — close, re-cut, re-push.

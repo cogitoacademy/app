@@ -1,5 +1,7 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -146,7 +148,7 @@ export function ContactRequestPanel({ bookingId }: { bookingId: string }) {
     return (
       <Card className="min-w-0 overflow-hidden">
         <CardBody>
-          <Text className="text-muted">Loading contact options…</Text>
+          <Loader />
         </CardBody>
       </Card>
     );
@@ -227,7 +229,7 @@ export function ContactRequestPanel({ bookingId }: { bookingId: string }) {
                         ? "Wants to exchange contact details"
                         : request?.direction === "outgoing" &&
                             request.status === "pending"
-                          ? "Request sent — waiting for a response"
+                          ? "Request sent · waiting for a response"
                           : request?.status === "accepted"
                             ? request.email
                               ? "Email shared"

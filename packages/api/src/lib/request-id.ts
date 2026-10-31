@@ -46,15 +46,14 @@ export async function readBodyBytesWithLimit(
     // eslint-disable-next-line no-await-in-loop
     const { done, value } = await reader.read();
     if (done) break;
-    if (value) {
-      total += value.length;
-      if (total > limit) {
-        // eslint-disable-next-line no-await-in-loop
-        await reader.cancel();
-        return { bytes: new Uint8Array(0), tooLarge: true };
-      }
-      chunks.push(value);
+    // A read with done=false carries a Uint8Array, including empty chunks.
+    total += value.length;
+    if (total > limit) {
+      // eslint-disable-next-line no-await-in-loop
+      await reader.cancel();
+      return { bytes: new Uint8Array(0), tooLarge: true };
     }
+    chunks.push(value);
   }
   const bytes = new Uint8Array(total);
   let offset = 0;

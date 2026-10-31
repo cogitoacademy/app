@@ -16,7 +16,7 @@ export function Card({
     props: {
       "data-slot": "card",
       className: cn(
-        "text-foreground ring ring-card-border rounded-xl shadow-card bg-card",
+        "min-w-0 text-foreground ring ring-card-border rounded-xl shadow-card bg-card",
         className,
       ),
       ...props,
@@ -26,10 +26,12 @@ export function Card({
 
 export const cardHeaderVariants = cva(
   [
-    "p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
-    "grid grid-cols-[1fr_auto]",
-    "has-[>svg]:grid-cols-[auto_1fr_auto]",
-    "has-[[data-slot=iconbox]]:grid-cols-[auto_1fr_auto]",
+    "@container/card p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
+    "min-w-0 grid grid-cols-[minmax(0,1fr)_auto]",
+    "has-[>svg]:grid-cols-[auto_minmax(0,1fr)_auto]",
+    "has-[[data-slot=iconbox]]:grid-cols-[auto_minmax(0,1fr)_auto]",
+    "@sm/card:has-[>svg]:*:data-[slot=card-header-action]:col-start-3",
+    "@sm/card:has-[[data-slot=iconbox]]:*:data-[slot=card-header-action]:col-start-3",
     "has-[[data-slot=iconbox]]:*:data-[slot=card-description]:col-start-2",
     "[&>svg]:row-span-2",
     "*:data-[slot=iconbox]:row-span-2",
@@ -73,7 +75,8 @@ export function CardHeaderAction({
     <div
       data-slot="card-header-action"
       className={cn(
-        "col-start-3 row-start-1 row-span-2 ml-auto flex items-center gap-2",
+        "col-start-2 row-start-1 row-span-2 ml-auto flex flex-wrap items-center justify-end gap-2",
+        "@max-sm/card:col-span-full @max-sm/card:col-start-1 @max-sm/card:row-start-3 @max-sm/card:row-span-1 @max-sm/card:ml-0 @max-sm/card:w-full @max-sm/card:justify-start",
         className,
       )}
       {...props}
@@ -136,12 +139,10 @@ export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-body"
       className={cn(
-        "p-6 **:data-[slot=item]:px-6",
-        "*:data-[slot=table-container]:-m-6 **:data-[slot=table-head]:border-t-0",
-        "has-[>[data-slot=pagination]]:*:data-[slot=table-container]:mb-0",
-        "*:data-[slot=stack]:-m-6",
-        "not-[:has(caption)]:[&_tbody>tr:last-child>td:first-child]:rounded-bl-xl",
-        "not-[:has(caption)]:[&_tbody>tr:last-child>td:last-child]:rounded-br-xl",
+        "min-w-0 p-6 **:data-[slot=item]:px-6",
+        "has-[>[data-slot=table-container]:first-child]:pt-0 has-[>[data-slot=table-container]:last-child]:pb-0",
+        "*:data-[slot=table-container]:-mx-6 *:data-[slot=table-container]:w-[calc(100%+3rem)]",
+        "*:data-[slot=table-container]:my-6 *:data-[slot=table-container]:first:mt-0 *:data-[slot=table-container]:last:mb-0",
         className,
       )}
       {...props}

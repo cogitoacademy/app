@@ -10,7 +10,7 @@ const nginxConfig = readFileSync(
 describe("web nginx CSP", () => {
   test("allows the production API to host Knowledge Bank PDF frames", () => {
     expect(nginxConfig).toContain(
-      "frame-src 'self' https://api.cogitoacademy.id",
+      "frame-src 'self' blob: https://api.cogitoacademy.id",
     );
   });
 

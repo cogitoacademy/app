@@ -1,3 +1,4 @@
+import { DEFAULT_V3_ECONOMY_CONFIG } from "@cogito-app/api/modules/pricing/v3-economy.config";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
 import { env } from "@cogito-app/env/server";
@@ -10,12 +11,16 @@ export function seedPackagesAllowed(
   return seedAllowed(nodeEnv, allowFlag);
 }
 
-export const PACKAGES = [
-  { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 312500 },
-  { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 690000 },
-  { code: "explorer", name: "Explorer Pack", marks: 200, priceIdr: 1070000 },
-  { code: "pioneer", name: "Pioneer Pack", marks: 400, priceIdr: 2000000 },
-];
+const PACKAGE_NAMES: Record<string, string> = {
+  starter: "Starter Pack",
+  learner: "Learner Pack",
+  explorer: "Explorer Pack",
+  pioneer: "Pioneer Pack",
+};
+export const PACKAGES = DEFAULT_V3_ECONOMY_CONFIG.packages.map((pkg) => ({
+  ...pkg,
+  name: PACKAGE_NAMES[pkg.code] ?? pkg.code,
+}));
 
 export async function seedPackages() {
   await Promise.all(

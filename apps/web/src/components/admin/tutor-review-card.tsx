@@ -36,12 +36,16 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconAlertTriangle, IconInbox } from "@tabler/icons-react";
+import { IconInbox } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPalette,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 import {
@@ -64,22 +68,6 @@ import {
   type TutorReviewDiff,
 } from "@/components/admin/tutor-review-diff";
 
-const FLOOR_ONLINE: Record<string, number> = {
-  "1": 42,
-  "2": 35,
-  "3": 28,
-  "4": 24,
-  "5": 21,
-  "6": 19,
-};
-const FLOOR_OFFLINE: Record<string, number> = {
-  "1": 50,
-  "2": 45,
-  "3": 40,
-  "4": 35,
-  "5": 30,
-  "6": 27,
-};
 const STATUS_BADGE: Record<
   string,
   {
@@ -128,7 +116,14 @@ interface TutorReviewCardProps {
         id: string;
         name: string;
         slug: string;
-        parent?: { name: string; slug: string } | null;
+        parent?: {
+          name: string;
+          slug: string;
+          lightTextColor?: string | null;
+          lightBackgroundColor?: string | null;
+          darkTextColor?: string | null;
+          darkBackgroundColor?: string | null;
+        } | null;
       };
     }> | null;
     modality: string | null;
@@ -138,8 +133,6 @@ interface TutorReviewCardProps {
     bankAccountOpeningCity: string | null;
     bankAccountOwnership: "self" | "trusted_person" | null;
     bankTransferDisclaimerAccepted: boolean | null;
-    prices: Record<string, number> | null;
-    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
@@ -154,7 +147,7 @@ interface TutorReviewCardProps {
     } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
   onAction?: () => void;
 }
 
@@ -269,7 +262,6 @@ const REVIEW_SECTION_FIELDS = {
   teaching: ["modality", "subjectIds", "expertise"],
   credentials: ["education", "achievements", "experiences"],
   proofs: ["achievementProofUrls", "experienceProofUrls", "proofUrls"],
-  marks: ["prices", "baseRatesIdr"],
   photo: ["profileImageUrl"],
   payout: [
     "bankName",
@@ -317,22 +309,27 @@ function ReviewEmptyState({
   );
 }
 
-export type SpecializationItem = { label: string; field?: string };
+export type SpecializationItem = {
+  id: string;
+  label: string;
+  parentColors?: CompetitionPalette | null;
+};
 
 function SpecBadges({ items }: { items: SpecializationItem[] }) {
   if (items.length === 0) {
-    return <Text className="text-sm text-dimmed">—</Text>;
+    return <Text className="text-sm text-dimmed">Not provided</Text>;
   }
   return (
     <div className="flex min-w-0 flex-wrap gap-1.5">
-      {items.map(({ label, field }) => (
+      {items.map(({ id, label, parentColors }) => (
         <Badge
-          key={`${field ?? "specialization"}-${label}`}
+          key={id}
           variant="secondary"
           className={cn(
             "h-auto min-h-5.5 max-w-full whitespace-normal break-words py-0.5",
-            field ? getCompetitionFieldClass(field, "solid") : undefined,
+            parentColors ? competitionPaletteClassName : undefined,
           )}
+          style={getCompetitionPaletteStyle(parentColors)}
         >
           {label}
         </Badge>
@@ -457,7 +454,7 @@ function ReviewActions({
 export function TutorReviewCard({
   profile,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   onAction,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
@@ -675,11 +672,6 @@ export function TutorReviewCard({
           label: profile.onboardingStatus,
           variant: "secondary" as const,
         });
-  const floorPrices =
-    profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
-  const priceEntries = Object.entries(profile.prices ?? {}).toSorted(
-    ([a], [b]) => Number(a) - Number(b),
-  );
   const reviewAction = reviewMutation.variables?.action;
   const isPending = reviewMutation.isPending;
   const currentProfileImageUrl = profile.user?.image ?? null;
@@ -688,22 +680,41 @@ export function TutorReviewCard({
   );
   const pendingChangesWithoutPhoto = Object.entries(
     profile.pendingProfileChanges ?? {},
-  ).filter(([field]) => field !== "profileImageUrl");
+  ).filter(
+    ([field]) => !["profileImageUrl", "prices", "baseRatesIdr"].includes(field),
+  );
   const currentSpecializationItems = (profile.subjects ?? [])
     .map((entry) => ({
       id: entry.subject.id,
       label: entry.subject.parent?.name
         ? `${entry.subject.parent.name} · ${entry.subject.name}`
         : entry.subject.name,
-      field: entry.subject.parent?.slug ?? entry.subject.slug,
+      parentColors: getCompetitionPalette(entry.subject.parent),
     }))
     .filter(
       (item, index, all) =>
         all.findIndex((other) => other.id === item.id) === index,
     );
+  const reviewSubjectLabels = new Map(subjectLabels);
+  const reviewSubjectPalettes = new Map(subjectPalettes ?? []);
+  for (const entry of profile.subjects ?? []) {
+    const subject = entry.subject;
+    const palette = getCompetitionPalette(subject.parent);
+    reviewSubjectLabels.set(
+      subject.id,
+      subject.parent?.name
+        ? `${subject.parent.name} · ${subject.name}`
+        : subject.name,
+    );
+    if (palette) reviewSubjectPalettes.set(subject.id, palette);
+  }
   const currentSubjectIds = currentSpecializationItems.map((item) => item.id);
   const specializationItems: SpecializationItem[] =
-    currentSpecializationItems.map(({ label, field }) => ({ label, field }));
+    currentSpecializationItems.map(({ id, label, parentColors }) => ({
+      id,
+      label,
+      parentColors,
+    }));
   const currentPendingValues: Record<string, unknown> = {
     name: profile.user?.name,
     displayName: profile.user?.name,
@@ -716,8 +727,6 @@ export function TutorReviewCard({
     achievements: profile.achievements,
     experiences: profile.experiences,
     modality: profile.modality,
-    baseRatesIdr: profile.baseRatesIdr,
-    prices: profile.prices,
     bankName: profile.bankName,
     bankAccountNumber: profile.bankAccountNumber,
     bankAccountHolderName: profile.bankAccountHolderName,
@@ -796,11 +805,6 @@ export function TutorReviewCard({
       REVIEW_SECTION_FIELDS.proofs,
       diffEntries,
       proofRows.length === 0,
-    ),
-    marks: getReviewSectionStatus(
-      REVIEW_SECTION_FIELDS.marks,
-      diffEntries,
-      priceEntries.length === 0,
     ),
     photo:
       pendingProfileImageUrl &&
@@ -1047,69 +1051,6 @@ export function TutorReviewCard({
           </ReviewSection>
 
           <ReviewSection
-            title="Marks per student"
-            status={sectionStatuses.marks}
-            showStatus={showSectionStatus("marks")}
-          >
-            {priceEntries.length ? (
-              <div className="overflow-hidden rounded-lg border border-item-border">
-                <Table className="text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="py-2!">Group size</TableHead>
-                      <TableHead className="py-2! text-right">Marks</TableHead>
-                      <TableHead className="py-2! text-right">
-                        Minimum
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {priceEntries.map(([size, price]) => {
-                      const floor = floorPrices[size];
-                      const belowFloor = floor !== undefined && price < floor;
-                      return (
-                        <TableRow key={size}>
-                          <TableCell className="py-2!">
-                            {size} {size === "1" ? "student" : "students"}
-                          </TableCell>
-                          <TableCell className="py-2! text-right font-medium">
-                            <span className="inline-flex items-center justify-end gap-1.5">
-                              <CogitoMarks value={price} size="4" />
-                              {belowFloor ? (
-                                <Badge variant="danger" size="sm" pill>
-                                  Below min
-                                </Badge>
-                              ) : null}
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-2! text-right text-muted">
-                            {floor ?? "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <ReviewEmptyState
-                title="No price list provided"
-                description="The tutor has not added a Marks price list yet."
-              />
-            )}
-            {priceEntries.some(([size, price]) => {
-              const floor = floorPrices[size];
-              return floor !== undefined && price < floor;
-            }) ? (
-              <Text className="mt-2 flex items-center gap-1 text-xs text-danger">
-                <IconAlertTriangle className="size-3" />
-                One or more sizes fall below the modality minimum. Confirm
-                before approving.
-              </Text>
-            ) : null}
-          </ReviewSection>
-
-          <ReviewSection
             title="Profile photo"
             status={sectionStatuses.photo}
             showStatus={showSectionStatus("photo")}
@@ -1224,8 +1165,8 @@ export function TutorReviewCard({
             profileId={profile.id}
             pendingChanges={profile.pendingProfileChanges}
             currentValues={currentPendingValues}
-            subjectLabels={subjectLabels}
-            subjectFieldSlugs={subjectFieldSlugs}
+            subjectLabels={reviewSubjectLabels}
+            subjectPalettes={reviewSubjectPalettes}
           />
           {profile.profileEditAdminNote ? (
             <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
@@ -1249,8 +1190,8 @@ export function TutorReviewCard({
             entries={profileHistory}
             title="Full review history"
             description="Every profile save and moderation decision, including direct-live fields."
-            subjectLabels={subjectLabels}
-            subjectFieldSlugs={subjectFieldSlugs}
+            subjectLabels={reviewSubjectLabels}
+            subjectPalettes={reviewSubjectPalettes}
           />
         </aside>
       </div>

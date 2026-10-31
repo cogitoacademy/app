@@ -2,6 +2,13 @@ import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 import postgres from "postgres";
 
+const TEST_DATABASE_PORTS = new Map([
+  ["cogito-test", new Set(["6767", "6768", "6769"])],
+  ["cogito-test-settlement", new Set(["6767"])],
+  ["cogito-test-payout", new Set(["6770"])],
+]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
 dotenv.config({
   path:
     process.env.ENV_FILE ??
@@ -26,10 +33,16 @@ function getDatabaseName(databaseUrl) {
   return decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, ""));
 }
 
-function assertSafeTestDatabase(databaseName) {
-  if (!databaseName.toLowerCase().includes("test")) {
+function assertSafeTestDatabase(databaseUrl, databaseName) {
+  const hostname = databaseUrl.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    process.env.NODE_ENV !== "test" ||
+    !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+    !LOOPBACK_HOSTS.has(hostname) ||
+    !TEST_DATABASE_PORTS.get(databaseName)?.has(databaseUrl.port)
+  ) {
     throw new Error(
-      `Refusing to create or migrate non-test database '${databaseName}'.`,
+      `Refusing to create or migrate outside a supported loopback test target (database '${databaseName}').`,
     );
   }
 }
@@ -37,7 +50,7 @@ function assertSafeTestDatabase(databaseName) {
 async function ensureTestDatabase() {
   const targetUrl = getDatabaseUrl();
   const databaseName = getDatabaseName(targetUrl);
-  assertSafeTestDatabase(databaseName);
+  assertSafeTestDatabase(targetUrl, databaseName);
 
   const adminUrl = new URL(targetUrl.toString());
   adminUrl.pathname = "/postgres";

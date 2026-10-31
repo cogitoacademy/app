@@ -4,8 +4,14 @@ import {
   LastAdminError,
   OptimisticLockError,
   TutorPayoutNotAvailableError,
+  WalletNotFoundError,
+  EconomyCompetitionNotInCatalogError,
   mapAdminError,
 } from "../../modules/admin/admin.errors";
+import {
+  TutorPayoutNotFoundError,
+  TutorPayoutTaxProfileIncompleteError,
+} from "../../modules/booking/booking.errors";
 import { DomainError } from "../../lib/domain-errors";
 
 describe("admin.errors", () => {
@@ -46,6 +52,12 @@ describe("admin.errors", () => {
   });
 
   describe("mapAdminError", () => {
+    test("maps economy competition catalog violations to BAD_REQUEST", () => {
+      const err = new EconomyCompetitionNotInCatalogError("unlisted");
+      expect(err.details).toEqual({ slug: "unlisted" });
+      expect(mapAdminError(err).status).toBe(400);
+    });
+
     test("maps unavailable tutor payouts to NOT_FOUND", () => {
       const err = new TutorPayoutNotAvailableError("t1");
       expect(err.details).toEqual({ tutorId: "t1" });
@@ -55,6 +67,19 @@ describe("admin.errors", () => {
       const err = new UserNotFoundError("u1");
       const result = mapAdminError(err);
       expect(result.status).toBe(404);
+    });
+
+    test("maps missing wallets and payouts to NOT_FOUND", () => {
+      expect(mapAdminError(new WalletNotFoundError("u1")).status).toBe(404);
+      expect(mapAdminError(new TutorPayoutNotFoundError("p1")).status).toBe(
+        404,
+      );
+    });
+
+    test("maps incomplete tutor payout profiles to BAD_REQUEST", () => {
+      expect(
+        mapAdminError(new TutorPayoutTaxProfileIncompleteError("t1")).status,
+      ).toBe(400);
     });
 
     test("maps LastAdminError to CONFLICT", () => {

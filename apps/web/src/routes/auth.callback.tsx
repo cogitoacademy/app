@@ -25,6 +25,12 @@ export const Route = createFileRoute("/auth/callback")({
       rememberAuthOutcome(search.authOutcome);
     }
     const role = sessionUser.role;
+    if (role === "student" && sessionUser.referralChoicePending) {
+      throw redirect({
+        to: "/referral-choice",
+        search: { redirect: search.redirect },
+      });
+    }
     const tutorOnboardingStatus =
       role === "tutor" && !search.redirect
         ? await readTutorOnboardingStatus(() => client.tutor.getMyProfile())

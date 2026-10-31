@@ -2,7 +2,14 @@ import { createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { Buffer } from "node:buffer";
+import {
+  createHmac,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 
 import { db } from "@cogito-app/db";
 import { isConfiguredAdminEmail } from "@cogito-app/env/admin";
@@ -24,6 +31,7 @@ export type CogitoUser = {
   emailVerified: boolean;
   image: string | null;
   role: string;
+  referralChoicePending: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -38,12 +46,31 @@ export type VerificationEmailSender = (params: {
   email: string;
   otp: string;
   type: "sign-in" | "email-verification" | "forget-password" | "change-email";
-  /** True only when Better Auth is sending the automatic signup OTP. */
-  isSignup?: boolean;
 }) => Promise<void>;
+
+export type PreAccountSignupEmailSender = (params: {
+  email: string;
+  otp: string;
+}) => Promise<void>;
+
+export type SignupWelcomeEmailSender = (params: {
+  user: CogitoUser;
+}) => Promise<void>;
+
+type SignupReferralTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
+export type SignupReferralChoiceWriter = (
+  conn: SignupReferralTransaction,
+  input: { userId: string; code?: string | null },
+) => Promise<unknown>;
 
 let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
 let verificationEmailSender: VerificationEmailSender | null = null;
+let preAccountSignupEmailSender: PreAccountSignupEmailSender | null = null;
+let signupWelcomeEmailSender: SignupWelcomeEmailSender | null = null;
+let signupReferralChoiceWriter: SignupReferralChoiceWriter | null = null;
 
 /**
  * Wires the email port used by Better Auth's reset-password flow.
@@ -58,12 +85,32 @@ export function setAuthEmailSender(sender: ResetPasswordEmailSender) {
 
 /**
  * Wires the email port used by the email-OTP verification plugin (G2).
- * Same circular-dependency rationale as setAuthEmailSender. `isSignup` is
- * included only for Better Auth's automatic signup OTP so the composition
- * root can add welcome content without changing resend/other OTP emails.
+ * Same circular-dependency rationale as setAuthEmailSender. This remains
+ * scoped to existing-account verification and related OTPs.
  */
 export function setVerificationEmailSender(sender: VerificationEmailSender) {
   verificationEmailSender = sender;
+}
+
+/** Wires the separate pre-account signup OTP email port. */
+export function setPreAccountSignupEmailSender(
+  sender: PreAccountSignupEmailSender | null,
+) {
+  preAccountSignupEmailSender = sender;
+}
+
+/** Wires the welcome email sent once, after a verified signup commits. */
+export function setSignupWelcomeEmailSender(
+  sender: SignupWelcomeEmailSender | null,
+) {
+  signupWelcomeEmailSender = sender;
+}
+
+/** Wires referral snapshots and the welcome Marks credit into verified signup. */
+export function setSignupReferralChoiceWriter(
+  writer: SignupReferralChoiceWriter | null,
+) {
+  signupReferralChoiceWriter = writer;
 }
 
 // R1: the shared Redis client for Better Auth secondary storage. Set once
@@ -138,11 +185,17 @@ export function resolveGoogleSocialProviders(input: {
   };
 }
 
-export function createAuth(options?: {
+type InternalAuthOptions = {
   secondaryStorageRedis?: SecondaryStorageRedis;
-}) {
+  /** Internal transaction-bound adapter used only after signup proof checks. */
+  database?: typeof db;
+  /** Internal email scope used by the signup transaction's create hook. */
+  verifiedSignupEmail?: string;
+};
+
+function buildAuth(options?: InternalAuthOptions) {
   return betterAuth({
-    database: drizzleAdapter(db, {
+    database: drizzleAdapter(options?.database ?? db, {
       provider: "pg",
       schema: schema,
     }),
@@ -168,6 +221,12 @@ export function createAuth(options?: {
           type: "string",
           required: false,
           defaultValue: "student",
+          input: false,
+        },
+        referralChoicePending: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
           input: false,
         },
       },
@@ -204,7 +263,7 @@ export function createAuth(options?: {
             url,
             token,
           });
-        } catch (error) {
+        } catch {
           // Never surface email failures to the caller: the request endpoint
           // must return the same response for known and unknown emails
           // (anti-enumeration). The email provider logs its own failures.
@@ -213,7 +272,7 @@ export function createAuth(options?: {
               level: "error",
               action: "reset_password_email_send_failed",
               userId: user.id,
-              error: { message: String(error) },
+              error: { code: "mail_provider_error" },
             }),
           );
         }
@@ -247,12 +306,11 @@ export function createAuth(options?: {
       },
     },
     plugins: [
-      // G2: email verification via OTP (better-auth email-otp plugin). The
-      // OTP is delivered through the shared email port (wired at boot via
-      // setVerificationEmailSender). sendVerificationOnSignUp sends the OTP
-      // right after sign-up; the verify-email endpoint marks the user verified.
+      // Existing-account email verification, sign-in, reset, and change-email
+      // continue through Better Auth. Public email signup has its own
+      // pre-account proof flow below.
       emailOTP({
-        sendVerificationOTP: async ({ email, otp, type }, ctx) => {
+        sendVerificationOTP: async ({ email, otp, type }) => {
           const sender = verificationEmailSender;
           if (!sender) {
             console.warn(
@@ -266,16 +324,8 @@ export function createAuth(options?: {
             return;
           }
           try {
-            const isSignup =
-              type === "email-verification" &&
-              ctx?.path?.startsWith("/sign-up") === true;
-            await sender({
-              email,
-              otp,
-              type,
-              ...(isSignup ? { isSignup: true } : {}),
-            });
-          } catch (error) {
+            await sender({ email, otp, type });
+          } catch {
             // Never surface email failures to the caller (anti-enumeration);
             // the email provider logs its own failures.
             console.error(
@@ -284,12 +334,13 @@ export function createAuth(options?: {
                 action: "verification_email_send_failed",
                 email,
                 type,
-                error: { message: String(error) },
+                error: { code: "mail_provider_error" },
               }),
             );
           }
         },
-        sendVerificationOnSignUp: true,
+        sendVerificationOnSignUp: false,
+        disableSignUp: true,
         expiresIn: 300,
         otpLength: 6,
       }),
@@ -303,32 +354,31 @@ export function createAuth(options?: {
     databaseHooks: {
       user: {
         create: {
-          // Keep the configured production operator usable when the account
-          // is created after the server has booted. The email-OTP plugin's
-          // sign-up after hook sends the combined welcome + verification email.
-          after: async (user) => {
-            // Boot reconciliation covers pre-existing accounts; this hook
-            // covers first-time signup without changing local/test defaults.
+          // Set these fields before insert so a signup transaction does not
+          // need a second connection to update the new row.
+          before: async (user, ctx) => {
+            const data = { ...user };
+            // OAuth input reaches this hook before adapter field defaults.
+            data.role ??= "student";
             if (
-              isProductionLike(env.NODE_ENV) &&
+              options?.verifiedSignupEmail &&
+              normalizeEmail(user.email) === options.verifiedSignupEmail
+            ) {
+              data.emailVerified = true;
+            }
+            if (
+              env.NODE_ENV !== "test" &&
               isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
             ) {
-              try {
-                await db
-                  .update(schema.user)
-                  .set({ role: "admin" })
-                  .where(eq(schema.user.id, user.id));
-              } catch (error) {
-                console.error(
-                  JSON.stringify({
-                    level: "error",
-                    action: "production_admin_signup_bootstrap_failed",
-                    userId: user.id,
-                    error: { message: String(error) },
-                  }),
-                );
-              }
+              data.role = "admin";
             }
+            if (ctx?.path === "/callback/:id" && data.role === "student") {
+              // Google is the only configured social provider. Only new OAuth
+              // student creation reaches this hook; reused accounts and
+              // configured administrators stay clear.
+              data.referralChoicePending = true;
+            }
+            return { data };
           },
         },
       },
@@ -336,4 +386,555 @@ export function createAuth(options?: {
   });
 }
 
+/** Public auth factory retains only storage configuration. */
+export function createAuth(options?: {
+  secondaryStorageRedis?: SecondaryStorageRedis;
+}) {
+  return buildAuth(options);
+}
+
 export const auth = createAuth();
+
+const SIGNUP_OTP_PREFIX = "pre-account-signup-otp:";
+const SIGNUP_OUTCOME_PREFIX = "pre-account-signup-outcome:";
+const verificationRow = schema.verification;
+const SIGNUP_OTP_TTL_MS = 5 * 60_000;
+const SIGNUP_RESEND_COOLDOWN_MS = 60_000;
+const SIGNUP_OUTCOME_TTL_MS = 24 * 60 * 60_000;
+const SIGNUP_OTP_MAX_ATTEMPTS = 3;
+
+type SignupFailure = {
+  ok: false;
+  status: number;
+  error: string;
+  retryAfterSeconds?: number;
+  signupAttemptId?: string;
+};
+
+const testSignupOtps = new Map<
+  string,
+  { rowId: string; otp: string; expiresAt: number }
+>();
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function isValidEmail(email: string) {
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+function signupOtpIdentifier(email: string) {
+  return `${SIGNUP_OTP_PREFIX}${email}`;
+}
+
+function signupOutcomeIdentifier(attemptId: string) {
+  return `${SIGNUP_OUTCOME_PREFIX}${attemptId}`;
+}
+
+function makeOtpDigest(email: string, otp: string) {
+  return createHmac("sha256", env.BETTER_AUTH_SECRET)
+    .update(`${email}\0${otp}`)
+    .digest("hex");
+}
+
+function encodeSignupOtp(
+  email: string,
+  otp: string,
+  attempts: number,
+  attemptId: string,
+) {
+  return `${makeOtpDigest(email, otp)}:${attempts}:${attemptId}`;
+}
+
+function parseSignupOtp(value: string) {
+  const [digest, attemptsValue, attemptId] = value.split(":");
+  const attempts = Number(attemptsValue);
+  if (
+    !digest ||
+    !/^[0-9a-f]{64}$/i.test(digest) ||
+    !Number.isInteger(attempts) ||
+    attempts < 0 ||
+    !attemptId ||
+    !isUuid(attemptId)
+  ) {
+    return null;
+  }
+  return { digest, attempts, attemptId };
+}
+
+function otpMatches(email: string, otp: string, digest: string) {
+  const expected = Buffer.from(makeOtpDigest(email, otp), "hex");
+  const stored = Buffer.from(digest, "hex");
+  return expected.length === stored.length && timingSafeEqual(expected, stored);
+}
+
+function makeSignupOtp(email: string, previousDigest?: string) {
+  while (true) {
+    const otp = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    if (!previousDigest || !otpMatches(email, otp, previousDigest)) return otp;
+  }
+}
+
+function lockSignupEmail(tx: typeof db, email: string) {
+  return lockSignupKey(tx, `cogito-pre-account-signup-email:${email}`);
+}
+
+function lockSignupAttempt(tx: typeof db, attemptId: string) {
+  return lockSignupKey(tx, `cogito-pre-account-signup-attempt:${attemptId}`);
+}
+
+function lockSignupKey(tx: typeof db, key: string) {
+  return tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`,
+  );
+}
+
+/**
+ * Commit the OTP proof and cooldown before delivery. Replacements happen under
+ * an email-scoped transaction lock, while the external mail call runs after
+ * commit so provider latency cannot hold the database connection or lock.
+ */
+export async function sendPreAccountSignupOtp(input: {
+  email: string;
+  signupAttemptId: string;
+}): Promise<
+  | { ok: true; signupAttemptId: string; resendAfterSeconds: number }
+  | SignupFailure
+> {
+  const email = normalizeEmail(input.email);
+  if (!isValidEmail(email) || !isUuid(input.signupAttemptId)) {
+    return { ok: false, status: 400, error: "Enter a valid email address." };
+  }
+  const sender = preAccountSignupEmailSender;
+  if (!sender) {
+    return {
+      ok: false as const,
+      status: 502,
+      error: "We couldn't send a code right now. Please try again.",
+    };
+  }
+
+  const proof = await db.transaction(async (tx) => {
+    await lockSignupEmail(tx as unknown as typeof db, email);
+    const identifier = signupOtpIdentifier(email);
+    const [current] = await tx
+      .select()
+      .from(verificationRow)
+      .where(eq(verificationRow.identifier, identifier))
+      .orderBy(sql`${verificationRow.createdAt} desc`)
+      .limit(1);
+    const now = Date.now();
+    if (
+      current &&
+      current.createdAt.getTime() + SIGNUP_RESEND_COOLDOWN_MS > now
+    ) {
+      return {
+        ok: false as const,
+        status: 429,
+        error: "Please wait before requesting another code.",
+        retryAfterSeconds: Math.ceil(
+          (current.createdAt.getTime() + SIGNUP_RESEND_COOLDOWN_MS - now) /
+            1000,
+        ),
+        ...(parseSignupOtp(current.value)?.attemptId === input.signupAttemptId
+          ? { signupAttemptId: input.signupAttemptId }
+          : {}),
+      };
+    }
+
+    await tx
+      .delete(verificationRow)
+      .where(eq(verificationRow.identifier, identifier));
+    const otp = makeSignupOtp(
+      email,
+      parseSignupOtp(current?.value ?? "")?.digest,
+    );
+    const rowId = randomUUID();
+    await tx.insert(verificationRow).values({
+      id: rowId,
+      identifier,
+      value: encodeSignupOtp(email, otp, 0, input.signupAttemptId),
+      expiresAt: new Date(now + SIGNUP_OTP_TTL_MS),
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+    });
+
+    return {
+      ok: true as const,
+      rowId,
+      otp,
+      expiresAt: now + SIGNUP_OTP_TTL_MS,
+    };
+  });
+
+  if (!proof.ok) return proof;
+
+  // The proof and cooldown are committed before calling the external mail
+  // provider so provider latency never holds a database connection or lock.
+  try {
+    await sender({ email, otp: proof.otp });
+  } catch {
+    // A resend may have replaced this proof while delivery was in flight.
+    // Delete only this request's row and leave any newer proof untouched.
+    await db.delete(verificationRow).where(eq(verificationRow.id, proof.rowId));
+    // Capture is written only after delivery succeeds. A concurrent newer capture must survive.
+    if (env.NODE_ENV !== "production") {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          action: "pre_account_signup_otp_send_failed",
+          error: { code: "mail_provider_error" },
+        }),
+      );
+    }
+    return {
+      ok: false,
+      status: 502,
+      error: "We couldn't send a code right now. Please try again.",
+    };
+  }
+
+  if (env.NODE_ENV === "test") {
+    const [currentProof] = await db
+      .select({ id: verificationRow.id })
+      .from(verificationRow)
+      .where(eq(verificationRow.id, proof.rowId))
+      .limit(1);
+    if (currentProof) {
+      testSignupOtps.set(email, {
+        rowId: proof.rowId,
+        otp: proof.otp,
+        expiresAt: proof.expiresAt,
+      });
+    }
+  }
+
+  return {
+    ok: true as const,
+    signupAttemptId: input.signupAttemptId,
+    resendAfterSeconds: SIGNUP_RESEND_COOLDOWN_MS / 1000,
+  };
+}
+
+/** Test-only reader used by the loopback E2E fixture endpoint. */
+export async function getPreAccountSignupOtpForTest(email: string) {
+  if (env.NODE_ENV !== "test") return null;
+  const normalizedEmail = normalizeEmail(email);
+  const captured = testSignupOtps.get(normalizedEmail);
+  if (!captured || captured.expiresAt <= Date.now()) {
+    if (
+      captured &&
+      testSignupOtps.get(normalizedEmail)?.rowId === captured.rowId
+    ) {
+      testSignupOtps.delete(normalizedEmail);
+    }
+    return null;
+  }
+
+  const [currentProof] = await db
+    .select({ id: verificationRow.id })
+    .from(verificationRow)
+    .where(eq(verificationRow.id, captured.rowId))
+    .limit(1);
+  if (
+    !currentProof ||
+    testSignupOtps.get(normalizedEmail)?.rowId !== captured.rowId
+  ) {
+    return null;
+  }
+  return captured.otp;
+}
+
+class FailedBetterAuthSignup extends Error {
+  constructor(readonly response: Response) {
+    super("Better Auth rejected the signup.");
+  }
+}
+
+async function betterAuthErrorMessage(response: Response) {
+  try {
+    const body = (await response.clone().json()) as { message?: unknown };
+    return typeof body.message === "string"
+      ? body.message
+      : "Unable to create account.";
+  } catch {
+    return "Unable to create account.";
+  }
+}
+
+/**
+ * Create an account only after a valid OTP. The lock, Better Auth account
+ * records, proof deletion, and outcome record share one PostgreSQL
+ * transaction. A failed Better Auth response rolls back and preserves proof.
+ */
+export async function completePreAccountSignup(input: {
+  email: string;
+  password: string;
+  name: string;
+  otp: string;
+  signupAttemptId: string;
+  referralCode?: string | null;
+  headers: Headers;
+}): Promise<
+  { ok: true; response: Response } | (SignupFailure & { response?: Response })
+> {
+  const email = normalizeEmail(input.email);
+  if (!isValidEmail(email) || !isUuid(input.signupAttemptId)) {
+    return { ok: false, status: 400, error: "Invalid signup request." };
+  }
+  const passwordError = assertPasswordPolicy(input.password);
+  if (passwordError) {
+    return { ok: false, status: 400, error: passwordError };
+  }
+  if (!/^\d{6}$/.test(input.otp)) {
+    return { ok: false, status: 400, error: "Enter the six-digit code." };
+  }
+  if (!signupReferralChoiceWriter) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Signup is temporarily unavailable. Please try again.",
+    };
+  }
+
+  let createdUser: CogitoUser | null = null;
+  let signupResponse: Response | null = null;
+  try {
+    const result = await db.transaction(async (tx) => {
+      await lockSignupEmail(tx as unknown as typeof db, email);
+      await lockSignupAttempt(
+        tx as unknown as typeof db,
+        input.signupAttemptId,
+      );
+      const outcomeIdentifier = signupOutcomeIdentifier(input.signupAttemptId);
+      const [existingOutcome] = await tx
+        .select()
+        .from(verificationRow)
+        .where(eq(verificationRow.identifier, outcomeIdentifier))
+        .limit(1);
+      if (existingOutcome) {
+        if (
+          existingOutcome.value === email &&
+          existingOutcome.expiresAt > new Date()
+        ) {
+          return { kind: "already-completed" as const };
+        }
+        if (existingOutcome.value !== email) {
+          return { kind: "attempt-mismatch" as const };
+        }
+        await tx
+          .delete(verificationRow)
+          .where(eq(verificationRow.id, existingOutcome.id));
+      }
+
+      const [proof] = await tx
+        .select()
+        .from(verificationRow)
+        .where(eq(verificationRow.identifier, signupOtpIdentifier(email)))
+        .orderBy(sql`${verificationRow.createdAt} desc`)
+        .limit(1);
+      if (!proof) return { kind: "invalid-code" as const };
+      if (proof.expiresAt <= new Date())
+        return { kind: "expired-code" as const };
+
+      const parsed = parseSignupOtp(proof.value);
+      if (!parsed || parsed.attemptId !== input.signupAttemptId) {
+        return { kind: "invalid-code" as const };
+      }
+      if (parsed.attempts >= SIGNUP_OTP_MAX_ATTEMPTS) {
+        return { kind: "attempt-limited" as const };
+      }
+      if (!otpMatches(email, input.otp, parsed.digest)) {
+        const attempts = parsed.attempts + 1;
+        await tx
+          .update(verificationRow)
+          .set({ value: `${parsed.digest}:${attempts}:${parsed.attemptId}` })
+          .where(eq(verificationRow.id, proof.id));
+        return {
+          kind:
+            attempts >= SIGNUP_OTP_MAX_ATTEMPTS
+              ? ("attempt-limited" as const)
+              : ("invalid-code" as const),
+        };
+      }
+
+      const [existingUser] = await tx
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .where(eq(schema.user.email, email))
+        .limit(1);
+      if (existingUser) return { kind: "existing-account" as const };
+
+      const signupAuth = buildAuth({
+        database: tx as unknown as typeof db,
+        secondaryStorageRedis: nullSecondaryStorageRedis,
+        verifiedSignupEmail: email,
+      });
+      const response = await signupAuth.api.signUpEmail({
+        body: {
+          email,
+          password: input.password,
+          name: input.name,
+        },
+        headers: input.headers,
+        asResponse: true,
+      });
+      const body = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as { user?: CogitoUser } | null;
+      if (!response.ok || !body?.user) {
+        throw new FailedBetterAuthSignup(response);
+      }
+
+      await signupReferralChoiceWriter!(
+        tx as unknown as SignupReferralTransaction,
+        { userId: body.user.id, code: input.referralCode },
+      );
+
+      await tx.delete(verificationRow).where(eq(verificationRow.id, proof.id));
+      const now = new Date();
+      await tx.insert(verificationRow).values({
+        id: randomUUID(),
+        identifier: outcomeIdentifier,
+        value: email,
+        expiresAt: new Date(now.getTime() + SIGNUP_OUTCOME_TTL_MS),
+        createdAt: now,
+        updatedAt: now,
+      });
+      return {
+        kind: "created" as const,
+        response,
+        user: body.user,
+      };
+    });
+
+    if (result.kind === "created") {
+      signupResponse = result.response;
+      createdUser = result.user;
+      if (env.NODE_ENV === "test") testSignupOtps.delete(email);
+    } else if (result.kind === "already-completed") {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          "Signup was already completed. Check the signup status before trying again.",
+      };
+    } else if (result.kind === "existing-account") {
+      return {
+        ok: false,
+        status: 409,
+        error: "An account already uses this email.",
+      };
+    } else if (result.kind === "attempt-mismatch") {
+      return { ok: false, status: 409, error: "Signup attempt is not valid." };
+    } else if (result.kind === "expired-code") {
+      return {
+        ok: false,
+        status: 400,
+        error: "This code has expired. Send a new code.",
+      };
+    } else if (result.kind === "attempt-limited") {
+      return {
+        ok: false,
+        status: 429,
+        error: "Too many incorrect codes. Send a new code.",
+      };
+    } else {
+      return {
+        ok: false,
+        status: 400,
+        error: "The code is incorrect or no longer valid.",
+      };
+    }
+  } catch (error) {
+    if (error instanceof FailedBetterAuthSignup) {
+      return {
+        ok: false,
+        status: error.response.status,
+        error: await betterAuthErrorMessage(error.response),
+        response: error.response,
+      };
+    }
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      (error.code.startsWith("REFERRAL_") ||
+        error.code === "INVALID_REFERRAL_CODE" ||
+        error.code === "SELF_REFERRAL")
+    ) {
+      return {
+        ok: false,
+        status: error.code === "REFERRAL_STUDENT_ONLY" ? 403 : 400,
+        error:
+          "message" in error && typeof error.message === "string"
+            ? error.message
+            : "Referral choice could not be saved.",
+      };
+    }
+    console.error(
+      JSON.stringify({
+        level: "error",
+        action: "pre_account_signup_failed",
+        error: { code: "signup_transaction_failed" },
+      }),
+    );
+    return {
+      ok: false,
+      status: 500,
+      error:
+        "We couldn't complete signup. Your code is still available to retry.",
+    };
+  }
+
+  if (!signupResponse || !createdUser) {
+    return { ok: false, status: 500, error: "We couldn't complete signup." };
+  }
+  if (signupWelcomeEmailSender) {
+    try {
+      await signupWelcomeEmailSender({ user: createdUser });
+    } catch {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          action: "signup_welcome_email_send_failed",
+          userId: createdUser.id,
+          error: { code: "mail_provider_error" },
+        }),
+      );
+    }
+  }
+  return { ok: true, response: signupResponse };
+}
+
+/** Read the signup result after a browser loses the create response. */
+export async function getPreAccountSignupOutcome(input: {
+  email: string;
+  signupAttemptId: string;
+}) {
+  const email = normalizeEmail(input.email);
+  if (!isValidEmail(email) || !isUuid(input.signupAttemptId)) return false;
+  const [outcome] = await db
+    .select({
+      value: schema.verification.value,
+      expiresAt: schema.verification.expiresAt,
+    })
+    .from(schema.verification)
+    .where(
+      eq(
+        schema.verification.identifier,
+        signupOutcomeIdentifier(input.signupAttemptId),
+      ),
+    )
+    .limit(1);
+  return outcome?.value === email && outcome.expiresAt > new Date();
+}

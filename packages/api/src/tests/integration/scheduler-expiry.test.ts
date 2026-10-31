@@ -12,7 +12,7 @@ import {
 } from "@cogito-app/db/schema";
 
 import { services } from "@cogito-app/api/services";
-import { resetDatabase } from "../helpers/test-client";
+import { ensureTestTutorSubject, resetDatabase } from "../helpers/test-client";
 import {
   createTestUser,
   createTestWallet,
@@ -92,10 +92,14 @@ async function seedExpiringBooking(params: {
     scheduledEndAt: new Date(start.getTime() + 3600_000),
     timezone: "Asia/Jakarta",
     priceSnapshot: {
-      perStudent: params.holdAmount,
-      baseline: params.holdAmount,
-      tutorShare: params.holdAmount * 0.8,
-      cogitoTake: params.holdAmount * 0.2,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-debate",
+      modality: "online",
+      headcount: 1,
+      perStudentMarks: params.holdAmount,
+      collectedMarks: params.holdAmount,
+      tutorHonorariumIdr: 300_000,
     },
     originalMarks: params.holdAmount,
     holdAmount: params.holdAmount,
@@ -157,6 +161,7 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     const b = await services.booking.createSolo(studentA.id, {
       tutorId,
       availabilitySlotId: slotId,
+      subjectId: await ensureTestTutorSubject(tutorId),
       modality: "online",
       scheduledStartAt: start,
       scheduledEndAt: new Date(start.getTime() + 3600_000),

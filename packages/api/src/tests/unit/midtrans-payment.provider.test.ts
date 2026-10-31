@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { expect, test, describe, mock, afterEach } from "bun:test";
+import { expect, test, describe, mock, afterEach, beforeEach } from "bun:test";
 import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
 
 const opts = {
@@ -8,7 +8,90 @@ const opts = {
   mode: "test" as const,
 };
 
+test("authenticated status rejects a response bound to another order", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  statusApiState = {
+    order_id: "different-order",
+    transaction_status: "pending",
+  };
+  await expect(
+    provider.getPaymentRequestStatus!("requested-order"),
+  ).rejects.toThrow("provider returned a different order");
+});
+
+test("refund webhook requires the authenticated provider state to confirm the refund", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  const body = notificationBody({ transaction_status: "refund" });
+  statusApiState = { ...statusApiState, transaction_status: "pending" };
+  await expect(
+    provider.verifyWebhook(JSON.stringify(body), ""),
+  ).rejects.toThrow("provider has not confirmed a refund");
+});
+
+test.each([
+  null,
+  123,
+  "not-a-time",
+  "2026-01-01T10:00:00",
+  "2026-01-01T10:00:00+99:99",
+])(
+  "status tolerates unusable success timestamp %s without inventing provider time",
+  async (timestamp) => {
+    const provider = createMidtransPaymentProvider(opts);
+    statusApiState = {
+      order_id: "order1",
+      transaction_status: "settlement",
+      gross_amount: "50000.00",
+      currency: "IDR",
+      payment_type: "bank_transfer",
+      settlement_time: timestamp,
+    };
+    const result = await provider.getPaymentRequestStatus!("order1");
+    expect(result.providerSuccessAt).toBeUndefined();
+    expect(result.providerSuccessTimeStatus).toBe("unavailable");
+  },
+);
+
+test("refund history without usable evidence cannot supply a refund identity", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  statusApiState = {
+    order_id: "order1",
+    transaction_status: "refund",
+    gross_amount: "50000.00",
+    currency: "IDR",
+    refunds: [null, "invalid", {}, { refund_key: "" }],
+  };
+  expect(
+    (await provider.getPaymentRequestStatus!("order1")).providerRefundIdentity,
+  ).toBeUndefined();
+});
+
+test("provider failures tolerate non-string diagnostic code and message", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  globalThis.fetch = mock(async () =>
+    Response.json(
+      { status_code: 502, status_message: { private: "invalid" } },
+      { status: 502 },
+    ),
+  ) as never;
+  await expect(
+    provider.createIntent({
+      paymentId: "pay1",
+      amountIdr: 50000,
+      providerReference: "ref1",
+    }),
+  ).rejects.toThrow("Payment provider");
+});
+
 const originalFetch = globalThis.fetch;
+let statusApiState: Record<string, unknown>;
+
+beforeEach(() => {
+  statusApiState = {};
+  globalThis.fetch = mock(() =>
+    Promise.resolve(Response.json({ ...statusApiState })),
+  ) as never;
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -31,6 +114,7 @@ function notificationBody(
 ) {
   const base = {
     transaction_time: "2026-09-03 10:00:00",
+    settlement_time: "2026-09-03 10:05:00",
     transaction_status: "settlement",
     transaction_id: "57d5293c-e65f-4a29-95e4-5959c3fa335b",
     status_message: "midtrans payment notification",
@@ -43,6 +127,20 @@ function notificationBody(
     currency: "IDR",
   };
   const body = { ...base, ...overrides };
+  statusApiState = {
+    transaction_status: body.transaction_status,
+    transaction_id: body.transaction_id,
+    order_id: body.order_id,
+    payment_type: body.payment_type,
+    fraud_status: body.fraud_status,
+    status_message: body.status_message,
+    gross_amount: body.gross_amount,
+    refund_amount: body.refund_amount,
+    currency: body.currency,
+    transaction_time: body.transaction_time,
+    settlement_time: body.settlement_time,
+    refunds: body.refunds,
+  };
   body.signature_key = signatureFor(
     String(body.order_id),
     String(body.status_code),
@@ -333,6 +431,124 @@ describe("MidtransPaymentProvider verifyWebhook (signature_key)", () => {
     expect(payload.status).toBe("SETTLED");
   });
 
+  test("uses authenticated settlement_time for a settled non-card payment", async () => {
+    const body = JSON.stringify(
+      notificationBody({
+        transaction_time: "2026-09-03 08:00:00",
+        settlement_time: "2026-09-03 08:05:00",
+      }),
+    );
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    statusApiState.settlement_time = "2026-09-03T10:05:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.providerSuccessAt).toEqual(
+      new Date("2026-09-03T10:05:00+07:00"),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps a settled card time unresolved because transaction_time is initiation time", async () => {
+    const body = JSON.stringify(
+      notificationBody({
+        transaction_status: "settlement",
+        payment_type: "credit_card",
+        transaction_time: "2026-09-03 08:00:00",
+        settlement_time: "2026-09-03 08:05:00",
+      }),
+    );
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    statusApiState.settlement_time = "2026-09-03T10:05:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.providerSuccessAt).toBeUndefined();
+    expect(payload.providerSuccessTimeStatus).toBe("unavailable");
+  });
+
+  test("does not infer non-card settlement time when provider payment type is missing", async () => {
+    const body = JSON.stringify(notificationBody());
+    statusApiState.payment_type = undefined;
+    statusApiState.settlement_time = "2026-09-03T10:05:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.status).toBe("SETTLED");
+    expect(payload.providerSuccessAt).toBeUndefined();
+    expect(payload.providerSuccessTimeStatus).toBe("unavailable");
+  });
+
+  test("delayed success notification returns authenticated refund state", async () => {
+    const body = JSON.stringify(
+      notificationBody({ transaction_status: "settlement" }),
+    );
+    statusApiState.transaction_status = "refund";
+    statusApiState.payment_type = "credit_card";
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload).toMatchObject({
+      status: "REFUNDED",
+      providerSuccessTimeStatus: "unavailable",
+    });
+    expect(payload.providerSuccessAt).toBeUndefined();
+  });
+
+  test("marks a refunded non-card payment unresolved when status omits settlement time", async () => {
+    const body = JSON.stringify(
+      notificationBody({ transaction_status: "refund", payment_type: "qris" }),
+    );
+    statusApiState.transaction_status = "refund";
+    statusApiState.payment_type = "qris";
+    statusApiState.settlement_time = undefined;
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload).toMatchObject({
+      status: "REFUNDED",
+      providerSuccessTimeStatus: "unavailable",
+      amountIdr: 430_000,
+      currency: "IDR",
+    });
+    expect(payload.providerSuccessAt).toBeUndefined();
+  });
+
+  test("accepts card capture but leaves its KOL ordering time unresolved", async () => {
+    const body = JSON.stringify(
+      notificationBody({
+        transaction_status: "capture",
+        payment_type: "credit_card",
+        transaction_time: "2026-09-03 08:00:00",
+      }),
+    );
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.status).toBe("PAID");
+    expect(payload.providerSuccessAt).toBeUndefined();
+    expect(payload.providerSuccessTimeStatus).toBe("unavailable");
+  });
+
+  test("accepts a non-card settlement but leaves its ordering unresolved when settlement_time is missing", async () => {
+    const body = JSON.stringify(
+      notificationBody({ settlement_time: undefined }),
+    );
+    statusApiState.settlement_time = undefined;
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.status).toBe("SETTLED");
+    expect(payload.providerSuccessAt).toBeUndefined();
+    expect(payload.providerSuccessTimeStatus).toBe("unavailable");
+  });
+
+  test("does not treat an impossible provider calendar date as KOL success time", async () => {
+    const body = JSON.stringify(notificationBody());
+    statusApiState.settlement_time = "2026-02-31T10:05:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.status).toBe("SETTLED");
+    expect(payload.providerSuccessAt).toBeUndefined();
+    expect(payload.providerSuccessTimeStatus).toBe("unavailable");
+  });
+
+  test("does not confirm a success notification while authenticated status is pending", async () => {
+    const body = JSON.stringify(notificationBody());
+    statusApiState.transaction_status = "pending";
+    statusApiState.settlement_time = undefined;
+    await expect(provider.verifyWebhook(body, "")).rejects.toThrow(
+      "provider has not confirmed a successful payment",
+    );
+  });
+
   test("rejects an invalid signature", async () => {
     const body = JSON.stringify(
       notificationBody({}, "SB-Mid-server-wrong-key"),
@@ -437,13 +653,59 @@ describe("MidtransPaymentProvider verifyWebhook (signature_key)", () => {
   });
 
   test("maps refund and partial_refund to REFUNDED", async () => {
-    for (const status of ["refund", "partial_refund"]) {
+    for (const [status, refundKind] of [
+      ["refund", "full"],
+      ["partial_refund", "partial"],
+    ] as const) {
       const body = JSON.stringify(
-        notificationBody({ transaction_status: status }),
+        notificationBody({
+          transaction_status: status,
+          refund_amount: status === "refund" ? "430000.00" : "20000.00",
+        }),
       );
       const payload = await provider.verifyWebhook(body, "");
-      expect(payload.status).toBe("REFUNDED");
+      expect(payload).toMatchObject({
+        status: "REFUNDED",
+        refundKind,
+      });
     }
+  });
+
+  test("ignores unsigned webhook refund details and returns status-API evidence", async () => {
+    const body = notificationBody({
+      transaction_status: "refund",
+      refund_amount: "50000.00",
+      refunds: [
+        {
+          refund_chargeback_id: 111,
+          refund_amount: "50000.00",
+          created_at: "2026-10-23T10:00:00+07:00",
+        },
+      ],
+    });
+    statusApiState.refunds = [
+      {
+        refund_chargeback_id: 222,
+        refund_amount: "50000.00",
+        created_at: "2026-10-23T10:05:00+07:00",
+      },
+    ];
+
+    const payload = await provider.verifyWebhook(JSON.stringify(body), "");
+    expect(payload.refundKind).toBe("full");
+    expect(payload.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    const webhookOnlyIdentity = createHash("sha256")
+      .update(
+        JSON.stringify([
+          {
+            identity: "111",
+            amountIdr: 50_000,
+            createdAt: "2026-10-23T03:00:00.000Z",
+          },
+        ]),
+      )
+      .digest("hex");
+    expect(payload.providerRefundIdentity).not.toBe(webhookOnlyIdentity);
   });
 
   test("rejects an unknown status", async () => {
@@ -493,25 +755,178 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
           transaction_id: "txn-1",
           order_id: "550e8400-e29b-41d4-a716-446655440000",
           fraud_status: "accept",
+          payment_type: "bank_transfer",
+          gross_amount: "350000.00",
+          currency: "IDR",
+          transaction_time: "2026-09-03T10:00:00+07:00",
+          settlement_time: "2026-09-03T10:05:00+07:00",
         }),
       );
     }) as never;
 
-    await expect(
-      resolvingProvider.getPaymentRequestStatus!(
-        "550e8400-e29b-41d4-a716-446655440000",
-      ),
-    ).resolves.toEqual({
+    const status = await resolvingProvider.getPaymentRequestStatus!(
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(status).toMatchObject({
       providerReference: "midtrans:user1:starter",
       providerEventId: "txn-1",
       status: "SETTLED",
       failureReason: null,
       receiptUrl: null,
+      amountIdr: 350_000,
+      currency: "IDR",
+      providerSuccessAt: new Date("2026-09-03T10:05:00+07:00"),
+      providerSuccessTimeStatus: "verified",
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe(
       "https://api.sandbox.midtrans.com/v2/550e8400-e29b-41d4-a716-446655440000/status",
     );
+  });
+
+  test("uses authenticated refund history to distinguish partial from full on the same transaction", async () => {
+    let response: Record<string, unknown> = {
+      transaction_status: "partial_refund",
+      transaction_id: "txn-refund-same",
+      order_id: "pay-refund-same",
+      gross_amount: "50000.00",
+      refund_amount: "20000.00",
+      currency: "IDR",
+      refunds: [
+        {
+          refund_chargeback_id: 11,
+          refund_amount: "20000.00",
+          created_at: "2026-10-23 10:00:00",
+        },
+      ],
+    };
+    globalThis.fetch = mock(() =>
+      Promise.resolve(Response.json(response)),
+    ) as never;
+
+    const partial = await provider.getPaymentRequestStatus!("pay-refund-same");
+    expect(partial).toMatchObject({
+      providerEventId: "txn-refund-same",
+      status: "REFUNDED",
+      refundKind: "partial",
+      refundAmountIdr: 20_000,
+      currency: "IDR",
+    });
+    expect(partial.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+
+    response = {
+      ...response,
+      transaction_status: "refund",
+      refund_amount: "50000.00",
+      refunds: [
+        ...((response.refunds as Array<Record<string, unknown>>) ?? []),
+        {
+          refund_chargeback_id: 12,
+          refund_amount: "30000.00",
+          created_at: "2026-10-23 10:05:00",
+        },
+      ],
+    };
+    const full = await provider.getPaymentRequestStatus!("pay-refund-same");
+    expect(full).toMatchObject({
+      providerEventId: "txn-refund-same",
+      status: "REFUNDED",
+      refundKind: "full",
+      refundAmountIdr: 50_000,
+      currency: "IDR",
+    });
+    expect(full.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    expect(full.providerRefundIdentity).not.toBe(
+      partial.providerRefundIdentity,
+    );
+  });
+
+  test("filters malformed refund history and accepts safe fallback identities", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "refund",
+          order_id: "pay-refund-history",
+          gross_amount: "50000.00",
+          refund_amount: "50000.00",
+          currency: "IDR",
+          refunds: [
+            null,
+            { refund_chargeback_id: 1.5, refund_key: "fallback-key" },
+            { refund_key: "x".repeat(129) },
+            {
+              refund_chargeback_id: 12,
+              refund_amount: "12.50",
+              created_at: "2026-10-23 10:00:00",
+            },
+            {
+              refund_key: "later-key",
+              refund_amount: "20.00",
+              created_at: "2026-10-23T10:05:00+07:00",
+            },
+          ],
+        }),
+      ),
+    ) as never;
+
+    const status =
+      await provider.getPaymentRequestStatus!("pay-refund-history");
+    expect(status.status).toBe("REFUNDED");
+    expect(status.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  test("omits refund identity when the authenticated history is not an array", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "refund",
+          order_id: "pay-refund-no-history",
+          gross_amount: "50000.00",
+          currency: "IDR",
+          refunds: { refund_key: "not-an-array" },
+        }),
+      ),
+    ) as never;
+
+    const status = await provider.getPaymentRequestStatus!(
+      "pay-refund-no-history",
+    );
+    expect(status.status).toBe("REFUNDED");
+    expect(status.providerRefundIdentity).toBeUndefined();
+  });
+
+  test("rejects a successful status without a valid IDR amount and currency", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "settlement",
+          order_id: "pay-bound",
+          payment_type: "bank_transfer",
+          settlement_time: "2026-09-03T10:05:00+07:00",
+        }),
+      ),
+    ) as never;
+    await expect(
+      provider.getPaymentRequestStatus!("pay-bound"),
+    ).rejects.toThrow("missing a valid IDR amount or currency");
+  });
+
+  test("rejects a successful status in a non-IDR currency", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        Response.json({
+          transaction_status: "settlement",
+          order_id: "pay-bound",
+          payment_type: "bank_transfer",
+          gross_amount: "350000.00",
+          currency: "USD",
+          settlement_time: "2026-09-03T10:05:00+07:00",
+        }),
+      ),
+    ) as never;
+    await expect(
+      provider.getPaymentRequestStatus!("pay-bound"),
+    ).rejects.toThrow("missing a valid IDR amount or currency");
   });
 
   test("uses the production status endpoint in live mode", async () => {
@@ -638,4 +1053,125 @@ describe("MidtransPaymentProvider refund", () => {
       "Payment provider returned invalid refund response",
     );
   });
+});
+
+describe("Midtrans boundary evidence", () => {
+  test.each(["deny", "expire"])(
+    "sanitizes %s status diagnostics and falls back to requested order identity",
+    async (transaction_status) => {
+      statusApiState = {
+        transaction_status,
+        status_message: "  rejected\n by provider  ",
+      };
+      const provider = createMidtransPaymentProvider({
+        ...opts,
+        resolvePayment: async () => null,
+      });
+      const result = await provider.getPaymentRequestStatus!("fallback-order");
+      expect(result.providerReference).toBe("fallback-order");
+      expect(result.providerEventId).toBe("fallback-order");
+      expect(result.failureReason).toBe("rejected by provider");
+    },
+  );
+
+  test("empty provider diagnostics remain null", async () => {
+    statusApiState = { transaction_status: "expire", status_message: " \n " };
+    const result =
+      await createMidtransPaymentProvider(opts).getPaymentRequestStatus!(
+        "order-empty",
+      );
+    expect(result.failureReason).toBeNull();
+  });
+
+  test("missing status is rejected rather than assumed pending", async () => {
+    await expect(
+      createMidtransPaymentProvider(opts).getPaymentRequestStatus!(
+        "order-missing",
+      ),
+    ).rejects.toThrow();
+    const body = notificationBody({ transaction_status: undefined });
+    await expect(
+      createMidtransPaymentProvider(opts).verifyWebhook(
+        JSON.stringify(body),
+        "",
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("failed notification without transaction id or message uses order identity and null reason", async () => {
+    const body = notificationBody({
+      transaction_status: "deny",
+      transaction_id: undefined,
+      status_message: undefined,
+    });
+    const result = await createMidtransPaymentProvider(opts).verifyWebhook(
+      JSON.stringify(body),
+      "",
+    );
+    expect(result.providerEventId).toBe(body.order_id);
+    expect(result.failureReason).toBeNull();
+  });
+
+  test("refund accepts transaction identity when provider omits refund key", async () => {
+    statusApiState = { transaction_id: "refund-transaction" };
+    await expect(
+      createMidtransPaymentProvider(opts).refund("order-refund", 100),
+    ).resolves.toEqual({ providerRefundId: "refund-transaction" });
+  });
+
+  test("invalid diagnostic code and blank message never leak raw provider data", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status_code: "secret with spaces",
+            status_message: "  ",
+          }),
+          { status: 503 },
+        ),
+    ) as never;
+    await expect(
+      createMidtransPaymentProvider(opts).refund("order-refund", 100),
+    ).rejects.toThrow("Payment provider refund error: 503 HTTP error");
+  });
+
+  test("refund identity is stable when evidence lacks timestamps and amounts", async () => {
+    statusApiState = {
+      transaction_status: "refund",
+      gross_amount: "50000",
+      currency: "IDR",
+      refunds: [{ refund_key: "z" }, { refund_key: "a" }],
+    };
+    const provider = createMidtransPaymentProvider(opts);
+    const first = await provider.getPaymentRequestStatus!("order-refund");
+    statusApiState.refunds = [{ refund_key: "a" }, { refund_key: "z" }];
+    const second = await provider.getPaymentRequestStatus!("order-refund");
+    expect(first.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    expect(second.providerRefundIdentity).toBe(first.providerRefundIdentity);
+  });
+});
+
+test("provider error accepts a safe fallback message when status_message is absent", async () => {
+  globalThis.fetch = mock(
+    async () =>
+      new Response(JSON.stringify({ message: "  Provider\n unavailable " }), {
+        status: 503,
+      }),
+  ) as never;
+  await expect(
+    createMidtransPaymentProvider(opts).refund("order-error", 100),
+  ).rejects.toThrow("Provider unavailable");
+});
+
+test("provider preserves a falsey transport rejection without inventing error details", async () => {
+  globalThis.fetch = mock(async () => {
+    throw undefined;
+  }) as never;
+  await expect(
+    createMidtransPaymentProvider(opts).createIntent({
+      paymentId: "order-error",
+      amountIdr: 100,
+      providerReference: "ref",
+    }),
+  ).rejects.toBeUndefined();
 });

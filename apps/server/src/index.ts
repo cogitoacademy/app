@@ -5,10 +5,16 @@ import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   setAuthEmailSender,
   setAuthSecondaryStorageRedis,
+  setPreAccountSignupEmailSender,
+  setSignupReferralChoiceWriter,
+  setSignupWelcomeEmailSender,
   setVerificationEmailSender,
 } from "@cogito-app/auth";
 import { buildResetPasswordEmail } from "@cogito-app/auth/reset-password-email";
-import { buildVerificationEmail } from "@cogito-app/auth/verification-email";
+import {
+  buildSignupWelcomeEmail,
+  buildVerificationEmail,
+} from "@cogito-app/auth/verification-email";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
 
@@ -80,6 +86,10 @@ const port = env.PORT;
 
 const { services } = await import("@cogito-app/api/services");
 
+// Signup choices, welcome credits, and OTP proof consumption share one DB
+// transaction. Keep the referral business rules in the API service.
+setSignupReferralChoiceWriter(services.referral.applyEmailSignupChoice);
+
 // R1: Redis-backed Better Auth sessions (DB-backed). Reads come from Redis
 // with database fallback; revokes clear both stores. The adapter degrades
 // (warn, no throw) when Redis is unreachable, so logins never 500.
@@ -110,16 +120,20 @@ if (env.PAYMENT_PROVIDER === "stub") {
   });
 }
 
+const authEmailHeaderUrl = new URL("/auth-email-header.png", env.CORS_ORIGIN)
+  .href;
+
 setAuthEmailSender(async ({ user, url }) => {
+  if (env.NODE_ENV === "test") return;
   if (!isProductionLike(env.NODE_ENV)) {
     log({
       level: "info",
       action: "reset_password_link",
       userId: user.id,
-      url,
     });
   }
   const { subject, html } = buildResetPasswordEmail({
+    headerUrl: authEmailHeaderUrl,
     name: user.name,
     url,
   });
@@ -131,28 +145,49 @@ setAuthEmailSender(async ({ user, url }) => {
   });
 });
 
-// P2/G2: signup welcome copy and email verification OTP share one delivery;
-// other OTP types remain purpose-specific.
-setVerificationEmailSender(async ({ email, otp, type, isSignup }) => {
-  if (!isProductionLike(env.NODE_ENV)) {
-    log({
-      level: "info",
-      action: "verification_otp",
-      email,
-      type,
-      otp,
-    });
-  }
-  const isSignupVerification =
-    type === "email-verification" && isSignup === true;
+// Public signup proves email ownership before creating the account. Test
+// servers capture the OTP inside @cogito-app/auth and never send real mail.
+setPreAccountSignupEmailSender(async ({ email, otp }) => {
+  if (env.NODE_ENV === "test") return;
   const { subject, html } = buildVerificationEmail({
+    headerUrl: authEmailHeaderUrl,
     name: email.split("@")[0] ?? email,
     otp,
     expiresInMinutes: 5,
-    includeWelcome: isSignupVerification,
-    loginUrl: isSignupVerification
-      ? `${env.CORS_ORIGIN.replace(/\/$/, "")}/login`
-      : undefined,
+  });
+  await services.email.send({
+    to: email,
+    subject,
+    html,
+    category: "auth",
+  });
+});
+
+setSignupWelcomeEmailSender(async ({ user }) => {
+  if (env.NODE_ENV === "test") return;
+  const { subject, html } = buildSignupWelcomeEmail({
+    headerUrl: authEmailHeaderUrl,
+    name: user.name,
+    loginUrl: `${env.CORS_ORIGIN.replace(/\/$/, "")}/login`,
+  });
+  await services.email.send({
+    to: user.email,
+    subject,
+    html,
+    category: "auth",
+  });
+});
+
+// Existing account verification/reset/change-email OTPs remain on the
+// Better Auth plugin. This path deliberately never includes signup welcome
+// copy, and the OTP itself is not written to logs.
+setVerificationEmailSender(async ({ email, otp }) => {
+  if (env.NODE_ENV === "test") return;
+  const { subject, html } = buildVerificationEmail({
+    headerUrl: authEmailHeaderUrl,
+    name: email.split("@")[0] ?? email,
+    otp,
+    expiresInMinutes: 5,
   });
   await services.email.send({
     to: email,

@@ -164,5 +164,12 @@ export function createTutorHandler(tutorService: TutorService) {
         mapTutorError,
       );
     },
+
+    getMyPayoutFinance: async ({ context }: { context: Context }) => {
+      return withDomainMap(
+        () => tutorService.getMyPayoutFinance(context.session!.user.id),
+        mapTutorError,
+      );
+    },
   };
 }

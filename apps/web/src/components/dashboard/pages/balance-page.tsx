@@ -1,5 +1,10 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -32,7 +37,6 @@ import {
   IconLockOpen,
   IconShoppingCart,
   IconUsers,
-  IconLoader2,
   IconArrowDown,
   IconArrowUp,
   IconArrowsExchange,
@@ -65,6 +69,23 @@ type LedgerEntry = {
   createdAt: string | Date;
 };
 
+type TopUpPackage = {
+  code: string;
+  label: string;
+  marks: number;
+  priceIdr: number;
+};
+
+type TopUpQuote = {
+  quoteId: string;
+  revision: number;
+  marks: number;
+  customAmountIdr: number;
+  exactPackage: TopUpPackage | null;
+  recommendedPackage: TopUpPackage | null;
+  expiresAt: string;
+};
+
 function getLedgerDirection(entryType: string) {
   if (entryType === "credit" || entryType === "compensate_credit") return 1;
   if (entryType === "deduct" || entryType === "compensate_deduct") return -1;
@@ -77,23 +98,23 @@ function formatIdr(amount: number) {
 
 export function BalancePage() {
   const queryClient = useQueryClient();
-  const [selectedPackageCode, setSelectedPackageCode] = useState<string | null>(
-    null,
-  );
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
+  const [customMarks, setCustomMarks] = useState(100);
+  const [topUpQuote, setTopUpQuote] = useState<TopUpQuote | null>(null);
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
-  );
-  const { data: packagesData, isLoading: packagesLoading } = useQuery(
-    orpc.wallet.listPackages.queryOptions(),
   );
   const { data: paymentConfig } = useQuery(
     orpc.payment.getConfig.queryOptions(),
   );
-  const packages = packagesData?.packages ?? [];
-  const selectedPackage = packages.find(
-    (pkg) => pkg.code === selectedPackageCode,
-  );
+  const {
+    data: topUpCatalog,
+    isLoading: topUpCatalogLoading,
+    isError: topUpCatalogError,
+    refetch: reloadTopUpCatalog,
+  } = useQuery(orpc.payment.getTopUpCatalog.queryOptions());
+  const v3Active = topUpCatalog?.active === true;
+  const displayPackages = v3Active ? topUpCatalog.packages : [];
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -101,13 +122,34 @@ export function BalancePage() {
     | { items: LedgerEntry[]; nextCursor: string | null }
     | undefined;
 
-  const purchase = useMutation(
-    orpc.payment.createPurchase.mutationOptions({
+  const quoteTopUp = useMutation(
+    orpc.payment.createTopUpQuote.mutationOptions({
+      onSuccess: (quote) => {
+        setTopUpQuote(quote);
+        setPaymentDrawerOpen(true);
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Price could not be calculated",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+
+  const purchaseFromQuote = useMutation(
+    orpc.payment.createPurchaseFromQuote.mutationOptions({
       onSuccess: async (res) => {
         if (res.checkoutUrl) {
           window.location.assign(res.checkoutUrl);
           return;
         }
+        toastManager.add({
+          title: "Checkout status is being confirmed",
+          description:
+            "Your quoted amount and Marks are saved. We will not start a second checkout while the provider status is uncertain.",
+          type: "warning",
+        });
         await queryClient.invalidateQueries({
           queryKey: orpc.wallet.get.queryKey(),
         });
@@ -141,7 +183,7 @@ export function BalancePage() {
             <Heading level={1} size="md">
               Manage your Marks
             </Heading>
-            <Text className="text-muted">
+            <Text className="max-w-full text-muted">
               See what’s available, review active holds, and top up when you
               need to.
             </Text>
@@ -168,7 +210,7 @@ export function BalancePage() {
                 </div>
                 <Text className="text-dimmed text-sm">
                   {kbAccessible ? (
-                    "Unlocked — explore your learning materials."
+                    "Unlocked. Explore your learning materials."
                   ) : (
                     <>
                       <CogitoMarks
@@ -236,29 +278,45 @@ export function BalancePage() {
           </CardTitle>
         </CardHeader>
         <CardBody>
-          {packagesLoading ? (
-            <Text className="text-muted">Loading packages...</Text>
-          ) : packages.length === 0 ? (
+          {topUpCatalogLoading ? (
+            <Loader />
+          ) : displayPackages.length === 0 ? (
             <EmptyState
               icon={<IconShoppingCart />}
-              title="No Marks packages available"
-              description="Top-up packages will appear here when they are available."
+              title={
+                topUpCatalogError
+                  ? "Top-up packages could not be loaded"
+                  : "Top-up is unavailable"
+              }
+              description="Please try again later."
+              action={
+                topUpCatalogError ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => void reloadTopUpCatalog()}
+                  >
+                    Try again
+                  </Button>
+                ) : undefined
+              }
               tone="secondary"
               size="compact"
               className="rounded-lg border border-border"
             />
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {packages.toReversed().map((pkg) => (
+              {displayPackages.toReversed().map((pkg) => (
                 <Card
                   key={pkg.code}
                   className={cn(
-                    pkg.code === "explorer" ? "border-primary" : "",
+                    pkg.code === "explorer" || pkg.code === "pioneer"
+                      ? "border-primary"
+                      : "",
                     "h-fit",
                   )}
                 >
                   <CardHeader>
-                    <CardTitle>{pkg.name}</CardTitle>
+                    <CardTitle>{pkg.label}</CardTitle>
                   </CardHeader>
                   <CardBody>
                     <div className="space-y-1">
@@ -280,10 +338,12 @@ export function BalancePage() {
                     <Button
                       block
                       onClick={() => {
-                        purchase.reset();
-                        setSelectedPackageCode(pkg.code);
-                        setPaymentDrawerOpen(true);
+                        quoteTopUp.mutate({
+                          requestKey: crypto.randomUUID(),
+                          marks: pkg.marks,
+                        });
                       }}
+                      disabled={quoteTopUp.isPending}
                     >
                       <IconShoppingCart />
                       Buy
@@ -293,13 +353,59 @@ export function BalancePage() {
               ))}
             </div>
           )}
+          {v3Active ? (
+            <div className="mt-5 flex flex-col gap-3 rounded-lg border border-card-border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-1">
+                <Text className="font-semibold">Choose an exact amount</Text>
+                <Text className="text-sm text-muted">
+                  Review the quoted price and any package recommendation before
+                  continuing.
+                </Text>
+              </div>
+              <div className="flex flex-col gap-2 sm:min-w-72 sm:flex-row sm:items-end">
+                <Field className="min-w-0 flex-1">
+                  <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
+                  <SeliaNumberField
+                    id="custom-marks-amount"
+                    allowOutOfRange
+                    format={{ useGrouping: false }}
+                    min={1}
+                    max={1_000_000}
+                    step={1}
+                    value={customMarks || null}
+                    onValueChange={(nextValue) =>
+                      setCustomMarks(nextValue ?? 0)
+                    }
+                  />
+                </Field>
+                <Button
+                  variant="secondary"
+                  disabled={
+                    !Number.isInteger(customMarks) ||
+                    customMarks < 1 ||
+                    customMarks > 1_000_000 ||
+                    quoteTopUp.isPending
+                  }
+                  progress={quoteTopUp.isPending}
+                  onClick={() => {
+                    quoteTopUp.mutate({
+                      requestKey: crypto.randomUUID(),
+                      marks: customMarks,
+                    });
+                  }}
+                >
+                  Get a price
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardBody>
       </Card>
 
       <Drawer
         open={paymentDrawerOpen}
         onOpenChange={(open) => {
-          if (!purchase.isPending) setPaymentDrawerOpen(open);
+          if (!purchaseFromQuote.isPending) setPaymentDrawerOpen(open);
         }}
         swipeDirection="down"
       >
@@ -311,39 +417,101 @@ export function BalancePage() {
             </DrawerDescription>
           </DrawerHeader>
           <DrawerBody className="space-y-4">
-            {selectedPackage ? (
-              <div className="rounded-lg border border-item-border bg-item p-4">
+            {topUpQuote ? (
+              <div className="space-y-3 rounded-lg border border-item-border bg-item p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <Text className="font-semibold">
-                      {selectedPackage.name}
+                      {topUpQuote.exactPackage?.label ?? "Custom top-up"}
                     </Text>
                     <Text className="text-dimmed text-sm">
-                      <CogitoMarks value={selectedPackage.marks} size="3" />
+                      <CogitoMarks value={topUpQuote.marks} size="3" />
                     </Text>
                   </div>
                   <Text className="font-semibold">
-                    {formatIdr(selectedPackage.priceIdr)}
+                    {formatIdr(
+                      topUpQuote.exactPackage?.priceIdr ??
+                        topUpQuote.customAmountIdr,
+                    )}
                   </Text>
                 </div>
+                {topUpQuote.recommendedPackage ? (
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <Text className="font-medium">
+                      Recommended: {topUpQuote.recommendedPackage.label}
+                    </Text>
+                    <Text className="text-sm text-muted">
+                      <CogitoMarks
+                        value={topUpQuote.recommendedPackage.marks}
+                        size="3"
+                      />
+                      <span className="mx-2">·</span>
+                      {formatIdr(topUpQuote.recommendedPackage.priceIdr)}
+                    </Text>
+                  </div>
+                ) : null}
+                <Text className="text-xs text-dimmed">
+                  Quote valid until{" "}
+                  {new Intl.DateTimeFormat("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }).format(new Date(topUpQuote.expiresAt))}
+                </Text>
               </div>
             ) : null}
           </DrawerBody>
-          {selectedPackage ? (
-            <DrawerFooter>
-              <Button
-                block
-                progress={purchase.isPending}
-                disabled={purchase.isPending}
-                onClick={() =>
-                  purchase.mutate({ packageCode: selectedPackage.code })
-                }
-              >
-                {purchase.isPending ? (
-                  <IconLoader2 className="animate-spin" />
-                ) : null}
-                Continue payment · {formatIdr(selectedPackage.priceIdr)}
-              </Button>
+          {topUpQuote ? (
+            <DrawerFooter className="flex-col">
+              {topUpQuote.exactPackage ? (
+                <Button
+                  block
+                  progress={purchaseFromQuote.isPending}
+                  disabled={purchaseFromQuote.isPending}
+                  onClick={() =>
+                    purchaseFromQuote.mutate({
+                      quoteId: topUpQuote.quoteId,
+                      choice: "package",
+                    })
+                  }
+                >
+                  Choose package · {formatIdr(topUpQuote.exactPackage.priceIdr)}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    block
+                    progress={purchaseFromQuote.isPending}
+                    disabled={purchaseFromQuote.isPending}
+                    onClick={() =>
+                      purchaseFromQuote.mutate({
+                        quoteId: topUpQuote.quoteId,
+                        choice: "custom",
+                      })
+                    }
+                  >
+                    Buy {topUpQuote.marks} Marks ·{" "}
+                    {formatIdr(topUpQuote.customAmountIdr)}
+                  </Button>
+                  {topUpQuote.recommendedPackage ? (
+                    <Button
+                      block
+                      variant="secondary"
+                      disabled={purchaseFromQuote.isPending}
+                      onClick={() =>
+                        purchaseFromQuote.mutate({
+                          quoteId: topUpQuote.quoteId,
+                          choice: "recommended",
+                        })
+                      }
+                    >
+                      Choose {topUpQuote.recommendedPackage.label} ·{" "}
+                      {formatIdr(topUpQuote.recommendedPackage.priceIdr)}
+                    </Button>
+                  ) : null}
+                </>
+              )}
             </DrawerFooter>
           ) : null}
         </DrawerPopup>
@@ -363,7 +531,7 @@ export function BalancePage() {
         </CardHeader>
         <CardBody className="min-w-0 overflow-hidden">
           {ledgerLoading ? (
-            <Text className="text-muted">Loading transaction history...</Text>
+            <Loader />
           ) : !ledger?.items.length ? (
             <EmptyState
               icon={<IconArrowsExchange />}

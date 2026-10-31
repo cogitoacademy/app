@@ -9,6 +9,12 @@ import {
   availabilitySlot,
   booking as bookingTable,
   bookingSession,
+  tutorPayout,
+  tutorSessionFee,
+  tutorPayoutAllocation,
+  notification,
+  notificationDispatch,
+  auditLog,
 } from "@cogito-app/db/schema";
 import { TUTOR_PAYOUT_RATE_IDR } from "../../shared/constants";
 
@@ -20,6 +26,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { calculateTutorTaxIdr } from "../../modules/booking/tutor-payout-calculation";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -91,6 +98,27 @@ async function createPublishedTutor(email: string, ts: number) {
   return { tutorId, tutorClient, slotId: slot!.id };
 }
 
+function v3PriceSnapshot({
+  headcount = 1,
+  perStudentMarks = 20,
+  tutorHonorariumIdr = 50_000,
+}: {
+  headcount?: number;
+  perStudentMarks?: number;
+  tutorHonorariumIdr?: number;
+} = {}) {
+  return {
+    engine: "v3" as const,
+    v3Revision: 1,
+    competition: "competition-debate",
+    modality: "online" as const,
+    headcount,
+    perStudentMarks,
+    collectedMarks: perStudentMarks * headcount,
+    tutorHonorariumIdr,
+  };
+}
+
 async function insertBookingRow(
   overrides: Partial<typeof bookingTable.$inferInsert>,
 ) {
@@ -109,13 +137,8 @@ async function insertBookingRow(
       scheduledStartAt: new Date(Date.now() + 48 * 3600_000),
       scheduledEndAt: new Date(Date.now() + 48 * 3600_000 + 3600_000),
       timezone: "Asia/Jakarta",
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
-      originalMarks: 50,
+      priceSnapshot: v3PriceSnapshot(),
+      originalMarks: 20,
       holdAmount: 0,
       deadlineAt: new Date(Date.now() + 86400000),
       ...overrides,
@@ -124,8 +147,88 @@ async function insertBookingRow(
   return row!;
 }
 
+async function insertV3FeeBooking(
+  overrides: Partial<typeof bookingTable.$inferInsert>,
+  options: {
+    headcount?: number;
+    perStudentMarks?: number;
+    tutorHonorariumIdr?: number;
+  } = {},
+) {
+  const priceSnapshot = v3PriceSnapshot(options);
+  const row = await insertBookingRow({
+    ...overrides,
+    priceSnapshot,
+    originalMarks: priceSnapshot.collectedMarks,
+  });
+  const [fee] = await db
+    .insert(tutorSessionFee)
+    .values({
+      bookingId: row.id,
+      bookingSessionId: null,
+      academyClassSessionId: null,
+      tutorId: row.tutorId,
+      scheduledStartAt: row.scheduledStartAt,
+      earnedAt: row.completedAt ?? new Date(),
+      eventKey: `tutor-session-fee:booking:${row.id}`,
+      grossHonorariumIdr: priceSnapshot.tutorHonorariumIdr,
+      collectedMarks: priceSnapshot.collectedMarks,
+      priceSnapshot,
+    })
+    .returning();
+  return { booking: row, fee: fee! };
+}
+
+async function insertV3SessionFee(
+  bookingId: string,
+  bookingSessionId: string,
+  tutorId: string,
+  scheduledStartAt: Date,
+) {
+  const priceSnapshot = v3PriceSnapshot();
+  await db.insert(tutorSessionFee).values({
+    bookingId,
+    bookingSessionId,
+    academyClassSessionId: null,
+    tutorId,
+    scheduledStartAt,
+    earnedAt: new Date(),
+    eventKey: `tutor-session-fee:booking-session:${bookingSessionId}`,
+    grossHonorariumIdr: priceSnapshot.tutorHonorariumIdr,
+    collectedMarks: priceSnapshot.collectedMarks,
+    priceSnapshot,
+  });
+}
+
+function assertPayoutIntegrationDatabase() {
+  let databaseUrl: URL | undefined;
+  try {
+    if (process.env.DATABASE_URL) {
+      databaseUrl = new URL(process.env.DATABASE_URL);
+    }
+  } catch {
+    databaseUrl = undefined;
+  }
+
+  if (
+    process.env.NODE_ENV !== "test" ||
+    (databaseUrl?.protocol !== "postgres:" &&
+      databaseUrl?.protocol !== "postgresql:") ||
+    !["localhost", "127.0.0.1", "::1"].includes(
+      databaseUrl?.hostname.toLowerCase().replace(/^\[|\]$/g, "") ?? "",
+    ) ||
+    databaseUrl?.port !== "6770" ||
+    databaseUrl?.pathname !== "/cogito-test-payout"
+  ) {
+    throw new Error(
+      "Tutor payout integration tests require NODE_ENV=test and loopback cogito-test-payout on port 6770.",
+    );
+  }
+}
+
 describe("Tutor payouts (G16)", () => {
   beforeAll(async () => {
+    assertPayoutIntegrationDatabase();
     await resetDatabase();
   });
 
@@ -133,10 +236,13 @@ describe("Tutor payouts (G16)", () => {
   const studentEmail = `student.pay.${ts}@cogito.test`;
   const tutorEmail = `tutor.pay.${ts}@cogito.test`;
   const adminEmail = `admin.pay.${ts}@cogito.test`;
+  const secondAdminEmail = `admin.pay.second.${ts}@cogito.test`;
 
   let studentClient: TestClient;
   let tutorClient: TestClient;
   let adminClient: TestClient;
+  let secondAdminClient: TestClient;
+  let adminId: string;
   let studentId: string;
   let tutorId: string;
   let slotId: string;
@@ -165,15 +271,27 @@ describe("Tutor payouts (G16)", () => {
       "Admin Payout",
     );
     const adminCtx = await createTestContext(adminRes.cookie);
-    await setUserRole(adminCtx.session!.user.id, "admin");
+    adminId = adminCtx.session!.user.id;
+    await setUserRole(adminId, "admin");
     adminClient = createTestClient(
       await createTestContext(
         (await signInAndGetCookie(adminEmail, "Test1234!")) ?? "",
       ),
     );
+
+    const secondAdminRes = await signUpAndSignIn(
+      secondAdminEmail,
+      "Test1234!",
+      "Second Admin Payout",
+    );
+    const secondAdminCtx = await createTestContext(secondAdminRes.cookie);
+    await setUserRole(secondAdminCtx.session!.user.id, "admin");
+    secondAdminClient = createTestClient(
+      await createTestContext(secondAdminRes.cookie),
+    );
   });
 
-  test("solo booking flows to completed with G19 snapshot 50/37/13", async () => {
+  test("solo booking completion records the V3 price snapshot", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
 
@@ -202,98 +320,92 @@ describe("Tutor payouts (G16)", () => {
       .from(bookingTable)
       .where(eq(bookingTable.id, b.id));
     expect(row!.priceSnapshot).toMatchObject({
-      perStudent: 50,
-      baseline: 42,
-      tutorShare: 37,
-      cogitoTake: 13,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-debate",
+      modality: "online",
+      headcount: 1,
+      perStudentMarks: 44,
+      collectedMarks: 44,
+      tutorHonorariumIdr: 180_000,
     });
   });
 
-  test("completed group + cancelled + completed series bookings seeded", async () => {
-    await insertBookingRow({
-      type: "group",
-      tutorId,
-      proposerId: studentId,
-      targetGroupSize: 3,
-      minConfirmedHeadcount: 2,
-      confirmedHeadcount: 3,
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 150,
-        tutorShare: 120,
-        cogitoTake: 30,
+  test("payout summaries include completed V3 fee events, not cancelled bookings", async () => {
+    await insertV3FeeBooking(
+      {
+        type: "group",
+        tutorId,
+        proposerId: studentId,
+        targetGroupSize: 3,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 3,
+        completedAt: new Date(Date.now() - 60_000),
       },
-      originalMarks: 150,
-    });
+      { headcount: 3, perStudentMarks: 20, tutorHonorariumIdr: 150_000 },
+    );
 
     await insertBookingRow({
-      type: "solo",
       tutorId,
       proposerId: studentId,
       currentState: "cancelled",
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
-      originalMarks: 50,
+      priceSnapshot: v3PriceSnapshot(),
     });
 
     const series = await insertBookingRow({
       type: "series",
       tutorId,
       proposerId: studentId,
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
-      originalMarks: 100,
+      priceSnapshot: v3PriceSnapshot(),
+      originalMarks: 40,
+      holdAmount: 40,
+      completedAt: new Date(Date.now() - 60_000),
     });
 
     const s1 = new Date(Date.now() + 72 * 3600_000);
     const s2 = new Date(Date.now() + 96 * 3600_000);
-    await db.insert(bookingSession).values([
-      {
-        seriesBookingId: series.id,
-        scheduledStartAt: s1,
-        scheduledEndAt: new Date(s1.getTime() + 3600_000),
-        currentState: "completed",
-        holdAmount: 50,
-        priceSnapshot: {
-          perStudent: 50,
-          baseline: 50,
-          tutorShare: 40,
-          cogitoTake: 10,
+    const sessions = await db
+      .insert(bookingSession)
+      .values([
+        {
+          seriesBookingId: series.id,
+          scheduledStartAt: s1,
+          scheduledEndAt: new Date(s1.getTime() + 3600_000),
+          currentState: "completed",
+          holdAmount: 20,
+          priceSnapshot: v3PriceSnapshot(),
         },
-      },
-      {
-        seriesBookingId: series.id,
-        scheduledStartAt: s2,
-        scheduledEndAt: new Date(s2.getTime() + 3600_000),
-        currentState: "completed",
-        holdAmount: 50,
-        priceSnapshot: {
-          perStudent: 50,
-          baseline: 50,
-          tutorShare: 40,
-          cogitoTake: 10,
+        {
+          seriesBookingId: series.id,
+          scheduledStartAt: s2,
+          scheduledEndAt: new Date(s2.getTime() + 3600_000),
+          currentState: "completed",
+          holdAmount: 20,
+          priceSnapshot: v3PriceSnapshot(),
         },
-      },
-    ]);
+      ])
+      .returning();
+    await Promise.all(
+      sessions.map((session) =>
+        insertV3SessionFee(
+          series.id,
+          session.id,
+          tutorId,
+          session.scheduledStartAt,
+        ),
+      ),
+    );
   });
 
-  test("admin.getTutorPayouts sums tutorShare/cogitoTake from completed bookings only", async () => {
+  test("admin.getTutorPayouts aggregates completed V3 fee events", async () => {
     const result = await adminClient.admin.getTutorPayouts({ tutorId });
 
-    // solo (1) + group (1) + series (2 sessions) = 4 completed sessions
+    // Solo (1) + group (1) + series (2 sessions) = 4 completed V3 fee events.
     expect(result.completedSessions).toBe(4);
-    expect(result.totalMarks).toBe(292);
-    expect(result.cogitoTake).toBe(63);
-    expect(result.tutorPayout).toBe(237);
-    expect(result.tutorPayoutIdr).toBe(237 * TUTOR_PAYOUT_RATE_IDR);
+    expect(result.totalMarks).toBe(144);
+    expect(result.cogitoTake).toBe(0);
+    expect(result.tutorPayout).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(430_000);
   });
 
   test("admin.getTutorPayouts respects date range", async () => {
@@ -315,11 +427,30 @@ describe("Tutor payouts (G16)", () => {
     expect(empty.tutorPayout).toBe(0);
   });
 
+  test("admin pending payout exposes an auditable session breakdown", async () => {
+    const pending = await adminClient.admin.getPendingTutorPayouts({ tutorId });
+
+    expect(pending.completedSessions).toBe(4);
+    expect(pending.items).toHaveLength(4);
+    expect(
+      pending.items?.filter((item) => item.sourceType === "fee_event"),
+    ).toHaveLength(4);
+    expect(
+      pending.items?.every((item) => item.sourceType === "fee_event"),
+    ).toBe(true);
+    expect(
+      pending.items?.reduce((sum, item) => sum + item.grossHonorariumIdr, 0),
+    ).toBe(pending.tutorPayoutIdr);
+    expect(pending.items?.every((item) => item.bookingNumber > 0)).toBe(true);
+  });
+
   test("tutor.getMyPayouts returns own scoped summary", async () => {
     const result = await tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(4);
-    expect(result.tutorPayout).toBe(237);
-    expect(result.cogitoTake).toBe(63);
+    expect(result.totalMarks).toBe(144);
+    expect(result.tutorPayout).toBe(0);
+    expect(result.cogitoTake).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(430_000);
   });
 
   test("tutor.getMyPayouts excludes other tutors' bookings", async () => {
@@ -329,5 +460,680 @@ describe("Tutor payouts (G16)", () => {
     const result = await other.tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(0);
     expect(result.tutorPayout).toBe(0);
+    const otherFinance = await other.tutorClient.tutor.getMyPayoutFinance();
+    expect(otherFinance.pending.grossHonorariumIdr).toBe(0);
+    expect(otherFinance.history).toHaveLength(0);
+  });
+
+  test("prepares and records exact tax snapshots, serializes admins, and blocks repayment until reconciliation", async () => {
+    const isolatedTutor = await createPublishedTutor(
+      `tutor.pay.cutoff.${ts}@cogito.test`,
+      ts + 2,
+    );
+    const payoutTutorId = isolatedTutor.tutorId;
+    await db
+      .update(tutorProfile)
+      .set({
+        bankName: "BCA",
+        bankAccountNumber: "001234567890",
+        bankAccountHolderName: "Prof Payout",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+        taxLegalName: "Payout Snapshot Tutor",
+        nik: "0012345678901234",
+        npwp: "000123456789000",
+      })
+      .where(eq(tutorProfile.userId, payoutTutorId));
+
+    const historicalCutoff = new Date(Date.now() - 60_000);
+    await db.insert(tutorPayout).values({
+      tutorId: payoutTutorId,
+      cutoffAt: historicalCutoff,
+      grossHonorariumIdr: 237 * TUTOR_PAYOUT_RATE_IDR,
+      transferFeeIdr: 0,
+      netHonorariumIdr: 237 * TUTOR_PAYOUT_RATE_IDR,
+      bankName: "BCA",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Prof Payout",
+      status: "paid",
+      paidAt: historicalCutoff,
+      paidBy: adminId,
+    });
+
+    const beforeNewCompletion =
+      await isolatedTutor.tutorClient.tutor.getMyPayouts({});
+    expect(beforeNewCompletion.completedSessions).toBe(0);
+    expect(beforeNewCompletion.tutorPayoutIdr).toBe(0);
+
+    const start = new Date(Date.now() + 48 * 3600_000);
+    const newBooking = await studentClient.booking.createSolo({
+      tutorId: payoutTutorId,
+      availabilitySlotId: isolatedTutor.slotId,
+      modality: "online",
+      scheduledStartAt: start.toISOString(),
+      scheduledEndAt: new Date(start.getTime() + 3600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+    await isolatedTutor.tutorClient.tutorActions.acceptBooking({
+      bookingId: newBooking.id,
+    });
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, newBooking.id));
+    await isolatedTutor.tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: newBooking.id,
+    });
+    const [newFee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, newBooking.id));
+    expect(newFee).toBeDefined();
+
+    const pendingBeforePay = await isolatedTutor.tutorClient.tutor.getMyPayouts(
+      {},
+    );
+    expect(pendingBeforePay.completedSessions).toBe(1);
+    expect(pendingBeforePay.tutorPayoutIdr).toBe(newFee!.grossHonorariumIdr);
+
+    const originalPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    expect(originalPreview.taxRateBps).toBe(250);
+    await adminClient.admin.updateTutorTaxConfig({
+      expectedVersion: 0,
+      nikNpwpRateBps: 300,
+      nikOnlyRateBps: 325,
+      missingRateBps: 350,
+      reason: "Exercise stale preview revalidation in payout acceptance test",
+    });
+    const configChangedPrepare = adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: originalPreview.sourceKeys,
+      previewVersion: originalPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await expect(configChangedPrepare).rejects.toThrow();
+
+    const beforeProfileChange =
+      await isolatedTutor.tutorClient.tutor.getMyProfile();
+    await isolatedTutor.tutorClient.tutor.updateMyProfile({
+      version: beforeProfileChange.version,
+      bankAccountNumber: "009876543210",
+    });
+    const profileChangedPrepare = adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: originalPreview.sourceKeys,
+      previewVersion: originalPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await expect(profileChangedPrepare).rejects.toThrow();
+
+    const currentPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    expect(currentPreview.taxRateBps).toBe(300);
+    expect(currentPreview.taxHonorariumIdr).toBe(
+      calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+    );
+    const operationIds = [crypto.randomUUID(), crypto.randomUUID()];
+    const results = await Promise.allSettled([
+      adminClient.admin.prepareTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: currentPreview.sourceKeys,
+        previewVersion: currentPreview.previewVersion,
+        operationId: operationIds[0]!,
+      }),
+      secondAdminClient.admin.prepareTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: currentPreview.sourceKeys,
+        previewVersion: currentPreview.previewVersion,
+        operationId: operationIds[1]!,
+      }),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+
+    const payouts = await db
+      .select()
+      .from(tutorPayout)
+      .where(eq(tutorPayout.tutorId, payoutTutorId));
+    expect(payouts).toHaveLength(2);
+    const newBatch = payouts.find(
+      (payout) => payout.cutoffAt.getTime() > historicalCutoff.getTime(),
+    );
+    expect(newBatch).toMatchObject({
+      status: "prepared",
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      transferFeeIdr: 0,
+      netHonorariumIdr:
+        newFee!.grossHonorariumIdr -
+        calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      bankAccountNumber: "009876543210",
+      taxLegalName: "Payout Snapshot Tutor",
+      taxNik: "0012345678901234",
+      taxNpwp: "000123456789000",
+    });
+
+    const allocations = await db
+      .select()
+      .from(tutorPayoutAllocation)
+      .where(eq(tutorPayoutAllocation.payoutId, newBatch!.id));
+    expect(allocations).toHaveLength(1);
+    expect(allocations[0]).toMatchObject({
+      payoutId: newBatch!.id,
+      sourceKey: newFee!.eventKey,
+      sourceType: "fee_event",
+      tutorSessionFeeId: newFee!.id,
+      bookingId: newBooking.id,
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+    });
+
+    const allocationDetails = await adminClient.admin.getTutorPayoutAllocations(
+      {
+        payoutId: newBatch!.id,
+      },
+    );
+    expect(allocationDetails.detailsAvailable).toBe(true);
+    expect(allocationDetails.items).toHaveLength(1);
+    expect(allocationDetails.items[0]).toMatchObject({
+      sourceKey: newFee!.eventKey,
+      bookingNumber: expect.any(Number),
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+    });
+
+    const historicalBatch = payouts.find(
+      (payout) => payout.cutoffAt.getTime() === historicalCutoff.getTime(),
+    );
+    const historicalDetails = await adminClient.admin.getTutorPayoutAllocations(
+      {
+        payoutId: historicalBatch!.id,
+      },
+    );
+    expect(historicalDetails).toEqual({ detailsAvailable: false, items: [] });
+
+    await expect(
+      adminClient.admin.recordTutorPayoutTransfer({
+        payoutId: newBatch!.id,
+        previewVersion: currentPreview.previewVersion,
+        actualAmountIdr: newBatch!.netHonorariumIdr + 1,
+        paidAt: new Date().toISOString(),
+      }),
+    ).rejects.toThrow();
+    const actualPaidAt = new Date(Date.now() - 10_000);
+    const paidResult = await adminClient.admin.recordTutorPayoutTransfer({
+      payoutId: newBatch!.id,
+      previewVersion: currentPreview.previewVersion,
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      paidAt: actualPaidAt.toISOString(),
+      reference: "BANK-REF-001",
+      proofUrl: "https://example.com/proof/001",
+    });
+    expect(paidResult).toMatchObject({
+      status: "paid",
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      actualProofUrl: "https://example.com/proof/001",
+      transferRecordedBy: adminId,
+    });
+    expect(paidResult.transferRecordedAt).toBeInstanceOf(Date);
+    const replayInput = {
+      payoutId: newBatch!.id,
+      previewVersion: currentPreview.previewVersion,
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      paidAt: actualPaidAt.toISOString(),
+      reference: " BANK-REF-001 ",
+      proofUrl: "https://example.com/proof/001",
+    };
+    const identicalRetries = await Promise.all([
+      adminClient.admin.recordTutorPayoutTransfer(replayInput),
+      secondAdminClient.admin.recordTutorPayoutTransfer(replayInput),
+    ]);
+    expect(identicalRetries).toHaveLength(2);
+    expect(identicalRetries.every((result) => result.status === "paid")).toBe(
+      true,
+    );
+    const conflictingReplays = [
+      { ...replayInput, actualAmountIdr: replayInput.actualAmountIdr + 1 },
+      {
+        ...replayInput,
+        paidAt: new Date(actualPaidAt.getTime() + 1_000).toISOString(),
+      },
+      { ...replayInput, reference: "BANK-REF-DIFFERENT" },
+    ];
+    const conflictingResults = await Promise.allSettled(
+      conflictingReplays.map((conflictingReplay) =>
+        adminClient.admin.recordTutorPayoutTransfer(conflictingReplay),
+      ),
+    );
+    expect(
+      conflictingResults.every((result) => result.status === "rejected"),
+    ).toBe(true);
+    const payoutAudits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.targetId, newBatch!.id));
+    expect(
+      payoutAudits.filter(
+        (row) => row.action === "tutor_payout_transfer_recorded",
+      ),
+    ).toHaveLength(1);
+    const [payoutNotification] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `tutor-payout.${newBatch!.id}.paid`))
+      .limit(1);
+    expect(payoutNotification?.body).toContain(
+      `Gross Rp${newFee!.grossHonorariumIdr.toLocaleString("id-ID")}`,
+    );
+    expect(payoutNotification?.body).toContain("Tax Rp");
+    expect(payoutNotification?.body).not.toContain("Tax snapshot unavailable");
+    expect(payoutNotification?.body).toContain("Transfer fee Rp");
+    expect(payoutNotification?.body).toContain("Net Rp");
+    expect(payoutNotification?.body).toContain(
+      `Booking #${newBooking.bookingNumber} · solo ·`,
+    );
+    expect(payoutNotification?.body).toContain(
+      newFee!.scheduledStartAt.toLocaleDateString("id-ID", {
+        dateStyle: "medium",
+        timeZone: "Asia/Jakarta",
+      }),
+    );
+    const [emailDispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, payoutNotification!.id))
+      .limit(1);
+    expect(emailDispatch?.status).toBe("queued");
+    const emailDispatches = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, payoutNotification!.id));
+    expect(emailDispatches).toHaveLength(1);
+
+    const snapshotProfile =
+      await isolatedTutor.tutorClient.tutor.getMyProfile();
+    await isolatedTutor.tutorClient.tutor.updateMyProfile({
+      version: snapshotProfile.version,
+      bankName: "Mandiri",
+      bankAccountNumber: "006655443322",
+      taxLegalName: "Changed Legal Name",
+      nik: "1234567890123456",
+      npwp: null,
+    });
+    const historicalReport = await adminClient.admin.getTutorPayoutReport({
+      dateFrom: new Date(actualPaidAt.getTime() - 60_000).toISOString(),
+      dateTo: new Date(actualPaidAt.getTime() + 60_000).toISOString(),
+    });
+    const savedRow = historicalReport.find((row) => row.id === newBatch!.id);
+    expect(savedRow).toMatchObject({
+      bankAccountNumber: "009876543210",
+      taxLegalName: "Payout Snapshot Tutor",
+      taxNik: "0012345678901234",
+      taxNpwp: "000123456789000",
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      actualProofUrl: "https://example.com/proof/001",
+      transferRecordedBy: adminId,
+    });
+
+    const tutorFinance =
+      await isolatedTutor.tutorClient.tutor.getMyPayoutFinance();
+    expect(tutorFinance.pending).toMatchObject({
+      grossHonorariumIdr: 0,
+      completedSessions: 0,
+    });
+    expect(tutorFinance.history[0]).toMatchObject({
+      id: newBatch!.id,
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      items: [
+        expect.objectContaining({
+          sourceKey: newFee!.eventKey,
+          bookingNumber: newBooking.bookingNumber,
+          bookingType: "solo",
+        }),
+      ],
+    });
+    expect(tutorFinance.history[0]).not.toHaveProperty("nik");
+    expect(tutorFinance.history[0]).not.toHaveProperty("taxNik");
+    expect(tutorFinance.history[0]).not.toHaveProperty("taxNpwp");
+    await expect(studentClient.tutor.getMyPayoutFinance()).rejects.toThrow();
+    await expect(
+      studentClient.admin.getTutorPayoutReport({}),
+    ).rejects.toThrow();
+
+    const voidResult = await adminClient.admin.voidTutorPayout({
+      payoutId: newBatch!.id,
+      reason: "Transfer needs external reconciliation before repayment",
+    });
+    expect(voidResult).toMatchObject({
+      status: "void",
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      actualProofUrl: "https://example.com/proof/001",
+    });
+    await expect(
+      adminClient.admin.previewTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: [newFee!.eventKey],
+      }),
+    ).rejects.toThrow();
+
+    await adminClient.admin.resolveTutorPayoutReconciliation({
+      payoutId: newBatch!.id,
+      reason:
+        "External transfer reconciled by bank statement reference BANK-REF-001",
+    });
+    const reconciledPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    const repaymentPreparation = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: reconciledPreview.sourceKeys,
+      previewVersion: reconciledPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    expect(repaymentPreparation.status).toBe("prepared");
+
+    const pendingAfterPay = await isolatedTutor.tutorClient.tutor.getMyPayouts(
+      {},
+    );
+    expect(pendingAfterPay.completedSessions).toBe(0);
+    expect(pendingAfterPay.tutorPayoutIdr).toBe(0);
+  });
+
+  test("a selected source payout leaves other fee events payable", async () => {
+    const isolatedTutor = await createPublishedTutor(
+      `tutor.pay.selected.${ts}@cogito.test`,
+      ts + 3,
+    );
+    const payoutTutorId = isolatedTutor.tutorId;
+    await db
+      .update(tutorProfile)
+      .set({
+        bankName: "BCA",
+        bankAccountNumber: "001122334455",
+        bankAccountHolderName: "Selected Batch Tutor",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+        taxLegalName: "Selected Batch Tutor",
+        nik: "0000000000000042",
+        npwp: null,
+      })
+      .where(eq(tutorProfile.userId, payoutTutorId));
+
+    const firstSource = await insertV3FeeBooking({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(Date.now() - 6 * 60_000),
+    });
+    const secondSource = await insertV3FeeBooking({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(Date.now() - 5 * 60_000),
+    });
+    const before = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(before.items).toHaveLength(2);
+    const firstItem = before.items.find(
+      (item) => item.bookingId === firstSource.booking.id,
+    )!;
+    const secondItem = before.items.find(
+      (item) => item.bookingId === secondSource.booking.id,
+    )!;
+    const firstPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [firstItem.sourceKey],
+    });
+    const firstBatch = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: firstPreview.sourceKeys,
+      previewVersion: firstPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await adminClient.admin.recordTutorPayoutTransfer({
+      payoutId: firstBatch.id,
+      previewVersion: firstPreview.previewVersion,
+      actualAmountIdr: firstBatch.netHonorariumIdr,
+      paidAt: new Date().toISOString(),
+      reference: "BANK-SELECTED-001",
+    });
+
+    const feeStart = new Date(Date.now() + 48 * 3600_000);
+    const feeBooking = await studentClient.booking.createSolo({
+      tutorId: payoutTutorId,
+      availabilitySlotId: isolatedTutor.slotId,
+      modality: "online",
+      scheduledStartAt: feeStart.toISOString(),
+      scheduledEndAt: new Date(feeStart.getTime() + 3600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+    await isolatedTutor.tutorClient.tutorActions.acceptBooking({
+      bookingId: feeBooking.id,
+    });
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, feeBooking.id));
+    await isolatedTutor.tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: feeBooking.id,
+    });
+    const [fee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, feeBooking.id));
+    expect(fee).toBeDefined();
+
+    const laterSource = await insertV3FeeBooking({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(),
+    });
+    const after = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(after.items.map((item) => item.sourceKey)).toEqual(
+      expect.arrayContaining([
+        secondItem.sourceKey,
+        fee!.eventKey,
+        after.items.find((item) => item.bookingId === laterSource.booking.id)!
+          .sourceKey,
+      ]),
+    );
+    expect(after.items).toHaveLength(3);
+    expect(
+      after.items.some((item) => item.bookingId === firstSource.booking.id),
+    ).toBe(false);
+    expect(
+      after.items.some((item) => item.bookingId === secondSource.booking.id),
+    ).toBe(true);
+    expect(after.items.some((item) => item.sourceKey === fee!.eventKey)).toBe(
+      true,
+    );
+    expect(
+      after.items.some((item) => item.bookingId === laterSource.booking.id),
+    ).toBe(true);
+
+    const nextPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: after.items.map((item) => item.sourceKey),
+    });
+    const nextBatch = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: nextPreview.sourceKeys,
+      previewVersion: nextPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    expect(nextBatch.status).toBe("prepared");
+    expect(nextBatch.sourceKeys).toHaveLength(3);
+  });
+
+  test("pre-T03 allocations do not cut off unrelated fee events and reconciliation blocks released sources", async () => {
+    const isolatedTutor = await createPublishedTutor(
+      `tutor.pay.pre-t03-allocation.${ts}@cogito.test`,
+      ts + 5,
+    );
+    const payoutTutorId = isolatedTutor.tutorId;
+    await db
+      .update(tutorProfile)
+      .set({
+        bankName: "BCA",
+        bankAccountNumber: "001188776655",
+        bankAccountHolderName: "Pre-T03 Allocation Tutor",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+        taxLegalName: "Pre-T03 Allocation Tutor",
+        nik: "0000000000000067",
+        npwp: null,
+      })
+      .where(eq(tutorProfile.userId, payoutTutorId));
+
+    const cutoffAt = new Date(Date.now() - 60_000);
+    const firstSourceBooking = await insertV3FeeBooking({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(cutoffAt.getTime() - 30_000),
+    });
+    const secondSourceBooking = await insertV3FeeBooking({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(cutoffAt.getTime() - 15_000),
+    });
+    const available = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    const firstSource = available.items.find(
+      (item) => item.bookingId === firstSourceBooking.booking.id,
+    )!;
+    const secondSource = available.items.find(
+      (item) => item.bookingId === secondSourceBooking.booking.id,
+    )!;
+
+    // Models a T02-era manually paid row: its T03 preview fields are NULL,
+    // while the existing per-source allocation identifies the paid session.
+    const [preT03Payout] = await db
+      .insert(tutorPayout)
+      .values({
+        tutorId: payoutTutorId,
+        cutoffAt,
+        grossHonorariumIdr: firstSource.grossHonorariumIdr,
+        transferFeeIdr: 0,
+        netHonorariumIdr: firstSource.grossHonorariumIdr,
+        bankName: "BCA",
+        status: "paid",
+        paidAt: cutoffAt,
+        paidBy: adminId,
+      })
+      .returning();
+    expect(preT03Payout!.previewVersion).toBeNull();
+    expect(preT03Payout!.sourceKeys).toBeNull();
+    await db.insert(tutorPayoutAllocation).values({
+      payoutId: preT03Payout!.id,
+      sourceKey: firstSource.sourceKey,
+      sourceType: firstSource.sourceType,
+      tutorSessionFeeId: firstSource.tutorSessionFeeId,
+      bookingId: firstSource.bookingId,
+      bookingSessionId: firstSource.bookingSessionId,
+      bookingType: firstSource.bookingType,
+      deliveryStatus: firstSource.deliveryStatus,
+      scheduledStartAt: firstSource.scheduledStartAt,
+      earnedAt: firstSource.earnedAt,
+      grossHonorariumIdr: firstSource.grossHonorariumIdr,
+      priceSnapshot: firstSource.priceSnapshot,
+    });
+
+    const afterPaidAllocation = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterPaidAllocation.items.map((item) => item.bookingId)).toEqual([
+      secondSourceBooking.booking.id,
+    ]);
+
+    const voided = await adminClient.admin.voidTutorPayout({
+      payoutId: preT03Payout!.id,
+      reason: "Reconcile the existing transfer before releasing its source",
+    });
+    expect(voided.reconciliationStatus).toBe("required");
+    const whileUnresolved = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(whileUnresolved.items.map((item) => item.bookingId)).toEqual([
+      secondSourceBooking.booking.id,
+    ]);
+    await expect(
+      adminClient.admin.previewTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: [firstSource.sourceKey],
+      }),
+    ).rejects.toThrow();
+    expect(
+      (
+        await adminClient.admin.previewTutorPayout({
+          tutorId: payoutTutorId,
+          sourceKeys: [secondSource.sourceKey],
+        })
+      ).sourceKeys,
+    ).toEqual([secondSource.sourceKey]);
+
+    await adminClient.admin.resolveTutorPayoutReconciliation({
+      payoutId: preT03Payout!.id,
+      reason: "Bank record reviewed; the original source may be repaid once",
+    });
+    const afterResolution = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterResolution.items.map((item) => item.bookingId)).toEqual(
+      expect.arrayContaining([
+        firstSourceBooking.booking.id,
+        secondSourceBooking.booking.id,
+      ]),
+    );
+    const repaymentPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [firstSource.sourceKey],
+    });
+    const repayment = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: repaymentPreview.sourceKeys,
+      previewVersion: repaymentPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await adminClient.admin.recordTutorPayoutTransfer({
+      payoutId: repayment.id,
+      previewVersion: repaymentPreview.previewVersion,
+      actualAmountIdr: repayment.netHonorariumIdr,
+      paidAt: new Date().toISOString(),
+      reference: "BANK-REPAY-PRE-T03-001",
+    });
+    const afterRepayment = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterRepayment.items.map((item) => item.bookingId)).toEqual([
+      secondSourceBooking.booking.id,
+    ]);
+    expect(
+      afterRepayment.items.some(
+        (item) => item.bookingId === firstSourceBooking.booking.id,
+      ),
+    ).toBe(false);
   });
 });

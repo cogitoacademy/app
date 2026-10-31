@@ -25,15 +25,24 @@ import {
   bookingStateHistory,
   bookingRescheduleProposal,
   bookingSession,
+  academyClass,
+  academyClassSession,
   sessionNote,
   sessionCompletionFeedback,
+  sessionCompletionFeedbackHistory,
   availabilitySlot,
   tutorProfile,
   user,
   meetingEvent,
   tutorPayout,
+  tutorSessionFee,
+  ledgerEntry,
+  wallet,
+  tutorPayoutAllocation,
+  tutorTaxConfig,
   type booking as bookingTable,
   type BookingSessionTopic,
+  type BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -128,7 +137,7 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
 function bookingViewCondition(
   view: BookingListView | undefined,
   now: Date,
-  opts: { completionCondition?: SQL<unknown> } = {},
+  opts: { completionCondition?: SQL<unknown> },
 ): SQL<unknown> | undefined {
   if (!view || view === "all") return undefined;
   const pending = inArray(booking.currentState, [...BOOKING_ACTION_STATES]);
@@ -177,6 +186,21 @@ async function findBookingById(
   return (b as BookingRow | undefined) ?? null;
 }
 
+async function hasFailedGoogleMeeting(conn: DbOrTx, bookingId: string) {
+  const [failed] = await conn
+    .select({ id: meetingEvent.id })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, bookingId),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    )
+    .limit(1);
+  return Boolean(failed);
+}
+
 /**
  * Finds a tutor's profile, optionally restricted to published profiles.
  *
@@ -205,8 +229,7 @@ async function findTutorProfile(
 
 /**
  * Resolves one immutable booking-topic snapshot from the tutor's approved
- * competition tracks. When no subject id is supplied, a single available
- * track can be selected automatically for backward-compatible callers.
+ * competition tracks using the caller's explicit specialization selection.
  */
 async function findTutorSubjectTopic(
   conn: DbOrTx,
@@ -251,10 +274,7 @@ async function findTutorSubjectTopic(
     });
   }
 
-  if (subjectId) {
-    return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
-  }
-  return topics.length === 1 ? topics[0]! : null;
+  return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
 }
 
 /**
@@ -325,8 +345,9 @@ async function findParticipant(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
+  options: { forUpdate?: boolean } = {},
 ) {
-  const [participant] = await conn
+  const query = conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
@@ -336,6 +357,9 @@ async function findParticipant(
       ),
     )
     .limit(1);
+  const [participant] = options.forUpdate
+    ? await query.for("update")
+    : await query;
   return participant ?? null;
 }
 
@@ -355,6 +379,7 @@ async function findConfirmedParticipants(
   conn: DbOrTx,
   bookingId: string,
   excludeUserId?: string,
+  options: { forUpdate?: boolean } = {},
 ) {
   const conditions = [
     eq(bookingParticipant.bookingId, bookingId),
@@ -367,10 +392,49 @@ async function findConfirmedParticipants(
   if (excludeUserId) {
     conditions.push(ne(bookingParticipant.userId, excludeUserId));
   }
-  return conn
+  const query = conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(and(...conditions));
+  return options.forUpdate
+    ? query.orderBy(asc(bookingParticipant.userId)).for("update")
+    : query;
+}
+
+async function findLedgerEventKeys(
+  conn: DbOrTx,
+  bookingId: string,
+  eventKeys: string[],
+): Promise<string[]> {
+  if (eventKeys.length === 0) return [];
+  const rows = await conn
+    .select({ eventKey: ledgerEntry.eventKey })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    );
+  return rows.map((row) => row.eventKey);
+}
+
+async function findLedgerEventAmounts(
+  conn: DbOrTx,
+  bookingId: string,
+  eventKeys: string[],
+): Promise<Map<string, number>> {
+  if (eventKeys.length === 0) return new Map();
+  const rows = await conn
+    .select({ eventKey: ledgerEntry.eventKey, amount: ledgerEntry.amount })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    );
+  return new Map(rows.map((row) => [row.eventKey, row.amount]));
 }
 
 /** Returns invitees whose response can still keep a group in invitation phase. */
@@ -516,18 +580,7 @@ async function updateBookingPriceSnapshot(
   conn: DbOrTx,
   bookingId: string,
   values: {
-    priceSnapshot: {
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-    };
+    priceSnapshot: BookingPriceSnapshot;
     holdAmount: number;
   },
 ) {
@@ -697,17 +750,7 @@ async function insertBookingSession(
     scheduledEndAt: Date;
     currentState: string;
     holdAmount: number;
-    priceSnapshot: {
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-    };
+    priceSnapshot: BookingPriceSnapshot;
   },
 ) {
   await conn.insert(bookingSession).values(values);
@@ -731,12 +774,33 @@ export async function listSessionsBySeriesId(
     .orderBy(bookingSession.scheduledStartAt);
 }
 
-async function findSessionById(conn: DbOrTx, sessionId: string) {
-  const [session] = await conn
+async function updateScheduledSeriesPriceSnapshot(
+  conn: DbOrTx,
+  seriesBookingId: string,
+  values: { priceSnapshot: BookingPriceSnapshot; holdAmount: number },
+) {
+  await conn
+    .update(bookingSession)
+    .set(values)
+    .where(
+      and(
+        eq(bookingSession.seriesBookingId, seriesBookingId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    );
+}
+
+async function findSessionById(
+  conn: DbOrTx,
+  sessionId: string,
+  options: { forUpdate?: boolean } = {},
+) {
+  const query = conn
     .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.id, sessionId))
     .limit(1);
+  const [session] = options.forUpdate ? await query.for("update") : await query;
   return session ?? null;
 }
 
@@ -752,10 +816,17 @@ async function updateSessionSchedule(
 }
 
 async function cancelSession(conn: DbOrTx, sessionId: string) {
-  await conn
+  const [cancelled] = await conn
     .update(bookingSession)
     .set({ currentState: "cancelled", holdAmount: 0 })
-    .where(eq(bookingSession.id, sessionId));
+    .where(
+      and(
+        eq(bookingSession.id, sessionId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    )
+    .returning({ id: bookingSession.id });
+  return Boolean(cancelled);
 }
 
 async function completeSession(
@@ -810,6 +881,124 @@ async function insertCompletionFeedback(
   return row!;
 }
 
+async function updateCompletionFeedback(
+  conn: DbOrTx,
+  values: {
+    id: string;
+    expectedVersion: number;
+    version: number;
+    discussion: string[];
+    strengths: string[];
+    improvements: string[];
+  },
+) {
+  const [row] = await conn
+    .update(sessionCompletionFeedback)
+    .set({
+      version: values.version,
+      discussion: values.discussion,
+      strengths: values.strengths,
+      improvements: values.improvements,
+    })
+    .where(
+      and(
+        eq(sessionCompletionFeedback.id, values.id),
+        eq(sessionCompletionFeedback.version, values.expectedVersion),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+async function insertCompletionFeedbackHistory(
+  conn: DbOrTx,
+  values: typeof sessionCompletionFeedbackHistory.$inferInsert,
+) {
+  const [row] = await conn
+    .insert(sessionCompletionFeedbackHistory)
+    .values(values)
+    .returning();
+  return row!;
+}
+
+async function findCompletionFeedbackHistoryByRequestKey(
+  conn: DbOrTx,
+  requestKey: string,
+) {
+  const [row] = await conn
+    .select({ ...getTableColumns(sessionCompletionFeedbackHistory) })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.requestKey, requestKey))
+    .limit(1);
+  return row ?? null;
+}
+
+async function listCompletionFeedbackHistoryByBooking(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn
+    .select({
+      id: sessionCompletionFeedbackHistory.id,
+      feedbackId: sessionCompletionFeedbackHistory.feedbackId,
+      bookingId: sessionCompletionFeedbackHistory.bookingId,
+      sessionId: sessionCompletionFeedbackHistory.sessionId,
+      version: sessionCompletionFeedbackHistory.version,
+      status: sessionCompletionFeedbackHistory.status,
+      actorId: sessionCompletionFeedbackHistory.actorId,
+      actorRole: sessionCompletionFeedbackHistory.actorRole,
+      reason: sessionCompletionFeedbackHistory.reason,
+      deliveryConfirmed: sessionCompletionFeedbackHistory.deliveryConfirmed,
+      discussion: sessionCompletionFeedbackHistory.discussion,
+      strengths: sessionCompletionFeedbackHistory.strengths,
+      improvements: sessionCompletionFeedbackHistory.improvements,
+      createdAt: sessionCompletionFeedbackHistory.createdAt,
+    })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.bookingId, bookingId))
+    .orderBy(
+      asc(sessionCompletionFeedbackHistory.createdAt),
+      asc(sessionCompletionFeedbackHistory.version),
+    );
+}
+
+async function listCompletionFeedbackHistoryByFeedback(
+  conn: DbOrTx,
+  feedbackId: string,
+) {
+  return conn
+    .select({ ...getTableColumns(sessionCompletionFeedbackHistory) })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.feedbackId, feedbackId))
+    .orderBy(asc(sessionCompletionFeedbackHistory.version));
+}
+
+export async function hasChargeableFeedbackEntitlement(
+  conn: DbOrTx,
+  bookingId: string,
+  userId: string,
+  eventKeys: string[],
+) {
+  const participant = await findParticipant(conn, bookingId, userId);
+  if (!participant || participant.role === "tutor" || eventKeys.length === 0) {
+    return false;
+  }
+  const [entry] = await conn
+    .select({ id: ledgerEntry.id })
+    .from(ledgerEntry)
+    .innerJoin(wallet, eq(wallet.id, ledgerEntry.walletId))
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        eq(ledgerEntry.entryType, "deduct"),
+        eq(wallet.userId, userId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    )
+    .limit(1);
+  return Boolean(entry);
+}
+
 async function listCompletionFeedbackByBooking(
   conn: DbOrTx,
   bookingId: string,
@@ -825,8 +1014,9 @@ async function findCompletionFeedback(
   conn: DbOrTx,
   bookingId: string,
   sessionId: string | null,
+  options: { forUpdate?: boolean } = {},
 ) {
-  const rows = await conn
+  const query = conn
     .select({ ...getTableColumns(sessionCompletionFeedback) })
     .from(sessionCompletionFeedback)
     .where(
@@ -841,7 +1031,8 @@ async function findCompletionFeedback(
           ),
     )
     .limit(1);
-  return rows[0] ?? null;
+  const results = options.forUpdate ? await query.for("update") : await query;
+  return results[0] ?? null;
 }
 
 /**
@@ -1102,7 +1293,7 @@ async function findCompletedBookingsByTutor(
             ),
           )
         : gte(booking.scheduledStartAt, dateFrom);
-    if (condition) conditions.push(condition);
+    conditions.push(condition!);
   }
   if (dateTo) {
     const condition =
@@ -1115,7 +1306,7 @@ async function findCompletedBookingsByTutor(
             ),
           )
         : lte(booking.scheduledStartAt, dateTo);
-    if (condition) conditions.push(condition);
+    conditions.push(condition!);
   }
   return conn
     .select({ ...getTableColumns(booking) })
@@ -1123,14 +1314,110 @@ async function findCompletedBookingsByTutor(
     .where(and(...conditions));
 }
 
-async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
-  const [row] = await conn
-    .select({ ...getTableColumns(tutorPayout) })
-    .from(tutorPayout)
-    .where(eq(tutorPayout.tutorId, tutorId))
-    .orderBy(desc(tutorPayout.cutoffAt))
-    .limit(1);
-  return row ?? null;
+async function findTutorSessionFeesByTutor(
+  conn: DbOrTx,
+  tutorId: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+  dateBasis: "scheduledStartAt" | "completedAt" = "scheduledStartAt",
+) {
+  const conditions: SQL[] = [eq(tutorSessionFee.tutorId, tutorId)];
+  const dateColumn =
+    dateBasis === "completedAt"
+      ? tutorSessionFee.earnedAt
+      : tutorSessionFee.scheduledStartAt;
+  if (dateFrom) conditions.push(gte(dateColumn, dateFrom));
+  if (dateTo) conditions.push(lte(dateColumn, dateTo));
+
+  return conn
+    .select({
+      ...getTableColumns(tutorSessionFee),
+      bookingNumber: booking.bookingNumber,
+      bookingType: sql<string>`coalesce(${booking.type}, ${academyClass.kind})`,
+    })
+    .from(tutorSessionFee)
+    .leftJoin(booking, eq(tutorSessionFee.bookingId, booking.id))
+    .leftJoin(
+      academyClassSession,
+      eq(tutorSessionFee.academyClassSessionId, academyClassSession.id),
+    )
+    .leftJoin(academyClass, eq(academyClassSession.classId, academyClass.id))
+    .where(and(...conditions));
+}
+
+async function listTutorPayoutAllocatedSourceKeys(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<string[]> {
+  const rows = await conn
+    .select({ sourceKey: tutorPayoutAllocation.sourceKey })
+    .from(tutorPayoutAllocation)
+    .innerJoin(tutorPayout, eq(tutorPayoutAllocation.payoutId, tutorPayout.id))
+    .where(
+      and(
+        eq(tutorPayout.tutorId, tutorId),
+        eq(tutorPayoutAllocation.active, true),
+      ),
+    );
+  return rows.map((row) => row.sourceKey);
+}
+
+async function insertTutorPayoutAllocations(
+  conn: DbOrTx,
+  rows: (typeof tutorPayoutAllocation.$inferInsert)[],
+) {
+  if (rows.length === 0) return [];
+  return conn.insert(tutorPayoutAllocation).values(rows).returning();
+}
+
+async function listTutorPayoutAllocationsByPayoutId(
+  conn: DbOrTx,
+  payoutId: string,
+) {
+  return conn
+    .select({
+      id: tutorPayoutAllocation.id,
+      payoutId: tutorPayoutAllocation.payoutId,
+      sourceKey: tutorPayoutAllocation.sourceKey,
+      sourceType: tutorPayoutAllocation.sourceType,
+      tutorSessionFeeId: tutorPayoutAllocation.tutorSessionFeeId,
+      bookingId: tutorPayoutAllocation.bookingId,
+      bookingNumber: booking.bookingNumber,
+      bookingSessionId: tutorPayoutAllocation.bookingSessionId,
+      classSessionId: tutorPayoutAllocation.academyClassSessionId,
+      deliveryLabel: tutorPayoutAllocation.deliveryLabel,
+      bookingType: tutorPayoutAllocation.bookingType,
+      deliveryStatus: tutorPayoutAllocation.deliveryStatus,
+      scheduledStartAt: tutorPayoutAllocation.scheduledStartAt,
+      earnedAt: tutorPayoutAllocation.earnedAt,
+      grossHonorariumIdr: tutorPayoutAllocation.grossHonorariumIdr,
+      collectedMarks: tutorPayoutAllocation.collectedMarks,
+      priceSnapshot: tutorPayoutAllocation.priceSnapshot,
+      createdAt: tutorPayoutAllocation.createdAt,
+      active: tutorPayoutAllocation.active,
+      releasedAt: tutorPayoutAllocation.releasedAt,
+      releaseReason: tutorPayoutAllocation.releaseReason,
+    })
+    .from(tutorPayoutAllocation)
+    .leftJoin(booking, eq(tutorPayoutAllocation.bookingId, booking.id))
+    .where(eq(tutorPayoutAllocation.payoutId, payoutId))
+    .orderBy(
+      asc(tutorPayoutAllocation.scheduledStartAt),
+      asc(tutorPayoutAllocation.id),
+    );
+}
+
+async function listTutorSessionFeeEventKeysByBookings(
+  conn: DbOrTx,
+  bookingIds: string[],
+): Promise<string[]> {
+  if (bookingIds.length === 0) return [];
+
+  const rows = await conn
+    .select({ eventKey: tutorSessionFee.eventKey })
+    .from(tutorSessionFee)
+    .where(inArray(tutorSessionFee.bookingId, bookingIds));
+  return rows.map((row) => row.eventKey);
 }
 
 /**
@@ -1147,26 +1434,32 @@ async function listTutorPayoutProfiles(conn: DbOrTx) {
       bankAccountHolderName: tutorProfile.bankAccountHolderName,
       bankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
       bankAccountOwnership: tutorProfile.bankAccountOwnership,
+      taxLegalName: tutorProfile.taxLegalName,
       bankTransferDisclaimerAccepted:
         tutorProfile.bankTransferDisclaimerAccepted,
+      nik: tutorProfile.nik,
+      npwp: tutorProfile.npwp,
+      taxRateOverrideBps: tutorProfile.taxRateOverrideBps,
+      profileVersion: tutorProfile.version,
     })
     .from(tutorProfile)
     .innerJoin(user, eq(tutorProfile.userId, user.id))
     .orderBy(desc(tutorProfile.createdAt));
 }
 
-/**
- * Lists immutable payout batches by transfer date and joins the current
- * profile only as a fallback for legacy rows that predate account snapshots.
- */
+/** Lists payout snapshots by actual transfer date, plus prepared and void rows. */
 async function listTutorPayoutRecords(
   conn: DbOrTx,
   dateFrom?: Date,
   dateTo?: Date,
 ) {
-  const conditions: SQL[] = [eq(tutorPayout.status, "paid")];
-  if (dateFrom) conditions.push(gte(tutorPayout.paidAt, dateFrom));
-  if (dateTo) conditions.push(lte(tutorPayout.paidAt, dateTo));
+  const dateConditions: SQL[] = [];
+  if (dateFrom) dateConditions.push(gte(tutorPayout.paidAt, dateFrom));
+  if (dateTo) dateConditions.push(lte(tutorPayout.paidAt, dateTo));
+  const withinDateWindow = and(
+    sql`${tutorPayout.paidAt} IS NOT NULL`,
+    ...dateConditions,
+  );
 
   return conn
     .select({
@@ -1176,20 +1469,52 @@ async function listTutorPayoutRecords(
       bankName: tutorPayout.bankName,
       bankAccountNumber: tutorPayout.bankAccountNumber,
       bankAccountHolderName: tutorPayout.bankAccountHolderName,
-      profileBankAccountNumber: tutorProfile.bankAccountNumber,
-      profileBankAccountHolderName: tutorProfile.bankAccountHolderName,
-      profileBankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
-      profileBankAccountOwnership: tutorProfile.bankAccountOwnership,
+      bankAccountOpeningCity: tutorPayout.bankAccountOpeningCity,
+      bankAccountOwnership: tutorPayout.bankAccountOwnership,
+      taxLegalName: tutorPayout.taxLegalName,
+      taxNik: tutorPayout.taxNik,
+      taxNpwp: tutorPayout.taxNpwp,
+      taxStatus: tutorPayout.taxStatus,
+      taxRateBps: tutorPayout.taxRateBps,
+      taxRateSource: tutorPayout.taxRateSource,
+      taxHonorariumIdr: tutorPayout.taxHonorariumIdr,
+      actualAmountIdr: tutorPayout.actualAmountIdr,
+      actualReference: tutorPayout.actualReference,
+      actualProofUrl: tutorPayout.actualProofUrl,
+      transferRecordedAt: tutorPayout.transferRecordedAt,
       grossHonorariumIdr: tutorPayout.grossHonorariumIdr,
       transferFeeIdr: tutorPayout.transferFeeIdr,
       netHonorariumIdr: tutorPayout.netHonorariumIdr,
       status: tutorPayout.status,
       paidAt: tutorPayout.paidAt,
+      previewVersion: tutorPayout.previewVersion,
+      coveredSessionCount: sql<number>`(
+        SELECT count(*)::int
+        FROM tutor_payout_allocation
+        WHERE tutor_payout_allocation.payout_id = ${tutorPayout.id}
+      )`,
+      preparedAt: tutorPayout.preparedAt,
+      voidedAt: tutorPayout.voidedAt,
+      voidReason: tutorPayout.voidReason,
+      reconciliationStatus: tutorPayout.reconciliationStatus,
+      reconciliationReason: tutorPayout.reconciliationReason,
+      preparedBy: tutorPayout.preparedBy,
+      paidBy: tutorPayout.paidBy,
     })
     .from(tutorPayout)
     .innerJoin(user, eq(tutorPayout.tutorId, user.id))
-    .leftJoin(tutorProfile, eq(tutorPayout.tutorId, tutorProfile.userId))
-    .where(and(...conditions))
+    .where(
+      or(
+        eq(tutorPayout.status, "prepared"),
+        withinDateWindow,
+        and(
+          eq(tutorPayout.status, "void"),
+          sql`${tutorPayout.voidedAt} IS NOT NULL`,
+          ...(dateFrom ? [gte(tutorPayout.voidedAt, dateFrom)] : []),
+          ...(dateTo ? [lte(tutorPayout.voidedAt, dateTo)] : []),
+        ),
+      ),
+    )
     .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.id));
 }
 
@@ -1199,6 +1524,105 @@ async function insertTutorPayout(
 ) {
   const [row] = await conn.insert(tutorPayout).values(input).returning();
   return row!;
+}
+
+async function findTutorTaxConfig(conn: DbOrTx) {
+  return (
+    (await conn.query.tutorTaxConfig.findFirst({
+      where: eq(tutorTaxConfig.id, "default"),
+    })) ?? null
+  );
+}
+
+async function findTutorPayoutById(
+  conn: DbOrTx,
+  payoutId: string,
+  forUpdate = false,
+) {
+  const query = conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.id, payoutId))
+    .limit(1);
+  const [row] = forUpdate ? await query.for("update") : await query;
+  return row ?? null;
+}
+
+async function findTutorPayoutByIdempotencyKey(conn: DbOrTx, key: string) {
+  const [row] = await conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.idempotencyKey, key))
+    .limit(1);
+  return row ?? null;
+}
+
+async function listTutorPayoutsByTutorId(
+  conn: DbOrTx,
+  tutorId: string,
+  limit = 100,
+) {
+  return conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.tutorId, tutorId))
+    .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.createdAt))
+    .limit(limit);
+}
+
+async function listTutorPayoutReconciliationSourceKeys(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<{ sourceKey: string; payoutId: string }[]> {
+  const rows = await conn
+    .select({
+      sourceKey: tutorPayoutAllocation.sourceKey,
+      payoutId: tutorPayout.id,
+    })
+    .from(tutorPayoutAllocation)
+    .innerJoin(tutorPayout, eq(tutorPayoutAllocation.payoutId, tutorPayout.id))
+    .where(
+      and(
+        eq(tutorPayout.tutorId, tutorId),
+        eq(tutorPayout.reconciliationStatus, "required"),
+      ),
+    );
+  return rows;
+}
+
+async function insertTutorSessionFee(
+  conn: DbOrTx,
+  input: typeof tutorSessionFee.$inferInsert,
+) {
+  const [inserted] = await conn
+    .insert(tutorSessionFee)
+    .values(input)
+    .onConflictDoNothing()
+    .returning();
+  if (inserted) return inserted;
+
+  const [existing] = await conn
+    .select()
+    .from(tutorSessionFee)
+    .where(eq(tutorSessionFee.eventKey, input.eventKey!))
+    .limit(1);
+  const snapshotMatches =
+    JSON.stringify(existing?.priceSnapshot ?? null) ===
+    JSON.stringify(input.priceSnapshot ?? null);
+  if (
+    !existing ||
+    existing.bookingId !== input.bookingId ||
+    existing.bookingSessionId !== (input.bookingSessionId ?? null) ||
+    existing.tutorId !== input.tutorId ||
+    existing.grossHonorariumIdr !== input.grossHonorariumIdr ||
+    existing.scheduledStartAt.getTime() !== input.scheduledStartAt!.getTime() ||
+    !snapshotMatches
+  ) {
+    throw new Error(
+      "Tutor session fee event conflicts with an existing source",
+    );
+  }
+  return existing;
 }
 
 /**
@@ -1277,6 +1701,33 @@ export function createBookingRepo(db: DbType) {
    * @param bookingId - the booking id
    * @returns the booking with related data, or null
    */
+  async function findBookingTutorFees(bookingId: string, tutorId: string) {
+    return db
+      .select({
+        id: tutorSessionFee.id,
+        bookingSessionId: tutorSessionFee.bookingSessionId,
+        grossHonorariumIdr: tutorSessionFee.grossHonorariumIdr,
+        scheduledStartAt: tutorSessionFee.scheduledStartAt,
+        payoutStatus: tutorPayout.status,
+      })
+      .from(tutorSessionFee)
+      .leftJoin(
+        tutorPayoutAllocation,
+        and(
+          eq(tutorPayoutAllocation.tutorSessionFeeId, tutorSessionFee.id),
+          eq(tutorPayoutAllocation.active, true),
+        ),
+      )
+      .leftJoin(tutorPayout, eq(tutorPayout.id, tutorPayoutAllocation.payoutId))
+      .where(
+        and(
+          eq(tutorSessionFee.bookingId, bookingId),
+          eq(tutorSessionFee.tutorId, tutorId),
+        ),
+      )
+      .orderBy(asc(tutorSessionFee.scheduledStartAt));
+  }
+
   async function findBookingWithParticipants(bookingId: string) {
     // The `meeting` one-relation returns an unspecified row when a booking has
     // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
@@ -1499,7 +1950,9 @@ export function createBookingRepo(db: DbType) {
 
   return {
     findBookingById,
+    hasFailedGoogleMeeting,
     findBookingWithParticipants,
+    findBookingTutorFees,
     listBookingsByProposer,
     listBookingsByTutor,
     listBookingsForAccess,
@@ -1511,6 +1964,8 @@ export function createBookingRepo(db: DbType) {
     listActiveTutorAvailability,
     findParticipant,
     findConfirmedParticipants,
+    findLedgerEventKeys,
+    findLedgerEventAmounts,
     findPendingInvitees,
     findUserEmails,
     findUsersByIds,
@@ -1535,9 +1990,16 @@ export function createBookingRepo(db: DbType) {
     insertSessionNote,
     listSessionNotes,
     insertCompletionFeedback,
+    updateCompletionFeedback,
+    insertCompletionFeedbackHistory,
+    findCompletionFeedbackHistoryByRequestKey,
+    listCompletionFeedbackHistoryByBooking,
+    listCompletionFeedbackHistoryByFeedback,
+    hasChargeableFeedbackEntitlement,
     listCompletionFeedbackByBooking,
     findCompletionFeedback,
     listSessionsBySeriesId,
+    updateScheduledSeriesPriceSnapshot,
     updateBookingPriceSnapshot,
     updateBookingSchedule,
     findBookingsExpiringByDeadline,
@@ -1550,10 +2012,20 @@ export function createBookingRepo(db: DbType) {
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
     findCompletedBookingsByTutor,
-    findLatestPaidTutorPayout,
+    findTutorSessionFeesByTutor,
+    listTutorPayoutAllocatedSourceKeys,
+    insertTutorPayoutAllocations,
+    listTutorPayoutAllocationsByPayoutId,
+    listTutorSessionFeeEventKeysByBookings,
     listTutorPayoutProfiles,
     listTutorPayoutRecords,
+    findTutorTaxConfig,
+    findTutorPayoutById,
+    findTutorPayoutByIdempotencyKey,
+    listTutorPayoutsByTutorId,
+    listTutorPayoutReconciliationSourceKeys,
     insertTutorPayout,
+    insertTutorSessionFee,
   };
 }
 

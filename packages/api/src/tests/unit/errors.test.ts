@@ -34,6 +34,14 @@ describe("Error helpers", () => {
     expect(err.message).toBe("Token expired");
   });
 
+  test("preserves a supplied unauthorized error cause", () => {
+    const cause = new Error("session lookup failed");
+    const err = unauthorized("Session unavailable", cause);
+
+    expect(err.message).toBe("Session unavailable");
+    expect(err.cause).toBe(cause);
+  });
+
   test("conflict creates CONFLICT error", () => {
     const err = conflict("Already exists");
     expect(err.status).toBe(409);

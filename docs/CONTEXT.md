@@ -1,6 +1,1532 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-10-09
+## Integrated release branch validation (30 October 2026)
+
+Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
+
+## Q15 business insights implementation — 30 October 2026
+
+Dashboard analytics separates top-up receipts (IDR), delivered services (Marks/session counts), current future commitments (funded/unfunded Marks and seat-sessions), and earned tutor costs (IDR allocated paid/unpaid as of now). Marks are never converted into estimated booking IDR value or profit. The endpoint remains admin-only /rpc/admin/getDashboardAnalytics with the normal JSON envelope.
+
+The response adds operationsSummary.delivered/upcoming/tutorFees/asOf and source-quality counts unavailablePrivateRates/unavailablePaymentDates. businessSummary exposes grossReceiptsIdr/netReceiptsIdr/refundedIdr. Cash receipts use providerSuccessAt and include subsequently REFUNDED successful purchases in gross; recorded refunds use their own event dates. Missing payment success dates are excluded from dated totals with an explicit dashboard notice, never guessed from updatedAt.
+
+Delivery is counted from authoritative completion deductions for completed sessions; cancellation/no-show penalties are not counted as delivered service. Upcoming commitments are a current snapshot independent of selected-period filters. Tutor paid/unpaid measures the current payment allocation of fees earned during the selected period; paid is gross honorarium allocation, not bank net transfer or transfer cashflow during the period. Missing future private rates are excluded from amount totals with a visible notice.
+
+The dashboard reuses existing Selia patterns and presents new operational facts in semantic sections. No migration, seed or provider call is required by analytics reads. Live acceptance fixtures must be scoped and cleaned up; no reset is required. Verification is recorded in the active readiness plan.
+
+## Readiness acceptance follow-up — 30 October 2026
+
+Real dev pricing activation passed with original pointer restoration and temporary fixture cleanup (`bun run verify:pricing-activation`; tmp/v3-only-dev/pricing-activation-live.json). The booking unit suite now uses explicit subjects, V3 revisions/snapshots and fee-event payout expectations: 319 tests passed; no compatibility runtime was restored. Friend-code query fixtures now include the current friends-list joins.
+
+Class enrollment integration supports an explicit non-resetting dev acceptance mode: CLASS_ENROLLMENT_DEV_ACCEPTANCE=true, NODE_ENV=development, exact loopback:6767/cogito-app, reset flags absent, and zero existing Academy classes/enrollments. Normal mode still requires test loopback:6769/cogito-test. Never combine it with reset-oriented Academy suites. Private env copies must disable external payment/email delivery and be removed after the run. Scoped fixture cleanup preserves unrelated bookings. The suite uses controlled providers for race tests; real Google acceptance remains the separate verify:academy-meet harness with event cleanup.
+
+45 PostgreSQL enrollment tests passed (362 assertions): full/half/single, installment/expiry, cancellation/refund/races, minimum/postponement, reports, class fee and payout preparation, plus a masterclass 5-Mark enrollment→report→single Rp250,000 earned fee journey. Cleanup left zero Academy fixtures and preserved four private bookings. Evidence: tmp/v3-only-dev/enrollment-acceptance.json and enrollment-acceptance.log. Payment checkout/webhooks, email delivery, recorded class payout transfer and browser acceptance remain separate gates.
+
+REQ-CLASS-05 records server-timestamped tutor absence notices and audited same-time replacement. Ordinary rescheduling is versioned per session. Its exit deadline is the earlier of notification +24 hours and the new start; only funded/unfunded allocations active at notification receive that change version. Students can cancel the changed undelivered session before the strict deadline; funded remaining Marks return once, while only the related unpaid installment slice is reduced or released. Delivered/reported/earned sessions are excluded. Same-time tutor replacement creates no new exit right and preserves an existing schedule-change window. The separate minimum-enrollment 72-hour postponement remains unchanged. Focused Postgres/browser/provider evidence is in the [readiness plan](plans/active/V3-UI-CLEANUP-AND-READINESS.md).
+
+## Live Academy publish verification — 30 October 2026
+
+Run `bun run verify:academy-meet` from the repository root for explicit live acceptance against authorized development `localhost:6767/cogito-app`. The script refuses other DB targets, reads Google OAuth credentials from apps/server/.env, creates temporary online masterclass/cohort drafts, publishes through the real Academy service and database with real Google Meet, and verifies custom fees, stale-version rejection, published-edit rejection and no duplicate meeting work. Google attendee notifications are disabled; payment/email providers are not exercised.
+
+A finally block deletes Google events by stable session identity (including after partial creation), then deletes only the created class fixtures and their scoped notifications/audits; session/meeting rows cascade. Cleanup failure fails the command and retains fixture identities in tmp/v3-only-dev/academy-meet-live.json for follow-up. This explicit provider check is separate from fast mocked unit/synthetic suites. It does not reset or reseed the database.
+
+Live result: masterclass Rp250,000 and cohort Rp500,000 both published with matching session snapshots and real Meet URLs; repeat processing created nothing; stale publish and edits after publication were rejected. Google events and all temporary DB fixtures were removed. Evidence: tmp/v3-only-dev/academy-meet-live.json. This verifies the service/database/provider journey, not browser UI or joining a call.
+
+## Per-class tutor fee — 30 October 2026
+
+Admin sets the agreed flat IDR tutor fee per class. New cohort/masterclass forms start at Rp400,000/Rp300,000; these are editable defaults, not publication limits. Draft save accepts a positive whole IDR amount up to Rp2,000,000,000 and copies it to each session. Publication validates that session fees match the class fee. Published pricing remains governed by existing draft/lifecycle restrictions; no global Economy setting or data migration is added.
+
+## Admin pricing activation — 30 October 2026
+
+Admin-only `POST /rpc/admin/activateV3EconomySettings` accepts `{json:{version,expectedActiveRevision,reason}}`. It activates only the latest saved revision, checks the previously observed active revision, validates saved pricing/catalog slugs, and writes the pointer plus audit in one transaction. Draft saving and activation share the revision advisory lock; catalog changes are locked too. Stale input returns a conflict. Existing quotes/bookings remain pinned. Economy UI requires an activation reason and distinguishes saved drafts from active pricing. No migration or automatic activation is needed; review and explicitly activate the saved pricing in admin settings.
+
+## V3 frontend cleanup — 30 October 2026
+
+Frontend pricing now uses V3 catalog/quote and competition-scoped rates exclusively. Removed legacy price editors, display conversions, obsolete redirects and unused compatibility components. Booking totals require actual V3 snapshots. The Academy Accordion type blocker is fixed. See [cleanup and remaining release work](plans/active/V3-UI-CLEANUP-AND-READINESS.md).
+
+## V3 report and settings cleanup — 30 October 2026
+
+This completes the report-provenance, payout-source and old settings cleanup left by the pricing cutover. Admin `getEconomySettings` and `updateEconomySettings` are removed from router, handler, service and request schema. Use `getV3EconomySettings`, `previewV3EconomySettings` and `saveV3EconomySettings`; saving a draft still does not activate it.
+
+Report text is canonical plaintext on writes and reads. Entity-decoding and legacy-version PDF detection are removed. History statuses are `submitted`/`corrected`, with `admin`/`tutor` actors only. A correction requires the existing report version's history event; missing provenance returns a conflict instead of synthesizing an unknown legacy actor. Admin history UI shows the recorded role/actor. PDF exports retain normal continuation pages for long content, without a legacy flag or label.
+
+Payout allocations accept only `fee_event` and require a non-null `tutor_session_fee_id`. Migration 0079_v3_report_and_payout_contracts validates these rules without rewriting or deleting existing financial/report history. Invalid old rows cause migration failure and require explicit cleanup. Unused repository reads for old report-format detection, uncategorized tutor fallback and aggregate payout cutoff were removed.
+
+Migration 0079 was applied to authorized dev `localhost:6767/cogito-app` without another reset. Preflight found zero invalid history/allocation rows. Real PostgreSQL tests rejected both legacy report values, both legacy payout source types and null fee IDs. A current admin correction and request replay preserved report identity, literal entity text, ledger and fee rows. An invalid-provenance fixture was rejected without new history/fees and then removed. Current report listing/PDF export passed. A new V3 quote-to-payment-to-booking-to-report-to-fee-to-payout service journey also passed after 0079, using stub payments/manual meetings and a local simulated transfer record only.
+
+Evidence: `tmp/v3-only-dev/cleanup-verification.json` and `current-report.pdf`. Focused tests and server/E2E typechecks are recorded in the current handoff; full legacy-oriented suites and browser/provider acceptance were not run. The frontend cleanup subsequently fixed the Accordion callback mismatch; web typecheck now passes. No test or production database was reset or migrated in this cleanup.
+
+## V3-only pricing cutover — 30 October 2026
+
+Current pricing behavior supersedes earlier activation-null compatibility notes:
+
+- New booking requests require an explicit `subjectId` and an active V3 revision. Missing configuration blocks creation before wallet holds; tutor `prices`/`baseRatesIdr` and old economy settings are never fallback inputs.
+- Discovery exposes competition-derived V3 prices only. With no active revision it exposes no prices, including for the seven canonical categories.
+- Booking repricing reads the booking's pinned immutable V3 revision, independently of the current activation pointer. Old snapshot formats are rejected by pricing and on-demand fee creation.
+- The old package-code purchase entry point always rejects; purchases use V3 quotes and an explicit package/custom/recommended choice. Webhook, quote and report replay protections remain.
+- Tutor payout aggregation reads immutable session fee events and source allocations only. Booking-snapshot fallback and historical aggregate cutoffs no longer determine payable earnings.
+- `/admin-economy` presents the V3 rate card and preview only; the obsolete Cogito take schedule panel has been removed. The old take-schedule APIs have since been removed by the report/settings cleanup below.
+- The temporary runtime filter for migration-0027 catalog IDs is removed: migration 0078 handles obsolete rows and fresh migrations insert no catalog data. Seed supplies the seven current parents and 34 children.
+
+Dev execution was explicitly authorized for `localhost:6767/cogito-app`, NODE_ENV=development. Its public/drizzle schemas were reset and migrations through 0078 applied. Before seed, catalog/package/old-economy row counts were all zero. Seed created canonical catalog, PRD packages and active revision 1; rerunning seed preserved existing records. No test/payout-test/production database was reset.
+
+Verified with real dev PostgreSQL service calls: 140-Mark custom quote recommends 150 Marks/Rp975000; stub payment replay credits once; a newly created solo booking reaches tutor acceptance, report, one fee event, payout preview, one allocation and simulated transfer-record replay. A partial group reprices N3 to N2 (21 to 25 Marks each for the seeded Essay category) from revision 1 even while the active pointer is temporarily null; reconfirmation and tutor acceptance succeed. Fixture timestamps were advanced in SQL to exercise report completion. Payment/email/Meet providers used stub/manual behavior; the payout transfer was a local record labelled DEV-SIMULATION-NO-BANK-TRANSFER, with no bank operation.
+
+Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts`. Focused V3/discovery/fee tests and selected booking tests passed; server typecheck passed. Web typecheck remains blocked by the unrelated Accordion callback type mismatch in academy-class-page.tsx. Full legacy-oriented test suites and browser/provider acceptance were not run. The later report/settings cleanup removes the legacy history/actor values, allocation source enum values and old settings APIs. Unused pricing utility methods remain separate from this cleanup.
+
+## PR #332 coverage and CodeQL follow-up (28 October 2026)
+
+Coverage regressions exposed a pending half-plan cancellation bug: cancelling
+the last session in its first installment left the checkout pending because
+second-installment reservations were counted as payable checkout seats. Session
+cancellation now checks the first installment specifically; when none of its
+seats remain, it cancels the pending enrollment/unpaid installments and releases
+the remaining unfunded reservations without wallet changes. The PostgreSQL
+regression failed on `c60c1054` and passes for both full and half plans after
+the fix. The latest completed all-test-pass checkpoint, run `40694971836` on
+`489786b4`, reports overall lines 97.32%, functions 99.78% and branches 88.58%; the unchanged
+100% gate remains open.
+
+Real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Follow-up tests exercise both repeat scheduler payloads and student resource input validation. The test support directory is excluded from the production source inventory so `test-setup.ts` is not counted as app code. This remains bounded unit evidence, not full financial/provider acceptance.
+
+CI coverage uses Istanbul source counters through a Bun preload instead of merging Bun's unstable native line/function summaries. The API/auth/DB/env source inventory keeps unloaded/mocked production modules at zero, excludes tests and test support, hashes source content, merges stable function/branch identities, then runs the existing strict LCOV validator and unchanged 100% gates. The three database partitions and their reset boundaries remain separate; the runner additionally requires a confirmed reset window. The local application runtime does not load this instrumentation. Hosted run 40662816367 on c54fc6d4 still fails the unchanged gate: merged API/overall lines are 93.0%, functions 95.6%, and branches 83.1%; no thresholds or source filters were weakened. The 781ef99b batch adds service, scheduler, pricing, error-map, palette, payout, and URL-schema cases; 207 focused tests / 492 assertions pass on Windows Bun canary. Run 40667837202 on df96f51d passed build/lint/typecheck but `api-fixtures` failed because the new class-enrollment top-up test returned quote IDs absent from the FK-backed quote table; the coverage gate was skipped. The fixture now persists test-owned quote/revision rows and cleans up its revision; the 100% gate still needs a complete hosted rerun.
+
+Two CodeQL findings in Google Meet test mocks are addressed by exact OAuth token endpoint matching. Collector regression tests and focused API tests pass on the available Windows Bun canary. Pinned Windows DB/auth timeouts and interrupted Docker setup attempts are not passes. The 100% coverage gate remains IN PROGRESS pending genuine coverage-gap work and a passing hosted run. E2E is outside the required gate for this follow-up. See RUNBOOK and BUN-COVERAGE-LIMITATION.md.
+
+## Linux acceptance and coverage blocker (28 October 2026)
+
+Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 assertions, 88 reset-free fixture tests / 774 assertions, 11 payout tests / 105 assertions, and 156 server tests / 409 assertions. A separate guarded T05 rollback test passes 1 / 7. Four typecheck tasks, lint baseline and both build tasks pass; build uses real Node 24.22.1 and bounded memory, with one cached task. The Redis helper test now respects REDIS_URL; new tests cover private PDF storage failures/validation, admin content actor/version/redaction, and real PostgreSQL referral usage pagination/filter totals/literal wildcard search. Unrelated local Activities/client work remains outside this scope.
+
+The unchanged 100% coverage gate still fails: API 87.6%, overall 87.8%, function lower bounds 94.8%, 45 files with unverified function unions. A minimal reproduction proves partition-dependent Bun line denominators and absent function identities; zero branch records are not branch-coverage proof. See [BUN-COVERAGE-LIMITATION.md](BUN-COVERAGE-LIMITATION.md) for raw evidence, reproduction and next gate. No coverage filter/threshold was weakened. Initial interrupted/undersized-memory attempts are not passes. Hosted CI, genuine remaining coverage, provider/private-R2 acceptance, production restore/cutover and client approvals/UAT remain open.
+
+## Server acceptance follow-up (28 October 2026)
+
+Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
+
+## V3 local regression continuation (28 October 2026)
+
+Local acceptance now has a repeatable guarded browser runner, `packages/e2e/playwright.v3-acceptance.config.ts`. T05 creates a fresh tutor as well as fresh students, keeping prior bookings/history intact and preventing shared availability collisions. Stale OTP/payment/refund/legacy-entitlement test fixtures, class navigation/date assumptions and unordered report-revision assertions are corrected; domain services are unchanged by this slice. CI keeps seven reset-free UUID-fixture suites out of the resettable coverage partition and explicitly enables guarded KB/calendar DB tests.
+
+Verified locally: 13 real-RPC Edge journeys; 203 DB cases across 34 independently reset scratch schemas; 87 cases in the combined non-reset CI fixture partition; 2,695 unit/auth/env/DB-module cases plus 12 separate DB-backed role/verification cases; 3 FAQ/public-tutor DB cases. Four workspace typechecks, web/server builds and lint baseline pass. A PostgreSQL 17 test-DB dump restores with matching row counts/content digests across 21 critical tables. This is DB-only local proof, with no production cutover or provider acceptance. See RUNBOOK for commands, runtime limits and remaining release gates. Tests ran in the shared checkout with the unrelated Activities DTO overlay present; that overlay is excluded from the acceptance commit.
+
+## KB/calendar live acceptance (26 October 2026)
+
+Installed Edge passed the real API/DB journey in `kb-calendar-live.spec.ts`: 1/1 test (7.0s; 44.7s total). KB browser save survives reload; a concurrent API edit makes the browser save conflict while preserving its draft. Calendar create/update/readback and stale-version HTTP 409 pass. Anonymous session is explicitly empty: private file returns 401, public uploads path returns 404. Admin, eligible student and tutor receive the exact synthetic PDF bytes with `private, no-store`; student/tutor admin list/remove return 403. PostgreSQL integration separately passes 3 tests/8 assertions for concurrent saves, audit rollback and reference protection.
+
+Use `node node_modules/@playwright/test/cli.js test --config playwright.kb-calendar-live.config.ts --retries=0` from `packages/e2e`, with the existing guarded T05 environment: NODE_ENV=test, DATABASE_URL at loopback 6769/cogito-test, REDIS_URL at loopback 6381, SERVER_URL/BETTER_AUTH_URL/VITE_SERVER_URL at localhost:3201, WEB_URL/CORS_ORIGIN at localhost:3200, PORT=3201, WEB_PORT=3200, and T05_ENROLLMENT_TEST_{DB,REDIS,SERVER,WEB}_PORT=6769/6381/3201/3200. ENV_FILE resolves the local test env; reset flags must be absent. The dedicated config selects database sources/authoring only for its test servers, private local storage under ignored E2E test-results, disabled scheduler/Meet/email delivery and stub payments. Default browser channel is msedge; override E2E_BROWSER_CHANNEL for an installed channel.
+
+No reset, migration, dev/prod activation or production storage operation. Resource/event fixtures are removed; seed accounts/audits and immutable synthetic PDF registrations/files remain in the isolated test environment. E2E TypeScript passes; sequential-request lint warnings remain. The PDF is a signature-only synthetic transport fixture, not PDF rendering evidence. Ineligible-student/grant expiry, production private R2 denial, full calendar browser editing/WIB agenda, native zoom/accessibility, rollback and client UAT remain open.
+
+## Competition types workspace redesign (26 October 2026)
+
+`/admin-competitions` is now a grouped directory rather than a persistent tree/editor split. Parent competitions show their specializations, status and Add type action; search retains parent context and input focus during refetch, with a status filter and recoverable empty state. A Selia drawer opens only for create/edit. Optional descriptions, parent colors and specialization movement use disclosures. Unsaved edits require discard confirmation when closing or changing entries; successful save restores normal close behavior. Draft palette previews reflect current inputs.
+
+Existing catalog procedure inputs, immutable slugs, required audit reasons, optimistic versions, reference impact checks, safe-delete rules and inherited colors remain. The live catalog browser spec now passes 1/1 installed-Edge journey against isolated PostgreSQL 6769/Redis 6381, covering archive/restore/move persistence readback, inherited colors, and student HTTP 403 for admin list/archive. Test fixtures are cleaned up; no reset/migration or dev/production access. Historical-reference/concurrency and broader consumer acceptance remain open; see RUNBOOK for the 26 October checkpoint.
+
+## Admin KOL campaign UI (26 October 2026)
+
+`/admin-referrals` now includes KOL campaign creation and a read-only saved-terms list using the existing adminReferral procedures. Admin chooses the registration-only code; no random allocation, edit, rotation, impersonation, new route, financial logic, or migration. Verified students obtain their separate friend code through `referral.getMine` on `/referrals`.
+
+## V3 bounded regression checkpoint (25 October 2026)
+
+Source `be14c454` passed 58 tests / 160 assertions across 13 explicitly named
+files: auth hooks and installed Google callback with memory adapter, session
+response refresh, friend-code policy/service doubles, referral policy/cursor/usage,
+KOL settlement policy/CSV, and report access/window/history/PDF layout. Installed
+Bun was 1.4.0-canary.1, not the pinned 1.3.14 CI runtime.
+
+The isolated Google referral Edge workflow passed 3/3 in 43.0 seconds: friend,
+legacy KOL and no-code, each including blank Enter, invalid-code toast, reload,
+stale cached-session handling and destination resume. All API traffic is mocked;
+PostHog fetch warnings occurred. This does not establish real Google consent,
+Redis/PostgreSQL integration, provider delivery or production readiness.
+
+No DB mutation, migration, reset, seed, parent API restart or production action
+was performed for this checkpoint. Historical real-DB evidence retains its own
+source/environment scope. Run commands are in RUNBOOK. Backlog T09/T12 rows now
+reflect their later integration/local-dev checkpoints; T13 remains in progress.
+
+## Referral session cache correction (24 October 2026)
+
+Live dev submits returned 200 and persisted pending=false, but Better Auth Redis
+sessions retained pending=true even with disableCookieCache. GET get-session
+now refreshes role/email verification/referral pending from DB using the same
+helper as RPC context, preserving auth cookies and marking the response no-store.
+No referral attribution or reward is reapplied; existing saved choices are retained.
+Two focused response tests cover stale pending and anonymous sessions.
+
+## Google referral error feedback (24 October 2026)
+
+Failed Google referral saves show a Selia error toast and retain the inline
+message/input. The existing synthetic browser workflow checks toast visibility.
+RPC and attribution rules remain unchanged.
+
+## Google referral keyboard submission (24 October 2026)
+
+Referral code entry uses native form submission: Enter applies a nonblank code.
+Blank or in-flight submission is ignored; no-code remains an explicit button.
+The existing Google referral synthetic workflow covers Enter and blank input.
+No RPC contract or referral business-rule change.
+
+## Google signup referral callback correction (24 October 2026)
+
+Better Auth 1.6.11 invokes user.create.before with `/callback/:id` but without
+additional-field defaults: `role` is undefined for a new Google identity. The
+old student-only condition therefore persisted pending=false. The hook now
+resolves the student default before the administrator override and pending check.
+Existing OAuth reuse does not invoke user creation and is never re-attributed.
+The referral detour carries the validated original destination through reload,
+errors and completion. No schema/data backfill or existing-account policy change.
+Evidence: actual installed callback with memory adapter reproduced false before
+fix; fresh session and reuse regression passes. Three mocked Edge UI/wire cases
+cover friend/KOL/no-code, invalid code, reload and stale cached session. These
+are not PostgreSQL, real Google or reward-ledger acceptance.
+
+## Real dev class-to-PDF checkpoint (24 October 2026)
+
+On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
+HTTP/real PostgreSQL acceptance passed against explicitly validated loopback
+`6767/cogito-app`, using dedicated `journey-1792843607328` fixtures. Verified
+identities/password hashes and a published tutor profile were inserted directly;
+actual Better Auth password login issued sessions for admin/tutor/two students.
+Admin draft/publication, audited admin wallet correction (+100 Marks), student
+masterclass enrollment (20-Mark hold), assigned-tutor report and identical replay,
+student report visibility, and authenticated student/admin PDF download passed.
+Persistence shows one 20-Mark deduction, funded/spent allocation 20/20, report
+version 1, completed session, one Rp300,000 earned-fee event and final wallet
+80 total/available, zero held. No payout or provider settlement was executed.
+Student publication denied 403; student report submission denied 404; outsider
+report list excludes this session; cross-student/tutor PDF denied 403 and anonymous
+PDF denied 401. PDF private/no-store header, signature, all three feedback texts
+and one-page visual rendering passed. No business response was mocked.
+
+Controlled-time boundary: after future publication/enrollment, only the dedicated
+session timestamps were moved to now minus two/one hours. This is not a wall-clock
+session journey. No reset, seed command, migration, API restart, external send,
+payment/Meet call or existing-user balance modification was performed. Browser
+login initially hit 429, then succeeded after the limit window; preview snapshot
+attempts timed out. API acceptance is not full click-through browser acceptance.
+
+Class `87dcbb4c-255b-4626-aa2a-1684884c90b0`; session
+`354e79d8-e245-42b5-994e-183bff3d6856`; enrollment
+`6b5c6934-c01a-48f6-b87d-64b6f13556fb`. Retain fixture financial history for
+inspection; do not delete ledger, allocation, report or earned-fee records. Any
+future financial reversal must use an approved audited correction, never deletion.
+Local evidence/PDF/render remain ignored under this checkout's
+`tmp/dev-journey/`; private login/session files must never be committed or shared.
+Production, real provider delivery, full browser journey and client UAT remain gates.
+
+## KB/calendar local dev activation (24 October 2026)
+
+Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
+Migration 0075 applied after a local custom-format pg_dump; existing 34 bookings
+and 91 ledger entries were unchanged. Imported 3 KB resources and 63 calendar
+events from the preserved published snapshot, with explicit core-category mapping
+to active parent catalog IDs. One empty education-level placeholder was omitted
+from a derived import manifest; original snapshot and normalization evidence remain
+local. All 66 imported identities/hashes reconcile and qualify for unchanged replay;
+all three local private PDFs match SHA-256. No source documents/PDFs are committed.
+
+Local ignored env now uses KB_SOURCE=database, CC_SOURCE=database and
+CONTENT_ADMIN_ENABLED=true. KB_PRIVATE_DIR points to a separate ignored local
+directory outside public uploads. API restarted; health returns 200, anonymous
+protected file access 401 and the corresponding public upload path 404.
+This establishes local storage denial only, not production R2 privacy. Production
+is untouched. Backup restore rehearsal, real client UAT and production cutover
+remain outstanding. Rollback: disable authoring, set both sources to sanity and
+restart API; retain additive tables and imported files for reconciliation.
+
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
+## Approved account email branding (24 October 2026)
+
+OTP (pre-account and existing-account verification), welcome and password-reset
+emails share `packages/auth/src/auth-email-layout.ts`: the approved report banner,
+orange CTA, blue footer and full Cogito Academy name. Owner removed the orange
+rule below the banner. Bodies remain separate builders; future body changes reuse
+the wrapper. Resend attaches the approved PNG inline with a CID, using the
+byte-identical base64 asset shared with report export.
+Instructions/OTP/links remain live HTML with
+alt-text branding if images are blocked. No other notification templates changed.
+
+## Admin referral usage (24 October 2026)
+
+`/admin-referrals` and admin-only `adminReferral.listUsage` expose saved signup
+choices (friend, KOL and explicit no-code), searchable by code, user/referrer
+name/email or campaign. Paged rows include signup attribution, email verification,
+welcome terms/ledger credit, first chargeable friend-completion decision and
+KOL payment/refund/provider-time evidence. Filtered totals use actual linked
+ledger credits; the current wallet balance is not a referral earnings total.
+Repeatable-read read-only queries keep rows and totals on one snapshot. Unsaved
+Google choices and unused codes are outside this usage list. No schema change.
+
+## Login draft retention (24 October 2026)
+
+The public LoginPage no longer replaces sign-in/signup forms with a session
+pending loader. Better Auth focus refetches set pending when the cached session
+is null; the old branch unmounted the forms and cleared local drafts on tab
+return. Session refresh and protected-route checks remain active elsewhere.
+Two synthetic Edge browser regressions reproduce the loss before the fix and
+pass afterward; the live dev visibilitychange repro also retains the same input
+node and value. No password persistence or auth/backend contract changes.
+
+## Student report reference layout (24 October 2026)
+
+PDF export now follows the owner-supplied layout: supplied Cogito banner,
+right-aligned Student Report title, compact two-column inline metadata and
+Tutor Feedback with left-side section labels. Class type, cohort/class, session
+and time remain present. The footer reads Generated date by Cogito Academy;
+multi-page exports retain page numbers and labeled continuation pages. Text
+remains live and paginated; dense lists can span additional pages in the narrower
+feedback column. Bullets use a separate marker gutter; wrapped lines align with
+the first text character. Dense bullets stay separate and paginate rather than
+flowing inline. The banner is embedded from bundled JSON to survive server
+bundling without a runtime asset path. Eligibility/endpoints/window are unchanged.
+
+## KB/calendar source implementation (24 October 2026)
+
+Additive `0075_kb_calendar_content` defines KB files/resources and calendar
+records/category links. See the dated integration and local dev activation
+checkpoints above for migration evidence; production rollout remains separate.
+The editors in `/knowledge-bank` and `/calendar` use single-value text fields, private PDF upload, reasoned
+live-save CRUD and version conflicts. Imported records retain source IDs and
+can be archived, not hard-deleted. Calendar uses catalog parent identities and
+palettes, inclusive WIB dates and agenda identity `(event ID, displayed date)`.
+
+Default `KB_SOURCE=sanity`, `CC_SOURCE=sanity`, `CONTENT_ADMIN_ENABLED=false`
+keeps existing reads working without querying new tables. Explicit DB mode
+fails on DB/storage errors; it never silently falls back to Sanity. Existing
+wallet and independently gated file routes remain. Activities/FAQ/classes/tutor
+localization and global Sanity removal are outside this slice. Source content,
+selection manifests and PDFs stay ignored/local; none belongs in GitHub.
+
+Source implementation is not release acceptance. Migration/import/private bucket
+privacy, guarded PostgreSQL, website redirect, rollback and client UAT remain
+operator/parent gates. See RUNBOOK and migration README for activation order.
+
+## Earlier KB/calendar preparation checkpoint (superseded by source implementation above)
+
+Owner clarified one language-neutral input per KB/calendar text field; English
+is not required for entered content. Other modules' locale policies are unchanged.
+`migration/sanity-content/audit.py` verifies the published working snapshot and
+prepares single-value records without DB writes: 3 KB PDFs match source size/hash,
+63 competition ranges/references pass, and 80 differing legacy locale fields
+retain selection evidence. Six focused Python tests pass. Existing pages and
+content service still read Sanity; DB/admin/private-file migration and cutover
+remain open. Activities are deferred. See the migration README for exact scope.
+
+## Short FRIEND code source checkpoint (24 October 2026)
+
+New codes allocated by student `referral.getMine` use exactly three ASCII uppercase
+letters and three digits (`AND007`). Existing codes, attribution snapshots and
+shared invitations remain unchanged. Name letters are NFKD-normalized; short names
+are completed with deterministic SHA-256 account-ID letters, and names without
+ASCII letters use those identity letters. No migration or bulk rotation is needed.
+The shared uppercase unique namespace includes KOL codes. Allocation scans at most
+1,000 distinct suffixes, skipping occupied values; prefix exhaustion is explicit
+HTTP 409, never a longer code or a silent alternate prefix. Database concurrency,
+auth/provider and browser acceptance remain parent-owned and unrun for this slice.
+
+## KOL settlement release/dev sync (24 October 2026)
+
+PR #319 is merged into release at 61031cc9, following sidebar #318 and
+synthetic auth/referral/KOL acceptance #317. Root dev source is synchronized.
+The normal Drizzle postgres-js runner applied additive 0073/0074 only to dev
+localhost:6767/cogito-app; journal count advanced 74 -> 76. Booking (34), ledger
+(90) and completion-feedback (2) counts stayed unchanged; settlement entries
+start empty. No reset, seed or external transfer ran. Production is unchanged.
+
+API was explicitly restarted to load shared module changes; health is HTTP 200
+and unauthenticated /rpc/adminReferral/getKolSettlement returns 401. Web remains
+on localhost:3000, Midtrans uses its existing sandbox config, and scheduler is
+disabled only for the preview process. Logs: tmp/v3-dev/runtime/api-settlement.*.
+
+The extra pre-settlement Docker dump command did not return and was stopped;
+no fresh dump from that attempt is verified. Earlier checkpoint dumps remain
+under ignored tmp/v3-dev/checkpoint. Re-establish a fresh verified backup and
+restore rehearsal before any production rollout. This supersedes earlier
+0073/0074 dev-unapplied notes; live provider/OAuth and client UAT remain open.
+
+## KOL settlement browser acceptance (24 October 2026)
+
+Seven synthetic Chromium settlement cases pass (19.8s): admin opening,
+partial/history/overpayment display, transfer payload and WIB date, identical
+retry payload, adjustment reason/precondition, blocked adjustments, monthly
+CSV download bytes/name and non-admin redirect. Run from packages/e2e:
+`bunx playwright test --config playwright.kol-settlement-synthetic.config.ts`.
+RPC responses are mocked; the separate 21 PostgreSQL cases verify persistence,
+replay/concurrency, rollback, refunds and generated CSV. Five policy/CSV units
+also pass (combined 26 / 227). Full server build and normal four-workspace
+pre-push typechecks/lint pass. The bounded source rereview found no remaining
+findings after the numeric CSV, replay-precondition and timestamp-binding fixes.
+
+## KOL settlement parent verification (24 October 2026)
+
+Review fixes retain numeric negative adjustments in CSV, persist and compare
+adjustment replay preconditions, and bind WIB month boundaries as explicit ISO
+timestamptz values. Migration 0074 adds only expected_obligation_idr; applied
+0073 remains unchanged. Both migrations are applied only to guarded test
+6769/cogito-test (journal 75), without reset/seed. Current acceptance passes
+26 tests / 227 assertions across 21 PostgreSQL cases (including prior PR312
+ordering/refund regressions) and five settlement policy/CSV units. Concurrent
+transfer/replay, stale corrections, audit rollback, refund retention and the
+monthly CSV path and exact half-open WIB purchase boundaries pass. The combined auth/referral/KOL synthetic Chromium suite passes 10/10 after updating the commission-cell locator for settlement controls. Dev/production migration and browser settlement
+acceptance remain pending at this checkpoint.
+
+## KOL settlement source checkpoint (23 October 2026)
+
+REQ-KOL-02/03 and AC-K03 source now extend the existing admin commission page
+with actual external transfer recording, append-only signed obligation adjustments,
+history/readback and monthly reconciliation CSV. Transfers bind to one decision;
+there is no cross-campaign allocation, automatic recovery, future offset, bank
+execution or worker. Rp35,000 minus Rp10,000 leaves Rp25,000 outstanding; another
+Rp30,000 leaves Rp5,000 overpayment. Adjustments require reason and expected current
+obligation, preserve choice/transfer rows, and audit actor/time/before/after.
+Provider ordering and partial-refund semantics from PR312 remain unchanged.
+Full reversal makes effective obligation zero, including prior adjustments, while
+all history survives; unresolved time holds obligation at zero. Partial refunds
+remain flagged for explicit manual reconciliation; no proration policy is added.
+
+Additive 0073 SQL/snapshot/journal are generated and reviewed, **unapplied**.
+DB-free focused units and web typecheck are the validation scope; guarded parent
+PostgreSQL/concurrency, admin browser and migration/deployment acceptance remain
+open. Earlier settlement-deferred checkpoints below describe their historical
+source slices, superseded here for implementation only. T09 remains in progress.
+
+## Synthetic referral/KOL browser checkpoint (23 October 2026)
+
+The DB-free `v3-referral-kol.spec.ts` suite passes **10 Chromium tests** using
+web port 3304, a mocked API origin on 3305, one worker and no global setup.
+It verifies pending-student referral redirects, code normalization and explicit
+no-code submissions, inline save-error recovery, signed-out/non-pending route
+redirects, KOL next/previous cursor navigation (including unchanged microsecond
+cursor text), partial-refund reconciliation labels, unresolved-time holds,
+full-refund zero commission, and explicit empty/error states. E2E TypeScript
+passes with `--checkers 1`. These are synthetic session/RPC browser contracts;
+real Google OAuth, persisted referral choices, DB authorization/pagination,
+provider reconciliation and client UAT remain separate acceptance gates.
+No DB/provider/seed/reset/migration or development 3000/3001 session was used.
+
+## Core acceptance refresh (23 October 2026)
+
+The reset-free `class-enrollment.test.ts` suite passes 44 PostgreSQL tests /
+354 assertions against exact loopback 6769/cogito-test on integrated release
+source `fe3a6ea4`. It covers enrollment funding/expiry, class lifecycle/report
+settlement and reminder invariants using run-owned fixtures and targeted
+cleanup. No reset, migration, provider action or dev database write ran.
+This refresh does not claim a real browser journey or production acceptance.
+AUTH-02 source is already integrated through PR #309; its remaining gate is
+real Google/new-account choice/save/resume acceptance, not parent integration.
+
+## Development sync checkpoint (23 October 2026)
+
+Root checkout is synchronized to integrated release source `31774397`. The
+normal dev environment targets `localhost:6767/cogito-app`, API 3001, web 3000
+and Redis 6379. After a custom-format backup under ignored
+`tmp/v3-dev/checkpoint/`, the standard Drizzle postgres-js migrator applied
+0071 and 0072. Journal row count advanced 72 -> 74; booking (34), ledger (90)
+and completion-feedback (2) counts stayed unchanged. No reset or seed ran.
+This supersedes earlier notes saying 0071/0072 were test-only or dev-unapplied;
+production remains unmigrated by this work.
+
+Web and API dev processes are running; web HTML, `/health` and auth session
+read return HTTP 200, and the login page renders. Midtrans retains existing
+sandbox (`test`) configuration. The process-level scheduler is disabled for
+manual preview to avoid automatically processing existing background jobs;
+`.env` is unchanged. Google Meet remains configured; its boot credential probe
+succeeded. Real authenticated feature journeys and actual reminder dispatch
+were not exercised during this sync. Runtime logs are under ignored
+`tmp/v3-dev/runtime/`. Existing accounts/data and client document artifacts
+are preserved. See the integrated checkpoint for feature and acceptance status.
+
+## Integrated V3 progress checkpoint (23 October 2026)
+
+The remaining V3 source checkpoints are integrated through PR #310 (private
+student PDF and test infrastructure), #309 (AUTH-02 and friend rewards), #312
+(KOL first-top-up decisions/refund evidence), #314 (compact class UI and auth
+states), and this #313 reminder integration. Normal pre-push lint and all four
+workspace typecheck tasks pass on the combined source. Guarded non-reset
+PostgreSQL regressions pass 34 tests / 365 assertions across admin reports,
+friend rewards, KOL decisions, PDF eligibility and legacy reminder precision.
+Focused payment/provider/webhook/referral/reminder/retry units pass 160 / 428.
+Private PDF access/layout/window/service/HTTP checks pass 13 / 44. The full
+server tsdown build passes after restoring missing lockfile-pinned native
+Rolldown artifacts with a frozen dependency reinstall.
+The checked-in synthetic UI/PDF suite passes 14 Chromium cases at responsive
+sizes; its catalog locator now uses the full-card link.
+
+All local V3 branch/worktree progress was inventoried against release: older
+T06/T07, class publication, payout/tax, sidebar/profile and UI-controls commits
+are patch-equivalent or superseded by the release implementation. Preserve the
+old dirty drafts; do not merge their stale schema, source or generated snapshots.
+The September keyboard-booking branch is unique but outside V3 and incomplete
+(interactive-control/modal key handling and planned detail/help flows); it stays
+separate. Client quotation sources, fonts and rendered PDF artifacts are retained
+locally and excluded from application commits.
+
+Only test 6769/cogito-test has migration 0072 (journal 73); no database reset,
+seed, development/production migration or live provider action ran. Remaining
+release gates include real OAuth/enrollment/publish journeys, KOL admin browser
+acceptance, actual email/provider delivery, final PDF branding, deployment and
+client UAT. The ad hoc API-project typecheck includes the test tree and still
+has test typing errors; the supported four-workspace production check passes.
+
+## KOL PostgreSQL integration checkpoint (23 October 2026)
+
+Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
+journal 73); development and production remain unmigrated. The standard
+Drizzle postgres-js migrator ran after exact target/readback checks, without
+reset or seed. PostgreSQL acceptance passes 15 tests / 180 assertions for
+concurrent callback ordering, immutable correction audits, partial/full refund
+credit and reversal replay, cumulative refund snapshots, and microsecond admin
+pagination. Two fixture defects found on the first run were repaired: inject
+the production refund repo and use unqualified SET target columns.
+The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
+browser reconciliation display and broader release UAT remain separate gates.
+This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
+
+## Referral review corrections (22 October 2026)
+
+Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
+three times; callbacks contain database writes and durable notification outbox
+work, not provider I/O. The retry covers tutor/admin on-demand report submission
+and academy reports. Friend reward issuance rechecks both accounts' student
+roles under shared row locks before creating a new decision/credit; prior
+decisions remain replayable. Admin may confirm a delivered solo student no-show
+after session end using the existing report reason/delivery-confirmation flow.
+The previous charge is reused, with one fee/reward and immutable audit history;
+tutors cannot convert a terminal solo no-show and penalty alone earns nothing.
+
+Migration 0071 is applied only to guarded loopback 6769/cogito-test, without a
+reset/seed. Real deadlock/cap/replay, saved-term/no-code and role tests plus retry
+units pass 5 / 26;
+the complete on-demand admin report suite passes 12 / 118 including the solo
+no-show reward and entitlement regression. Dev/production migration, OAuth
+browser acceptance and the separate KOL commission workflow remain open.
+
+## AUTH-02 and friend referral source milestone (22 October 2026)
+
+This feature branch adds the Google new-student referral choice gate and the
+friend reward path. New Google-created students remain pending until they save
+one valid friend/KOL code or choose no code; the choice page resumes on later
+login and does not request another OTP. Existing-account OAuth reuse is not
+marked pending and cannot receive a new attribution. Email OTP signup passes an
+optional code through the existing account/proof transaction. A valid code
+snapshots signup settings; no code stores an immutable zero-welcome choice.
+
+Friend rewards are decided in the delivered report/settlement transaction for
+positive-charge solo, group, series-child, cohort, and masterclass completions.
+Q06 chargeable no-shows qualify only when the session is delivered and reported;
+a no-show penalty by itself does not. The first eligible decision is unique per
+referred student, including a permanent zero-credit result. A referrer-semester
+row lock enforces the active cap across different referred users. Settings are
+versioned by effective time; saved signup reward terms remain fixed, while the
+completion semester and cap use completion-time settings. The student page
+shows a generated friend code, current semester earned/remaining Marks, and the
+semester end date.
+
+At this 22 October source milestone, admin APIs could revise/audit friend
+settings and create/list KOL campaign codes. Signup validated campaign dates and
+snapshotted KOL flat/percentage terms and attribution expiry. First-purchase
+commission decisions, transfers, partial/overpayment accounting, CSV, corrections,
+and reversal handling were still outstanding; campaign creation did not imply a
+commission or payout.
+
+At this earlier source-only checkpoint, parent follow-up had generated additive
+`0071_referral_registration_rewards` after 0070: six new tables and
+`user.referral_choice_pending`, with the existing snapshot tables otherwise
+unchanged. The migration has since been applied only to guarded loopback
+6769/cogito-test; development 6767 and production remain unmigrated. Parent web
+and server typechecks pass after correcting UI/form and transaction parameter
+types; the focused unit suite passes 46 tests / 101 expectations.
+
+The read-only review against `356c352c..dfd8a2a0` closed its three original
+findings with no remaining spec/behavior findings. Its P2 documentation-status
+finding is corrected in this follow-up; the reviewer did not rerun tests.
+OAuth/browser UAT, development/production migration, and provider acceptance
+remain open.
+
+## Report PDF parent verification (22 October 2026)
+
+The parent repaired long metadata pagination and added a semantic student-search
+group. Academy topic metadata uses the session title, not its full curriculum.
+Dense current-format bullet lists can flow inline to retain one-page output;
+ordinary lists and legacy line breaks remain separate. Regressions cover three
+600-character fields, 300 short bullets per field, and 5,000-character metadata.
+Focused checks pass 29 tests / 104 assertions. A guarded non-reset PostgreSQL
+eligibility test passes 1 / 16 across private and academy adapters, exact-student
+charges, cancelled series parents, unfunded/released seats and date ordering.
+Web/server typechecks and a full server tsdown build pass. Three synthetic
+Chromium journeys pass for student/admin downloads, empty state and tutor UI
+denial. These browser routes are mocked; live-provider and final
+branding/deployment acceptance remain open. This supersedes older source-only
+DB/compiler notes below.
+
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker now sends `role: "student"` to `admin.searchUsers`;
+the repository filters by role before sorting and limiting, while other admin
+searches retain their all-role behavior. Private PDF layout identifies legacy
+feedback from the history entry matching the persisted current report version
+and its `actorRole`; reports without that current history entry retain legacy
+layout. Feedback length no longer determines the layout, so short legacy lists
+keep their line breaks and can continue across labelled pages.
+
+Follow-up unit checks pass 81 tests / 208 assertions. Server and web
+`check-types --checkers 1` pass. The parent's PostgreSQL and synthetic Chromium
+evidence above was not rerun in this continuation; no database, browser,
+migration, reset, seed, or provider was used, and the saved PDF sample was left
+unchanged.
+
+## Windows TypeScript-Go memory guard (22 October 2026)
+
+The earlier Windows workspace check failed with `VirtualAlloc` errno 1455.
+Every package check script that runs `tsgo` now passes `--checkers 1`; the root
+`check-types` script serializes Turbo tasks with `--concurrency=1`, and
+Lefthook runs pre-push typecheck and lint-baseline commands sequentially. This
+reduces concurrent compiler pressure while keeping TypeScript-Go;
+`NODE_OPTIONS` does not control its Go checker parallelism.
+
+In this worktree, `bun run check-types` passed with 4/4 uncached tasks in
+12.832 seconds. The parent also measured the web check at 6.51 seconds with one
+checker after the default four-checker invocation ran out of memory. See the
+[typecheck memory plan](plans/active/WINDOWS-TYPECHECK-MEMORY.md).
+
+## KOL first commission decision source slice (23 October 2026)
+
+This branch now persists the verified provider success timestamp on each payment
+and records one KOL first-purchase decision per referred student from the
+signup-saved flat/percentage terms and the payment-record IDR price. The saved
+price excludes provider/channel fees. Eligibility is strictly before the saved
+attribution expiry. Callbacks serialize on the saved referral choice; a late
+earlier success replaces the current decision and appends an immutable audit
+event with before/after payment, timestamp, base amount, and commission. Equal
+timestamps are ordered by ascending payment ID. A zero commission still records
+the decision. The admin endpoint returns both current/local payment status and
+the decision's saved status snapshot. The page uses bounded keyset pages ordered
+by immutable decision creation time and ID, shows current status, and flags
+partial refunds for manual reconciliation. An authenticated partial-refund
+status is successful purchase evidence: it promotes a not-yet-successful local
+payment to SETTLED and credits saved Marks once. Its cumulative cash-refund
+amount is kept for manual reconciliation; there is no partial proration or Marks
+reversal. Any calculated commission remains historical and visibly flagged for
+reconciliation.
+
+The user's 23 October ordering decision is earliest provider success time, not
+first callback commit time. Midtrans webhooks are rechecked against the
+authenticated status API because the signature does not cover time fields.
+Midtrans confirms card `capture` as successful, but documents `transaction_time`
+as transaction initiation and exposes no `capture_time` in the status response.
+The card payment still credits Marks, while its KOL decision is held at zero as
+unresolved; later purchases cannot take first place without an exact verified
+provider time. Non-card settlement uses `settlement_time`. A full refund keeps
+its purchase as the first-event reservation and voids commission to zero. No
+Marks are credited when a refund is confirmed before local success. A refund
+without the original success time is likewise unresolved. A later authoritative
+exact provider time, if available, can resolve a hold with audit; this slice adds
+no manual time-entry control. Confirmed Midtrans status must also return IDR
+gross and currency, which the payment service checks against the saved purchase
+amount and allowed channel-fee tolerance.
+Settled transfers are never rewritten. A later full refund can advance a
+partial-refund state for the same provider transaction and invoke the existing
+wallet reversal once. Partial-refund proration/accounting, overpayment handling,
+external transfer records, CSV, and settled-transfer reversal adjustments
+remain separate work. Migration 0072 is unapplied, and guarded database proof
+is authored but pending the parent test window. No
+database migration, reset, seed, provider call, or browser payment ran in this
+slice.
+
+## Classes UI workspace (22 October 2026)
+
+Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,
+one compact, keyboard-accessible link card per class, next-session dates in WIB,
+tutor names and explicit price units. Class details place curriculum beside
+enrollment on wide screens and stack on mobile, with enrollment before the
+curriculum on small screens. Catalog guidance
+explains the two class formats; class details and student reports link back to
+the catalog. Enrollment reuses the database-backed `_app` route session
+instead of independently reading a cookie-cached session. Signed-in students who
+need email verification see a verification action with a return to the class;
+non-student accounts see the student-account requirement, not a sign-in prompt.
+The current student-only routes still redirect signed-out visitors to login and
+non-students to dashboard before the panel mounts. Synthetic auth/layout checks
+passed on 23 October; the permanent catalog E2E locator still targets the old
+button and must be updated to the full-card link (see the UI audit plan).
+The app header identifies Class details and Class studio correctly.
+Admin `/admin-classes` starts with published/postponed classes. Drafts & editor
+keeps the editor mounted across tab changes; publishing returns to the published
+list. Manage class expands existing cancellation/minimum/schedule controls.
+Student/tutor/admin report lists are bounded and scroll locally. Mobile session
+selection focuses and scrolls to the selected report. Existing route role guards,
+RPCs, quote math, settlement and audit rules are unchanged.
+
+## On-demand report acceptance (22 October 2026)
+
+PR #305 is verified against current V3, including the sidebar/profile repairs.
+The guarded PostgreSQL suite passes 11 tests / 106 assertions; feedback/service
+units pass 31 / 112. The real-RPC Chromium journey passes (1 test, 52.3s): initial
+admin report, version-2 correction, immutable history and no second settlement.
+Fixtures accept text authentication IDs, verify the run-owned student and exact
+synthetic booking, choose an unoccupied tutor slot, and preserve unrelated holds.
+
+Migration 0070 is applied through the normal runner to test 6769/cogito-test
+(journal 71) and development 6767/cogito-app (journal 91). SQL SHA-256:
+`eacfa97b013f23fa2e74be6d6d8e410b2b9c0f354b1d9ae6bb121370f40fc0f4`.
+A local pre-migration dump is retained under ignored
+`tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
+ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
+reset/seed, production migration, or live provider action ran. Test history is
+retained under run-scoped identities. The private PDF source implementation is
+now authored in this isolated continuation; focused/unit/privacy checks and a
+rendered sample pass. Database/browser/deployment acceptance and broader legacy
+reminder coverage remain open.
+This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## T07 private student report PDF source implementation (2026-10-22)
+
+The isolated report-export module adds student self-download and an admin flow
+that requires selecting a student. Tutors cannot export arbitrary student data.
+It reads completed private solo/group reports, completed series children even
+after parent cancellation, and delivered cohort/masterclass reports with the
+selected student's funded and charged allocation. Exact private-booking ledger
+entitlement follows Q06; legacy feedback is decoded using report history. Data
+is read in one read-only repeatable-read snapshot, filtered from the same WIB
+calendar day three months ago through the captured generation instant, and
+sorted newest scheduled first with report-ID tie breaking.
+
+The Selia report workspace shows the student's live name, report count, and an
+explicit empty state. PDFs use a bundled DejaVu Sans font and a placeholder
+Cogito header, include live tutor/session metadata, preserve long legacy text on
+continuation pages, and have WIB generation date/page numbering. Focused export
+tests pass 9 tests / 31 expectations; rate-limit routing passes 18 / 67. The
+combined focused run passes 27 tests / 98 expectations. A seven-page sample was
+rendered and visually checked, including a three-field 600-character single-page
+case and long legacy continuation. No database, browser, migration, reset, seed,
+full server build or provider check ran in this source slice. Focused Bun and
+tsdown PDF-module bundles each emitted one JavaScript entry with the complete
+1,008,096-character font embedded and no separate font asset; the tsdown output
+was 3.28 MB (tsdown 0.22.14, Rolldown 1.2.3). Guarded database, authenticated
+browser, full typecheck, server tsdown/Docker build and deployment acceptance
+remain with the parent.
+
+### E2E CI environment forwarding (22 October)
+
+The root E2E command runs through Turbo's strict environment mode. The
+`@cogito-app/e2e` task now explicitly allows the variables used by Playwright
+and its test servers, including `WEB_URL` and `WEB_PORT`. CI writes the port to
+`apps/server/.env.test` but does not write the URL; dotenv loads after Turbo's
+filtering, so both values must be preserved as ambient task environment. The
+loopback URL and matching-port checks remain unchanged.
+
+## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
+
+The on-demand solo/group/series admin report source milestone is applied to
+this isolated worktree as `9bc960ed`; the parent `f/release-v3` and `main` are
+untouched. The existing booking-detail admin action records a report for the
+assigned tutor after delivery confirmation and with an audit reason. Initial
+submission settles scheduled work once; adding a report to an already-completed
+legacy booking/session does not settle it again. Corrections require the current
+version and append report/audit history and a tutor notice without replaying
+financial effects.
+
+Review fixes store new feedback as canonical plaintext, use history status to
+decode exactly one HTML-escape layer only for known legacy rows/snapshots, and
+serialize a request UUID globally before booking/tutor locks in both tutor and
+admin paths. Same-key cross-booking conflicts resolve to the report conflict
+(409); Q06 read coverage includes chargeable group-series no-shows. Focused
+pure feedback tests pass 12 tests / 33 expectations and focused admin-service tests pass 4 / 21 and completeSession mock regressions pass 15 / 58 (exit 0). Cached format and lint pass; lint reports existing
+warnings. Authored 6769 database coverage and the solo Chromium journey remain
+unrun in this source worktree.
+
+Migration `0070_on_demand_report_admin_audit.sql` remains unapplied; its SQL
+SHA-256 is `EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`.
+History is linked to both feedback and booking with `ON DELETE CASCADE`; current
+feedback is also linked to its session with cascade, while history's session ID
+is text only. Hard deletion of a booking or session/feedback can therefore
+remove history; the text session ID alone does not guarantee retention. No
+current application hard-delete path was found, and this documents the existing
+schema boundary rather than adding a release gate. No historical actor is
+invented and no legacy row is backfilled.
+
+## V3 execution priorities (22 October 2026)
+
+Owner direction: finish core V3 work through feature branches and GitHub PRs into
+`f/release-v3`, with focused validation and docs per feature. The repository uses
+squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migration
+are tertiary. Their scope/release gates remain until an approved client deferral;
+this priority change does not authorize production release or changing `main`.
+
+## Explicit ongoing experience (22 October 2026)
+
+Tutor experience dates now use an explicit "I currently work in this role"
+checkbox instead of blank-end-year helper text. Checked means `endYear: null`
+and disables the end-year control without removing it; unchecking starts at the
+current year or start year, whichever is later. Date fields align at the top.
+Existing null end years render checked. No storage or API change is required.
+The Education, Achievements & Experiences header gives its text a shrinkable
+span so the info button stays beside wrapped text, including at mobile widths.
+
+## Compact tutor profile status (22 October 2026)
+
+The tutor profile shows one status badge beside its heading. The duplicate
+Profile status card and pending-edit badge are removed. Published profiles with
+no review action show no notice; draft, review, revision and suspension guidance
+appears as compact text in the header. Admin feedback remains in its existing
+card. Public tutor details currently use a catalog drawer, so no standalone
+public-profile link is added. Synthetic browser coverage checks lifecycle
+states, feedback retention and mobile overflow without writing dev data.
+
+## Tutor profile render repair (22 October 2026)
+
+The tutor `/profile` tax-section introduction used `FieldDescription` outside
+its required Base UI `Field` context, throwing during render and showing the
+route error page. It now uses Selia `Text`. Synthetic authenticated Chromium
+coverage reproduces the failure before the change and passes afterward,
+including visible legal-name fields and no browser errors. No dev data changed.
+
+## V3 publication lint fixes (22 October 2026)
+
+FAQ link selection is render state; its URL input receives focus only after the
+user opens the link editor. FAQ URL validation still rejects control characters
+and backslashes, using explicit character checks. Public classes use the existing
+30-second visibility-aware clock so upcoming sessions update without impure
+render-time clock reads. Workspace typecheck and the lint baseline pass; focused
+FAQ regressions are recorded in the PR. No API or storage contract changed.
+
+## UI controls and Card/Table repair (22 October 2026)
+
+Card responsive containment is scoped to CardHeader. Applying inline-size
+containment to the whole Card inflated grid row heights and caused large blank
+gaps on the economy page; the measured section gap is restored to 24px.
+
+Payout tax default and custom tutor fields now use percentages and a rupiah
+deduction example. API rates remain integer basis points; no stored rate changed.
+
+Web numeric fields use the shared Selia NumberField with styled steppers. Academy,
+lifecycle and payout date/time fields reuse CrossBrowserDateTimeInput. Card/Table
+width, spacing and narrow-card header actions are handled in shared components;
+per-page table-width overrides have been removed. The calendar month selector
+registers its visible labels before opening, and date pickers expose the next
+100 years by default for future schedules. Source audit and component browser
+checks are recorded in [the UI audit plan](plans/active/UI-CONTROLS-AND-LAYOUT-AUDIT.md).
+Authenticated admin/student route smoke checks now pass for the states listed
+in the audit plan. Academy rate controls use an independent auto-fit grid to
+prevent numeric text clipping; DB-backed write-flow acceptance remains pending. Backend contracts, migrations and provider configuration are
+unchanged by this repair.
+
+## T07 pending-report reminder integration checkpoint (2026-10-22)
+
+The class-report reminder worker is integrated on local `f/release-v3` at
+`1f9b6dd7`. It runs in the existing `class-enrollment-check` job alongside
+second-installment reminders, with separate report reminder counters. The
+guarded, non-reset PostgreSQL `class-enrollment.test.ts` suite passed 44 tests /
+354 expectations on exact loopback `6769/cogito-test` (exit 0, 9.62s); the
+pure report-reminder suite passed 7 tests / 25 expectations (exit 0, 0.15s).
+The integration fixture asserts only its owned installment event keys, student
+and enrollment while preserving the global report scan. `SELECT current_database()`
+was verified before fixture writes. No development seed or migration ran; no
+live email, browser or external provider ran. PDF export, dedicated on-demand
+admin correction, and legacy solo/group/series reminder coverage were pending
+at this parent reminder checkpoint; the isolated source continuation is above.
+
+## T06 parent integration and local verification (2026-10-21)
+
+T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
+unchanged. After restarting Docker, the parent applied additive migration 0069
+to guarded loopback `6769/cogito-test` with the normal migration runner and no
+reset flags. The non-reset enrollment/lifecycle/report suite passed 41 tests /
+319 expectations (exit 0), including payment-first and cancellation-first lock
+orders, stale-lease requeue, and durable generation recovery after event deletion.
+A second run from the integrated root checkout also passed 41 / 319 in 12.68s.
+
+Development `6767/cogito-app` is migrated through 0069 using the normal runner:
+journal id 90, timestamp `1792593114908`, SQL SHA-256
+`a6a442562692e34cea132cbd4bb20de6561906fb45ad9441add19dbf8b8c2617`.
+Migration 0068 is journal id 89, timestamp `1792584327849`, hash
+`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`.
+Dev ledger count 89 and booking count 34 were unchanged across migration; no dev
+reset or seed ran. Root workspace dependency junctions were repaired to resolve
+root packages rather than a saved feature worktree, then local API/web restarted.
+API port 3001 health reports database/Redis/scheduler healthy; web port 3000
+returns 200. These checks do not exercise live Google Calendar or payments.
+
+Browser acceptance: the integrated enrollment and whole-class cancellation
+journeys passed in the two-case run. The new lifecycle journey initially found
+missing admin storage state, then an ambiguous text locator; it now signs in
+using the per-run credentials and matches the postponed badge exactly. Its
+focused rerun passed (1 Chromium test, 32.4s; exit 0), covering session
+cancellation, one-time postponement and exact fee-free withdrawal. Integrated
+root web and E2E typechecks passed (exit 0). Focused provider 52/196,
+cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
+exposed a duplicate class-card React key during list refresh. The fix is
+integrated through `ede98094`; its focused regression passes 2 tests / 4
+expectations and the integrated lifecycle Chromium rerun passes (35.1s, exit 0)
+with zero duplicate-key warnings.
+Ordinary rescheduling policy, broader V3 acceptance and previously recorded
+API/web full-compiler limitations remain open.
+
+## Test database reset incident and guard (2026-10-21)
+
+At about 13:17:59 UTC, `academy-class.test.ts` invoked the API test helper's
+`resetDatabase()` against loopback `cogito-test` on port 6767. The helper
+truncated its broad table list with `CASCADE`; setup then failed because
+`tax_legal_name` was missing. The separate development database `cogito-app`
+was read back intact and was not truncated. No test-data recovery, restore or
+reseed has been performed or verified. The reset guard now always rejects 6767/6768 and permits
+only exact dedicated `cogito-test:6769` or `cogito-test-payout:6770` targets
+when `TEST_DATABASE_ALLOW_RESET=true` and
+`TEST_DATABASE_RESET_TARGET` exactly matches `DATABASE_URL`. Test setup no
+longer supplies a default database URL. The standalone guard suite passes 6
+tests / 40 expectations; no database-backed tests were run for this fix.
+
+Earlier T06 worker checkpoint (superseded by the parent verification above):
+implementation and focused unit checks were completed before Docker became
+available. The parent subsequently integrated and verified the same changes.
+
+Prior integrated local checkpoint (21 October, before T06 lifecycle): f/release-v3 includes admin cancellation
+446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
+0066 applied through the standard runner to guarded loopback cogito-app/6767.
+Dev readback: journal id 87, timestamp 1792559482042, hash
+70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
+The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
+or live-provider test ran. T07 report settlement, class payout identity, and the
+role-based `/class-reports` workspace are implemented in this worktree. Focused
+report/enrollment browser acceptance and web/E2E typechecks pass; see the T07
+runbook checkpoint. PDF, reminders, the dedicated on-demand admin correction
+workflow, lifecycle follow-ups, AUTH-02/referrals and full release acceptance
+remain open. Main is unchanged.
+
+Prior T06 whole-class administrator cancellation checkpoint (before current lifecycle work):
+implementation on f/v3-admin-class-cancellation
+with parent acceptance complete for this slice. Admins review exact zero-fee future-hold returns,
+then confirm a versioned/idempotent quote. The transaction cancels future sessions,
+releases only unspent future allocations, stops unpaid/checkout obligations,
+preserves past delivery holds and earned fees, and writes audit plus student/tutor
+notification outboxes. Class ownership history remains readable after cancellation.
+The existing meeting worker durably deletes cancelled-session provider events,
+including late creates after cancellation or lease recovery. Postgres checks pass
+22 / 140; Google provider fake checks pass 46 / 148. Migration 0066 only expands
+the class-meeting status check and is applied to disposable 6769, not dev yet.
+Minimum/postponement, one-session administrator cancellation, rescheduling,
+and withdrawal-rate settings remain open. T07 report settlement, payout identity,
+and the shared report workspace are implemented in this worktree; PDF, reminders,
+the dedicated on-demand admin correction workflow and remaining release acceptance
+stay open.
+
+Prior T06 student cancellation checkpoint (before current lifecycle work):
+withdrawal was implemented on its baseline-derived
+worktree: exact preview + versioned/idempotent confirmation, per-allocation
+Marks accounting, inclusive 24h deadline, unpaid-half cancellation and atomic
+audit/notification. Parent Postgres checks pass 15/101 and the combined web
+typecheck passes. Chromium acceptance passes (1 integrated journey / 1.2m), using real cancellation RPCs and wallet readback; E2E typecheck also passes. This is a partial T06 slice:
+admin cancellation, minimum/postponement/rescheduling and configurable withdrawal
+rate remain outstanding; at that baseline checkpoint, completion/report T07 was
+not yet implemented.
+
+Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
+payout 2482d7ec. The standard migration runner applied 0065 only after the exact
+loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,
+hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939,
+and tutor_tax_config exists. The owned API was restarted; no dev reset or seed ran.
+At that earlier local checkpoint, T06 cancellation and T07 completion/report
+remained next; main is unchanged.
+
+Parent integration verification (21 October): T03 on the current enrollment/signup
+baseline passes 11 isolated Postgres tests / 105 assertions, 11 tax/profile/test-target
+units / 32 assertions, 7 payout service cases / 13 assertions, and 3 Chromium
+UI journeys (1.3m). The UI scenarios mock payout RPC responses; the Postgres suite
+covers actual transaction invariants separately. E2E no-emit typecheck passes.
+Final full web/API compiler acceptance remains unverified after Windows virtual-memory
+exhaustion in the parent signup check. Isolated migration 0065 readback matches
+row 66 / timestamp 1792525224597 / SQL hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939.
+Local development application of 0065 follows integration; OPS01 remains open.
+
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent AUTH-01 verification (21 October): signup and existing-account OTP DB
+regressions pass 15 / 73; auth path/rate-reset safety checks pass 19 / 69; both
+Edge signup browser journeys pass (1.4m), including an aborted successful create
+response followed by outcome recovery. Security probes and browser journeys
+use isolated auth rate buckets on the disposable test Redis; the application's
+limiter is unchanged. These checks do not complete AUTH-02 or referral rewards.
+
+Enrollment is integrated into local `f/release-v3` through `bd123ce4`.
+Parent verification passed 9 guarded Postgres cases / 69 expectations, 12
+pricing/funding/public DTO units / 37 expectations, 5 public tutor projection
+units / 28 expectations, and the integrated Chromium enrollment journey (1.6m).
+The web typecheck passed in the enrollment worktree after direct fixes. Local
+web/API health returned 200 with DB/Redis/scheduler/DLQ healthy. T06/T07 and the
+remaining release scope are not completed by this enrollment checkpoint.
+
+Parent enrollment follow-up (21 October): checkout confirmation and second
+installment payment read authoritative time after acquiring transaction locks.
+Confirmation rejects reserved sessions that have started or are no longer
+scheduled. Allocation state types now match the database check constraint;
+unsupported filters on public tutor one-to-one relations were removed, with
+active-subject/parent filtering retained in the public DTO mapper. Parent web
+typecheck passes after these fixes and the worktree Drizzle link repair.
+
+## Enrollment schema checkpoint (2026-10-21)
+
+`385fc959` integrates the additive enrollment schema from `2f9786d0`.
+Migration `0064` is applied to local dev with table and journal hash readback;
+no existing snapshot table changed. T05 runtime/API/student UI now implement
+cohort and masterclass enrollment, immutable session/rate snapshots, per-session
+wallet holds, checkout expiry, half-plan installments, due reminders and
+test-only top-up quoting. Acceptance evidence and remaining checks are recorded
+below and in `RUNBOOK.md`; this checkpoint does not complete T06 or T07.
+Payout migration generation may follow this idx64 lineage.
+
+## T05 class enrollment checkpoint (2026-10-21)
+
+Student class detail now contains an authenticated enrollment panel separate
+from the public class DTO. The enrollment API reports only the signed-in
+student's own seats and exposes full/half/single cohort plans plus the one-seat
+masterclass plan. Current rates and selected future session IDs are snapshotted
+on the enrollment. Full enrollment reserves all selected seats and holds each
+session's Marks atomically. Half enrollment holds the first ceil-half and keeps
+the remaining seats reserved without wallet funds until the second installment
+deadline. A 15-minute pending checkout owns its seats; expiry releases all of
+them and a new request receives a fresh quote. Late join prices only scheduled
+future sessions, and a missed second installment releases its unpaid future
+allocations without charging them.
+
+The downstream T07 funding boundary is an immutable allocation row per
+enrollment/session. Its hold event key is
+`class-enrollment:${enrollmentId}:session:${sessionId}:hold:v1`; its stable
+source reference is
+`academy-class-enrollment/${enrollmentId}/allocation/${allocationId}`. Wallet
+hold and funded-state writes share the enrollment transaction. Allocation
+accounting requires `spentMarks + releasedMarks <= fundedMarks <= rateMarks`;
+unfunded future-half rows cannot be spent, and a released row must have zero
+remaining funded Marks before its seat is freed. T07 completion may deduct only
+from that session allocation. Enrollment and payment do not settle class fees or
+complete reports. T06 cancellation remains pending; no cancellation action is
+presented as available.
+
+Pure pricing/funding tests passed 11 tests / 36 expectations; the isolated
+PostgreSQL suite passed 7 tests / 64 expectations, including duplicate requests,
+last-seat contention, rollback, immutable rates, expiry, installment default,
+reminder catch-up and role denial. The focused Chromium student journey passed
+1 spec in 58.7s covering full, half, single and insufficient-balance checkout,
+retry, reload, second installment and immutable top-up quote. The DTO allowlist
+unit test passed 1 expectation. Focused lint and formatting passed with lint
+warnings; the E2E package typecheck passed before its final reload-wait update.
+API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
+`RUNBOOK.md`. Do not infer T06, T07 or release readiness.
+
+## T05 repeat-run fixture identity (2026-10-21)
+
+On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The T05-only starting balance is 326 Marks so the earlier booking-flow journey can hold 126 Marks while the class-enrollment journey retains its established 200-Mark funding; other seed targets retain the 200-Mark default. A second run-scoped student starts with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle cases. The disposable database accumulates two run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. This T05 identity flow remains separate from the API `resetDatabase()` helper. The API helper always rejects reset on 6767/6768; its only allowed reset targets are exact 6769/6770 database pairs with both explicit consent variables. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
+
+Pure guard and identity tests pass. A transactionally isolated regression for the exact 6769 target is authored but was not run because the T07 worker owns the serialized database window. It checks that repeated T05 reset calls preserve cancellation spending and stub-payment rows, then rolls back its synthetic class fixture. No reset, migration, browser E2E or full typecheck was performed for this slice.
+
+## V3 integration and local migration checkpoint (2026-10-20)
+
+Feature worktrees derive from `f/release-v3`; tested work merges there, and
+`main` waits for final acceptance. The `t3/integrate-v3-progress` checkpoint
+was fast-forwarded into `f/release-v3` at `10a733cd`, combining fee/payout and
+class drafts with FAQ rich text, calendar, palette and shared docs. The prior
+dirty source is preserved in the named `v3 pre-integration source backup
+20261020` stash; client artifacts remain in place and the old fee worktree is
+unchanged.
+
+Local startup on 20 October returned HTTP 200 from the web app on port 3000
+and `/health` on port 3001, with database, Redis and scheduler checks healthy.
+Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
+detail route ID and removes the invalid argument to the repository factory.
+The web typecheck now passes, as does the public DTO allowlist unit test.
+Class publishing and review fixes are merged through `42e8358f`, with room
+mock compatibility in `b353cb1d`. Author verification passed the class browser
+journey, 9 Postgres cases / 51 expectations, provider units and all three app
+typechecks. Parent additionally verified 113 room/tutor unit tests and the
+entire API unit suite (2,486 tests / 5,845 expectations). Enrollment and the
+downstream class delivery/report/cancellation flows remain incomplete.
+Settlement through `de76a5b9` is merged into `f/release-v3`: session-specific
+no-show allocations, completion/cancellation serialization, admin parent-hold
+recomputation and finalization with cancelled children. Verification on the
+integration branch passed 375 core unit tests (949 expectations), 7 no-show
+Postgres tests (69 expectations), and web typecheck. The database suite used
+only the guarded `cogito-test-settlement` database. Browser settlement coverage
+remains open. Heavy typecheck/browser work is serialized after Windows
+virtual-memory allocation failures. Class checks are finished; signup owns
+the next heavy verification window.
+
+Migration `0063_academy_class_meetings.sql` is applied to local development
+and the class test database. Parent verified the dev table and migration hash
+`f3c0a5888c23dc94ef487f8e4d9aca7052e338705ab34c9c62b3be207ccfb41e`
+at timestamp `1792496861907`. Existing migration history was preserved.
+
+Read-only verification now confirms both local `cogito-app` and `cogito-test`
+have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
+in timestamp order, and both have the FAQ, fee, payout, class and class-session
+tables. The parent applied only the additive class-draft migration to local
+development after reviewing its SQL and journal state; this integration
+worktree made no database writes, and the shared test database was not changed
+for this checkpoint. Neither journal was rewritten and no historical fee
+backfill was added. Exact timestamps, hashes and verification details are in
+[`RUNBOOK.md`](./RUNBOOK.md).
+
+The imported Playwright guard validates `NODE_ENV=test` and loopback
+`cogito-test` before setup can reset or seed, loads the same resolved env file
+for config and setup, requires dedicated free API/web ports with server reuse
+disabled, and retains failure traces even at zero retries. Parent verification
+passed its guard unit suite (7 tests / 32 expectations) and E2E typecheck; the
+browser suite was not rerun against the shared test database. See the
+[runbook](./RUNBOOK.md) for the guarded command.
+
+## Tutor tax and payout checkpoint (2026-10-21)
+
+T03 now has tutor tax-profile fields, configurable default and tutor override
+rates, whole-IDR withholding, versioned selected-session preparation, manual
+external-transfer recording, audited void/reconciliation, tutor-only finance
+history, transactional notification/outbox writes, and saved-snapshot monthly
+CSV. New payouts snapshot the bank, identity, tax rate and fee sources; legacy
+aggregate rows remain unchanged and unbackfilled. Historical cutoffs now apply
+only to those legacy aggregate rows, including unresolved allocationless voids
+until audited reconciliation is resolved. Identical transfer retries return
+the saved paid result without another audit or notification. Tutor payout
+history and its notification list the covered booking number, type and date.
+OPS01 tax-adviser confirmation remains a release operational gate, and the
+defaults are not legal validation. Focused pure/unit checks in this review pass
+passed 78 tests / 260 expectations across tax/profile, CSV, environment guard,
+repository and test-client safety; two targeted booking-service tests passed
+with 3 expectations. Changed-file formatting and lint passed with no errors;
+existing warnings remain in the large booking modules. The isolated Postgres
+and browser suites are authored but remain pending the assigned enrollment
+verification window. The dedicated target is `cogito-test-payout` on loopback
+port 6770 with Redis 6382, separate server/web ports 3111/3110, provider fakes,
+and a named volume; it has not been started or written. Parent-integrated
+enrollment migration `0064` is the generation baseline. T03 migration
+`0065_tutor_payout_tax.sql` was generated from `0064_snapshot.json` at journal
+timestamp `1792525224597` (SHA-256
+`876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`). The
+parent confirms `0064` is applied to local development; this worktree has not
+applied `0065`. No schema change is part of these review fixes; `0065` remains
+gated on parent review and the assigned database verification window.
+
+## V3 pre-account email signup checkpoint (2026-10-21)
+
+REQ-AUTH-01 changes public email/password signup so no account exists before a
+valid email OTP is proved. `POST /api/auth/sign-up/email-otp` sends a six-digit
+code with a 60-second per-email resend cooldown; a resend replaces the prior
+proof. The proof and cooldown commit in a short transaction before the server
+calls the mail provider, so provider latency does not hold a database
+connection or email lock. A failed delivery removes only the proof row created
+by that request and returns an inline error. `POST /api/auth/sign-up/email`
+requires the code and attempt UUID.
+Account/session creation, proof consumption, and a 24-hour email/attempt outcome
+record commit in one PostgreSQL transaction. Failed account creation rolls back
+and keeps the proof reusable. The UI starts with an empty code, clears proof
+when the email changes, shows inline send/verification errors, and checks
+`POST /api/auth/sign-up/email-outcome` after an uncertain network response
+instead of retrying account creation.
+
+These custom POST routes validate `Origin` or `Referer` against the configured
+frontend-origin policy. Auth path matching uses the same repeated-decoding,
+slash-normalizing canonicalizer as the 10/minute/IP auth limiter, so encoded
+separator, case, or trailing-slash variants share the same budget. The browser
+keeps only its attempt UUID per normalized email in session storage to recover
+after an address edit or reload; changing email still clears the visible OTP
+and proof state. Auth logs omit OTP values, attempt IDs, passwords, and
+password-reset URLs/tokens. Better Auth's email-OTP plugin also sets
+`disableSignUp: true`, so its sign-in OTP route cannot provision an account
+outside this transaction.
+
+The proof uses the existing Better Auth `verification` table; this slice has no
+schema, index, or migration change. The local OTP capture route is registered
+only for `NODE_ENV=test` on loopback `cogito-test` and reads an in-memory code;
+test mode suppresses signup and welcome mail. Existing-user verification,
+password reset, tutor invitation claiming, and internal seed/provisioning remain
+on their scoped paths. Welcome delivery is attempted once by the successful
+consumer after commit and is best-effort. This completes only the REQ-AUTH-01
+slice; Google pending-referral resume (REQ-AUTH-02), referral economics, and
+Google-choice behavior remain outside this checkpoint.
+
+The isolated browser run uses loopback PostgreSQL `cogito-test` on 6768,
+Redis 6380, API 3201, and web 3200. See the [runbook](./RUNBOOK.md) for the
+dedicated port overrides, migration, and guarded E2E command.
+
+## Competition catalog language
+
+**Parent competition**: A competition type, such as Debate, that owns the
+on-demand pricing agreement inherited by its specializations.
+
+**Child specialization**: A selectable topic under exactly one parent
+competition, used to describe tutor expertise and the booked session topic.
+
+**Archived competition/specialization**: A retained classification unavailable
+for new selections; its existing assignments and agreements remain recognizable.
+
+Owner-requested CRUD is specified in PRD S04 / REQ-COMP-01..07 and task T00A.
+Implementation is in progress on the working branch; TASKS records verification
+and remaining integration gates. The domain terms above do not imply release.
+
+## Others activity articles (2026-10-30)
+
+Activities Others now uses app-managed articles, replacing Sanity event reads and
+the previous event detail/registration format. Admin `/activities` authors cover
+URL, required English title/summary/body, optional Indonesian equivalents,
+WIB start/end, location and publication. Rich text reuses the safe FAQ editor
+(paragraphs, lists, bold/italic, links); registration links belong in the body.
+The anonymous marketing consumer reads only published articles and derives
+Upcoming/Completed from end time. Classes are unchanged. Migration 0077 adds
+`activity_article`; applied only to local dev `localhost:6767/cogito-app`.
+Published local example: `e7da3184-ec78-4ebf-9611-7d444842e82b`, Example: Ideas into
+Action. It is labelled demonstration content and uses a nonfunctional example
+registration link. No production deployment/data change.
+
+## Activities website implementation (2026-10-26)
+
+The marketing checkout `C:/.Projects/cogito-acad` now implements localized
+`/en/activities` and `/id/activities`: the existing website heading treatment is
+followed directly by Classes, then Others, without the preview's section-jump
+links. Cohorts and Masterclasses share a catalog and type filters. The owner-requested
+follow-up removes cover/placeholder images and uses compact My Bookings-style
+rows: date tile, icon-led time/mode/tutor metadata, compact class title,
+competition/session/price metadata and detail action. The follow-up matches
+My Bookings text hierarchy and removes the large description paragraph.
+Class rows read `/rpc/classes/list`, link to the corresponding app class detail,
+and show schedules, tutor names, current rates and postponed status. The public
+class DTO now includes nullable `titleId`/`descriptionId` for Indonesian fallback.
+Others combines published legacy Sanity events into one article list; existing
+event detail/registration behavior is retained and no category labels are added.
+Desktop/mobile navigation links to Activities; the two legacy event category
+routes permanently redirect to the same locale's Activities page. Fetch failure
+and valid empty results have distinct messages. T10 is not complete: Others DB
+migration/admin authoring, approved content and release acceptance remain open.
+
+## Planned Activities page (2026-10-26)
+
+Owner direction for pending T10: one Activities page with a heading matching the
+other main website pages. Use two or three sections: Cohorts and Masterclasses
+may be combined under Classes or kept separate, plus one Others section.
+Others presents Simulation Days, Cogito 101 series, Monthly Townhall and similar
+content together as an article-style list, without activity-type labels or
+separate type subsections. Class sections continue to use app class records.
+The presentation slice is implemented as recorded above; see REQ-CONTENT-01 and
+the T10 Activities checklist in `docs/plans/active/RELEASE-V3-TASKS.md`.
+
+## Marketing landing checkpoint (2026-10-19)
+
+The separate `C:\.Projects\cogito-acad` branch `f/release-v3-nonvideo` has a
+partial T11 implementation: the homepage Activities section and Activities /
+Start Learning navigation are removed; existing `/events/[category]` routes
+remain. School logos use a manually controlled horizontal strip with mouse,
+keyboard and touch support. Testimonials use one responsive autoplay carousel;
+compact screens add swipe while keeping arrows and dots. Hover/focus pauses it,
+and reduced-motion settings disable autoplay and transitions. The methods-card
+pulse is also motion-safe. A headless Edge production run checked 1280px,
+1024px, 1023px, 768px, 470px, 469px, 390px and 320px, plus reduced motion. The
+testimonial card surface fits its frame across those widths (including the
+470px breakpoint), its controls remain below and separated from the card, and
+the page has no horizontal overflow or client errors. Mobile navigation was
+checked in `/en` and `/id`; touch hold pauses autoplay and swipe advances the
+card. The browser pass exposed and fixed a mobile FAQ hydration mismatch by
+deferring viewport detection until after the first render. Typecheck,
+changed-file lint/format, diff check and production build pass. Static generation logged
+connection-refused errors for the existing approved-achievements endpoint but
+completed. Physical-device, screen-reader and client visual acceptance are still
+pending; Why Cogito spacing is refined (16px from label to heading, 32px from
+heading to cards) and checked at desktop and mobile widths in English and
+Indonesian. The approved feature showcase remains open (M02/Q14). Track this
+work in the T11 row and checkpoint in
+`docs/plans/active/RELEASE-V3-TASKS.md`; do not infer release readiness from the
+build.
+
+## V3 checkout and booking snapshot checkpoint (2026-10-18)
+
+Migration 0055 adds a nullable, separate customer activation pointer, immutable
+15-minute student top-up quotes and payment quote/choice/label/pricing/provider
+intent fields. Missing/null activation keeps legacy pricing. No activation UI or
+RPC exists; draft saves never activate customer prices. New V3 top-ups lock the
+quote before creating one payment, commit before provider I/O and retain its
+identity on uncertain responses. Provider metadata writes cannot overwrite a
+webhook's payment status. Custom and recommended choices both remain available.
+Legacy purchases retain their existing retry flow while V3 is inactive; missing
+checkout retries now use the payment's stored amount. Active V3 blocks new legacy
+package sales while allowing existing owned pending attempts to be resumed.
+
+Booking snapshots now distinguish untagged legacy fields from `engine:"v3"`
+revision/competition/mode/headcount/Marks/IDR honorarium. New solo, group and solo
+series creation uses the server-resolved parent slug; group repricing loads the
+exact immutable revision pinned by the booking. Discovery and create-booking
+preview project prices by the selected parent slug from the active revision. A
+new parent slug without an active rate is rejected and cannot fall through to a
+tutor's legacy base rate. With the activation pointer unset, the seven legacy
+competition paths remain compatible. Active V3 group-series prices at target
+headcount and pins the active revision; a viable partial group recalculates from
+that pinned revision at confirmed headcount, adjusts each confirmed participant's
+remaining scheduled-session hold, and updates booking/session snapshots before
+reconfirmation. Activation-null legacy group-series and target-size-one solo
+series remain unchanged. Tutor profiles
+now return an active-revision fee projection for assigned parent competitions;
+changed legacy `baseRatesIdr`/`prices` writes are rejected only while V3 is active,
+and admin edit approval discards queued `baseRatesIdr`. Review submission reads
+the pointer inside its status-update transaction: active V3 removes the legacy
+fee requirement; a null pointer preserves it. With a null pointer, the projection
+is null and legacy tutor rate writes remain compatible. Legacy
+analytics fields are not V3 profitability; **do not activate customer pricing**
+until the remaining acceptance gates are resolved.
+
+Group-series slice verification: `bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/booking.service.test.ts` passes **303 tests, 0 failures, 755 expectations**, including target-size creation, pinned partial-group repricing, reconfirmation and underfunded top-up preflight. The guarded integration command `bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/booking-group-series.test.ts` passes **9 tests, 0 failures, 55 expectations**, including a scheduled-session-only repository update check. Neither command sets the V3 activation pointer. The broader checkpoint below predates this slice. Earlier focused verification: 487 unit tests pass (1,391 expectations) across
+pricing, booking, discovery and catalog behavior; 14 PostgreSQL integration
+tests pass (93 expectations) across economy roles, catalog CRUD, top-up and
+dynamic-parent admin. Coverage includes immutable replay, choice locking,
+uncertain provider outcomes, early webhook, concurrent purchases, late credit,
+dynamic active-rate selection and pinned-revision repricing. Web typecheck and
+build pass. New balance UI has not yet received browser QA. Production and live
+payment providers were untouched.
+
+## V3 earned tutor session fee checkpoint (2026-10-19)
+
+Migration `0059_massive_blindfold.sql` adds `tutor_session_fee`, an append-only
+application record for the gross IDR honorarium earned when a tutor completes a
+session. Completion writes it in the same transaction as the existing state,
+Marks deduction, and feedback. Solo/group identity is the booking ID; each series
+child uses its session ID, so a completed child is recorded while the parent
+series remains scheduled. Stable event keys and unique source indexes prevent a
+second fee row for the same delivery. The row pins tutor, scheduled/completed
+timestamps, gross honorarium, and the booking/session price snapshot. Legacy
+snapshots use their saved IDR honorarium or the existing `tutorShare × 7,000`
+compatibility calculation; V3 snapshots use their saved IDR honorarium.
+
+This is a delivery/earned-fee fact, separate from the manual bank transfer.
+Tutor/admin payout summaries read fee events for the requested time window,
+then use the legacy booking/session snapshot adapter only for sources without a
+fee event. Source-key deduplication prevents a completed booking or series child
+from being counted twice; this also makes a completed child visible while its
+series parent remains scheduled. Pending summaries apply the paid cutoff to new
+fees by `earnedAt` and retain the existing completion-time fallback for legacy
+records.
+
+Migration `0060_tutor_payout_allocations.sql` adds per-session source
+allocations for newly prepared tutor payouts. The V3 payout workflow prepares
+an immutable fee/profile/rate/bank snapshot before an external transfer, then
+records only the exact net amount after that transfer. A filtered active-source
+unique index and stable tutor/config locks prevent a delivery from being
+reserved by two active batches. Void releases allocations but keeps payout and
+transfer evidence; repayment stays blocked when external transfer evidence is
+unreconciled. Existing paid aggregates remain unallocated and unchanged; their
+original session breakdown is never backfilled or inferred. Tax defaults are
+configurable and are not legal validation; OPS01 tax-adviser confirmation
+remains an operational release gate.
+The owner waived historical per-session reconciliation/backfill for unused V3;
+no historical payout rows were changed. Class delivery/report/expiry integration
+remains with T04/T06/T07 and is outside this payout implementation. This slice
+does not change existing cancellation, no-show, expiry, or feedback rules.
+Q03/Q06/Q07 and Q05 were resolved on 19 October; Q04's minimum/postponement
+rules were accepted. The final 30 October decision implements ordinary rescheduling with a strict affected-session exit deadline before min(notification +24h, new start). Same-time tutor replacement creates no exit right.
+
+Series completion and no-show now serialize on the parent booking, child
+session, and participant rows. The existing session-specific no-show ledger
+event marks that participant's allocation as already charged: a repeated
+series no-show is rejected, and a later completion report skips that allocation
+instead of consuming Marks held for future sessions. Other delivered group
+seats still settle normally. A no-show ledger event alone does not prove
+delivery or earn a tutor fee; the tutor must submit the completion report.
+Malformed V3 snapshots with a missing or invalid `tutorHonorariumIdr` fail
+before wallet/hold writes; an explicit zero honorarium remains valid.
+
+Student and admin per-session cancellation now use the booking's reschedule
+advisory lock, then lock and refresh the parent booking, child session, and
+participant rows. Cancellation changes a child only while it is still
+`scheduled`; a concurrent completion that commits first leaves the report,
+fee, wallet, and remaining holds intact, and the stale cancel is rejected.
+The shared advisory lock also serializes cancellation with proposal acceptance.
+
+Focused verification: tutor-fee unit tests **4/4**, booking-service unit tests
+**307/307**, admin-service unit tests **30/30**, solo booking integration
+**12/12**, standalone group integration **8/8**, group-series integration
+**9/9**, and payout/allocation integration **8/8** (**378 tests total**). Tests
+cover pending source detail, fee-event and legacy snapshot allocations,
+historical batch detail-unavailable behavior, completed-child visibility,
+cutoff preservation, and the two-admin no-duplicate race. Server and web
+TypeScript checks passed individually before the production-build attempts;
+later reruns under memory pressure failed (server TypeScript-Go hit a Windows
+allocation stack, and web TypeScript-Go exited 253 without a source diagnostic).
+The full workspace check previously hit Windows `VirtualAlloc` errno 1455.
+Production builds are not verified: server `tsdown` exited 253 without a source
+diagnostic, and Vite could not allocate 27,648 bytes after transforming 8,875
+modules. Retry checks/builds when memory headroom is available. No V3 activation
+or external provider call was performed.
+
+Settlement follow-on verification (2026-10-20): the focused real-Postgres
+series no-show/completion suite passed twice (**12 executions, 112
+expectations**), covering solo and group no-show settlement, repeat no-show and
+completion, concurrent completion, the no-show/completion race, malformed V3
+honoraria, and transaction rollback on fee insertion failure. The tutor-fee
+unit suite passed **6/6**. Logs confirm the test meeting adapter was manual.
+Browser E2E was not run for this settlement slice.
+
+Review follow-up verification (2026-10-20): booking/admin service and repository
+unit suites passed **447/447 tests, 1,153 expectations**. The settlement suite
+passed **7/7 tests, 69 expectations**, including full-series completion after a
+no-show and a lock-gated cancellation/completion race. Admin U6 passed **7/7,
+70 expectations** across solo release/forfeit/partial cancellation and group
+series release followed by completion; it asserts wallet, participant, and
+parent holds plus terminal parent state. Existing G18 series completion passed
+**8/8, 29 expectations**, and M4 student cancellation passed **1/1, 4
+expectations**. Admin cancellation now recomputes the parent hold from remaining
+confirmed/reconfirmed participant holds, excluding pending invitees. Series
+completion finalizes the parent after every child is completed or cancelled,
+then releases residual participant holds. These integration runs used the
+retained loopback `cogito-test-settlement` database on port 6767; meeting
+creation used the manual adapter and email delivery was not configured. No
+browser E2E or typecheck was run for this follow-up.
+
+## V3 class draft checkpoint (2026-10-19)
+
+Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
+
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. At this dated 19 October checkpoint, T02 delivery fees and T06 cancellation remained separate work. T07 report settlement, class payout identity, and the role-based report workspace are implemented; PDF, reminders, and the dedicated on-demand admin correction workflow remain pending.
+
+Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
+
+## V3 published class read contract (2026-10-20)
+
+The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes student catalog fields, the published class-plan rates and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; signed-in students use the separate T05 enrollment procedures and never receive another student's records.
+
+## V3 class publication and meeting setup checkpoint (2026-10-20)
+
+Admin can publish a versioned class draft after the service rechecks active competition ancestry, published tutor assignments and delivery mode, future session times, cohort minimum/curriculum, managed-room capacity and conflicts, and the approved tutor fee (Rp400,000 per cohort session or Rp300,000 per masterclass session in either mode). Publication marks sessions scheduled, writes audit state, deduplicates one tutor notification per class, and creates one durable meeting job per online session in the same transaction. In-person sessions use managed rooms and have no Meet job.
+
+Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO; the student detail route shows the separate T05 enrollment panel only to signed-in students. T04 still depends on T02 delivery/fee and T07 report integration. T06 lifecycle is integrated into Release V3; its admin view merges the published and postponed query snapshots by class ID and retains the highest-version record so one current card and its existing actions remain during refresh. Absence/expiry handling and approved client curriculum and cover inputs remain separate.
+
+Publication takes the competition-catalog lock, sorted tutor locks, and sorted room locks before fresh row-locked reference reads. Catalog archive, tutor status, and room update/deactivation use the matching locks so publication cannot validate stale mutable references. The class publish API suite passed 9 tests / 51 expectations, including gated room-capacity, room-deactivation, and catalog-archive races. The admin-to-public Chromium journey passed 1 spec and covers pending-link retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. At this 20 October checkpoint, T04 remained in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
+
+## V3 report-field character limits (2026-10-18)
+
+REQ-REPORT-01 now applies to new on-demand/series completion submissions:
+600 Unicode code points total per field across all normalized bullets, counting
+one LF between nonempty lines. Shared `booking/feedback-rules.ts` normalizes CRLF,
+strips UI bullet prefixes, trims line edges and removes empty lines. UI counters,
+submit gating, RPC schema and direct service validation use the same rules.
+The service rejects overlong input before settlement instead of silently slicing
+30 bullets/1000 characters. New report text is stored as canonical plaintext;
+React text output remains escaped by React. Reads return canonical plaintext unchanged; no legacy entity decoding or synthetic history snapshots remain. Corrections require the existing version history event and record the real admin/tutor actor.
+Class report settlement is implemented in the T07 backend. The role-based report
+workspace is documented below; PDF remains pending. On-demand booking reports
+are in the isolated source continuation above. Legacy reminder coverage is
+implemented in the 23 October continuation below, with its verification state
+recorded there.
+Focused report + booking regression: 295 tests pass; web typecheck passes.
+
+## V3 class session reports and payout identity (2026-10-21)
+
+The `class-enrollment.reports.ts` service implements private class-session
+reports with immutable revisions and atomic settlement of remaining funded seat
+Marks. It writes the fixed tutor fee only when at least one funded seat is
+chargeable, preserves report access for funded students after settlement, and
+keeps cancelled parents cancelled while allowing retained past sessions to
+settle. Corrections append revision/audit history without replaying wallet or
+fee effects. The payout source model supports a nullable booking plus real class
+session identity, delivery label, and collected-Mark snapshot; class earnings
+use the existing exact-net and allocation workflow without fabricated booking
+price data. Migration 0067 is applied only to the guarded disposable test DB on 6769. The role-based `/class-reports` workspace uses Selia controls, normalized
+600-code-point feedback, delivery confirmation, draft-preserving version conflicts,
+and settlement preview/readback. The shared page supports versioned admin edits
+with a required reason; the dedicated on-demand admin correction workflow remains
+pending. Reminder verification passes 7 fake-clock unit tests / 25 expectations
+and 3 guarded, non-reset PostgreSQL tests / 34 expectations on loopback
+`6769/cogito-test`. It covers current/next-day/catch-up periods, concurrent
+processors and one email-outbox row per period, report and parent-cancellation
+races, cancelled/completed exclusions, transactional rollback/retry, and unchanged
+wallet, allocation, ledger, fee, report and session facts across reminder writes.
+Whole-class cancellation leaves a retained past scheduled session eligible until
+its report is submitted; cancelled/completed sessions and completed classes stop.
+At this class-reminder checkpoint, the legacy solo/group/series reminder policy
+was unchanged; separate coverage was added in the 23 October continuation below.
+PDF remains open. Tutor, admin, and student browser acceptance
+passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
+report implementation checkpoint. This reminder verification used no browser,
+live email or external provider and required no migration.
+
+## V3 draft economy editor and revision storage (2026-10-18)
+
+Branch `f/release-v3` starts at `14dc4486`, verified equal to fetched origin/main.
+T01 includes editable packages/surcharge/competition/session adjustments, pure
+pricing calculations, admin get/preview/save RPCs and an English Selia draft
+editor in `/admin-economy`. Migration 0054 adds immutable revision storage.
+Save uses transaction advisory lock, expectedVersion and transactional audit.
+Reads return virtual defaults at revision 0 before first save. Q13 is resolved
+by the project owner: custom and recommended package remain selectable, with
+tiers following package Marks and unit prices plus surcharge.
+
+All current catalog parents now appear in the Economy editor; superseded
+migration 0027 seed rows are excluded. Additional parent rates are blank until
+both values are entered, then saved only in an immutable draft revision. A
+PostgreSQL integration case verifies this admin path and confirms
+the activation pointer remains unset. Active booking/discovery code now reads
+the selected competition rate, rejects unconfigured new slugs, and reprices V3
+bookings from their pinned revision. Customer prices still use the legacy path
+while the pointer is unset. Tutor profile reads now project active V3 fees by
+assigned parent and group size; tutor writes to changed legacy rates are rejected
+only after activation, while admin approval ignores queued legacy base-rate
+proposals. Active V3 group-series pricing and partial-group repricing are
+implemented in the later checkpoint above. Analytics interpretation, website
+catalog projection, release acceptance and explicit customer activation remain
+pending. No historical records were repriced and no provider or production
+write was made.
+
+Tests: 487 focused unit cases pass (1,391 expectations) across V3 math/config,
+booking, discovery, catalog, pricing and admin regression. Web tsgo passes with
+GOMAXPROCS=2/GOMEMLIMIT=768MiB. PostgreSQL suites pass: economy roles 7/26,
+catalog CRUD 4/53, V3 top-up 2/9 and dynamic parent-rate admin 1/5. They verify
+single-winner CAS, immutable history, audit rollback, legacy pricing unchanged,
+role denial, catalog palette/readiness behavior and a saved dynamic rate with no
+activation. Migrations 0054–0057 were applied only to isolated `cogito-test`;
+no production migration was run. Browser QA verified
+draft load/save/reload, missing-reason and invalid-rate save gating, stale-version
+conflict recovery, 440 Marks equality recommendation, and 390px card/table fit.
+The report dialog was checked at exact 600 and over-limit 601 code points; no
+report was submitted. Screenshots: `tmp/v3-admin-440.png`,
+`tmp/v3-admin-mobile-fixed.png`, `tmp/v3-report-600.png`,
+`tmp/v3-report-601.png`. Customer pricing remains on legacy economy because the
+activation pointer is unset. Booking/payment snapshot code and dynamic price
+reads are implemented, while analytics, website catalog projection, release
+acceptance and activation remain pending.
+Evidence: docs/plans/active/RELEASE-V3-TASKS.md.
+
+Latest combined focused verification: **642 API unit tests, 0 failures, 1,667
+expectations across 10 files**; web typecheck/build and the narrow V3 pricing
+TypeScript project pass. The API package-wide typecheck remains unverified;
+existing test-fixture diagnostics fall outside that narrow check. No activation
+pointer was written.
+
+## SnapCN video tooling (2026-10-18)
+
+`apps/video` is an isolated Remotion workspace for SnapCN video compositions.
+It registers the 3-second `CogitoIntro` starter using vendored `text-reveal`
+and core source (revision/license recorded inside the workspace), shares
+Cogito CSS tokens/fonts, and configures `@/` in TypeScript and the bundler.
+The project-local catalogue skill lives in `.agents/skills/snapcn/`.
+Root `video:studio`, `video:still`, and `video:render` delegate through Turbo.
+Video exports stay in ignored `apps/video/out/`. Application UI remains Selia.
+Shared UI now declares the font packages imported by its own global CSS.
+Typecheck passed; bundle/render verification is blocked by a full C: drive
+(ENOSPC during first Chromium download). Re-run after freeing space.
+Setup/verification status: `docs/plans/active/SNAPCN-SETUP.md`.
+
+Last updated: 2026-10-19
 
 ## Grafana SQLite eval-storm + WAL fix (2026-10-09)
 
@@ -123,18 +1649,21 @@ and problem outcomes. Students also see verified achievement count from
 windows from `tutor.listAvailability` and the nearest available action deadline.
 Tutor dashboard's **Needs action** queue uses `booking.listMine({ view: "action" })`,
 matching the Bookings page instead of locally selecting only tutor-review requests.
-Admin **Booked value** displays IDR as the primary amount, Marks as its supporting
-equivalent, and platform share in both units. Values come from pricing locked when
-each booking was created; later economy changes do not rewrite historical totals.
-During a mixed frontend/API rollout where locked IDR aggregate fields are absent,
-the card temporarily estimates IDR from Marks using the active economy rate and
-labels that fallback explicitly instead of rendering an invalid amount.
+Admin Business insights show selected-period counts by saved pricing engine
+(V3, legacy, other, or missing). Booking-derived money totals are omitted because
+parent booking and per-session snapshots use different units across solo, group,
+and series records, and V3 does not snapshot a gross service IDR or platform take.
+Counts use booking creation date and include all booking states. Do not estimate
+service totals using the current Marks rate. The finance card below uses successful
+top-up payment and refund records for realized top-up revenue.
 Admin `/dashboard` shows queue counts for escalated bookings, booking
 exceptions, tutor reviews, and achievement reviews using existing admin reads.
 
 Admin Business insights labels are explicit: the booking-state portfolio is
-all-time/live, selected-period trends use WIB calendar days, and booked Marks
-plus platform take are locked booking snapshots rather than cash revenue.
+all-time/live, selected-period trends use WIB calendar days, and the pricing
+snapshot mix counts booking records rather than sessions. Booking-derived Marks,
+IDR, and platform-share totals remain gated on Q15; successful top-up payments
+less refunds remain the cash-revenue source.
 `activeLearners` remains proposer-based and is rendered as **Active booking
 proposers** until group-participant and login-activity definitions are approved.
 Admins can use 7/30/90-day presets or an inclusive custom WIB range of up to
@@ -321,9 +1850,97 @@ supersedes older placement notes below that refer to contextual booking actions
 in the sticky rail. The user-facing state timeline is labeled **History**;
 internal state-history and activity component names remain unchanged.
 
-## Competition field color tokens (2026-09-08)
+## Competition field palette and catalog CRUD (2026-10-18)
 
-The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory`, current subject-taxonomy parent slugs, and legacy category slugs to reusable soft and solid class sets; unknown categories fall back to Research & Essay. Competition-field badges in tutor discovery cards, the tutor drawer, onboarding selections, and calendar details use the solid treatment. Their foreground is white for every field except Business Plan, which uses the academy's dark foreground. Calendar event surfaces remain soft for readability in the calendar grid and agenda.
+The working branch adds versioned admin CRUD to the existing two-level subject
+catalog. Parents own four configurable OKLCH values: light text/background and
+dark text/background. Children inherit all four and cannot store overrides.
+Creating a parent requires all four colors; patching a subset preserves omitted
+values. Migrations 0056 and 0057 were exercised against the guarded local test
+database, preserving existing IDs/slugs/active flags and the seven current plus
+seven legacy 0027 palettes. Production migration and complete UI acceptance remain
+release gates.
+
+Admin writes use a transaction-only shared catalog lock, optimistic row versions,
+and before/after audit records with a required reason. New parents begin inactive
+and cannot sell until dynamic pricing is configured. Archiving a parent preserves
+child flags and historical assignments, labels, booking/session price snapshots,
+and financial terms. Delete and child-move eligibility includes historical tutor
+profile audit snapshots. The guarded Postgres suite proves both assignment/delete
+orders: assignment-first makes deletion conflict on the resulting reference, and
+delete-first makes the queued assignment fail selection validation. It also
+proves both booking/archive orders over `booking.sessionTopic`: booking-first
+preserves category/specialization IDs and slugs and appears in archive impact;
+archive-first makes the queued booking fail with `BOOKING_NOT_EDITABLE`. A
+stale concurrent admin edit waits behind the first versioned update and returns
+`CONFLICT`, leaving one mutation audit. `bun test --timeout 30000 --env-file
+apps/server/.env.test packages/api/src/tests/integration/competition-catalog.test.ts`
+passed 6 tests/72 expectations. Sequentially,
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/v3-dynamic-competition.test.ts`
+passed 1 test/5 expectations and left the V3 activation pointer unset. The
+focused Chromium browser journey in `packages/e2e/src/specs/competition-catalog.spec.ts`
+passed child-slug search, archive impact preview/confirmation, restore, and
+moving an unused child while checking its inherited destination palette. It
+exposed that a child-only search result was omitted from the parent-grouped
+tree; the admin catalog now includes the matching child's parent as context.
+Full app regression and website projection remain in T00A/T10/T12 acceptance.
+
+The focused palette resolver uses stable catalog IDs first and exact stored slugs
+second, including archived entries for historical displays. Only the content
+boundary maps the seven known legacy Sanity aliases. Unknown historical content
+uses the neutral compatibility palette. API projections provide parent colors to
+calendar and booking read models without changing their saved names, prices, or
+other financial terms. App surfaces now receive configured light/dark values
+instead of relying on the fixed seven-type class map; see T00A for the remaining
+typecheck, browser and release acceptance gates.
+The separate `C:\.Projects\cogito-acad` marketing site uses app catalog parent
+palettes for public tutor specialization badges. Its calendar migration remains
+part of the planned T12 content work; do not expose inactive catalog rows through
+a new broad public endpoint to bridge that gap.
+
+## Public tutor website source (2026-10-19)
+
+The app exposes anonymous `publicContent.tutors.list` for the marketing site's
+server-side tutor directory and landing cards. It filters on the existing published tutor
+status and maps a strict profile/catalog DTO with optional Indonesian catalog
+names and the parent category's light/dark palette inherited by each subject.
+Inactive child or parent catalog rows are filtered from the public projection;
+empty results remain `[]`, while API/database errors remain errors. The selection and mapper exclude account
+IDs/emails, prices, payout and tax details, consent, review state, and unknown
+future fields. `profileImageUrl` is the canonical `user.image`; `modality` is
+teaching format. The tutor schema has no physical tutor-city field, so the API
+does not emit `locations` or derive a location from modality. The marketing site
+now filters by Online/Offline modality, with `both` matching either choice, and
+builds its competition-field filters from active parent categories in the public
+tutor results. Public tutor pages use a no-store API adapter and show an
+unavailable state on request failure; they do not fall back to Sanity. Tutor
+profile copy follows the current app's English-only fields, while Indonesian
+catalog labels are used when available and otherwise fall back to English. See
+[T10 public tutor API checkpoint](plans/active/T10-PUBLIC-TUTORS-API.md). Before
+release, reconcile the intended public tutor roster with published app profiles;
+the website read does not migrate or fall back to Sanity tutor data.
+
+## FAQ admin and public API slice (2026-10-19)
+
+FAQ management is consolidated into `/faq`: admins get All/Active/Inactive
+filters, add/edit controls, a desktop split editor and a mobile drawer. Dirty
+drafts are guarded on close, switch and navigation. Students/tutors retain the
+read-only public view. `/admin-faq` and its duplicate sidebar item are removed.
+
+The app FAQ uses one medium-sized FAQ heading and the same full-width layout
+as bookings. Rounded question rows expand inline with circular plus/close
+controls; answer spacing sits inside the panel's 250 ms height transition so
+closing reaches zero height. Reduced-motion preferences disable the transition.
+
+The app `/faq` question/answer section uses separate rounded accordion rows with
+theme-accent collapsed surfaces, card surfaces when expanded, and circular
+plus/close indicators. Existing heading text and FAQ content remain unchanged.
+
+FAQ entries are owned by the app database and edited by admins at `/faq`. Authenticated students and tutors read active FAQs at `/faq` through the anonymous public projection and Selia accordion; admins use the admin projection and editor on the same page. The sidebar exposes FAQ to all app roles and uses a single FAQ link for all roles. Migration `0059_faq_rich_text.sql` adds rich JSONB documents while preserving and backfilling the legacy question/answer columns. The English question and answer are required; Indonesian fields are optional and hidden in the new-entry form until requested. The admin editor supports bold, italic, safe links, and ordered/unordered lists. Admin rows are alphabetized by the English question and show their modified date. The `showOnLanding` selection is limited to six active entries and serialized in the database transaction.
+
+The anonymous `publicContent.faq.list` endpoint keeps the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents; the additive fields preserve existing consumers. Entries remain alphabetized by the question displayed for the requested locale, and `landing` also filters to `showOnLanding`. Admin visibility/version fields remain private; writes require admin authorization and updates use expected-version checks. The marketing adapter reads both surfaces server-side with `no-store`, requires the response `json` field while allowing absent or array-valued `meta`, validates rich documents and safe links, and falls back to the legacy fields when an older API omits rich fields. It renders rich formatting, answers, and lists; links inside question triggers remain non-interactive to preserve button semantics. FAQ JSON-LD continues to use the plain-text projection. Empty results and API/configuration errors retain their separate localized states. No FAQ copy was seeded and neither Sanity nor legacy FAQ fallback is used.
+
+Migrations `0058` and `0059` have been exercised on local `cogito-test`; `0059` is also applied to the local development database `cogito-app`. Shared/production migration and initial FAQ copy remain release gates. See [T10 FAQ checkpoint](plans/active/T10-FAQ-CHECKPOINT.md).
 
 ## Tutor specialization selector layout (2026-09-09)
 
@@ -487,17 +2104,29 @@ white, including both the wordmark and academy label. This is frontend-only
 presentation behavior with no RPC, schema, persistence, or operational
 contract change.
 
-## Sidebar navigation order (2026-09-04)
+## Sidebar navigation groups (2026-10-22)
 
-The authenticated sidebar keeps its three semantic zones: role-specific primary
-navigation, shared resources, and the account menu in the footer. Student
-navigation follows the main journey (`Dashboard`, `Tutors`, `My Bookings`,
-`Balance`, `Achievements`); tutor navigation prioritizes work actions
-(`Dashboard`, `Bookings`, `Availability`, `Tutor Profile`); and admin navigation
-starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
-`Economy`, `Achievements`). Resource labels and the **Tutor Profile** wording
-remain unchanged. This is frontend-only presentation behavior with no RPC,
-schema, persistence, or operational contract change.
+`apps/web/src/components/dashboard/app-sidebar.tsx` groups admin links by task:
+
+- **Overview:** Dashboard, Operations.
+- **Teaching:** Bookings, Classes, Session reports, Tutors.
+- **Finance:** Tutor payouts, KOL commissions, Economy.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ.
+
+Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
+Classes, My Bookings, Session reports, Achievements, My referrals). Tutor links use
+**Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
+Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
+after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
+Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
+SidebarGroup with SidebarItemButton headings and independent default-expanded
+SidebarCollapsible/Trigger/Panel sections, including Resources. Native button
+triggers support Enter/Space, expose expanded state and a rotating chevron, and
+retain visible keyboard focus. Collapsed panels remove their links from the tab
+order. State lasts only for the mounted sidebar; no persistence is added.
+The existing link rendering, active states,
+and booking-action badge are preserved. This is frontend presentation only; routes, RPC
+contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Human-readable booking references (2026-09-04)
 
@@ -706,11 +2335,12 @@ container and does not serve TLS. Production-like API deployments therefore set
 verification when TLS is enabled, and should remain `true` for a managed or
 external PostgreSQL endpoint that requires TLS.
 
-Production-like server boot reconciles the comma-separated `ADMIN_EMAILS`
+Server boot outside test mode reconciles the comma-separated `ADMIN_EMAILS`
 allowlist before serving traffic. It defaults to
 `itcogitoacademy01@gmail.com`, matches case-insensitively, promotes matching
 existing accounts, and never demotes other admins. The Better Auth signup hook
-covers a matching account created after boot. The guarded production seed uses
+covers a matching account created after boot. Development uses the same explicit
+allowlist; tests never bootstrap configured admins. The guarded production seed uses
 a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
 `ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
 student has verified local authentication and seeded Marks, while its review
@@ -760,7 +2390,7 @@ Tutor discovery, booking, dashboards, sidebar, and admin review render
 temporarily, but the response key is projected from `user.name` and new UI does
 not depend on the stored legacy value.
 
-Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, specialization selection, tutor proof links, and availability previews.
+Empty-state backgrounds are neutral, with tone color confined to the icon box and no background gradients. Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, specialization selection, tutor proof links, and availability previews.
 
 Invitation history keeps metadata but never stores plaintext invite secrets. The latest generated link remains visible and repeatedly copyable during the current admin page session. For any pending history entry, **Generate & copy link** rotates the token, invalidates the previous link, and records the existing resend audit action.
 
@@ -782,7 +2412,7 @@ metadata on wider layouts. On narrow screens, the price moves below the avatar
 so the content column remains available for the tutor name, modality, bio, and
 subject badges.
 
-The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. The payout details card keeps the main metrics compact and exposes the unpaid-honorarium and transfer-fee explanations through shared accessible `InfoPreview` popovers. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, role-appropriate financial treatment (Marks for students, IDR honorarium for tutors), status tooltip, and detail action; the compact next-lesson card hides financial details to keep the overview focused. Admins see escalated booking operations plus pending tutor-profile and achievement review queues, as well as a Business insights section backed by the admin-only `admin.getDashboardAnalytics` aggregate procedure. That section offers 7/30/90-day WIB booking and audience trends, a live booking-state portfolio, modality/category signals, and Marks-based summary KPIs. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Its theme menu supports Light, Dark, and System, and pressing `D` outside editable fields toggles between the currently rendered light and dark themes; the explicit selection remains persisted by `next-themes`. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These dashboards are frontend compositions of their relevant oRPC procedures, with the admin analytics read documented in `docs/API-REFERENCE.md`.
+The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. The payout details card keeps the main metrics compact and exposes the unpaid-honorarium and transfer-fee explanations through shared accessible `InfoPreview` popovers. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, role-appropriate financial treatment (Marks for students, IDR honorarium for tutors), status tooltip, and detail action; the compact next-lesson card hides financial details to keep the overview focused. Admins see escalated booking operations plus pending tutor-profile and achievement review queues, as well as a Business insights section backed by the admin-only `admin.getDashboardAnalytics` aggregate procedure. That section offers 7/30/90-day WIB booking and audience trends, a live booking-state portfolio, modality/category signals, and counts of parent booking records by V3, legacy, other, or missing pricing snapshot. Booking-derived Marks, IDR, and platform-share totals remain omitted until their population, participant, session, and date basis is defined; top-up cash reporting remains based on payment/refund records. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Its theme menu supports Light, Dark, and System, and pressing `D` outside editable fields toggles between the currently rendered light and dark themes; the explicit selection remains persisted by `next-themes`. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These dashboards are frontend compositions of their relevant oRPC procedures, with the admin analytics read documented in `docs/API-REFERENCE.md`.
 
 The authenticated `/notifications` route is a focused inbox for durable in-app notifications. It uses cursor pagination, a category label badge, an exact date/time plus relative age, visible unread treatment, row selection, select-all for the currently loaded rows, and batch read/unread updates. Selected IDs are sent through the protected `notification.updateReadStatus` procedure, which scopes the database update to the authenticated user. The existing mark-all-read action and notification-bell unread count remain available. Bell items mark unread notifications as read and then navigate to the associated booking, balance, achievements, calendar, or notifications page; they no longer stop after changing read state. Retired economy rate-change rows are omitted from the inbox and unread count.
 
@@ -810,7 +2440,7 @@ safe display identity; meeting attendee email arrays remain server-only.
 Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only. Knowledge Bank category slugs are mapped to known labels or title-cased when rendered, while their raw values remain the filter keys.
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`. Admins see an `Edit competitions` button that opens the `competition` list in Sanity Studio (`https://cogitoacademy.sanity.studio`).
-- The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter (multi-select across the seven competition fields, all-on by default) that narrows both the month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
+- The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter built from the loaded competition categories. Filter keys use each category's parent `coreCategory` slug and labels use its English `name`, with the seven legacy labels as fallbacks when a name is missing. All current types are selected by default, newly loaded types are selected unless explicitly excluded, uncategorized events remain visible when no filter is active, and Reset restores all current options. The filter narrows both month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
 - `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count) or an active admin grant; tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering. PDF previews use an unsandboxed browser-native iframe inside a bottom drawer on mobile and a right-side drawer on desktop, with a new-tab fallback.
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The file response may be framed only by the configured app origin so the cross-subdomain PDF preview works; every other API route retains `X-Frame-Options: DENY` and `frame-ancestors 'none'`. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
@@ -858,7 +2488,7 @@ Booking detail also renders the current response window for deadline-bound state
 
 - **Group/group-series invitee email (P1):** the invitee notification written by `booking.service.ts` (`createGroup`/`createGroupSeries`) carries the PRD-mandated content in its body — full schedule, per-student price, total Marks hold, the no-opt-out disclaimer (series only), and a direct in-platform CTA (`${CORS_ORIGIN}/bookings/{bookingId}`). Because `notification.write` uses `notif.body` as the email `html`, the CTA is present in both the in-app notification and the dispatched email.
 - **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` lock the parent booking before mutating an invitation, then query remaining pending invitees. Concurrent final responses therefore serialize. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
-- **Signup verification/welcome email (P2/G2):** a new email/password signup receives one `auth` email through Better Auth's email-OTP signup hook. The combined template includes the welcome/onboarding entry point, login link, brief platform intro, and six-digit verification OTP, saving one provider delivery compared with separate messages. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never re-sends signup welcome copy.
+- **Signup verification/welcome email (P2/G2, REQ-AUTH-01):** public email/password signup sends the pre-account OTP before creating a user; it no longer uses Better Auth's automatic signup-verification email. After the proof transaction commits, the winning request attempts one separate welcome/onboarding email with the login link. Welcome delivery is best-effort and does not roll back signup. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never receives signup welcome copy.
 
 ## Tutor invite flow
 
@@ -1131,7 +2761,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Admin Module (admin)
 
-- `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, tutor payout report/preview/prepare/record/void/reconciliation, tax defaults/override, `getV3EconomySettings`, `previewV3EconomySettings`, `saveV3EconomySettings`
 
 ### AdminKnowledgeBank Module (admin)
 
@@ -1270,19 +2900,21 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## Auth Config
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening); the configured Google provider sends `prompt=consent` so the Google permission screen is shown during verification runs even for a previously authorized account.
-- Production/staging admin bootstrap uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; existing admins are preserved and the normal admin role-management flow remains available for other addresses.
+- Admin bootstrap outside test mode uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; development, staging, and production are included. Existing admins are preserved and the normal admin role-management flow remains available for other addresses.
 - Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: session cookies use sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. The short-lived Better Auth OAuth state cookie is explicitly sameSite=lax so the signed state returns on the provider's top-level callback GET; it remains secure/httpOnly and is checked against the database verification record. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site. Google login uses `prompt=consent` to make the provider permission screen visible for verification evidence; it requests identity scopes only and does not add the server-side Meet/Calendar scope to every user's login.
 - `CogitoUser` type exported with role field.
 - Web email sign-in and sign-up treat authentication as one awaited handoff: Better Auth must return success, the client reads a fresh session with `disableCookieCache`, and then TanStack Router navigates by a validated return path or the role/onboarding default. Tutor accounts without a profile, or with `draft`/`changes_requested` onboarding status, go to `/profile`; tutors in review, approved, published, or suspended states and admins go to `/dashboard`, as do students by default. The client suppresses Better Auth's overlapping session signal refresh during that handoff so the form does not remount into the global pending loader; the authenticated shell uses the same fresh session source for its parent route guard. A user whose fresh session has `emailVerified !== true` is sent to `/verify-email` after a new OTP request, including legacy accounts created before verification was introduced; the selected post-login destination is preserved for after verification. Existing users are not backfilled as verified. This is frontend-only and does not change auth endpoints or persistence.
 - The `/login` email forms validate each touched field on change and blur, keep the client rules aligned with the server password policy, show inline Selia field errors and danger outlines for touched or blocked fields, and normalize name/email whitespace before calling Better Auth. This is presentation and client-validation behavior only; it does not change auth endpoints or persistence.
-- **Pending (foundation hardening):** password policy — **fully implemented (C6 closed by REVIEW-FIXES-3 P6)** — min 8 via `minPasswordLength` + upper/lower/digit via `assertPasswordPolicy` enforced in the server auth route at sign-up (`apps/server/src/routes.ts`), mirrored in the sign-up form (single consistent statement — 2026-08-17). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`); the authenticated web shell warns during the final 30 minutes and keeps the existing unauthorized redirect as the fallback. **Email verification (G2) — implemented (REVIEW-FIXES-4 P4.4, #76), enforcement level: sign-up/sign-in routing plus paid actions** — better-auth `emailOTP` plugin (6-digit OTP, 5 min expiry, `sendVerificationOnSignUp`), OTP delivered via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); the automatic email/password signup OTP uses the same message as the P2 welcome/onboarding copy, so it creates one provider delivery instead of separate welcome and verification emails. `/verify-email` UI route collects the code; `auth.api.verifyEmailOTP` marks the user verified. New and legacy users with `emailVerified !== true` are sent to `/verify-email` after email/password or Google sign-in, with a new OTP request and a validated return path; existing users are not backfilled as verified. **Enforcement (backend finalization):** the four booking-create procedures (`booking.createSolo/createGroup/createSeries/createGroupSeries`) and `payment.createPurchase` run on `verifiedStudentProcedure` (`procedures.ts`), which throws `FORBIDDEN` ("Email verification required") unless the session user is a student with `emailVerified === true` — an unverified user cannot create bookings or purchase Marks.
+- **Pending (foundation hardening):** password policy — **fully implemented (C6 closed by REVIEW-FIXES-3 P6)** — min 8 via `minPasswordLength` + upper/lower/digit via `assertPasswordPolicy` enforced in the server auth route at sign-up (`apps/server/src/routes.ts`), mirrored in the sign-up form (single consistent statement — 2026-08-17). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`); the authenticated web shell warns during the final 30 minutes and keeps the existing unauthorized redirect as the fallback. **Email verification (G2) — implemented (REVIEW-FIXES-4 P4.4, #76), enforcement level: sign-up/sign-in routing plus paid actions** — Better Auth `emailOTP` plugin (6-digit OTP, 5 min expiry) handles existing-account verification via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); public email/password signup uses the REQ-AUTH-01 pre-account OTP flow and attempts separate welcome mail after the account-creation transaction commits. `/verify-email` UI route collects the code; `auth.api.verifyEmailOTP` marks the user verified. New and legacy users with `emailVerified !== true` are sent to `/verify-email` after email/password or Google sign-in, with a new OTP request and a validated return path; existing users are not backfilled as verified. **Enforcement (backend finalization):** the four booking-create procedures (`booking.createSolo/createGroup/createSeries/createGroupSeries`) and `payment.createPurchase` run on `verifiedStudentProcedure` (`procedures.ts`), which throws `FORBIDDEN` ("Email verification required") unless the session user is a student with `emailVerified === true` — an unverified user cannot create bookings or purchase Marks.
 
 ## CI/CD
 
-- **CI test and coverage performance (2026-09-02):** `.github/workflows/ci.yml` restores the shared Bun install cache before `bun install`, and typecheck/build restore separate Turbo caches. Pull requests use full git history plus Turbo `--affected` for typecheck and build; manual dispatches still run the full graph. The web `check-types` task runs `tsgo --noEmit`, leaving the production Vite build to the Build job. Test + Coverage starts independently of lint/typecheck, runs one lcov-producing coverage suite, then the server suite in a separate process because its webhook test uses `mock.module`; the previous duplicate uninstrumented API pass is removed. A failed coverage test command is explicitly propagated after the coverage comment/gate step.
-- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, starts the web server in Vite `test` mode, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown.
+- **CI test and coverage performance (2026-09-02):** `.github/workflows/ci.yml` restores the shared Bun install cache before `bun install`, and typecheck/build restore separate Turbo caches. Pull requests use full git history plus Turbo `--affected` for typecheck and build; manual dispatches still run the full graph. The web `check-types` task runs `tsgo --noEmit`, leaving the production Vite build to the Build job. Test + Coverage starts independently of lint/typecheck, captures and merges the three coverage partitions, then runs the server suite in a separate process because its webhook test uses `mock.module`; the previous duplicate uninstrumented API pass is removed. A failed coverage test command is explicitly propagated after the coverage comment/gate step.
+- **V3 API coverage defaults (2026-10-30):** after migrations, Test + Coverage runs `bun run seed --defaults-only` from `apps/server` on its disposable primary database. This inserts canonical competition taxonomy, Marks packages, and active V3 pricing without demo tutor/student bookings. The API reset helper restores the same V3 package and economy defaults after each authorized reset; it does not restore legacy economy values.
+- **Coverage process isolation:** Resettable integration files each run in a separate Bun process with a unique counter output before merging. Multiple isolated workers must not share COUNTER_COVERAGE_FILE because their flushes overwrite earlier files. The collector regression suite verifies unique per-file partitions; 100% line, function, and branch gates remain in force.
+- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, starts the web server in Vite `test` mode, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown. Test + Coverage uses disposable PostgreSQL services at runner ports 6769 (`cogito-test`) and 6770 (`cogito-test-payout`); the payout schema is migrated separately and `booking-payout-g16.test.ts` runs only against the latter with its reset consent scoped to that command. Reset-free report fixture suites run on 6769 without reset overrides. Bun writes each run's LCOV output to the configured `coverage/lcov.info`; the workflow clears that file before each of the resettable, fixture, and payout partitions, then snapshots the fresh non-empty profile under `coverage/api-*` before the next Bun process replaces it. The three raw profiles are merged to `coverage/lcov.merged.info` before the unchanged coverage gate; the comment step only reads this merged output after the test/merge step succeeds. The DB unit test mock includes a test-only auth secret because Bun can share module mocks with integrations in the resettable process; it restores its shared server env mock after each case so the SSL-redaction setup cannot leak NODE_ENV=development into resettable auth integrations. `.github/scripts/merge-lcov.test.ts` verifies line/function/branch unions, raw profile preservation, and rejects missing, empty, or recordless profiles. The E2E job maps disposable PostgreSQL targets 6769/cogito-test and 6770/cogito-test-payout, with separate Redis services on 6381 and 6382. Regular browser tests use strict Turbo env forwarding, the full T05 target tuple, and T06/T07 role-state opt-ins; the three payout specs run separately against 6770/6382 with T05 variables unset. E2E_AUTH_RATE_LIMIT_RESET is explicit workflow consent for a target-guarded helper that clears only disposable auth limiter keys before seeded sign-ins; the production rate limit is unchanged. Report fixture reset overrides remain absent, and T05 keeps its fresh per-run student identity.
 - **CD**: The production workflow and `scripts/migrate-and-deploy.sh` are restored to their last known successful state at `bb1ccb9a` after a VPS-side immutable-image pull exhausted disk and crashed the self-hosted runner. GitHub Actions builds and pushes server/web images on a hosted runner; the VPS job resolves the private database, runs pg_dump → private R2 snapshot → `bun run db:migrate`, posts the configured Coolify webhook, and verifies `/health.version`. The VPS deploy job does not pull application images directly. Infra apply and production CD share the `production-deploy` concurrency group, preventing env restarts from racing image rollout.
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
@@ -1293,7 +2925,30 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 - **Scheduler boot**: The BullMQ worker + 7 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s, `escalate-support-tickets` 15m, `retry-failed-meetings` 5m, `reconcile-payments` 15m — wired in `apps/server/src/scheduler.ts`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email/SLA/payment-reconciliation jobs never run. **Fail-loud boot:** when `SCHEDULER_ENABLED=true` but Redis is unreachable, `initScheduler()` pings the shared Redis (`checkSchedulerHealth`) and **throws — the boot aborts** instead of silently running without the expiry/hold-release/email/payment-reconciliation jobs. `send-notification-email` consumes the email outbox (`notification.dispatchQueuedEmails`): notification writes queue dispatch rows (`status='queued'`) inside the DB transaction and the scheduler sends them, so no email I/O happens inside open transactions. `GET /health` surfaces a `checks.scheduler` entry (`ok`/`error`/`degraded` from the same Redis ping), so a dead scheduler trips the readiness check.
   1d8dd3b (feat(infra): add OVH Terraform and Coolify bootstrap)
 
+PR310 LCOV merge behavior (23 October 2026): Bun may emit `FNF`/`FNH` without function identities. The merger preserves the exact named union and uses the maximum profile summary and known named counts as conservative lower bounds, writes a function-identity sidecar, and labels incomplete counts in the PR report. It fails the unchanged 100% gate when unidentified functions remain uncovered; incomplete identities are not described as a fully measured function union.
+
+PR310 CI follow-up (23 October 2026): Run [#39896841727](https://github.com/cogitoacademy/app/actions/runs/39896841727) passed Build, Lint and Type Check. Test + Coverage stopped on two server guard unit assertions that expected obsolete denial text; the coverage threshold step was skipped, so this run does not establish a coverage failure. The regular E2E partition had eight failures: outdated empty-state copy, a seeded wallet with an earlier 126-Mark booking hold, stale pre-V3 pricing assertions, and report fixtures with overlapping fixed schedule times. The payout partition failed during setup because nested Bun children loaded the regular env file instead of the selected payout file. Scoped fixes preserve strict guards and production limits, give the exact 6769 T05 booking/lifecycle student 326 Marks for its 126-Mark booking hold, and create a second run-scoped 200-Mark student for the parallel multi-plan class journey. They also assert current student Marks pricing and the read-only tutor honorarium table, use retry-stable class session dates, and pass the resolved absolute E2E env file into child Bun commands. Both browser partitions, all tests and the 100% coverage thresholds remain enabled. Focused pure guard/environment checks pass 15 tests / 50 expectations under available Bun 1.4.0-canary.1, and Playwright test discovery lists 54 tests across 14 files without starting a browser; pre-commit lint/format hooks pass with existing lint warnings; the serial pre-push check, push and one manual CI dispatch remain. No local database, Redis, seed, migration or provider operation is part of this follow-up.
+
+Run [#39909560681](https://github.com/cogitoacademy/app/actions/runs/39909560681) on `6ef0b948` passed Build, Lint and Type Check. The two server reset-guard assertions are now resolved; server tests finished with 152 passed, one skipped, and zero failures. All three coverage partitions also passed (3,031 resettable tests, 56 fixture tests, and 11 payout tests), but the merger stopped because `coverage/api-resettable/lcov.info` was absent. Bun 1.3.14 printed the full resettable coverage table but did not create the requested custom `--coverage-dir` path; a focused run under available Bun 1.4.0-canary.1 reproduced the configured default output at `coverage/lcov.info`. The workflow now removes that default profile before each partition, requires a fresh non-empty LCOV file, and copies it into the partition path before the next process. The merger remains fail-closed and all 100% thresholds remain unchanged. E2E completed with payout successful and the regular partition at 45 passed, 5 failed, and 1 flaky. Three class enrollment/report failures came from sharing the run-scoped student wallet: the multi-plan journey spends 149 Marks while the other class journeys need 80, 22, and 25 after the seeded 126-Mark booking hold. The multi-plan case now uses a second run-scoped 200-Mark student in its dedicated authenticated browser context; the T05 326-Mark balance and the 80/44/25 and insufficient-funds assertions remain unchanged. The class-publish journey exceeded Playwright's default 30-second test timeout, so that one multi-step test now has 90 seconds with its assertions intact. The uppercase auth `NOT_FOUND` log corresponds to the deliberate case-variant route rejection in `pre-account-signup.spec.ts`. The flaky FAQ validation passed on retry. This run does not establish a coverage-threshold failure.
+
+Run [#39913840116](https://github.com/cogitoacademy/app/actions/runs/39913840116) passed Build, Lint, Type Check and all server/coverage test partitions (152 server tests passed, one skipped; the three coverage partitions had zero failures), but the merger stopped because Bun 1.3.14 emitted `FNF`/`FNH` summaries without `FN`/`FNDA` identities for some sources. The 100% threshold step did not run. E2E had 48 regular passes and 3 regular failures; all 3 payout tests passed. The failed regular cases were the class-publish helper using calendar-dialog selectors for native `datetime-local` inputs, an ambiguous replacement-start accessible name, and class-report assertions matching a timestamp plus badge while the report enrollment reused a wallet depleted by parallel class journeys. The helper now fills and checks the native value, the enrollment test selects the textbox role, and T07 uses its own run-scoped 200-Mark report student. The 326-Mark booking/lifecycle wallet, the multi-plan 200-Mark wallet, and the 80/44/25 and insufficient-funds checks remain intact. Focused LCOV merger tests pass 6 tests / 55 expectations; E2E identity fixture tests pass 2 / 4. At that checkpoint the edits were still unpushed; the later 8945d6b update and current CI follow-up are recorded below.
+
+PR310 follow-up on `90863a22`, based on `8945d6b` (23 October 2026): The partition runner uses a temporary Bun config without the per-file 80% threshold; the merged gate retains 100%. Class schedule E2E uses Selia calendar and minute-time controls, keeps generated dates inside the calendar future range, and matches report-version text exactly. The focused LCOV suite passes 11 tests / 145 expectations under Bun 1.4.0-canary.1; touched TypeScript formatting passes and focused lint exits 0 with existing `no-await-in-loop` warnings. Normal pre-push passed on `90863a22` (serial typecheck 4/4 tasks, 25.04 seconds). Full hosted CI [run 39939287307](https://github.com/cogitoacademy/app/actions/runs/39939287307) is in progress on this code commit. No local database or browser acceptance ran.
+
 ## Plans
+
+### Release v3 planning baseline (2026-10-18)
+
+The Post-Meeting Release Scope has a development planning package in
+`docs/plans/active/RELEASE-V3-PRD.md`, `RELEASE-V3-SPEC.md`, and
+`RELEASE-V3-TASKS.md`. The source/code audit and consolidated open decisions are
+in `docs/client/RELEASE-V3-AUDIT.md` and `RELEASE-V3-DECISIONS.md`.
+Status: draft specifications, not implemented functionality. Baseline app HEAD:
+`14dc4486`; website checkout reviewed: `ab43c2fc`. Financial/enrollment decisions
+remain gated as recorded in the decision register. User clarification on
+2026-10-18: website content requires English, Indonesian is optional, both inputs
+must be available; the app interface stays entirely English. This is a planned
+content contract, not a claim that all current forms already enforce it.
 
 Active plans live in `docs/plans/active/` (indexed in `docs/plans/README.md`).
 Completed plan documents are deleted when their work merges (policy set
@@ -1306,12 +2961,13 @@ file are the permanent record; plan-file archives are not maintained.
 > ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
 > decision). Fresh clones need no `.superpowers/` content.
 
-| Plan                                                  | Status                                                           |
-| ----------------------------------------------------- | ---------------------------------------------------------------- |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending    |
-| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan |
-| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                       |
-| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining      |
+| Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the status authority. T07 PDF/reminders, T09 settlement/admin usage and T12 KB/calendar implementation are integrated. Local dev activation and historical DB/browser results are documented in dated checkpoints. T09/T12 remain in progress for provider, production/storage, restore and client acceptance. T13 has bounded current-head regression evidence, not full release acceptance. Q04 and Q15 are resolved and implemented; Q14, OPS01 and final release gates remain open. |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active
 production payment-provider guide.
@@ -1438,54 +3094,54 @@ still pending).
 
 Status column: **Fixed** = verified in code on main after #17 merge; **Open** = not yet implemented.
 
-| ID  | Bug                                                                    | Priority | Story | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --- | ---------------------------------------------------------------------- | -------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A4  | withdraw→cancel doesn't release other participants' holds              | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A5  | confirmedHeadcount not decremented on withdraw                         | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A6  | holdAmount not zeroed on cancel/decline/expire                         | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| A7  | Series cancel doesn't cascade to bookingSession rows                   | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever              | P0       | 2     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron              | P0       | 2     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C1  | booking.get() IDOR — no ownership check                                | P0       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C2  | booking.listSessions() IDOR — no ownership check                       | P0       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C3  | Tutor actions lack tutorProcedure role guard                           | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C4  | resendInvite doesn't invalidate old token                              | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C5  | OpenAPI spec exposed without auth                                      | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| C6  | No password policy                                                     | P1       | 4     | **Fixed** — `minPasswordLength: 8` + `assertPasswordPolicy` upper/lower/digit enforced server-side at sign-up (REVIEW-FIXES-3 P6, #65)                                                                                                                                                                                                                                                                                                                      |
-| D1  | Wallet ledger insert not atomic with balance update                    | P0       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| D2  | 8 read-then-write race conditions without optimistic lock              | P1       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| D3  | Payment webhook out-of-order delivery — user not credited              | P0       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| D4  | Booking creation has no idempotency key                                | P1       | 7     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| E1  | notification.write() swallows all errors silently                      | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| E2  | Google Meet + Resend calls have no timeout                             | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| E3  | No statement_timeout on DB pool                                        | P1       | 6     | **Fixed** (`packages/db/src/index.ts:20` — `statement_timeout: 30_000`)                                                                                                                                                                                                                                                                                                                                                                                     |
-| E4  | No uncaughtException handler                                           | P1       | 6     | **Fixed** (`apps/server/src/index.ts:24`)                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| E5  | Webhook timestamp validation disabled outside production               | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| F1  | Unbounded string inputs (no .max()) — DoS vector                       | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| F2  | Unbounded array inputs (no .max())                                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| F3  | Dates not validated to be in the future                                | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| G1  | No session expiry configured                                           | P1       | 4     | **Fixed** (`packages/auth/src/index.ts:39` — `expiresIn: 60*60*24*7`)                                                                                                                                                                                                                                                                                                                                                                                       |
-| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | **Fixed (REVIEW-FIXES-4 P4.4)** — better-auth `emailOTP` plugin (6-digit OTP, 5 min expiry, `sendVerificationOnSignUp`) plus sign-in routing for legacy and new unverified accounts, OTP delivered via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); the automatic signup OTP also carries the P2 welcome/onboarding copy in the same email, `/verify-email` UI route; `auth.api.verifyEmailOTP` marks the user verified |
-| G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     | Fixed — session cookies remain sameSite=strict in production; the short-lived OAuth state cookie is sameSite=lax for the Google top-level callback and remains signed, secure, and httpOnly                                                                                                                                                                                                                                                                 |
-| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** (`packages/api/src/lib/security-headers.ts:15` — `connect-src 'self' ${corsOrigin}`)                                                                                                                                                                                                                                                                                                                                                              |
-| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| I2  | Missing composite index for overlap check query                        | P2       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| I3  | Dev DB logging may expose sensitive params                             | P2       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| J1  | No React error boundary — blank page on crash                          | P1       | 9     | Fixed (`apps/web/src/components/error-boundary.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                        |
-| J2  | No auth session expiry handling on frontend                            | P1       | 9     | **Fixed (2026-08-22)** — authenticated shell warns during the final 30 minutes, offers sign-in again, and preserves the existing 401 redirect                                                                                                                                                                                                                                                                                                               |
-| J3  | 4 dead frontend components                                             | P2       | 9     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 7 repeatable jobs have `attempts: 3` + exponential backoff; DLQ added (prod-fixes M4): failed jobs land in `cogito-jobs-dlq` + bounded Redis list `cogito:dlq` (100 entries)                                                                                                                                                                                                                                                                    |
-| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Fixed — `lib/metrics.ts` evicts entries older than 10 min (cleanup every 60s)                                                                                                                                                                                                                                                                                                                                                                               |
+| ID  | Bug                                                                    | Priority | Story | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --- | ---------------------------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A4  | withdraw→cancel doesn't release other participants' holds              | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A5  | confirmedHeadcount not decremented on withdraw                         | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A6  | holdAmount not zeroed on cancel/decline/expire                         | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A7  | Series cancel doesn't cascade to bookingSession rows                   | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever              | P0       | 2     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron              | P0       | 2     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C1  | booking.get() IDOR — no ownership check                                | P0       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C2  | booking.listSessions() IDOR — no ownership check                       | P0       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C3  | Tutor actions lack tutorProcedure role guard                           | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C4  | resendInvite doesn't invalidate old token                              | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C5  | OpenAPI spec exposed without auth                                      | P1       | 3     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| C6  | No password policy                                                     | P1       | 4     | **Fixed** — `minPasswordLength: 8` + `assertPasswordPolicy` upper/lower/digit enforced server-side at sign-up (REVIEW-FIXES-3 P6, #65)                                                                                                                                                                                                                                                                                                                                                               |
+| D1  | Wallet ledger insert not atomic with balance update                    | P0       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D2  | 8 read-then-write race conditions without optimistic lock              | P1       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D3  | Payment webhook out-of-order delivery — user not credited              | P0       | 5     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D4  | Booking creation has no idempotency key                                | P1       | 7     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| E1  | notification.write() swallows all errors silently                      | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| E2  | Google Meet + Resend calls have no timeout                             | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| E3  | No statement_timeout on DB pool                                        | P1       | 6     | **Fixed** (`packages/db/src/index.ts:20` — `statement_timeout: 30_000`)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| E4  | No uncaughtException handler                                           | P1       | 6     | **Fixed** (`apps/server/src/index.ts:24`)                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| E5  | Webhook timestamp validation disabled outside production               | P1       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| F1  | Unbounded string inputs (no .max()) — DoS vector                       | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| F2  | Unbounded array inputs (no .max())                                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| F3  | Dates not validated to be in the future                                | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| G1  | No session expiry configured                                           | P1       | 4     | **Fixed** (`packages/auth/src/index.ts:39` — `expiresIn: 60*60*24*7`)                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | **Fixed (REVIEW-FIXES-4 P4.4)** — the Better Auth emailOTP plugin for existing-account email verification and sign-in routing for legacy and new unverified accounts, with OTP delivery through the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`). Public email/password signup now uses the REQ-AUTH-01 pre-account proof flow and sends welcome/onboarding mail separately after commit, `/verify-email` UI route; `auth.api.verifyEmailOTP` marks the user verified |
+| G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     | Fixed — session cookies remain sameSite=strict in production; the short-lived OAuth state cookie is sameSite=lax for the Google top-level callback and remains signed, secure, and httpOnly                                                                                                                                                                                                                                                                                                          |
+| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** (`packages/api/src/lib/security-headers.ts:15` — `connect-src 'self' ${corsOrigin}`)                                                                                                                                                                                                                                                                                                                                                                                                       |
+| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| I2  | Missing composite index for overlap check query                        | P2       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| I3  | Dev DB logging may expose sensitive params                             | P2       | 8     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| J1  | No React error boundary — blank page on crash                          | P1       | 9     | Fixed (`apps/web/src/components/error-boundary.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| J2  | No auth session expiry handling on frontend                            | P1       | 9     | **Fixed (2026-08-22)** — authenticated shell warns during the final 30 minutes, offers sign-in again, and preserves the existing 401 redirect                                                                                                                                                                                                                                                                                                                                                        |
+| J3  | 4 dead frontend components                                             | P2       | 9     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 7 repeatable jobs have `attempts: 3` + exponential backoff; DLQ added (prod-fixes M4): failed jobs land in `cogito-jobs-dlq` + bounded Redis list `cogito:dlq` (100 entries)                                                                                                                                                                                                                                                                                                             |
+| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Fixed — `lib/metrics.ts` evicts entries older than 10 min (cleanup every 60s)                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### 2026-08-14 audit additions (implemented via PR #46)
 
@@ -1554,14 +3210,14 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 | M7  | MED      | Withdraw from `AWAITING_ADMIN_ROOM_APPROVAL` regresses to reconfirmation but leaves the `requested` roomBooking live for admin assign. **FIXED** (REVIEW-FIXES-4 P2.13): both the group regression path and the solo/series cancel path call `roomPort.cancelRequestedRoomForBooking` (new room-service method: cancels the pending `requested` row, no-op if already confirmed/cancelled) so an admin `assignRoom` mid-reconfirmation cannot resurrect a room for a booking heading back to tutor review                                                                                                                                                                                                                                                                                                                                                                                                                                           | `booking.service.ts` (withdraw), `room.service.ts`                                                               |
 | M8  | MED      | Pre-H2 withdraw group reprice throws `InsufficientMarksError` and rolls back the withdrawal (PRD TC-19: fall through to expiry). **FIXED** (REVIEW-FIXES-4 P2.15): the withdraw regression branch catches `InsufficientMarksError` from `repriceGroupForHeadcount`, releases the remaining participants' holds, zeroes the booking hold and transitions to EXPIRED (mirroring the B5 expiry fallback) — the withdrawer is never stuck in a group they cannot leave                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `booking.service.ts` (withdraw/repriceGroupForHeadcount)                                                         |
 | M9  | MED      | Knowledge Bank eligibility was previously exposed to every protected role. **UPDATED (2026-09-01):** the endpoint and content/file paths admit students, tutors, and admins; students retain the 35-Mark total-balance gate while tutors and admins bypass it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `wallet.router.ts`, `content.router.ts`, `apps/server/src/routes.ts`                                             |
-| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
+| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold. P2 follow-up recomputes the admin-cancelled parent hold from remaining confirmed participants and finalizes the series after every child is completed or cancelled, releasing residual holds                                                                                                                                                                                                                                                                                                                      | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
 | L2  | LOW      | `meetingEvent` row written on the global `db`, not the booking tx → tx rollback after Google event creation leaves an orphan event + row; tutor re-accept duplicates the event. **FIXED** (REVIEW-FIXES-4 P2.17): `MeetingPort.createEvent` accepts an optional `conn` (DbOrTx) and both providers write the local row through it, so the row commits/rolls back with the booking; `finalizeMeetingSchedule` passes the booking `tx` and best-effort `cancelEvent`s the provider event when the tx fails after creation (no orphan, no duplicate on re-accept)                                                                                                                                                                                                                                                                                                                                                                                      | `google-meeting.provider.ts`, `booking.service.ts`                                                               |
 | L3  | LOW      | "Meeting link ready" notification sent even with no URL (fallback provider) — should say "link pending". **FIXED** (REVIEW-FIXES-4 P2.17): `finalizeMeetingSchedule` derives the copy from `meetingResult.meetingUrl` — "Meeting link ready" only when a URL exists, otherwise "Meeting link pending" (manual/fallback rows)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `booking.service.ts`                                                                                             |
 | L4  | LOW      | Webhook timestamp validation was provider-agnostic; Midtrans notifications use a body signature and no timestamp header. **FIXED**: timestamp validation is provider-conditional and skipped for Midtrans                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `apps/server/src/webhooks/payments.ts`                                                                           |
 | L5  | LOW      | `infra/.env.prod.example`/RUNBOOK env table stale — missing R2__, GOOGLE_MEET__, GOOGLE_IMPERSONATED_USER, WEBHOOK_ALLOWED_IPS, SEED_*; RUNBOOK references non-existent `RESEND_FROM_EMAIL` (actual `EMAIL_FROM`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `infra/*.example`, `docs/RUNBOOK.md`, `infra/monitoring.md`                                                      |
 | X1  | —        | **Retired provider readiness** — historical implementation completed and later removed during the Midtrans cutover. Active runtime supports `stub`/`midtrans`; historical payment rows remain readable for audit/reconciliation, with no retired-provider rollback path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `docs/MIDTRANS-MIGRATION.md`, `midtrans-payment.provider.ts`, `payment.service.ts`, `packages/env/src/server.ts` |
 | X2  | —        | Resend: correct provider; missing `NODE_ENV=production` requirement on `RESEND_API_KEY` → silent stub suppresses all critical emails with no alert. **FIXED** (REVIEW-FIXES-4 P4.1 + prod-fixes C2): env schema superRefine requires `RESEND_API_KEY` when `NODE_ENV` is production/staging and rejects the dev-default `EMAIL_FROM` (must be a verified Resend address)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `packages/env/src/server.ts`                                                                                     |
-| X3  | —        | Google Meet: both auth paths correct; missing `GOOGLE_IMPERSONATED_USER` guard for SA mode (events land on the SA's own calendar), no boot-time probe, `.env.prod.example` broken. **FIXED** (REVIEW-FIXES-4 P4.2): env schema requires a complete credential set when `GOOGLE_MEET_ENABLED=true` (OAuth triple OR SA email+key) and `GOOGLE_IMPERSONATED_USER` in SA mode; boot-time `meeting.probe()` (calendarList.get) logs loudly on failure (wired into server bootstrap); `.env.prod.example` + `.env.staging.example` corrected. Also fixed `z.coerce.boolean()` coercing the string `"false"` to `true`                                                                                                                                                                                                                                                                                                                                    | `google-meeting.provider.ts`, `infra/.env.prod.example`, `packages/env/src/server.ts`                            |
+| X3  | —        | Google Meet: both auth paths correct; missing `GOOGLE_IMPERSONATED_USER` guard for SA mode (events land on the SA's own calendar), no boot-time probe, `.env.prod.example` broken. **FIXED** (REVIEW-FIXES-4 P4.2): env schema requires a complete credential set when `GOOGLE_MEET_ENABLED=true` (OAuth triple OR SA email+key) and `GOOGLE_IMPERSONATED_USER` in SA mode; boot-time `meeting.probe()` (calendarList.get) logs loudly on failure (wired into server bootstrap); `.env.prod.example` + `.env.staging.example` corrected. Also fixed `z.coerce.boolean()` coercing the string `"false"` to `true`; empty and whitespace-only boolean values use their schema defaults                                                                                                                                                                                                                                                                | `google-meeting.provider.ts`, `infra/.env.prod.example`, `packages/env/src/server.ts`                            |
 | X4  | —        | R2: the old manual presigned-POST flow was rejected by R2 with `501 NotImplemented` because R2 does not support multipart-form POST presigned URLs. **FIXED** (2026-09-01): R2 uses the AWS SDK presigned PUT flow with signed content type/length, and the upload bucket has browser CORS for the local and production app origins. The existing env guard still requires all four `R2_*` vars together AND `R2_PUBLIC_URL` in production.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `storage.ts`, `packages/env/src/server.ts`, R2 bucket CORS policy                                                |
 | X5  | —        | WhatsApp/SLA: no WhatsApp adapter (out of scope until approved); SLA business-hours WIB not implemented (H5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                                                                |
 
@@ -1763,8 +3419,248 @@ Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit f
 
 ## Tutor weekly honorarium and payout account (2026-08-28)
 
-Tutor-facing financial UI uses IDR only; internal/student Marks values are not presented to tutors. The tutor dashboard shows completed-session honorarium awaiting admin payment, not a calendar-reset total. Admin-confirmed payout records advance an exclusive cutoff so the pending amount clears only after payment. Tutor profiles store private payout bank details: bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment. Only the exact bank name `BCA` is fee-free, representing conventional BCA; BCA Syariah, `blu` (BCA Digital), and every other bank name incur a Rp2,500 deduction once per payout. The public tutor discovery projection omits all payout fields.
+Tutor-facing financial UI uses IDR and never presents internal/student Marks. The tutor dashboard reads only the authenticated tutor's unpaid count, gross, rate/status, tax, transfer fee, net, and own payout history. NIK/NPWP and bank account fields stay out of public discovery and tutor finance responses. A new payout requires legal name, 16-digit NIK, and complete bank details; published tutors may continue teaching before tax-profile completion.
+
+Admin payout uses immutable selected-source previews and two phases: prepare the versioned fee/profile/rate/bank snapshot, then record the externally performed transfer only after its exact net amount is paid. Admin default rates are configurable (250 bps for NIK+NPWP, 300 bps for NIK-only and missing identity), with audited tutor overrides. Whole-IDR withholding uses basis-point arithmetic and one Rp2,500 non-BCA fee per batch; exact bank name `BCA` is fee-free. The historical cutoff applies only to allocationless aggregate rows; pre-T03 rows that already have source allocations are scoped by those rows even when preview fields are NULL. Void keeps history and releases allocations; when transfer evidence exists, reconciliation blocks repayment for each released source until audited resolution. Admin and tutor history, CSV, and payout notifications label missing legacy coverage/tax snapshots as unavailable rather than inventing zero values. Paid CSV rows use saved snapshots and actual `paidAt` in Asia/Jakarta, with void/reconciliation rows separate. No historical aggregate or tax snapshot is backfilled. These defaults are not legal validation; tax-adviser confirmation remains OPS01.
 
 ## Cogito Marks amount presentation (2026-09-08)
 
 Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` component, which prefixes the value with the Cogito mark symbol and supplies an accessible `N Marks` label. Conceptual copy such as “Top Up Marks” remains plain text.
+
+### T07 integrated development checkpoint (21 October)
+
+Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. At that checkpoint PDF export, on-demand admin correction and remaining T06 lifecycle rules were still open; main was unchanged.
+
+### T07 pending-report reminder implementation (21 October)
+
+This isolated T07 worktree wires pending report reminders into the existing
+one-minute class-enrollment scheduler. It queues a bounded batch of
+private tutor reminders for ended, scheduled cohort/masterclass sessions with no
+report. The first reminder is due at session end and repeats per 24 elapsed
+hours; catch-up writes only the current period. Existing unique notification
+event keys and the email outbox provide restart/replay idempotence without a
+migration. The worker rechecks report, class/session state, schedule and tutor
+under the class/session locks. A whole-class cancellation keeps a retained past
+scheduled session eligible; cancelled/completed sessions, completed classes and
+submitted reports stop reminders. It does not touch report, delivery, wallet,
+allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
+PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
+only owned UUID fixtures. No live email, browser or external provider was used.
+At this 21 October class-only checkpoint, legacy solo/group/series reminder
+coverage remained pending; the 23 October continuation below records its
+implementation. PDF export and the
+dedicated on-demand admin correction workflow remain pending.
+
+### T07 legacy on-demand missing-report reminders (23 October)
+
+The existing one-minute `class-enrollment-check` scheduler now also runs a
+bounded tutor-only worker for ended solo/group bookings and scheduled series
+children without their matching report. It repeats at session end and every 24
+elapsed hours, with delayed runs writing only the current period. The worker
+locks the booking and (for a series) its child, then rechecks tutor, state,
+schedule, report absence and event identity in the notification/outbox
+transaction. Whole-session cancel/completed/no-show states are excluded;
+participant-level group/series no-show does not by itself mean the remaining
+session was not delivered. The message explicitly asks tutors to report only if
+delivery occurred. It does not mutate completion, report, wallet, fee or
+settlement state and adds no migration. SQL eligibility, elapsed periods, and
+locked schedule fingerprints use full stored timestamp precision; only the
+pagination cursor is normalized to milliseconds. Historical focused suites
+passed 7 / 27 and 8 / 33; the current unit suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached). Guarded non-reset PostgreSQL acceptance passed 3 tests / 32 expectations at 127.0.0.1:6769/cogito-test; browser and actual email delivery remain open. PDF remains open.
+
+The global bounded scan advances a process-local keyset cursor after each
+candidate, including failed outbox writes, and wraps to retry the oldest due
+items. Restart returns to the oldest item; event-key/outbox dedupe is durable,
+but the fairness cursor is not. A unit regression covers a failed 100-item
+batch progressing to later eligible bookings and wraparound retry. Guarded
+PostgreSQL regressions for actual report/state rechecks, duplicate scheduling,
+tutor-only email outbox identity, microsecond cursor progress, single and
+series-child 24-hour boundaries, due-at-end and same-millisecond reschedule
+rejection passed 3 tests / 32 expectations on guarded loopback 127.0.0.1:6769/cogito-test, with test-only timestamp fixture corrections and no migration, reset, or seed. The current
+focused unit suite
+passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached).
+
+### KOL responsive polish checkpoint
+
+Frontend checkpoint (2026-10-25): KOL settlement responsive polish only. Long unbroken history references overflowed the card (1743px content at 288/358/736/1119px card widths) and were clipped by the existing app scroller. Settlement cards now wrap identifiers; settlement/export buttons grow with labels and retry actions wrap. Synthetic Edge checks pass 13/13; see RUNBOOK. No backend, accounting or authorization changes. Economy, payout, class/report, native 200% zoom, RTL and screen-reader acceptance remain unverified.
+
+### Economy/payout responsive checkpoint (25 October 2026)
+
+The bounded frontend slice gives V3 economy amount controls a 14rem minimum width so ten-digit IDR values remain readable inside locally scrolling tables. Shared Card/NumberField styles and financial/auth/RPC behavior are unchanged. Dedicated mocked Edge coverage inspects economy read/edit and tutor payout prepared, unpaid-preview and void/reconciliation drawers at 320/390/768/1440 CSS px. This is synthetic layout evidence, not payout persistence or release acceptance; native 200% zoom remains unverified. See RUNBOOK and the active UI audit plan.
+
+### Canonical KB/calendar management (25 October 2026)
+
+Admin authoring is now part of `/knowledge-bank` (resources/PDFs) and `/calendar` (events), with View/Manage controls on each page. The duplicate KB & calendar sidebar destination is removed; `/admin-content` remains an admin-only compatibility redirect to Knowledge Bank. Student/tutor readers and server-side access gates are retained. Editor queries run only in Manage mode, and save/delete invalidates the corresponding reader query. This UI consolidation requires no migration or API/provider change.
+
+### Academy capacity policy (2026-10-29)
+
+Academy class capacity is set by Cogito per session and is independent of tutor online/offline private teaching limits. Draft save and publication retain tutor status/mode, schedule overlap, session quota, and managed-room capacity validation.
+
+Classes catalog cards on mobile and desktop follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a compact Details action aligned to the right. The same card composition is used across the responsive catalog grid. Prices use Start from with the lowest positive configured cohort plan rate or the masterclass rate; missing rates show Price unavailable.
+
+Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
+
+Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
+
+Classes competition badges use the configured parent competition palette (or the competition itself for root types), with light/dark theme support and a neutral fallback.
+
+Classes card metadata shows tutor names for masterclasses and session count for cohorts; cohort cards omit tutor names and avoid repeating the session count.
+
+Classes card session metadata uses an explicit flex column so icon-bearing Selia Text rows remain stacked vertically.
+
+Cohort catalog cards show the first-to-last session date range instead of a session time. Enrollment copy reflects the per-session start cutoff and availability, not a single cohort-wide deadline; single-session enrollment can select a future session mid-cohort, while full/half plans quote remaining upcoming sessions.
+
+Classes catalog Cohort/Masterclass type badges use the tertiary variant to distinguish them from the card background.
+
+Class detail uses a compact overview with competition palette, tertiary class type, expandable description, schedule metadata and starting price. Desktop enrollment sits beside the overview and expandable session curriculum; mobile order is overview, enrollment, sessions. Existing ClassEnrollmentPanel retains authentication, payment, cancellation and postponement handling. No progress/review/week grouping is inferred.
+
+<!-- Student referral dashboard, 2026-10-29 -->
+
+Student referrals: `/rpc/referral/getMine` now includes `friends` scoped to the authenticated referrer (name, signup date, first completed paid session date, credited Marks). The page shows an invitation panel, inline semester summary and full-width invited-friends table with account-created/completed-session states; zero credited Marks remains visible when no reward was granted. No migration or environment changes required.
+
+Student referral layout (30 October): invitation panel highlights the code and copy action; inline semester metrics precede the full-width friends table. Mobile stacks the invitation content and semester metrics. Completed referrals with zero reward explicitly show No Marks credited.
+
+Enrollment & payment uses one outer Card. Existing enrollment summaries, new-plan payment summary, and quoted top-up use plain sections and dividers; financial calculations and mutation handlers are unchanged.
+
+### Class detail layout validation (2026-10-29)
+
+Compact overview, expandable session curriculum, and the single-card enrollment/payment panel are implemented locally. Focused Edge synthetic browser run: 25 passed in 43.8s, covering catalog/detail widths 320/390/768/1440, keyboard disclosure, long/empty/missing content, starting rate and schedule ordering, unavailable states, signed-out/unverified/tutor route guards, loading/API errors, postponed/sold-out states, mid-cohort single-session request selection, and pending/second-installment/shortfall/defaulted payment controls. Web and E2E typechecks, scoped lint, and diff checks pass. Desktop render was inspected. No live DB checkout, provider/payment, cancellation transaction, or production acceptance was run; broader release gates stay open.
+
+Class enrollment plan selection uses Selia tabs (Full, Half, Single session), retaining allowed-plan restrictions; single sessions use a labeled radio list. Session accordion cards use tighter horizontal and vertical padding.
+
+Plan-tab and compact-session follow-up: 27 focused synthetic Edge cases are covered (26 passed initially; the desktop catalog navigation timeout passed on a focused rerun). Direct/keyboard plan switching and reduced session padding pass at 320/1440px. Web and E2E typechecks, scoped lint and diff checks pass; web typecheck used GOMAXPROCS=2 and GOMEMLIMIT=768MiB after an initial machine-memory failure. Live payment/provider acceptance remains unrun.
+
+Class enrollment uses the Booking summary presentation: warning IconBox header, label/value metadata and cost rows, and a CardFooter action. The single-session radio list excludes sold-out/already-entitled sessions; summary tutor, format, schedule and amounts reflect the selected session. Existing checkout, installment and top-up handlers remain intact.
+
+Booking summary/radio follow-up: 29 focused synthetic Edge browser cases passed (53.4s), plus 6 pricing unit tests / 22 assertions. Final layout adjustment was rechecked with 5 passing overview/radio responsive cases (13.4s). Web/E2E typechecks, scoped lint and diff checks pass. Mobile and desktop renders were inspected. Live database checkout, external payment/provider calls and production acceptance remain unrun.
+
+My referrals Invited friends table has a hover/click InfoPreview on Status explaining Account created and First session completed. The descriptions follow the existing completedAt projection and do not imply a fixed reward beyond the semester cap.
+
+My referrals table and reward note sit directly in a semantic section below the invitation panel and semester summary.
+
+Admin referral layout (2026-10-30): Activity and KOL campaigns use the shared FilterTabBar. Activity opens by default with inline summary metrics above the filtered usage table. Usage details open in a Selia drawer with collapsible technical evidence and saved terms. Existing search, pagination and campaign actions remain; API and reward rules are unchanged.
+
+Classes catalog cards lead with a two-line class title, then competition/type/status badges, then date and session metadata. Starting price and Details share the bottom row. Masterclass date/time is consolidated in metadata. Focused synthetic catalog/enrollment browser checks pass at 320, 390, 768 and 1440px (4/4); mobile render inspected.
+
+Published admin classes render directly in the tab without an outer Card, using the student catalog card grid, title and badge hierarchy, and WIB date tiles; meeting setup and class management remain available within each card.
+
+Class studio: the tab bar has Drafts and icon-only New class actions. Drafts toggles the saved draft list; selecting a draft or creating a class closes the list so the editor appears alone by default.
+
+Shared CardBody table spacing (2026-10-29): remove top padding when a direct-child TableContainer is first and bottom padding when it is last. This also covers tables followed by pagination or preceded by controls, while preserving the inset for those siblings.
+
+Class studio draft list and editor are mutually exclusive. The icon-size New class action opens an editor grouped into details, pricing/enrollment, and sessions cards, following tutor profile form sections. Cohort pricing uses explicit vertical spacing.
+
+The Session Reporting tab in `/class-reports` uses a full-width Selia table for class/session, Jakarta date, format, report status, and selection action. Search and filters narrow by class/session text, class type, date range, and report status; clearing filters resets the list. The selected report reader/editor follows below; narrow screens scroll the table horizontally.
+
+Published class Manage class opens a right-side Selia drawer with a scrollable body containing cancellation and lifecycle controls, replacing the inline accordion.
+
+### Tutor honorarium in booking detail (2026-10-29)
+
+Admin booking participant details show tutor gross IDR honorarium per recorded session with payout status; student wallet and booking ledger remain available.
+
+Page title convention: use Selia `Heading level={1} size="md"` followed by `Text className="max-w-full text-muted"` in a plain div (optionally `min-w-0 max-w-full`).
+
+Class Studio Manage class uses the default Selia side drawer width (max-w-md, 28rem).
+
+Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
+
+Session reports UI: a single empty state replaces redundant export and selection placeholders when no sessions exist. Student Reports now uses a selection toolbar and the eligible catalog; bulk PDF requests include explicit reportIds, with the entitlement window unchanged.
+
+Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.
+
+Notification bell and sidebar booking indicators use red dots. The bell checks unread notifications with `notification.list({ unreadOnly: true, limit: 1 })`; the sidebar requests one action booking instead of 100. No numeric totals are fetched for these indicators.
+
+Tutor pricing (V3 only): Cogito admins own all honorarium rates. Tutor profile updates reject changed `prices` or `baseRatesIdr` even before an economy revision is active. Tutor onboarding does not require legacy rates; without active pricing, the UI shows an admin-configuration message instead of editable inputs. Configure pricing through admin economy settings before new sales.
+
+Referral empty states (30 October): reuse the shared EmptyState with contextual icons and copy. Student invites offer a copy-message action; filtered admin results offer Clear filters; unfiltered activity explains when records appear; an empty KOL list opens the existing create form. No new API or reward rules.
+
+Navigation query caching: fresh query data is reused for 60 seconds on remount; stale or invalidated queries still refetch. First visits still fetch from the API. Live navigation latency has not yet been measured.
+
+Admin referral detail refinement (30 October): table prioritizes student identity, source, split date/time, outcome and right-aligned welcome credit. Compact chevron actions have student-specific accessible labels. Drawer remains mounted with selected content retained during closing so Selia enter/exit transitions can run. Detail sections separate identity/source, rewards/outcome, and collapsible technical evidence; null technical fields are omitted. No RPC or reward-rule changes.
+
+## Student report bulk export (30 October 2026)
+
+The Session Reports workspace defaults to Student Reports for admin/student. Admin selects one student using the toolbar search; students see their own reports. The same input searches report references, sessions and metadata after student selection. One eligible catalog includes private, cohort and masterclass feedback from the existing three-calendar-month entitlement window. Checkboxes select up to 100 reports across client-side filters/pages (10 rows/page); changing student clears selection. View opens a Selia drawer. Download Selected combines exactly the chosen reports into one PDF. Admin Session Reporting and the tutor workspace retain class feedback submission/correction and settlement behavior. Pending reports remain in Session Reporting, outside the downloadable catalog.
+
+POST /reports/student/list and PDF export share the same authorized eligibility loader. Bulk export revalidates every source-qualified ID and returns 409 if any is unavailable; it never silently exports a subset. Route/selection/access/window/PDF-layout tests (19 cases / 71 assertions), focused lint and web typecheck cover this slice; Eight synthetic Edge journeys pass, including exact selected-ID download payloads, empty states, role-specific drawers/editors and selection retention at 320/1440px. Live database/auth and selected-data PDF acceptance remain open.
+
+- Academy class editor: cohort session actions follow Tutor Experience placement: add at the last session footer, icon-only remove at each footer, disabled for the final remaining session.
+
+Admin referral density (30 October): activity records now use a single text line with centered alignment and compact vertical padding. Student email, source owner, reward breakdown and verification remain in the detail drawer; date/time is inline. No API or business-rule changes.
+
+- Academy session editor reuses the class-detail Selia accordion pattern. Sessions expand independently; adding a session opens its fields. Panels stay mounted to retain native form validation.
+
+- Class editor Sessions uses one outer Card with a single heading and description. Session accordion rows use separators rather than individual card surfaces; panel padding preserves field rings.
+
+UI states: use the shared EmptyState for empty collections and Loader without visible loading text for pending content. Loader retains an accessible status label.
+
+Latest shared-checkout typecheck (30 October 2026): web passed before concurrent changes; the final rerun is blocked by academy-class-page.tsx:1274 (Accordion onValueChange unknown[] versus number[]). Server check remains blocked by the unrelated unused MODALITY import in tutor.service.ts. No errors from the bulk-report files were reported. Focused lint, formatting, route/selection/PDF tests and the eight synthetic Edge journeys passed; these do not prove live API/database acceptance.
+
+### Session Reporting workspace
+
+Session Reporting combines ended private booking sessions and cohort/masterclass sessions in one searchable, paginated table. Search accepts BKG/CLS references or titles; type and report-status filters narrow the list. Selecting a row opens its report in a drawer. Student Reports remains the student-centric bulk PDF workspace. Booking detail shortcuts open `/class-reports?workspace=sessions&report=private:<booking-or-child-id>`. Recorded private reports are view-only for tutors and correctable by admins; class report permissions remain unchanged.
+
+Competition types uses a compact Selia table with collapsed category rows and expandable specialization tables. Search reveals matching groups. Superseded migration-0027 seed IDs are excluded from this admin directory; database records remain untouched.
+
+Others article layout follow-up (2026-10-30): at desktop widths (1024px+),
+the detail modal places cover/title/schedule/location in the left column and
+rich article content in the right column. Narrower screens stack metadata
+above the body. No data/API change. Scoped lint and marketing tsc pass.
+
+Activities admin editor layout correction (2026-10-30): the owner intended
+the cogito-app authoring form. At 1024px+, metadata/publication occupies the
+left column and English/optional Indonesian rich-text editors occupy the right
+column, with a larger desktop editing area. Mobile stacks fields above editors.
+Save/cancel remain in the same form. Scoped lint passes; whole-app typecheck
+still reports the pre-existing academy-class-page Accordion type error.
+
+### KB/calendar management controls (2026-10-30)
+
+Admin resource and event lists use tables. Calendar education levels are `sd`, `smp`, `sma`, `mahasiswa`; scale is `international` or `national`, validated by the authoring API. Dates use the shared date picker in WIB, preserving existing times. Manual order is hidden; new entries default to zero and edits retain stored order. Resource categories render verbatim. Admin-only `/rpc/adminContent/previewPdf` accepts `{ "json": { "fileId": "..." } }` and returns a base64 PDF plus its filename, including archived/unattached files; authoring must be enabled. The browser renders a temporary PDF blob and revokes its URL when closed/replaced. Web CSP permits blob frames; deploy the updated nginx configuration with the web app. No database migration is required.
+
+KB/calendar management now follows the FAQ page composition: header add action, status filter, list plus sticky desktop editor, and right-side drawer on smaller screens. Tables remain the record list; opening another entry or closing the editor confirms draft discard.
+
+KB/calendar management refinement: compact rows, shared TablePagination (10 records per page over the loaded admin collection), search resets pagination, no active/archive filter or manual reload control. Existing TanStack Query refresh and mutation invalidation remain. Calendar create/update/delete accept an omitted reason and generate an operation-specific audit reason; Knowledge Bank changes still require a reason. Deploy matching API and web changes together; no environment or database migration changes.
+
+KB/calendar editor confirmation uses Selia Dialog for discarding drafts and deleting entries. Discard confirmation appears only when field values differ from the opened draft; closing an unchanged editor proceeds immediately.
+
+Calendar toolbar: admin management is an accessible gear-only button immediately before Filter inside CompetitionCalendar, including empty calendars. Calendar page/panel widths are constrained to their parent so the 720px month grid scrolls horizontally inside the panel on narrow screens. Focused mocked browser checks cover scroll movement, toolbar placement, manage navigation, and reader visibility; they do not prove live API/data behavior.
+
+### Booking exact top-up (2026-10-30)
+
+Private booking summaries now quote the current Marks shortfall using the existing payment quote and purchase RPCs. A drawer confirms the exact IDR price and opens hosted payment in a separate tab so booking selections remain available. Returning to the booking tab refreshes the wallet; Check balance also refreshes it. Continue booking becomes available when the wallet has sufficient available Marks. Booking submission still validates current availability and price; payment does not reserve a slot. Same-tab redirect restoration and automatic booking submission are not implemented. Provider/browser acceptance remains pending.
+
+Competition types directory toolbar now places search, an icon-only status filter, and an icon-only Add competition action in one row. Both actions retain accessible labels and title hints. The table keeps a 48rem minimum width and nonwrapping records, scrolling horizontally inside its focusable labeled container on narrow screens.
+
+Classes exact top-up now uses a confirmation drawer and opens hosted payment in a separate tab. Returning refreshes wallet and enrollment state. Check balance and Continue class checkout allow explicit refresh and return to the existing installment funding controls. Payment still does not extend seat reservation expiry; funding continues through existing server validation. Browser/provider acceptance is pending.
+
+Competition types result metadata is compact (`N groups`). Color inheritance guidance is available through the shared InfoPreview popover beside the count, supporting tap, hover and keyboard access.
+
+Migration 0078_remove_superseded_competition_seeds removes only the seven parent and 21 specialization seed IDs from migration 0027. It aborts atomically if pending tutor selections, booking snapshots/topics, economy revisions or foreign-key references still use them; clean up those references explicitly before retrying. Canonical migration 0029 rows and audit history remain. Migration authored but not applied or database-tested.
+
+Seed competition taxonomy: seed.ts now inserts the seven canonical parent competitions and 34 specializations (including Law Debate), with migration-0056 parent palettes, before assigning review tutor subjects. Missing rows are inserted by slug in one transaction; existing catalog edits and archive status are preserved. Seed code updated only; database seed not executed.
+
+Initial data ownership (2026-10-30): migration 0027/0028 retain schema creation only; 0029/0041/0047 retain no-op journal slots. Competition taxonomy (7 parents, 34 specializations including Law Debate), Marks packages and default economy config are inserted only by apps/server/src/seed/seed.ts. Non-test seed preserves existing config/catalog values; test seed retains its explicit economy reset. Existing databases are not retroactively changed by editing these migrations; 0078 remains the cleanup for obsolete 0027 seeds. Migration 0056/0057 palette backfills remain for existing rows; they create no records. For a fresh database, run schema migrations then the server seed. No migration or seed was executed for this change.
+
+V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive package defaults from DEFAULT_V3_ECONOMY_CONFIG (50/350000, 150/975000, 250/1500000, 500/2750000). After canonical taxonomy and review admin creation, server seed transactionally initializes and activates a new PRD-default V3 revision only when no revision is active; it preserves and validates an existing active revision and does not activate an unrelated saved draft. Review tutor seed no longer writes legacy prices/baseRatesIdr and clears those fields on its existing demo profile. New presentation bookings use an assigned active specialization, active V3 revision, V3 snapshots and quote-derived Marks holds. Existing legacy presentation bookings cause an explicit reset-required error. This supersedes earlier notes describing seedEconomyConfig and legacy seed pricing. Runtime compatibility removal is still pending. No database migrate, seed or reset was executed. Focused package-default test passed (1 test, 4 assertions); server typecheck remains blocked by the existing unused MODALITY import in tutor.service.ts; live seeding is unverified.
+
+### PR #332 coverage continuation (28 October 2026)
+
+Hosted run `40671516167` on `d7f70efb` passes all three API coverage test partitions and server unit tests, then fails only the unchanged 100% coverage thresholds: API lines 94.4% (9,931/10,515), overall lines 94.4% (10,270/10,877), functions 96.6% (2,672/2,766), branches 84.9% (7,431/8,757). This validates the persisted top-up quote/revision/payment fixtures. CodeQL and both language/action analyses pass on this head. New focused tests cover FAQ rich-text safety/conversion and payment-handler Test Mode/catalog/purchase/reconciliation paths; under the repository counter preload, both target files reach 100% lines, functions and branches in the focused run (10 tests / 45 assertions). Full merged coverage is still open; E2E is not required for this follow-up.
+
+- Tutor profile drawer pricing uses a Selia accordion per competition, retaining the tutor subject/pricing filter. The first competition opens by default; multiple competitions can remain open.
+
+- UI em-dash audit: empty values use contextual English labels; prose uses sentences or colons, status separators use center dots. Wallet Marks loading retains the icon with an accessible, inline Selia spinner.
+
+FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
+
+## Admin meeting retry UI (31 October 2026)
+
+Admin booking detail provides an icon-only retry action for confirmed online bookings with a failed Google Meet attempt and no URL. The admin API locks and validates the booking, reruns existing meeting finalization, records the successful transition as admin, and audits the result. Admin Classes retains its class-level failed-meeting retry and now uses an accessible icon-only control. No schema change.
+
+Live validation (31 October 2026): admin class retry recovered a failed dev session after transient Google OAuth hostname resolution errors. A read-only Calendar API probe succeeded, then the admin retry handler returned a persisted `created` meeting with URL/event ID. No Google Cloud Console change or code patch was needed for that incident; evidence: `tmp/v3-only-dev/academy-meet-retry-live.json`.
+
+Coverage tooling supports `--list` and repeatable `--group NAME` for focused counter collection and per-process PASS/FAIL diagnostics. Selected runs never replace the full merged report or satisfy the global 100% gate. See RUNBOOK selective coverage runs. CI diagnosis artifacts include all isolated integration counters.
+
+Coverage remediation: resetDatabase() suites are discovered across the complete API test tree and isolated per process, including tutor invite, role scope, and email verification suites. The 100% aggregate gate remains unchanged. Focused tests now cover OTP delivery races, payment/refund recovery, payout/report guards, Academy/postponement recovery and PDF page boundaries. Full gate acceptance requires fresh matching source hashes across every collected partition.

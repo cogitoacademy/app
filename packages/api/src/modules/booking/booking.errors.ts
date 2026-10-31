@@ -22,6 +22,48 @@ export class BookingNotEditableError extends DomainError {
   }
 }
 
+export class BookingV3CompetitionRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor() {
+    super(
+      "BOOKING_V3_COMPETITION_REQUIRED",
+      "A supported competition topic must be selected for V3 pricing",
+    );
+  }
+}
+
+export class BookingV3CompetitionUnavailableError extends DomainError {
+  readonly domain = "booking";
+  constructor(categorySlug: string) {
+    super(
+      "BOOKING_V3_COMPETITION_UNAVAILABLE",
+      "This topic is not available for V3 pricing",
+      { categorySlug },
+    );
+  }
+}
+
+export class BookingV3GroupSeriesNotReadyError extends DomainError {
+  readonly domain = "booking";
+  constructor() {
+    super(
+      "BOOKING_V3_GROUP_SERIES_NOT_READY",
+      "V3 group-series bookings are not available yet",
+    );
+  }
+}
+
+export class BookingV3PricingRevisionUnavailableError extends DomainError {
+  readonly domain = "booking";
+  constructor(version: number) {
+    super(
+      "BOOKING_V3_PRICING_REVISION_UNAVAILABLE",
+      "The V3 price revision for this booking is unavailable",
+      { version },
+    );
+  }
+}
+
 export class BookingSessionNotEndedError extends DomainError {
   readonly domain = "booking";
   constructor(id: string, scheduledEndAt: Date) {
@@ -305,6 +347,24 @@ export class BookingSeriesNoOptOutError extends DomainError {
   }
 }
 
+export class BookingCompletionFeedbackTooLongError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "REPORT_TOO_LONG",
+      "Each feedback field must contain at most 600 characters in total, including line breaks",
+      { id },
+    );
+  }
+}
+
+export class BookingCompletionReportConflictError extends DomainError {
+  readonly domain = "booking";
+  constructor(message = "The session report changed; reload before retrying") {
+    super("BOOKING_COMPLETION_REPORT_CONFLICT", message);
+  }
+}
+
 export class BookingCompletionFeedbackRequiredError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -313,6 +373,89 @@ export class BookingCompletionFeedbackRequiredError extends DomainError {
       "Session discussion, strengths, and points of improvement are required to complete the session",
       { id },
     );
+  }
+}
+
+export class TutorPayoutPreviewStaleError extends DomainError {
+  readonly domain = "booking";
+  constructor(message = "Payout details changed; review a fresh preview") {
+    super("PAYOUT_PREVIEW_STALE", message);
+  }
+}
+
+export class TutorPayoutTaxProfileIncompleteError extends DomainError {
+  readonly domain = "booking";
+  constructor(tutorId: string, missingFields: string[]) {
+    super(
+      "TAX_PROFILE_INCOMPLETE",
+      "Complete the tutor tax profile before preparing a payout",
+      { tutorId, missingFields },
+    );
+  }
+}
+
+export class TutorPayoutProfileIncompleteError extends DomainError {
+  readonly domain = "booking";
+  constructor(tutorId: string, missingFields: string[]) {
+    super(
+      "PAYOUT_PROFILE_INCOMPLETE",
+      "Complete the tutor bank details before preparing a payout",
+      { tutorId, missingFields },
+    );
+  }
+}
+
+export class TutorPayoutNotFoundError extends DomainError {
+  readonly domain = "booking";
+  constructor(payoutId: string) {
+    super("TUTOR_PAYOUT_NOT_FOUND", "Tutor payout not found", { payoutId });
+  }
+}
+
+export class TutorPayoutStateError extends DomainError {
+  readonly domain = "booking";
+  constructor(message: string) {
+    super("TUTOR_PAYOUT_STATE_INVALID", message);
+  }
+}
+
+export class TutorPayoutAmountMismatchError extends DomainError {
+  readonly domain = "booking";
+  constructor(expected: number, actual: number) {
+    super(
+      "PAYOUT_AMOUNT_MISMATCH",
+      "Actual transfer must equal the calculated net amount",
+      { expected, actual },
+    );
+  }
+}
+
+export class TutorPayoutReconciliationRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor(payoutId: string) {
+    super(
+      "PAYOUT_RECONCILIATION_REQUIRED",
+      "Reconcile the recorded external transfer before repaying these sessions",
+      { payoutId },
+    );
+  }
+}
+
+export class TutorPayoutTaxConfigConflictError extends DomainError {
+  readonly domain = "booking";
+  constructor(expectedVersion: number, actualVersion: number) {
+    super(
+      "TUTOR_TAX_CONFIG_CONFLICT",
+      "Tax rates changed; reload before saving",
+      { expectedVersion, actualVersion },
+    );
+  }
+}
+
+export class TutorPayoutCalculationDomainError extends DomainError {
+  readonly domain = "booking";
+  constructor(message: string) {
+    super("TUTOR_PAYOUT_CALCULATION_INVALID", message);
   }
 }
 
@@ -380,5 +523,35 @@ export function mapBookingError(
     return conflict(err.message, err);
   if (err instanceof BookingCompletionFeedbackRequiredError)
     return badRequest(err.message, err);
+  if (err instanceof BookingCompletionFeedbackTooLongError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingCompletionReportConflictError)
+    return conflict(err.message, err);
+  if (
+    err instanceof TutorPayoutPreviewStaleError ||
+    err instanceof TutorPayoutReconciliationRequiredError ||
+    err instanceof TutorPayoutTaxConfigConflictError ||
+    err instanceof TutorPayoutStateError
+  )
+    return conflict(err.message, err);
+  if (err instanceof TutorPayoutNotFoundError)
+    return notFound(err.message, err);
+  if (
+    err instanceof TutorPayoutTaxProfileIncompleteError ||
+    err instanceof TutorPayoutProfileIncompleteError ||
+    err instanceof TutorPayoutAmountMismatchError ||
+    err instanceof TutorPayoutCalculationDomainError
+  )
+    return badRequest(err.message, err);
+  if (
+    err instanceof BookingV3CompetitionRequiredError ||
+    err instanceof BookingV3CompetitionUnavailableError
+  )
+    return badRequest(err.message, err);
+  if (
+    err instanceof BookingV3GroupSeriesNotReadyError ||
+    err instanceof BookingV3PricingRevisionUnavailableError
+  )
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

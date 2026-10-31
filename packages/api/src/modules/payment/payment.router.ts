@@ -1,7 +1,14 @@
 import { protectedProcedure, verifiedStudentProcedure } from "../../procedures";
 import {
   createPurchaseInput,
+  createPurchaseOutput,
+  createTopUpQuoteInput,
+  createTopUpQuoteOutput,
+  createPurchaseFromQuoteInput,
+  createPurchaseFromQuoteOutput,
+  getTopUpCatalogOutput,
   getPurchaseInput,
+  getPurchaseOutput,
   simulatePurchaseInput,
 } from "./payment.types";
 import type { PaymentHandler } from "./payment.handler";
@@ -27,7 +34,41 @@ export function createPaymentRouter(handler: PaymentHandler) {
           "Creates a purchase intent for a Marks package (requires a verified email)",
       })
       .input(createPurchaseInput)
+      .output(createPurchaseOutput)
       .handler(handler.createPurchase),
+
+    getTopUpCatalog: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/payment/top-up/catalog",
+        tags: ["Payments"],
+        summary: "Get active V3 top-up packages",
+      })
+      .output(getTopUpCatalogOutput)
+      .handler(handler.getTopUpCatalog),
+
+    createTopUpQuote: verifiedStudentProcedure
+      .route({
+        method: "POST",
+        path: "/payment/top-up/quote",
+        tags: ["Payments"],
+        summary: "Create a V3 top-up quote",
+        description: "Creates an owned, immutable 15-minute top-up quote.",
+      })
+      .input(createTopUpQuoteInput)
+      .output(createTopUpQuoteOutput)
+      .handler(handler.createTopUpQuote),
+
+    createPurchaseFromQuote: verifiedStudentProcedure
+      .route({
+        method: "POST",
+        path: "/payment/top-up/purchase",
+        tags: ["Payments"],
+        summary: "Create a purchase from a V3 quote",
+      })
+      .input(createPurchaseFromQuoteInput)
+      .output(createPurchaseFromQuoteOutput)
+      .handler(handler.createPurchaseFromQuote),
 
     simulatePurchase: verifiedStudentProcedure
       .route({
@@ -49,6 +90,7 @@ export function createPaymentRouter(handler: PaymentHandler) {
         summary: "Get purchase status",
       })
       .input(getPurchaseInput)
+      .output(getPurchaseOutput)
       .handler(handler.getPurchase),
   };
 }

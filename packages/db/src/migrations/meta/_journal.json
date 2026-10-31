@@ -379,6 +379,223 @@
       "when": 1790661893766,
       "tag": "0053_fat_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792300714302,
+      "tag": "0054_v3_economy_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792304065224,
+      "tag": "0055_classy_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792310276156,
+      "tag": "0056_complex_ricochet",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792311353486,
+      "tag": "0057_legacy_competition_palette_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792347689780,
+      "tag": "0058_faq_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792383364835,
+      "tag": "0059_massive_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792385462859,
+      "tag": "0059_faq_rich_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792388580581,
+      "tag": "0060_tutor_payout_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792394899225,
+      "tag": "0061_academy_class_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792496861907,
+      "tag": "0063_academy_class_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792522475956,
+      "tag": "0064_academy_class_enrollment",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792525224597,
+      "tag": "0065_tutor_payout_tax",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792559482042,
+      "tag": "0066_academy_class_cancellation",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792572957418,
+      "tag": "0067_class-session-reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792584327849,
+      "tag": "0068_modern_carmella_unuscione",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792593114908,
+      "tag": "0069_academy_class_meeting_creation_generation",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1792603490318,
+      "tag": "0070_on_demand_report_admin_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792655844640,
+      "tag": "0071_referral_registration_rewards",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792727633256,
+      "tag": "0072_kol_first_successful_topup_commission",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792774252615,
+      "tag": "0073_kol_external_settlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792780107013,
+      "tag": "0074_kol_settlement_replay_precondition",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792822161322,
+      "tag": "0075_kb_calendar_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793327425722,
+      "tag": "0076_academy_class_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793340000000,
+      "tag": "0077_activity_articles",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793340000001,
+      "tag": "0078_remove_superseded_competition_seeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793340000002,
+      "tag": "0079_v3_report_and_payout_contracts",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793360000000,
+      "tag": "0080_academy_tutor_absence",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793360000001,
+      "tag": "0081_academy_schedule_change_exit",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793360000002,
+      "tag": "0082_class_allocation_schedule_change_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793451089309,
+      "tag": "0083_activity_single_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793451209435,
+      "tag": "0084_activity_optional_cover",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,143 @@
+# V3 UI cleanup and readiness — 30 October 2026
+
+## Completed
+
+- Balance uses V3 catalog, quotes and explicit package/custom/recommended choices only. Inactive pricing blocks top-up; no legacy package fallback.
+- Tutor discovery/drawer/booking creation require competition-scoped V3 prices. Old profile price editors, review tables and display fallbacks are removed.
+- Booking honorarium reads pinned V3 IDR snapshots. Series totals require actual session snapshots; missing data is unavailable rather than a guessed Marks conversion. List cards show per-session amounts.
+- Removed obsolete onboarding/tutor-bookings redirect routes, unused Sanity Studio controls and analytics compatibility adapter. Archived specializations remain supported as current catalog lifecycle.
+- Economy settings expose activeRevision separately from the latest saved revision; the badge distinguishes active, draft and unsaved edits. Saving does not activate.
+- Fixed the Academy Accordion callback type mismatch while retaining numeric session indices.
+
+## Remaining work, in recommended order
+
+| Priority              | Work                                                           | Evidence / acceptance                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Done                  | Admin pricing activation workflow                              | Admin UI/API now explicitly activate the latest saved revision with reason, stale-state checks and transactional audit. Focused tests cover service validation, conflict, audit failure and role denial; Live dev acceptance passed: explicit activation changes new quotes; existing quote replay and four pinned booking snapshots stay unchanged; stale activation is rejected and audited. Original pricing and metadata restored; temporary data removed. |
+| Done                  | Q15 business insights API + dashboard                          | Four metric groups implemented with authoritative event dates/ledger facts, current commitment funding and earned-fee allocation. Legacy pricing-engine breakdown removed. 42 unit tests, rollback PostgreSQL acceptance with 27 assertions, 5 synthetic browser tests, web/server/E2E typechecks and web production build passed.                                                                                                                             |
+| Done                  | Editable per-class Academy tutor fee                           | Owner confirmed per-class overrides. UI defaults remain Rp400,000/Rp300,000; publication accepts valid custom fees and requires matching session snapshots.                                                                                                                                                                                                                                                                                                    |
+| Cancelled deliverable | Client content/video supply                                    | Owner cancelled content/video delivery on30October; no longer a launch/development dependency. Existing content features retain empty states. Temporary UAT fixtures remain a testing task.                                                                                                                                                                                                                                                                    |
+| 4                     | Run integrated V3 acceptance                                   | Private solo/group service journeys passed previously with stub payments/manual meetings. 45 PostgreSQL enrollment tests plus 2 focused Q04 tests pass. Payout record-transfer/void lifecycle has rollback PostgreSQL acceptance. A Midtrans Sandbox checkout and in-process signed webhook replay now pass on local dev; signup/referral/KOL provider/browser integration remains open.                                                                       |
+| 5                     | Verify external integrations                                   | Google Meet creation and Academy service/database publication passed live, including cleanup and no duplicate work. Midtrans Sandbox charge/status and local signed-handler idempotency passed; one test email was accepted by Resend. Still open: external webhook delivery, browser return/balance refresh, inbox/OTP delivery, payout operational evidence, browser publish and joining a call.                                                             |
+| 6                     | Update remaining legacy-oriented test fixtures and run full CI | Booking service fixtures have been converted: 319/319 passed. Friend-code fixtures were repaired. Full suites and hosted CI still pending; focused checks are not the full release gate.                                                                                                                                                                                                                                                                       |
+| Owner follow-up       | Reconcile remaining release decision and operations follow-ups | Q14 named UAT/launch approver and OPS01 operational confirmation remain open. Q04 and Q15 are resolved and implemented. Content/video supply is cancelled by owner.                                                                                                                                                                                                                                                                                            |
+
+## Verification scope
+
+Targeted unit checks and synthetic browser tests cover V3 top-up choices, absence of legacy fallback, competition pricing and responsive economy settings. Browser RPCs are mocked; they do not call a database or provider. Web typecheck and production build are separate checks. Dev readiness evidence: tmp/v3-only-dev/readiness.json. No database mutations were needed for this frontend cleanup.
+
+Verified: 32 focused unit tests; 5 V3 UI browser tests; 4 economy viewport tests (320/390/768/1440); web/server/E2E typechecks; web production build. Full hosted CI and provider acceptance were not run. Existing workspace CRLF/whitespace warnings remain outside this cleanup.
+
+Activation follow-up verification: 19 economy unit tests passed (including role denial, activation conflict, audit failure and invalid reason); synthetic browser activation test passed; web/server/E2E typechecks passed. At that earlier checkpoint activation had not been tested against a live database; the later parallel readiness pass below completed it and restored the original pricing. Owner confirmed editable per-class fees.
+
+Per-class fee verification: 8 focused unit tests passed (custom fees for both kinds, invalid numeric amounts, public financial-field exclusion); web/server typechecks passed. Integration regression now expects a custom Rp250,000 masterclass to publish with matching session fee, the original integration suite was not run, but the later targeted live Academy harness verified both custom-fee class kinds against dev PostgreSQL and Google. Its temporary data was cleaned up.
+
+## Live Academy publish verification — 30 October 2026
+
+Run `bun run verify:academy-meet` from the repository root for explicit live acceptance against authorized development `localhost:6767/cogito-app`. The script refuses other DB targets, reads Google OAuth credentials from apps/server/.env, creates temporary online masterclass/cohort drafts, publishes through the real Academy service and database with real Google Meet, and verifies custom fees, stale-version rejection, published-edit rejection and no duplicate meeting work. Google attendee notifications are disabled; payment/email providers are not exercised.
+
+A finally block deletes Google events by stable session identity (including after partial creation), then deletes only the created class fixtures and their scoped notifications/audits; session/meeting rows cascade. Cleanup failure fails the command and retains fixture identities in tmp/v3-only-dev/academy-meet-live.json for follow-up. This explicit provider check is separate from fast mocked unit/synthetic suites. It does not reset or reseed the database.
+
+Live result: masterclass Rp250,000 and cohort Rp500,000 both published with matching session snapshots and real Meet URLs; repeat processing created nothing; stale publish and edits after publication were rejected. Google events and all temporary DB fixtures were removed. Evidence: tmp/v3-only-dev/academy-meet-live.json. This verifies the service/database/provider journey, not browser UI or joining a call.
+
+## Current next steps
+
+Completed baseline: live pricing activation/restoration, custom per-class fees, real Google Meet publish/cleanup, 319 booking unit tests, and 45 PostgreSQL enrollment tests. Earlier verification paragraphs below/above are chronological evidence, not the current outstanding list.
+
+1. **Implemented and focused acceptance complete: REQ-CLASS-05 tutor absence + same-time replacement.** Migration `0080_academy_tutor_absence.sql` records assignment-version notice history. Tutor can report while assigned and session scheduled (including after start/end until completed); strict <24h is late. Admin can replace at unchanged time with or without a submitted notice. Validation checks published replacement profile, mode, capacity, overlap, stale version, report/fee ownership; schedule, fee, and student allocations are retained. Existing stable Meet event is requeued to replace attendee, and in-app notices/audit are transactional. Owner confirmed same-time replacement grants no exit right. Q04 ordinary schedule changes grant 24 hours from notification, refund only the affected undelivered session as Marks, and do not refund delivered sessions. The resolved deadline is the earlier of notification +24 hours and the replacement session start. Evidence: 2 timing unit tests; one rollback-only dev PostgreSQL case / 18 assertions covering ownership, idempotency, stale version, earned-fee rejection, A→B→A assignment history, stable time/fee, audit, notifications and attendee updates; 5/5 synthetic Edge browser cases (mocked RPC); live `bun run verify:class-absence` against `localhost:6767/cogito-app` verified the same Google event ID/Meet link/time/fee, replacement attendee and old-tutor removal, no duplicate event on replay, after-start notice acceptance and scoped cleanup (`tmp/v3-only-dev/class-absence-live.json`).
+2. Run real browser journeys for signup/OTP, booking, class publish/enrollment and referral/KOL; validate payment checkout/webhook/return and delivered email. Existing service/unit tests do not establish these.
+3. Complete class-specific payout record-transfer/void acceptance; the Academy integration suite currently ends at preparation/allocation. Payout remains a manual record, not automated bank transfer.
+4. Run hosted Test + Coverage on the delivery branch first. Owner says not to wait for the E2E job. The first integrated CI run exposed missing seed-owned V3 defaults in the test setup; the CI seed and reset fixtures are being aligned before retry. Then start fresh dedicated6769 acceptance. Booking legacy fixture conversion is complete, not still pending.
+5. Confirm Q14 named UAT/launch approver and close OPS01 operational confirmation. Content/video supply (M01/M02) is cancelled by owner; empty-content counts are a recorded dev snapshot, not a production audit.
+
+## Parallel readiness pass — 30 October 2026
+
+Live pricing acceptance passed using `bun run verify:pricing-activation` against localhost:6767/cogito-app. Temporary revision 2 remained draft until activation; a new 140-Mark quote changed from Rp1,015,000 to Rp1,015,140; the previous quote stayed identical. Four existing booking snapshots stayed unchanged and their pinned revision remained readable. Exactly one successful activation audit was recorded. Cleanup restored the original active pointer and metadata and removed temporary quotes/revision/audits. Evidence: tmp/v3-only-dev/pricing-activation-live.json. This does not execute a new provider purchase or booking repricing.
+
+Fresh checks: 40 pricing/discovery/Academy focused tests passed. A further 39 enrollment/meeting/KOL/referral unit tests passed after updating the friend-code test query fixture for the current friends-list joins; production referral behavior was unchanged.
+
+Historical checkpoint before the focused REQ-CLASS-05 work below: the Academy router lacked absence/replacement workflow and existing reassignment tests were only direct database mutations. The live service/UI implementation and acceptance evidence are recorded in the completed work item above. Q04 ordinary schedule-change deadline is resolved: min(notification +24 hours, replacement start).
+
+## Readiness acceptance follow-up — 30 October 2026
+
+Real dev pricing activation passed with original pointer restoration and temporary fixture cleanup (`bun run verify:pricing-activation`; tmp/v3-only-dev/pricing-activation-live.json). The booking unit suite now uses explicit subjects, V3 revisions/snapshots and fee-event payout expectations: 319 tests passed; no compatibility runtime was restored. Friend-code query fixtures now include the current friends-list joins.
+
+Class enrollment integration supports an explicit non-resetting dev acceptance mode: CLASS_ENROLLMENT_DEV_ACCEPTANCE=true, NODE_ENV=development, exact loopback:6767/cogito-app, reset flags absent, and zero existing Academy classes/enrollments. Normal mode still requires test loopback:6769/cogito-test. Never combine it with reset-oriented Academy suites. Private env copies must disable external payment/email delivery and be removed after the run. Scoped fixture cleanup preserves unrelated bookings. The suite uses controlled providers for race tests; real Google acceptance remains the separate verify:academy-meet harness with event cleanup.
+
+45 PostgreSQL enrollment tests passed (362 assertions): full/half/single, installment/expiry, cancellation/refund/races, minimum/postponement, reports, class fee and payout preparation, plus a masterclass 5-Mark enrollment→report→single Rp250,000 earned fee journey. Cleanup left zero Academy fixtures and preserved four private bookings. Evidence: tmp/v3-only-dev/enrollment-acceptance.json and enrollment-acceptance.log. Payment checkout/webhooks, email delivery, recorded class payout transfer and browser acceptance remain separate gates.
+
+Historical checkpoint before REQ-CLASS-05 implementation: absence and replacement were open. See the completed work item above and the [Q04 decision register](../../client/RELEASE-V3-DECISIONS.md#q04-follow-up--perubahan-jadwal-biasa-dan-tutor-absen) for current policy scope.
+
+## Owner scope update — 30 October 2026
+
+Content/video deliverables cancelled by owner; no longer wait for M01/M02 materials. Existing content features remain, with empty states where no records exist. Q04 exit right is contextual and low-emphasis but clear/accessibile. It lasts until min(notification +24 hours, replacement start) and returns Marks only for the changed undelivered session. Q15 analytics is resolved by owner delegation and implemented as recorded below. See consolidated RELEASE-V3-DECISIONS for the owner record; previous material-waiting notes are historical.
+
+## Q15 analytics decision — 30 October 2026
+
+Owner delegated the metric choice; Q15 is now resolved in the consolidated decision register. Business insights separates top-up receipts IDR, delivered service Marks/session counts, current future confirmed commitments with funded/unfunded distinction, and earned/unpaid tutor costs IDR. No inferred Marks→IDR booking value or profit. Implementation must align event dates, participant/session allocations and labels with that definition; this decision alone does not complete analytics implementation or acceptance. Earlier Q15-open notes are historical.
+
+## Q15 implementation completed — 30 October 2026
+
+- Admin analytics now returns operationsSummary with private/Academy delivered service, future funded/unfunded commitments, current paid/unpaid allocation of earned tutor fees, asOf timestamp and missing-source counters. Cash businessSummary uses grossReceiptsIdr/netReceiptsIdr/refundedIdr; successful receipts use providerSuccessAt, and refunds retain their separate event date. Removed unused pricingSnapshotBreakdown and its legacy SQL classification.
+- Dashboard shows all four Q15 groups and explains period versus current snapshot. Missing payment dates/private rates produce visible notices instead of fabricated totals. Existing Selia components and semantic sections are reused.
+- 42 admin repository/service unit tests passed. Rollback-only real dev PostgreSQL acceptance passed 1 test / 27 assertions, covering solo/group/series deductions, cancellation/no-show exclusion, participant funding, Academy funded/unfunded/released allocations, earned/paid/void fees, refunded receipts, pending/out-of-period payments and missing source facts. No provider call/reset; fixture user absence after rollback verified.
+- 5 synthetic browser tests passed at 390/1440px: distinct values, no viewport overflow, real zeros, API failure/retry and both missing-source notices. This is mocked RPC evidence, separate from the PostgreSQL acceptance.
+- Web/server/E2E typechecks, focused formatting/lint and web production build passed. Full hosted CI, external payment/email acceptance, browser-to-live-API journeys and broader release gates remain open; Q15 itself is implemented and focused acceptance is complete.
+
+Sources: packages/api/src/modules/admin/admin-operations-analytics.ts, integration/admin-operations-analytics.test.ts and E2E analytics-layout.spec.ts. Sanitized live evidence: tmp/v3-only-dev/analytics-acceptance.json.
+
+## Tutor absence and same-time replacement checkpoint
+
+Implemented tutor absence notices (including after start while scheduled), strict less-than-24-hour late marking, assignment-version history/admin counts, and audited admin same-time replacement with notifications and stable Google attendee synchronization. Replacement preserves schedule, class fee and allocations and rejects earned/report sessions. Migration0080 applied to authorized dev localhost:6767/cogito-app without reset.
+
+Verified:53provider unit tests,2timing unit tests, PostgreSQL regression18assertions,5synthetic browser tests, real Google attendee readback/retry and after-start dev notice; fixture/event cleanup succeeded. Web/server/E2E typechecks and production web build passed; server typecheck refreshed after interruption also passed. Evidence:tmp/v3-only-dev/class-absence-live.json. Historical checkpoint before ordinary rescheduling implementation; final Q04 policy and implementation evidence are recorded below. Full CI remains open. The resumed final verification pass completed without changing model.
+
+## Q04 final owner confirmation — 30 October 2026
+
+Ordinary schedule-change policy is resolved: only the changed undelivered session is eligible for penalty-free cancellation/refund as Marks, before min(notification timestamp +24hours, replacement session start). Same-time tutor replacement gives no new exit right. Minimum-enrollment postponement remains a separate 72-hour policy. Implementation and focused acceptance are complete below; earlier Q04-open policy notes are historical. Canonical decision: docs/client/RELEASE-V3-DECISIONS.md.
+
+## Ordinary schedule-change lifecycle — 30 October 2026
+
+Admin `rescheduleClassSession` updates one future scheduled session with optimistic session-version checking, unchanged tutor/mode/room/capacity/fee, schedule conflict and class-window guards, transactional audit/notices, a durable Google Meet update, and a new schedule-change version. Migrations `0081_academy_schedule_change_exit.sql` (session deadline/version) and `0082_class_allocation_schedule_change_version.sql` (per-allocation eligibility snapshot) are applied to authorized dev `localhost:6767/cogito-app`.
+
+Students can quote/confirm cancellation only for their exact active funded/unfunded allocation snapshot and schedule version. Deadline is the earlier of server notice +24 hours and new session start; confirmation is strictly before it. Funded remaining Marks return through one allocation ledger event. Unfunded second-installment cancellation produces no wallet credit and reduces only that unpaid installment slice/due session. Delivery/report/earned checks and current version/deadline are revalidated. Replay returns the saved receipt, including after deadline; a new actual reschedule invalidates the prior quote and opens a new window for then-active seats. Same-time tutor replacement preserves an existing window. Minimum-enrollment postponement remains separate.
+
+Focused evidence: 2 unit timing tests pass; non-resetting dev PostgreSQL Q04 tests pass 2/2 with 21 assertions, covering funded refund isolation, request replay after deadline, post-notice seat denial, stale quote on repeated reschedule/window renewal, and unpaid installment partial cancellation without wallet credit or unrelated installment/seat changes. Six synthetic Edge browser cases passed on mocked RPC. Real Google Meet readback verified changed start/end, retained event ID/Meet URL/attendees/terms, successful retry against the same event, deadline bound, exact preservation of all four booking rows, and scoped event/DB cleanup (`tmp/v3-only-dev/class-reschedule-live.json`). Web/server typechecks, lint baseline and web production build pass. Full CI and broader hosted/live product gates remain open.
+
+## Class payout record-transfer and void acceptance — 30 October 2026
+
+Rollback-only PostgreSQL acceptance passed 1 case / 33 assertions (`tmp/v3-only-dev/class-payout-acceptance.json`): prepare, TEST transfer recording and replay, paid allocation coverage, void with retained reason/evidence, reconciliation block until resolution, then re-prepare. Owner snapshots stayed unchanged. No real bank transfer or payment/email provider was used; payout remains an admin-recorded manual workflow.
+
+## Provider, signup and referral acceptance checkpoint — 30 October 2026
+
+Read-only inspection of the local `apps/server/.env` found `PAYMENT_PROVIDER=midtrans` and `MIDTRANS_MODE=test`; the Midtrans server/client key fields, merchant ID and test allowlist are present. Both local key prefixes are production-style (`Mid-`), not Sandbox (`SB-Mid-`). Treat this as a local mode/key-prefix mismatch, not verified Sandbox configuration. This inspection does not establish the configuration loaded by Coolify or any live/staging runtime. No key values were displayed.
+
+The local development environment also has Resend key/from configuration present. Because signup mail is suppressed only in `NODE_ENV=test`, running signup against this development environment could send real email. No provider call or email was made. The checked-in test environment blanks Resend and uses test-only in-memory OTP capture; the signup Playwright global setup resets/seeds its database, so use only the dedicated loopback `cogito-test` target and task-local env described in `docs/RUNBOOK.md` § Isolated pre-account signup E2E.
+
+Existing Midtrans provider/webhook and payment-service unit coverage exercises mocked requests, signature/status mapping and idempotency. Signup/OTP and friend/KOL registration behavior have API integration coverage; the current Google/referral/KOL browser suites mock auth/RPC. These checks do not prove a browser checkout → provider webhook → return/balance journey, delivered OTP, or integrated signup → referral/KOL commission flow. No such acceptance was run in this checkpoint.
+
+Next safe acceptance remains pending: first verify, without disclosing secrets, that a reachable isolated/staging runtime has matching Sandbox credentials, `MIDTRANS_MODE=test`, an approved UAT account and the Sandbox notification URL. Then follow `docs/MIDTRANS-MIGRATION.md` §5.1 for a Sandbox test-card checkout, webhook, single Marks credit, redirect return/balance refresh, and bad-signature/duplicate/failure cases. Separately, OTP delivery needs a specifically controlled recipient and verified Resend sender; until then, use the isolated test OTP capture with stub payments for no-mail/no-cash signup/referral checks. The local development key-prefix mismatch is not approval to use live credentials, and this note makes no new product or policy decision.
+
+## Midtrans Sandbox correction — 30 October 2026
+
+The earlier production-key inference from prefix classification was too strong and is superseded. Owner confirmed these are Sandbox keys. Current local mode is test; a read-only authenticated request to api.sandbox.midtrans.com for a random nonexistent order returned HTTP200/provider404 “Transaction does not exist”, not an authentication rejection. No transaction was created. Local Sandbox authentication is verified; checkout/webhook/return acceptance remains pending. Do not retain the earlier inferred key mismatch as a blocker.
+
+## Midtrans Sandbox checkout and email provider acceptance — 30 October 2026
+
+A Rp350,000 Midtrans Sandbox Snap test-card purchase completed. An authenticated provider status read confirmed successful capture/fraud acceptance. The status signature was then delivered twice to the in-process local webhook: both responses succeeded, the payment is `PAID`, and exactly one 50-Mark wallet credit was recorded. UUID-scoped app fixtures were cleaned; the captured Sandbox transaction remains in provider history. Existing bookings and the active pricing pointer were unchanged. Evidence is in ignored `tmp/v3-only-dev/midtrans-sandbox-acceptance.json`.
+
+Resend accepted one branded auth-template delivery-test email. Inbox arrival was not checked; this is provider acceptance only, not verified OTP delivery. Evidence is in ignored `tmp/v3onlydev/resend-email-acceptance.json`.
+
+This does not establish external Midtrans notification delivery, browser return/balance refresh, OTP inbox delivery or signup/referral/KOL integration. See the guarded harness commands in `docs/RUNBOOK.md`. Full hosted CI remains pending on the delivery branch.
+
+- Tutor profile drawer pricing uses a Selia accordion per competition, retaining the tutor subject/pricing filter. The first competition opens by default; multiple competitions can remain open.
+
+- Booking specialization options and selected summary use a center dot between competition and specialization, matching the taxonomy and class pages.
+
+- UI em-dash audit: empty values use contextual English labels; prose uses sentences or colons, status separators use center dots. Wallet Marks loading retains the icon with an accessible, inline Selia spinner.
+
+## Admin meeting retry (31 October 2026)
+
+Admin booking detail now provides an icon-only retry action for confirmed online bookings with a failed Google Meet attempt and no URL. The admin API locks and validates the booking, reruns existing meeting finalization, records the successful transition as admin, and audits the result. Admin Classes keeps its failed-meeting retry and now uses the same accessible icon-only control. No schema change.
+
+Live retry evidence (31 October): the admin class retry handler was invoked for the failed dev session after confirming target `localhost:6767/cogito-app`. Its last stored error was `EAI_AGAIN oauth2.googleapis.com`; host DNS/HTTPS and a read-only OAuth/Calendar probe then passed. The handler retry completed with meeting status `created`, a Meet URL and event ID, and no error. Evidence: `tmp/v3-only-dev/academy-meet-retry-live.json`. No Google Cloud Console changes were required.

@@ -219,7 +219,7 @@ export function AchievementModerationPage() {
           <Heading level={1} size="md">
             Verify every achievement
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Review student evidence and publish only trusted submissions.
           </Text>
         </div>
@@ -497,7 +497,7 @@ function ModerationTable({
           </CardTitle>
         </CardHeader>
         <CardBody aria-busy={mutationPending} className="min-w-0 max-w-full">
-          <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+          <TableContainer className="min-w-0">
             <Table
               aria-label="Achievement moderation submissions"
               className="min-w-[52rem] text-sm"

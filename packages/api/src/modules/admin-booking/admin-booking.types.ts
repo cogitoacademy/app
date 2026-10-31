@@ -40,6 +40,10 @@ export const setMeetingLinkInput = z.object({
   url: externalHttpUrl,
 });
 
+export const retryMeetingInput = z.object({
+  bookingId: z.string().max(100),
+});
+
 export const cancelSeriesSessionInput = z
   .object({
     sessionId: z.string().max(100),

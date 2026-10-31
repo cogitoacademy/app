@@ -1,7 +1,8 @@
 "use client";
 
+import { wibCalendarDate } from "./calendar-utils";
 import { isValid } from "date-fns";
-import { IconCalendarEvent, IconRefresh } from "@tabler/icons-react";
+import { IconRefresh } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,24 +13,22 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import Loader from "@/components/loader";
-import { useRole } from "@/hooks/use-role";
 import { orpc } from "@/utils/orpc";
 
 import {
   CompetitionCalendar,
   type CalendarCompetition,
 } from "./competition-calendar";
-import { SanityStudioEditButton } from "./sanity-studio-button";
 
-export function CompetitionCalendarPage() {
+export function CompetitionCalendarPage({
+  onManage,
+}: { onManage?: () => void } = {}) {
   const competitions = useQuery(orpc.content.listCompetitions.queryOptions());
-  const { role, isLoading: isRoleLoading } = useRole();
-  const isAdmin = !isRoleLoading && role === "admin";
   const events = useMemo<CalendarCompetition[]>(
     () =>
       (competitions.data ?? []).flatMap((competition) => {
-        const start = new Date(competition.startDate);
-        const end = new Date(competition.endDate);
+        const start = wibCalendarDate(competition.startDate);
+        const end = wibCalendarDate(competition.endDate);
         if (!isValid(start) || !isValid(end)) return [];
 
         return [
@@ -39,13 +38,14 @@ export function CompetitionCalendarPage() {
             description: competition.description,
             start,
             end,
+            endInstant: competition.endDate,
             location: competition.location,
             categories: competition.categories,
             educationLevels: competition.educationLevels,
             scale: competition.scale,
             organizer: competition.organizer,
             registrationDeadline: competition.registrationDeadline
-              ? new Date(competition.registrationDeadline)
+              ? wibCalendarDate(competition.registrationDeadline)
               : null,
             registrationLink: competition.registrationLink,
             socialMediaLink: competition.socialMediaLink,
@@ -73,33 +73,25 @@ export function CompetitionCalendarPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg" className="min-h-0 flex-nowrap">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="min-h-0 min-w-0 w-full max-w-full flex-nowrap"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Heading>Your Gateway to the World Stage</Heading>
-          <Text className="mt-1 max-w-3xl text-muted">
+          <Heading level={1} size="md">
+            Your Gateway to the World Stage
+          </Heading>
+          <Text className="max-w-full text-muted">
             From national challenges to global arenas, access a curated list of
             opportunities tailored for your next big win. Keep track of upcoming
             competitions, registration deadlines, and event details in one
             place.
           </Text>
         </div>
-        {isAdmin ? (
-          <SanityStudioEditButton
-            type="competition"
-            label="Edit competitions"
-          />
-        ) : null}
       </div>
-      {events.length > 0 ? (
-        <CompetitionCalendar events={events} />
-      ) : (
-        <EmptyStateCard
-          icon={<IconCalendarEvent className="text-cogito-orange" />}
-          title="No competitions yet"
-          description="Published competitions will appear here when they are available."
-        />
-      )}
+      <CompetitionCalendar events={events} onManage={onManage} />
     </Stack>
   );
 }

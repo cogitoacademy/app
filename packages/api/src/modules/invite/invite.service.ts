@@ -1,6 +1,7 @@
 import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import { hashInviteToken } from "../../lib/tokens";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
 import { INVITE_STATUS, USER_ROLE, ACTOR_TYPE } from "../../shared/constants";
 import type { InviteRepo } from "./invite.repo";
 import type { InviteAuditPort } from "./index";
@@ -74,6 +75,7 @@ export function createInviteService(deps: {
     validateClaim(invite, userEmail, existingProfile, token, userRole);
 
     return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
       const [acceptedInvite] = await inviteRepo.updateInviteStatus(
         tx,
         invite!.id,

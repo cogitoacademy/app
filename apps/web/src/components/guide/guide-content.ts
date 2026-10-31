@@ -545,7 +545,7 @@ const tutorContent: GuideContent = {
           id: "tutor-profile",
           title: "Complete your teaching profile",
           summary:
-            "Add your bio, specializations, prices, proof, teaching formats, and availability before asking for review.",
+            "Add your bio, specializations, proof, teaching formats, and availability before asking for review.",
           actor: "You",
           icon: IconNotes,
           details: [
@@ -773,7 +773,7 @@ const adminContent: GuideContent = {
           id: "admin-review-tutor",
           title: "Review and publish tutor profiles",
           summary:
-            "Check the tutor's profile, subjects, prices, and proof before students can find them.",
+            "Check the tutor's profile, specializations, and proof before students can find them.",
           actor: "Admin",
           icon: IconShieldCheck,
           details: [
@@ -807,14 +807,10 @@ const adminContent: GuideContent = {
           actor: "Admin",
           icon: IconWallet,
           details: [
-            "The Unpaid amount column shows each tutor's unpaid honorarium and the completed sessions it includes.",
-            "Open a tutor payout to verify the destination account, transfer the net amount, then choose **Mark as paid**.",
-            "The unpaid amount covers completed sessions since that tutor's last recorded payment; it does not reset automatically each week.",
-            "If payout details are incomplete, ask the tutor to finish them before transferring money.",
-          ],
-          statuses: [
-            { label: "Unpaid", variant: "warning" },
-            { label: "Up to date", variant: "success" },
+            "Select the unpaid session fees to prepare a versioned batch with saved bank, tax-rate, and fee details.",
+            "After performing the bank transfer outside Cogito, record its exact net amount, actual date, and optional reference or proof.",
+            "An actual-amount mismatch cannot be marked paid. Refresh the preview if the tutor profile or tax configuration changes.",
+            "Voiding keeps transfer evidence. Reconcile an external transfer with an audited reason before those sessions can be prepared again.",
           ],
           cta: { label: "Open tutor payouts", to: "/admin-tutor-payouts" },
         },
@@ -978,11 +974,11 @@ const adminContent: GuideContent = {
           actor: "Admin",
           icon: IconCoins,
           details: [
-            "These settings control prices, tutor honorarium, and Cogito's share for future bookings.",
-            "Changes must follow the allowed IDR minimums and increments.",
-            "Existing bookings keep the amount they already showed; new bookings use the updated settings.",
+            "Draft settings define Marks packages, competition prices, and tutor honorarium.",
+            "Preview solo, group, online, and offline prices before saving a draft revision.",
+            "Saving a draft does not activate it. Existing bookings keep their saved price revision.",
           ],
-          statuses: [{ label: "Active configuration", variant: "info" }],
+          statuses: [{ label: "Pricing draft", variant: "info" }],
           cta: { label: "Open economy settings", to: "/admin-economy" },
         },
       ],

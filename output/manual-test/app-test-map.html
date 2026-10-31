@@ -1,0 +1,698 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        font-family: var(--font-sans, system-ui);
+        color: var(--foreground);
+        margin: 0;
+        line-height: 1.5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      nav {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 14px 0 22px;
+      }
+      button {
+        font: inherit;
+        color: var(--foreground);
+        background: var(--secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius, 8px);
+        padding: 7px 11px;
+      }
+      button[aria-selected="true"] {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .architecture {
+        display: grid;
+        grid-template-columns: 1fr 22px 1fr 22px 1fr;
+        align-items: center;
+        gap: 6px;
+        margin: 12px 0;
+      }
+      .box {
+        padding: 12px;
+        background: var(--secondary);
+        border-radius: var(--radius, 8px);
+      }
+      .arrow {
+        text-align: center;
+        color: var(--muted-foreground);
+      }
+      .muted,
+      small {
+        color: var(--muted-foreground);
+      }
+      .flow {
+        display: grid;
+        gap: 0;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 145px 1fr;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .step strong {
+        color: var(--primary);
+      }
+      .connector {
+        font-size: 18px;
+        color: var(--muted-foreground);
+        padding-left: 68px;
+        height: 24px;
+      }
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 17px;
+      }
+      h4 {
+        margin: 0;
+        font-size: 15px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+      td,
+      th {
+        text-align: left;
+        vertical-align: top;
+        padding: 10px 5px;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        color: var(--muted-foreground);
+        font-weight: 500;
+      }
+      td:first-child {
+        width: 70px;
+      }
+      label {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+      input {
+        accent-color: var(--primary);
+      }
+      .source {
+        font-size: 12px;
+        margin-top: 16px;
+        overflow-wrap: anywhere;
+      }
+      #progress {
+        font-size: 13px;
+        margin: 8px 0;
+      }
+      @media (max-width: 450px) {
+        .step {
+          grid-template-columns: 1fr;
+          gap: 3px;
+        }
+        .architecture {
+          grid-template-columns: 1fr;
+        }
+        .arrow {
+          transform: rotate(90deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="architecture" aria-label="Domain state to effects to evidence">
+      <div class="box">
+        <strong>1 · Aksi & state</strong><br /><small
+          >Student · Tutor · Admin · Job</small
+        >
+      </div>
+      <span class="arrow">→</span>
+      <div class="box">
+        <strong>2 · Efek terkait</strong><br /><small
+          >Wallet · fee · referral · outbox</small
+        >
+      </div>
+      <span class="arrow">→</span>
+      <div class="box">
+        <strong>3 · Bukti tes</strong><br /><small
+          >UI + record + ledger + audit</small
+        >
+      </div>
+    </div>
+    <nav aria-label="Test domains" role="tablist">
+      <button
+        role="tab"
+        id="tab0"
+        aria-controls="panel"
+        aria-selected="true"
+        data-i="0"
+      >
+        Booking</button
+      ><button
+        role="tab"
+        id="tab1"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="1"
+      >
+        Classes</button
+      ><button
+        role="tab"
+        id="tab2"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="2"
+      >
+        Tutors</button
+      ><button
+        role="tab"
+        id="tab3"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="3"
+      >
+        Wallet &amp; payouts</button
+      ><button
+        role="tab"
+        id="tab4"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="4"
+      >
+        Referral &amp; KOL</button
+      ><button
+        role="tab"
+        id="tab5"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="5"
+      >
+        Notifications</button
+      ><button
+        role="tab"
+        id="tab6"
+        aria-controls="panel"
+        aria-selected="false"
+        data-i="6"
+      >
+        Other modules
+      </button>
+    </nav>
+    <main id="panel" role="tabpanel" aria-labelledby="tab0"></main>
+    <script>
+      const domains = [
+        {
+          n: "Booking",
+          flow: [
+            [
+              "Student · solo / group / series",
+              "Pilih tutor, modality, jadwal → wallet hold",
+            ],
+            [
+              "Group",
+              "awaiting_participant_confirmation → awaiting_tutor_review",
+            ],
+            [
+              "Tutor review",
+              "awaiting_tutor_review → confirmed / declined / reschedule_proposed",
+            ],
+            [
+              "Harga / peserta berubah",
+              "awaiting_reconfirmation → tutor review / confirmed / expired",
+            ],
+            [
+              "Online / offline",
+              "confirmed → scheduled ATAU awaiting_admin_room_approval → scheduled",
+            ],
+            [
+              "Delivery",
+              "scheduled → completed / no_show / cancelled / late_cancelled",
+            ],
+            [
+              "Reschedule",
+              "reschedule_proposed → review / confirmed / scheduled / room approval / reconfirmation / declined / expired",
+            ],
+            [
+              "Terminal",
+              "completed, declined, cancelled, late_cancelled, no_show, expired",
+            ],
+          ],
+          tests: [
+            [
+              "B01",
+              "Student → tutor",
+              "Solo online: request → accept → scheduled → report complete; hold, deduction, report, fee cocok.",
+            ],
+            [
+              "B02",
+              "Student × 2–6",
+              "Group: accept / decline / withdraw; headcount, harga dan reconfirmation konsisten.",
+            ],
+            [
+              "B03",
+              "Admin + tutor",
+              "Offline: room approval / pindah room / konflik room; tidak double-book.",
+            ],
+            [
+              "B04",
+              "Tutor + student",
+              "Reschedule: accept / reject / expiry; jadwal dan meeting sesuai hasil keputusan.",
+            ],
+            [
+              "B05",
+              "Student + admin",
+              "Cancel sebelum/sesudah cutoff; bandingkan release/refund dengan policy di UI.",
+            ],
+            [
+              "B06",
+              "Tutor + admin",
+              "No-show student/tutor, late cancel, expired review; alasan dan ledger tersimpan.",
+            ],
+            [
+              "B07",
+              "Tutor",
+              "Series: complete satu child, child lain scheduled/cancelled; fee tidak dihitung dua kali.",
+            ],
+            [
+              "B08",
+              "Student",
+              "Saldo kurang / jadwal bentrok / stale version / klik ulang; tidak ada hold ganda.",
+            ],
+          ],
+          src: "booking/booking-transitions.ts · booking/booking.service.ts",
+        },
+        {
+          n: "Classes",
+          flow: [
+            [
+              "Admin authoring",
+              "draft → published; cohort ≥1 sesi / masterclass tepat 1 sesi",
+            ],
+            [
+              "Student plan",
+              "cohort: full / half / single · masterclass: satu harga",
+            ],
+            ["Checkout", "checkout_pending → active / expired / cancelled"],
+            [
+              "Half installment",
+              "funded pertama → pending kedua → funded / defaulted",
+            ],
+            [
+              "Seat allocation",
+              "checkout_reserved / unfunded_reserved → funded / released",
+            ],
+            [
+              "Cohort minimum",
+              "minimum check → keputusan admin: lanjut / postpone / cancel",
+            ],
+            [
+              "Session delivery",
+              "scheduled → completed / cancelled → report → fee tutor",
+            ],
+          ],
+          tests: [
+            [
+              "C01",
+              "Admin",
+              "Draft invalid: tutor, room, waktu, capacity, competition; publish ditolak dengan alasan.",
+            ],
+            [
+              "C02",
+              "Student",
+              "Enroll full / half / single / masterclass; jumlah sesi dan total Marks cocok.",
+            ],
+            [
+              "C03",
+              "Student",
+              "Saldo kurang → top-up → checkout; expired checkout melepas reservasi.",
+            ],
+            [
+              "C04",
+              "Student",
+              "Half: bayar kedua / lewati due date; unpaid future allocation dilepas sesuai policy.",
+            ],
+            [
+              "C05",
+              "Admin + student",
+              "Minimum tercapai/tidak tercapai, postpone, free-exit window, cancel; kursi dan Marks cocok.",
+            ],
+            [
+              "C06",
+              "Student × 2",
+              "Kursi terakhir direbut bersamaan / enroll ulang; tidak oversell atau double hold.",
+            ],
+            [
+              "C07",
+              "Tutor",
+              "Sesi complete + report, correction, PDF akses siswa; fee hanya sekali.",
+            ],
+          ],
+          src: "academy-class/* · class-enrollment/* · schema/academy-class*.ts",
+        },
+        {
+          n: "Tutors",
+          flow: [
+            ["Admin invite", "invited → accepted / expired / revoked"],
+            [
+              "Onboarding",
+              "draft → pending_review → changes_requested / approved_unpublished",
+            ],
+            ["Directory", "approved_unpublished → published / suspended"],
+            ["Profile editing", "none / pending_review / changes_requested"],
+            [
+              "Booking readiness",
+              "Subjects + modality + availability + capacity + bank/tax",
+            ],
+          ],
+          tests: [
+            [
+              "T01",
+              "Admin + tutor",
+              "Invite valid/expired/revoked, onboarding submit, request changes, approve, publish.",
+            ],
+            [
+              "T02",
+              "Student",
+              "Published tutor muncul di direktori; draft/suspended sesuai aturan visibility.",
+            ],
+            [
+              "T03",
+              "Tutor + admin",
+              "Edit profile pending approval; approve/reject tanpa merusak data published.",
+            ],
+            [
+              "T04",
+              "Tutor",
+              "Availability online/offline/both, overlap, capacity; booking memakai opsi yang valid.",
+            ],
+            [
+              "T05",
+              "Tutor + admin",
+              "Bank/tax lengkap, missing, override; payout preview memakai snapshot yang tepat.",
+            ],
+          ],
+          src: "schema/tutor-profile.ts · schema/tutor-invite.ts",
+        },
+        {
+          n: "Wallet & payouts",
+          flow: [
+            [
+              "Payment provider",
+              "PENDING → PAID / SETTLED / FAILED / EXPIRED / REFUNDED",
+            ],
+            [
+              "Wallet",
+              "credit → hold → release / deduct; total = available + held",
+            ],
+            [
+              "Completed delivery",
+              "booking / series child / class session → tutor_session_fee",
+            ],
+            ["Admin payout", "preview → prepared → paid / void"],
+            ["Reconciliation", "not_required / required / resolved"],
+          ],
+          tests: [
+            [
+              "P01",
+              "Student",
+              "Top-up success/fail/expire/refund; webhook duplicate tidak menambah kredit dua kali.",
+            ],
+            [
+              "P02",
+              "Student",
+              "Ledger dan saldo available/held/total cocok setelah semua cabang booking/classes.",
+            ],
+            [
+              "P03",
+              "Admin",
+              "Preview eligible unpaid fees, tax status/override, transfer fee; net cocok.",
+            ],
+            [
+              "P04",
+              "Admin",
+              "Prepare → record paid; source tidak bisa dialokasikan ke dua payout aktif.",
+            ],
+            [
+              "P05",
+              "Admin",
+              "Void prepared; source tersedia lagi sesuai policy.",
+            ],
+            [
+              "P06",
+              "Admin",
+              "Transfer mismatch / reconciliation required → resolved; evidence dan audit tersimpan.",
+            ],
+          ],
+          src: "schema/payment-record.ts · schema/wallet.ts · schema/tutor-payout*.ts",
+        },
+        {
+          n: "Referral & KOL",
+          flow: [
+            ["Signup choice", "none / friend / kol; snapshot attribution"],
+            [
+              "Friend",
+              "welcome credit → qualifying first completion → reward dengan semester cap",
+            ],
+            [
+              "KOL",
+              "campaign + code → qualifying payment → commission decision",
+            ],
+            [
+              "Commission basis",
+              "verified success time / unresolved; refund reconciliation",
+            ],
+            [
+              "Manual settlement",
+              "transfer / adjustment → saldo obligation vs paid",
+            ],
+          ],
+          tests: [
+            [
+              "R01",
+              "New student",
+              "No code / valid friend / valid KOL / invalid atau expired code; choice dan welcome credit cocok.",
+            ],
+            [
+              "R02",
+              "Friend pair",
+              "First qualifying completion reward sekali; ulang completion tidak double-credit.",
+            ],
+            [
+              "R03",
+              "Admin",
+              "Semester cap: remaining, exact cap, exhausted; credited Marks tidak lewat cap.",
+            ],
+            [
+              "R04",
+              "Admin",
+              "Campaign sebelum aktif / aktif / expired; attribution window sebelum/sesudah batas.",
+            ],
+            [
+              "R05",
+              "Admin",
+              "KOL first purchase vs repeat; flat + percent sesuai snapshot, duplicate event aman.",
+            ],
+            [
+              "R06",
+              "Admin",
+              "Missing provider success time, partial/full refund; komisi dan reconciliation sesuai fakta.",
+            ],
+            [
+              "R07",
+              "Admin",
+              "Unpaid / partial / fully settled / adjustment; double operation tidak double-transfer.",
+            ],
+          ],
+          src: "referral/referral.service.ts · referral/kol-settlement.policy.ts · schema/referral.ts",
+        },
+        {
+          n: "Notifications",
+          flow: [
+            [
+              "Domain event",
+              "Booking / payment / refund / schedule / achievement / system / override",
+            ],
+            [
+              "Notification write",
+              "eventKey dedupe → notification row → inbox unread/read",
+            ],
+            [
+              "Email gate · semua wajib",
+              "emailRequired=true + action/critical + supported category + recipient email",
+            ],
+            ["Outbox", "notification_dispatch: queued → claim → sending"],
+            ["Delivery result", "sent / suppressed / failed"],
+            [
+              "Recovery",
+              "failed retry <3 attempts; stale sending >10 menit dapat di-claim jika budget tersedia",
+            ],
+          ],
+          tests: [
+            [
+              "N01",
+              "Student + tutor + admin",
+              "Trigger satu event: recipient benar, isi dan action link menuju record yang tepat.",
+            ],
+            [
+              "N02",
+              "Same recipient",
+              "Replay eventKey → satu notification; inbox unread count dan read/unread konsisten.",
+            ],
+            [
+              "N03",
+              "Recipient",
+              "Info / emailRequired=false → in-app saja; action/critical lolos gate → outbox.",
+            ],
+            [
+              "N04",
+              "Recipient",
+              "Achievement/system tidak lolos email category gate; inbox tetap tersedia.",
+            ],
+            [
+              "N05",
+              "Worker",
+              "Queued → sending → sent; provider skipped → suppressed; error → failed + attempts.",
+            ],
+            [
+              "N06",
+              "Worker",
+              "Retry / stale claim / attempts habis; tidak double-send, idempotency memakai dispatch ID.",
+            ],
+            [
+              "N07",
+              "Other account",
+              "Tidak bisa baca atau mark-read notification milik akun lain.",
+            ],
+          ],
+          src: "notification/notification.service.ts · notification/notification.repo.ts",
+        },
+        {
+          n: "Other modules",
+          flow: [
+            [
+              "Achievement",
+              "draft / pending / pending_review / approved / rejected / archived",
+            ],
+            ["Support", "open → in_progress → resolved / closed"],
+            [
+              "Content & calendar",
+              "Admin create/edit/activate → reader visibility + akses",
+            ],
+            [
+              "Cross-module",
+              "Authorization · audit · pagination/filter · empty/error · responsive",
+            ],
+          ],
+          tests: [
+            [
+              "O01",
+              "Student + admin",
+              "Achievement submit, approve/reject/archive; public visibility dan evidence sesuai akses.",
+            ],
+            [
+              "O02",
+              "Student + admin",
+              "Support kategori tutor late/no-show/technical/payment/other; SLA, assignment, resolution.",
+            ],
+            [
+              "O03",
+              "Admin + student",
+              "Knowledge bank + calendar CRUD, active/inactive, filter; private file access diperiksa.",
+            ],
+            [
+              "O04",
+              "All roles",
+              "Coba endpoint/action role lain; ditolak tanpa perubahan data.",
+            ],
+            [
+              "O05",
+              "All roles",
+              "Empty/loading/error, filter/page, mobile; audit actor dan reason cocok.",
+            ],
+          ],
+          src: "schema/achievement.ts · schema/support-ticket.ts · schema/content-v3.ts",
+        },
+      ];
+      const checked = new Set();
+      let active = 0;
+      function render(i) {
+        active = i;
+        document
+          .querySelectorAll("nav button")
+          .forEach((b, j) => b.setAttribute("aria-selected", String(i === j)));
+        const d = domains[i];
+        document
+          .getElementById("panel")
+          .setAttribute("aria-labelledby", "tab" + i);
+        document.getElementById("panel").innerHTML =
+          '<div class="flow" aria-label="Alur ' +
+          d.n +
+          '">' +
+          d.flow
+            .map(
+              (s, k) =>
+                (k ? '<div class="connector" aria-hidden="true">↓</div>' : "") +
+                '<div class="step"><strong>' +
+                s[0] +
+                "</strong><div>" +
+                s[1] +
+                "</div></div>",
+            )
+            .join("") +
+          "</div><h3>Manual test · " +
+          d.tests.length +
+          ' skenario</h3><div id="progress"></div><table><thead><tr><th>Cek</th><th>Pelaku</th><th>Aksi dan hasil yang perlu diverifikasi</th></tr></thead><tbody>' +
+          d.tests
+            .map(
+              (t) =>
+                '<tr><td><label><input type="checkbox" data-id="' +
+                t[0] +
+                '" ' +
+                (checked.has(t[0]) ? "checked" : "") +
+                ">" +
+                t[0] +
+                "</label></td><td>" +
+                t[1] +
+                "</td><td>" +
+                t[2] +
+                "</td></tr>",
+            )
+            .join("") +
+          '</tbody></table><p class="source muted">Source: packages/api/src/modules/' +
+          d.src +
+          "<br>Ringkasan alur untuk perencanaan tes; panah antartahap bukan jaminan semua transisi langsung legal. Checkbox hanya sesi tampilan ini, belum bukti eksekusi.</p>";
+        update();
+      }
+      function update() {
+        document.getElementById("progress").textContent =
+          checked.size +
+          " / " +
+          domains.reduce((n, d) => n + d.tests.length, 0) +
+          " skenario ditandai manual";
+      }
+      document.querySelector("nav").addEventListener("click", (e) => {
+        if (e.target.dataset.i !== undefined)
+          render(Number(e.target.dataset.i));
+      });
+      document.getElementById("panel").addEventListener("change", (e) => {
+        if (e.target.dataset.id) {
+          e.target.checked
+            ? checked.add(e.target.dataset.id)
+            : checked.delete(e.target.dataset.id);
+          update();
+        }
+      });
+      render(0);
+    </script>
+  </body>
+</html>

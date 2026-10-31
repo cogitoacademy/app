@@ -1,4 +1,21 @@
 import { z } from "zod";
+import { v3EconomyConfigSchema } from "../pricing/v3-economy.config";
+import { externalHttpUrl } from "../../lib/url-schema";
+
+export const adminPreviewV3EconomyInput = z
+  .object({
+    values: v3EconomyConfigSchema,
+    exactMarks: z.number().int().min(1).max(1_000_000).optional(),
+  })
+  .strict();
+
+export const adminSaveV3EconomyInput = z
+  .object({
+    expectedVersion: z.number().int().min(0).max(2_000_000_000),
+    values: v3EconomyConfigSchema,
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();
 
 const dashboardDateKey = z
   .string()
@@ -57,6 +74,7 @@ export const listUsersInput = z
 export const adminSearchUsersInput = z.object({
   query: z.string().trim().min(2).max(100),
   limit: z.number().int().min(1).max(20).default(10),
+  role: z.enum(["student", "tutor", "admin"]).optional(),
 });
 
 export const setRoleInput = z.object({
@@ -82,8 +100,57 @@ export const adminGetTutorPayoutReportInput = z
   })
   .optional();
 
-export const adminMarkTutorPayoutPaidInput = z.object({
+export const adminGetPendingTutorPayoutsInput = z.object({
   tutorId: z.string().max(100),
+});
+
+export const adminPreviewTutorPayoutInput = z.object({
+  tutorId: z.string().min(1).max(100),
+  sourceKeys: z.array(z.string().min(1).max(255)).min(1).max(500),
+});
+
+export const adminPrepareTutorPayoutInput = adminPreviewTutorPayoutInput.extend(
+  {
+    previewVersion: z.string().regex(/^[a-f0-9]{64}$/),
+    operationId: z.string().uuid(),
+  },
+);
+
+export const adminRecordTutorPayoutTransferInput = z.object({
+  payoutId: z.string().uuid(),
+  previewVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  actualAmountIdr: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  paidAt: z.string().min(1).max(100),
+  reference: z.string().trim().max(255).optional(),
+  proofUrl: externalHttpUrl.optional(),
+});
+
+export const adminVoidTutorPayoutInput = z.object({
+  payoutId: z.string().uuid(),
+  reason: z.string().trim().min(1).max(2000),
+});
+
+export const adminResolveTutorPayoutReconciliationInput = z.object({
+  payoutId: z.string().uuid(),
+  reason: z.string().trim().min(1).max(2000),
+});
+
+export const adminUpdateTutorTaxConfigInput = z.object({
+  expectedVersion: z.number().int().min(0).max(2_000_000_000),
+  nikNpwpRateBps: z.number().int().min(0).max(10_000),
+  nikOnlyRateBps: z.number().int().min(0).max(10_000),
+  missingRateBps: z.number().int().min(0).max(10_000),
+  reason: z.string().trim().min(1).max(2000),
+});
+
+export const adminSetTutorTaxRateOverrideInput = z.object({
+  tutorId: z.string().min(1).max(100),
+  rateBps: z.number().int().min(0).max(10_000).nullable(),
+  reason: z.string().trim().min(1).max(2000),
+});
+
+export const adminGetTutorPayoutAllocationsInput = z.object({
+  payoutId: z.string().uuid(),
 });
 
 export const adminListLedgerEntriesInput = z.object({
@@ -106,30 +173,15 @@ export const adminListLedgerEntriesInput = z.object({
   dateTo: z.string().max(100).optional(),
 });
 
-export const adminUpdateEconomySettingsInput = z.object({
-  expectedVersion: z.number().int().min(1),
-  onlineCogitoBaseIdr: z
-    .number()
-    .int()
-    .min(5_000)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  onlineCogitoIncrementIdr: z
-    .number()
-    .int()
-    .min(0)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  offlineCogitoBaseIdr: z
-    .number()
-    .int()
-    .min(5_000)
-    .max(10_000_000)
-    .multipleOf(5_000),
-  offlineCogitoIncrementIdr: z
-    .number()
-    .int()
-    .min(0)
-    .max(10_000_000)
-    .multipleOf(5_000),
-});
+export const adminActivateV3EconomyInput = z
+  .object({
+    version: z.number().int().min(1).max(2_000_000_000),
+    expectedActiveRevision: z
+      .number()
+      .int()
+      .min(1)
+      .max(2_000_000_000)
+      .nullable(),
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();

@@ -6,6 +6,7 @@ import type {
   Modality,
   PriceSnapshot,
   EconomyPriceSnapshot,
+  V3ConfigRevision,
 } from "../pricing/pricing.service";
 import type { EconomyParameters } from "../economy";
 import type { BookingPayoutPort } from "../booking";
@@ -39,6 +40,7 @@ export interface TutorPricingPort {
     config: EconomyParameters,
   ): EconomyPriceSnapshot;
   getEconomyConfig?(conn?: DbOrTx): Promise<EconomyParameters>;
+  getActiveV3Config?(conn?: DbOrTx): Promise<V3ConfigRevision | null>;
 }
 
 export interface TutorAuditPort {

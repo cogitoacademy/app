@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   jsonb,
+  uuid,
   serial,
   index,
   uniqueIndex,
@@ -42,6 +43,45 @@ export type BookingSessionTopic = {
   subcategorySlug: string;
   subcategoryName: string;
 };
+
+export type LegacyBookingPriceSnapshot = {
+  engine?: undefined;
+  perStudent: number;
+  baseline: number;
+  tutorShare: number;
+  cogitoTake: number;
+  baselineCogitoTake: number;
+  baselineTutorShare: number;
+  extraTotal: number;
+  cogitoExtraTake: number;
+  tutorExtraShare: number;
+  economyVersion?: number;
+  markValueIdr?: number;
+  tutorBaseRateIdr?: number;
+  tutorIncrementIdr?: number;
+  tutorHonorariumIdr?: number;
+  cogitoBaseTakeIdr?: number;
+  cogitoIncrementIdr?: number;
+  cogitoTakeIdr?: number;
+  totalIdr?: number;
+  totalMarks?: number;
+  actualMarksPooled?: number;
+};
+
+export type V3BookingPriceSnapshot = {
+  engine: "v3";
+  v3Revision: number;
+  competition: string;
+  modality: "online" | "offline";
+  headcount: number;
+  perStudentMarks: number;
+  collectedMarks: number;
+  tutorHonorariumIdr: number;
+};
+
+export type BookingPriceSnapshot =
+  | LegacyBookingPriceSnapshot
+  | V3BookingPriceSnapshot;
 
 export const booking = pgTable(
   "booking",
@@ -81,28 +121,7 @@ export const booking = pgTable(
     // for WIB countdown/display.
     timezone: text("timezone").notNull().default("Asia/Jakarta"),
     roomId: text("room_id"),
-    priceSnapshot: jsonb("price_snapshot").$type<{
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-      economyVersion?: number;
-      markValueIdr?: number;
-      tutorBaseRateIdr?: number;
-      tutorIncrementIdr?: number;
-      tutorHonorariumIdr?: number;
-      cogitoBaseTakeIdr?: number;
-      cogitoIncrementIdr?: number;
-      cogitoTakeIdr?: number;
-      totalIdr?: number;
-      totalMarks?: number;
-      actualMarksPooled?: number;
-    }>(),
+    priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
     originalMarks: integer("original_marks").notNull(),
     holdAmount: integer("hold_amount").notNull().default(0),
     refundedAmount: integer("refunded_amount").notNull().default(0),
@@ -294,28 +313,7 @@ export const bookingSession = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     currentState: text("current_state").notNull().default("scheduled"),
     holdAmount: integer("hold_amount").notNull().default(0),
-    priceSnapshot: jsonb("price_snapshot").$type<{
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-      economyVersion?: number;
-      markValueIdr?: number;
-      tutorBaseRateIdr?: number;
-      tutorIncrementIdr?: number;
-      tutorHonorariumIdr?: number;
-      cogitoBaseTakeIdr?: number;
-      cogitoIncrementIdr?: number;
-      cogitoTakeIdr?: number;
-      totalIdr?: number;
-      totalMarks?: number;
-      actualMarksPooled?: number;
-    }>(),
+    priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -372,6 +370,7 @@ export const sessionCompletionFeedback = pgTable(
     discussion: jsonb("discussion").$type<string[]>().notNull(),
     strengths: jsonb("strengths").$type<string[]>().notNull(),
     improvements: jsonb("improvements").$type<string[]>().notNull(),
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -382,6 +381,58 @@ export const sessionCompletionFeedback = pgTable(
     index("session_feedback_bookingId_idx").on(table.bookingId),
     index("session_feedback_sessionId_idx").on(table.sessionId),
     index("session_feedback_authorId_idx").on(table.authorId),
+  ],
+);
+
+export const sessionCompletionFeedbackHistory = pgTable(
+  "session_completion_feedback_history",
+  {
+    id: uuidPrimaryKey,
+    feedbackId: text("feedback_id")
+      .notNull()
+      .references(() => sessionCompletionFeedback.id, { onDelete: "cascade" }),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    // Text preserves the session ID, but report history follows feedback and booking cascades.
+    sessionId: text("session_id"),
+    version: integer("version").notNull(),
+    status: text("status", { enum: ["submitted", "corrected"] }).notNull(),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorRole: text("actor_role", { enum: ["admin", "tutor"] }).notNull(),
+    reason: text("reason"),
+    deliveryConfirmed: boolean("delivery_confirmed"),
+    discussion: jsonb("discussion").$type<string[]>().notNull(),
+    strengths: jsonb("strengths").$type<string[]>().notNull(),
+    improvements: jsonb("improvements").$type<string[]>().notNull(),
+    requestKey: uuid("request_key"),
+    requestPayload: jsonb("request_payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    check("session_feedback_history_version_check", sql`${table.version} > 0`),
+    check(
+      "session_feedback_history_status_check",
+      sql`${table.status} IN ('submitted','corrected')`,
+    ),
+    check(
+      "session_feedback_history_actor_check",
+      sql`${table.actorRole} IN ('admin','tutor')`,
+    ),
+    uniqueIndex("session_feedback_history_feedback_version_uniq").on(
+      table.feedbackId,
+      table.version,
+    ),
+    index("session_feedback_history_booking_session_idx").on(
+      table.bookingId,
+      table.sessionId,
+      table.createdAt,
+    ),
+    uniqueIndex("session_feedback_history_request_key_uniq").on(
+      table.requestKey,
+    ),
   ],
 );
 
@@ -569,7 +620,7 @@ export const sessionNoteRelations = relations(sessionNote, ({ one }) => ({
 
 export const sessionCompletionFeedbackRelations = relations(
   sessionCompletionFeedback,
-  ({ one }) => ({
+  ({ one, many }) => ({
     booking: one(booking, {
       fields: [sessionCompletionFeedback.bookingId],
       references: [booking.id],
@@ -580,6 +631,21 @@ export const sessionCompletionFeedbackRelations = relations(
     }),
     author: one(user, {
       fields: [sessionCompletionFeedback.authorId],
+      references: [user.id],
+    }),
+    history: many(sessionCompletionFeedbackHistory),
+  }),
+);
+
+export const sessionCompletionFeedbackHistoryRelations = relations(
+  sessionCompletionFeedbackHistory,
+  ({ one }) => ({
+    feedback: one(sessionCompletionFeedback, {
+      fields: [sessionCompletionFeedbackHistory.feedbackId],
+      references: [sessionCompletionFeedback.id],
+    }),
+    actor: one(user, {
+      fields: [sessionCompletionFeedbackHistory.actorId],
       references: [user.id],
     }),
   }),

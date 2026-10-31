@@ -11,6 +11,7 @@ import { client } from "@/utils/orpc";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
 import { EmptyState } from "@/components/empty-state";
 import { useSubjectTaxonomy } from "@/components/tutor/subject-taxonomy";
+import type { CompetitionPalette } from "@/lib/competition-colors";
 
 export const Route = createFileRoute("/_app/admin-tutors_/$profileId")({
   head: () => ({
@@ -42,14 +43,16 @@ function RouteComponent() {
     }
     return labels;
   }, [subjectCategories]);
-  const subjectFieldSlugs = useMemo(() => {
-    const slugs = new Map<string, string>();
+  const subjectPalettes = useMemo(() => {
+    const palettes = new Map<string, CompetitionPalette>();
     for (const category of subjectCategories) {
       for (const subject of category.children) {
-        slugs.set(subject.id, category.slug);
+        if (category.parentColors) {
+          palettes.set(subject.id, category.parentColors);
+        }
       }
     }
-    return slugs;
+    return palettes;
   }, [subjectCategories]);
 
   const {
@@ -99,7 +102,7 @@ function RouteComponent() {
         <Heading level={1} size="md">
           Review tutor profile
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Check details, proofs, photos, and publication status in one focused
           workspace.
         </Text>
@@ -114,7 +117,7 @@ function RouteComponent() {
               : null,
         }}
         subjectLabels={subjectLabels}
-        subjectFieldSlugs={subjectFieldSlugs}
+        subjectPalettes={subjectPalettes}
         onAction={() => {
           void refetch();
           void queryClient.invalidateQueries({

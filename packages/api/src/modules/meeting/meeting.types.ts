@@ -24,9 +24,48 @@ export interface MeetingEventDetails {
   location?: string;
   /** Defaults to true. Offline bookings set this to false. */
   createConference?: boolean;
+  /** Stable provider key used for idempotent class-session calendar events. */
+  idempotencyKey?: string;
+  /** Persisted class-event generation; generation one retains the original ID. */
+  creationGeneration?: number;
+  /** Existing provider event to resume when conference generation is pending. */
+  externalEventId?: string;
+}
+
+export interface AcademyClassMeetingResult {
+  provider: "google_meet" | "manual";
+  status: "created" | "failed";
+  externalEventId: string | null;
+  meetingUrl: string | null;
+  errorReason: string | null;
+  /** The stored event is a deleted Calendar tombstone and needs a new generation. */
+  missingEvent?: true;
 }
 
 export interface MeetingPort {
+  /** Throws on provider failure so the class cancellation worker can retry. */
+  cancelAcademyClassEvent?(
+    externalEventId: string | null,
+    sessionId?: string,
+    creationGeneration?: number,
+  ): Promise<void>;
+
+  /** Creates an idempotent Google Meet event without writing a booking row. */
+  createAcademyClassEvent?(
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
+    details?: MeetingEventDetails,
+  ): Promise<AcademyClassMeetingResult>;
+  /** Updates the durable calendar event after a one-time cohort postponement. */
+  updateAcademyClassEvent?(
+    externalEventId: string | null,
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
+  ): Promise<void>;
   /**
    * Creates a provider-side meeting event and persists the local
    * `meetingEvent` row.

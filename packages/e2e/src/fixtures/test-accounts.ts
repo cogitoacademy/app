@@ -1,10 +1,20 @@
-export const STUDENT_EMAIL = "cogito.andre@yopmail.com";
+import { DEFAULT_STUDENT_EMAIL, resolveStudentEmail } from "./student-identity";
+
+export { DEFAULT_STUDENT_EMAIL };
+export const STUDENT_EMAIL = resolveStudentEmail({
+  E2E_STUDENT_EMAIL: process.env.E2E_STUDENT_EMAIL,
+});
+export const T05_CLASS_ENROLLMENT_STUDENT_EMAIL =
+  process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL;
+export const T07_CLASS_REPORTS_STUDENT_EMAIL =
+  process.env.T07_CLASS_REPORTS_STUDENT_EMAIL;
 export const STUDENT_NAME = "Andre by Cogito";
 export const STUDENT_PASSWORD =
   process.env.SEED_STUDENT_PASSWORD ?? "Student123!";
 export const FRIEND_EMAIL = "cogito.argya@yopmail.com";
 export const FRIEND_NAME = "Argya by Cogito";
-export const TUTOR_EMAIL = "cogito.diego@yopmail.com";
+export const TUTOR_EMAIL =
+  process.env.E2E_TUTOR_EMAIL ?? "cogito.diego@yopmail.com";
 export const TUTOR_NAME = "Diego by Cogito";
 export const TUTOR_PASSWORD = process.env.SEED_TUTOR_PASSWORD ?? "Tutor123!";
 export const ADMIN_EMAIL = "admin@cogitoacademy.id";

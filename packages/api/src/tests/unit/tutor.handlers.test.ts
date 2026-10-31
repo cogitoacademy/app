@@ -280,3 +280,18 @@ describe("tutorHandlers", () => {
     });
   });
 });
+
+test("payout handler supplies empty filters when input is omitted", async () => {
+  const getMyPayouts = mock(async (_userId: string, _filters: unknown) => ({
+    totalIdr: 0,
+  }));
+  const handler = createTutorHandler({ getMyPayouts } as unknown as Parameters<
+    typeof createTutorHandler
+  >[0]);
+  const result = await handler.getMyPayouts({
+    context: { session: { user: { id: "tutor1" } } },
+    input: undefined,
+  } as unknown as Parameters<typeof handler.getMyPayouts>[0]);
+  expect(result).toEqual({ totalIdr: 0 });
+  expect(getMyPayouts).toHaveBeenCalledWith("tutor1", {});
+});

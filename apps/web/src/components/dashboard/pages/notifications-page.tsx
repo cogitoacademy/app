@@ -56,6 +56,7 @@ type NotificationItemData = {
   category: string;
   title: string;
   body: string;
+  metadata: Record<string, unknown> | null;
   isRead: boolean;
   createdAt: Date | string;
 };
@@ -209,7 +210,7 @@ export function NotificationsPage() {
         <Heading level={1} size="md">
           Keep up with what matters
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Catch up on booking activity and important account updates.
         </Text>
       </div>
@@ -467,6 +468,18 @@ function NotificationItem({
                 params={{ bookingId: notification.bookingId }}
                 aria-label="View booking details"
               />
+            }
+            nativeButton={false}
+          >
+            <IconExternalLink />
+          </Button>
+        ) : notification.metadata?.action === "class-session-report" ? (
+          <Button
+            variant="plain"
+            size="xs-icon"
+            aria-label="Open session reports"
+            render={
+              <Link to="/class-reports" aria-label="Open session reports" />
             }
             nativeButton={false}
           >

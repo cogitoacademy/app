@@ -14,6 +14,7 @@ import {
   IconArrowRight,
   IconCalendarCheck,
   IconChevronDown,
+  IconSettings,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
@@ -45,12 +46,13 @@ import { CalendarAgendaView } from "./calendar-agenda-view";
 import { CalendarDetailsDrawer } from "./calendar-details-drawer";
 import { CalendarMonthView } from "./calendar-month-view";
 import {
+  wibCalendarDate,
   AGENDA_DAYS_TO_SHOW,
   EVENT_GAP,
   EVENT_HEIGHT,
-  competitionTypeOptions,
   filterEventsByCompetitionType,
-  getCategoryLabel,
+  getCompetitionTypeOptions,
+  getSelectedCompetitionTypes,
 } from "./calendar-utils";
 import type { CalendarCompetition, CalendarView } from "./calendar-types";
 
@@ -62,19 +64,31 @@ export interface CompetitionCalendarProps {
   events?: CalendarCompetition[];
   className?: string;
   initialView?: CalendarView;
+  onManage?: () => void;
 }
 
 export function CompetitionCalendar({
   events = EMPTY_EVENTS,
   className,
   initialView = "month",
+  onManage,
 }: CompetitionCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [currentDate, setCurrentDate] = useState(() =>
+    wibCalendarDate(new Date()),
+  );
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarCompetition | null>(null);
-  const [selectedTypes, setSelectedTypes] = useState<ReadonlySet<string>>(
-    () => new Set(competitionTypeOptions),
+  const [excludedTypes, setExcludedTypes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const competitionTypeOptions = useMemo(
+    () => getCompetitionTypeOptions(events),
+    [events],
+  );
+  const selectedTypes = useMemo(
+    () => getSelectedCompetitionTypes(competitionTypeOptions, excludedTypes),
+    [competitionTypeOptions, excludedTypes],
   );
 
   useEffect(() => {
@@ -133,33 +147,32 @@ export function CompetitionCalendar({
   }
 
   function handleToday() {
-    setCurrentDate(new Date());
+    setCurrentDate(wibCalendarDate(new Date()));
   }
 
   function handleViewChange(value: string) {
     if (value === "month" || value === "agenda") setView(value);
   }
 
-  const isFiltered = selectedTypes.size < competitionTypeOptions.length;
+  const isFiltered = competitionTypeOptions.some(({ value }) =>
+    excludedTypes.has(value),
+  );
 
   const filterLabel = isFiltered
     ? `Calendar options, ${view} view, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
     : `Calendar options, ${view} view`;
 
   function handleTypeToggle(value: string, checked: boolean) {
-    setSelectedTypes((prev) => {
+    setExcludedTypes((prev) => {
       const next = new Set(prev);
-      if (checked) {
-        next.add(value);
-      } else {
-        next.delete(value);
-      }
+      if (checked) next.delete(value);
+      else next.add(value);
       return next;
     });
   }
 
   function handleResetTypes() {
-    setSelectedTypes(new Set(competitionTypeOptions));
+    setExcludedTypes(new Set());
   }
 
   const calendarStyle = {
@@ -171,7 +184,7 @@ export function CompetitionCalendar({
     <>
       <Card
         className={cn(
-          "flex h-[85svh] min-h-0 shrink-0 flex-col overflow-clip md:h-auto md:min-h-[70svh] md:max-h-fit md:flex-1",
+          "flex w-full max-w-full h-[85svh] min-h-0 shrink-0 flex-col overflow-clip md:h-auto md:min-h-[70svh] md:max-h-fit md:flex-1",
           className,
         )}
         style={calendarStyle}
@@ -222,7 +235,18 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <div className="relative ml-auto flex gap-2">
+          <div className="relative ml-auto flex items-center gap-2">
+            {onManage ? (
+              <Button
+                variant="secondary"
+                size="sm-icon"
+                aria-label="Manage calendar"
+                title="Manage calendar"
+                onClick={onManage}
+              >
+                <IconSettings aria-hidden="true" />
+              </Button>
+            ) : null}
             <Menu>
               <MenuTrigger
                 render={
@@ -253,7 +277,7 @@ export function CompetitionCalendar({
                 <MenuSeparator />
                 <MenuGroup>
                   <MenuGroupLabel>Competition type</MenuGroupLabel>
-                  {competitionTypeOptions.map((value) => (
+                  {competitionTypeOptions.map(({ value, label }) => (
                     <MenuCheckboxItem
                       key={value}
                       checked={selectedTypes.has(value)}
@@ -261,7 +285,7 @@ export function CompetitionCalendar({
                         handleTypeToggle(value, checked === true)
                       }
                     >
-                      {getCategoryLabel(value)}
+                      {label}
                     </MenuCheckboxItem>
                   ))}
                 </MenuGroup>
@@ -284,7 +308,7 @@ export function CompetitionCalendar({
           </div>
         </CardHeader>
 
-        <CardBody className="min-h-0 basis-0 flex-1 overflow-auto overscroll-contain p-0!">
+        <CardBody className="min-h-0 w-full max-w-full basis-0 flex-1 overflow-auto overscroll-contain p-0!">
           {view === "month" ? (
             <CalendarMonthView
               currentDate={startOfMonth(currentDate)}

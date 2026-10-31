@@ -30,6 +30,7 @@ import {
   BookingSeriesNoOptOutError,
   mapBookingError,
 } from "../../modules/booking/booking.errors";
+import * as bookingErrors from "../../modules/booking/booking.errors";
 
 class TestDomainError extends DomainError {
   readonly domain = "test";
@@ -339,5 +340,62 @@ describe("booking.errors", () => {
       const result = mapBookingError(new TestDomainError());
       expect(result.status).toBe(500);
     });
+
+    const additionalMappings: Array<[DomainError, number]> = [
+      [new bookingErrors.BookingSessionNotFoundError("session-1"), 404],
+      [new bookingErrors.BookingSessionRequiredError("booking-1"), 400],
+      [new bookingErrors.BookingSessionNotStartedError("session-1"), 400],
+      [
+        new bookingErrors.BookingSessionNotEndedError("session-1", new Date()),
+        400,
+      ],
+      [
+        new bookingErrors.BookingTutorCapacityError("tutor-1", "online", 2, 1),
+        400,
+      ],
+      [
+        new bookingErrors.BookingTutorCapacityError("tutor-1", "online", 3, 2),
+        400,
+      ],
+      [new bookingErrors.BookingSessionNotCancellableError("session-1"), 400],
+      [new bookingErrors.BookingNotCompletedError("booking-1"), 400],
+      [
+        new bookingErrors.BookingCompletionFeedbackRequiredError("booking-1"),
+        400,
+      ],
+      [
+        new bookingErrors.BookingCompletionFeedbackTooLongError("booking-1"),
+        400,
+      ],
+      [new bookingErrors.BookingCompletionReportConflictError(), 409],
+      [new bookingErrors.TutorPayoutPreviewStaleError(), 409],
+      [
+        new bookingErrors.TutorPayoutReconciliationRequiredError("payout-1"),
+        409,
+      ],
+      [new bookingErrors.TutorPayoutTaxConfigConflictError(1, 2), 409],
+      [new bookingErrors.TutorPayoutStateError("Invalid state"), 409],
+      [new bookingErrors.TutorPayoutNotFoundError("payout-1"), 404],
+      [
+        new bookingErrors.TutorPayoutTaxProfileIncompleteError("tutor-1", []),
+        400,
+      ],
+      [new bookingErrors.TutorPayoutProfileIncompleteError("tutor-1", []), 400],
+      [new bookingErrors.TutorPayoutAmountMismatchError(10, 9), 400],
+      [
+        new bookingErrors.TutorPayoutCalculationDomainError("Invalid amount"),
+        400,
+      ],
+      [new bookingErrors.BookingV3CompetitionRequiredError(), 400],
+      [new bookingErrors.BookingV3CompetitionUnavailableError("math"), 400],
+      [new bookingErrors.BookingV3GroupSeriesNotReadyError(), 409],
+      [new bookingErrors.BookingV3PricingRevisionUnavailableError(1), 409],
+    ];
+
+    for (const [err, status] of additionalMappings) {
+      it(`maps ${err.name} to ${status}`, () => {
+        expect(mapBookingError(err).status).toBe(status);
+      });
+    }
   });
 });

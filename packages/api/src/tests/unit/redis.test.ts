@@ -396,9 +396,22 @@ describe("Redis client helpers", () => {
     const fallback = fresh.createRedisFallback();
     expect(fallback).toBeInstanceOf(fresh.InMemoryRedis);
 
-    const connected = fresh.initRedis("redis://localhost:6379");
+    const connected = fresh.initRedis(process.env.REDIS_URL ?? "");
     await expect(connected.ping()).resolves.toBe("PONG");
     await connected.quit();
     expect(fresh.getRedisClient()).toBe(connected);
   });
+});
+
+test("persistent in-memory keys report no millisecond expiry", async () => {
+  const redis = new InMemoryRedis();
+  await redis.set("persistent", "value");
+  expect(await redis.pttl("persistent")).toBe(-1);
+});
+
+test("invalid Redis URL construction falls back to memory", async () => {
+  const fresh = await import("../../lib/redis?invalid-url-fallback");
+  const redis = fresh.initRedis("redis://[");
+  expect(redis).toBeInstanceOf(fresh.InMemoryRedis);
+  expect(await redis.ping()).toBe("PONG");
 });

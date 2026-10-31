@@ -67,6 +67,10 @@ export const tutorProfile = pgTable(
     bankAccountNumber: text("bank_account_number"),
     bankAccountHolderName: text("bank_account_holder_name"),
     bankAccountOpeningCity: text("bank_account_opening_city"),
+    taxLegalName: text("tax_legal_name"),
+    nik: text("nik"),
+    npwp: text("npwp"),
+    taxRateOverrideBps: integer("tax_rate_override_bps"),
     bankAccountOwnership: text("bank_account_ownership", {
       enum: ["self", "trusted_person"],
     }),
@@ -118,6 +122,14 @@ export const tutorProfile = pgTable(
     check(
       "tutor_profile_bank_account_ownership_check",
       sql`${table.bankAccountOwnership} IS NULL OR ${table.bankAccountOwnership} IN ('self', 'trusted_person')`,
+    ),
+    check(
+      "tutor_profile_tax_nik_check",
+      sql`${table.nik} IS NULL OR ${table.nik} ~ '^[0-9]{16}$'`,
+    ),
+    check(
+      "tutor_profile_tax_rate_override_check",
+      sql`${table.taxRateOverrideBps} IS NULL OR ${table.taxRateOverrideBps} BETWEEN 0 AND 10000`,
     ),
     check(
       "tutor_profile_onboarding_status_check",

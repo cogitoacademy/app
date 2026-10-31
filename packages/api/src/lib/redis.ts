@@ -72,7 +72,7 @@ export class InMemoryRedis implements RedisClient {
       if (arg.type === "EX") expiresAt = Date.now() + arg.value * 1000;
       else if (arg.type === "PX") expiresAt = Date.now() + arg.value;
       else if (arg.type === "NX") nx = true;
-      else if (arg.type === "XX") xx = true;
+      else xx = true;
     }
 
     if (nx) {
@@ -300,7 +300,7 @@ export function createRedisAdapter(client: RedisAdapterClient): RedisClient {
           redisArgs.push("PX", arg.value);
         } else if (arg.type === "NX") {
           redisArgs.push("NX");
-        } else if (arg.type === "XX") {
+        } else {
           redisArgs.push("XX");
         }
       }

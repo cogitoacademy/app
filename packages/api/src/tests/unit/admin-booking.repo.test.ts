@@ -1,4 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
+import * as repo from "../../modules/admin-booking/admin-booking.repo";
+import { PAYMENT_STATUS } from "../../shared/constants";
 import {
   updateBookingWithOverride,
   insertStateHistoryEntry,
@@ -28,6 +30,78 @@ function makeInsertConn(returned: any[] = [{}]) {
 }
 
 describe("admin-booking.repo", () => {
+  test("override detects a lost optimistic race and participant locking is deterministic", async () => {
+    const update = makeUpdateConn([]);
+    const conn = {
+      ...update,
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ version: 1, currentState: "scheduled" }],
+          }),
+        }),
+      }),
+    } as any;
+    expect(
+      await updateBookingWithOverride(conn, "b1", "cancelled", "Admin", {}),
+    ).toEqual({ raced: true });
+    const lock = mock(async () => [{ id: "participant" }]);
+    const orderBy = mock(() => ({ for: lock }));
+    const participants = {
+      select: () => ({ from: () => ({ where: () => ({ orderBy }) }) }),
+    } as any;
+    expect(
+      await findParticipantsByBookingId(participants, "b1", {
+        forUpdate: true,
+      }),
+    ).toEqual([{ id: "participant" }]);
+    expect(lock).toHaveBeenCalledWith("update");
+    expect(orderBy).toHaveBeenCalledTimes(1);
+  });
+  test("booking and session lookups support locked reads and explicit missing rows", async () => {
+    for (const rows of [[], [{ id: "record1" }]]) {
+      const lock = mock(async () => rows);
+      const query = Object.assign(Promise.resolve(rows), { for: lock });
+      const conn = {
+        select: () => ({
+          from: () => ({ where: () => ({ limit: () => query }) }),
+        }),
+      } as any;
+      expect(await repo.findBookingById(conn, "b1")).toEqual(rows[0] ?? null);
+      expect(await repo.findSessionById(conn, "s1")).toEqual(rows[0] ?? null);
+      expect(lock).not.toHaveBeenCalled();
+      expect(
+        await repo.findBookingById(conn, "b1", { forUpdate: true }),
+      ).toEqual(rows[0] ?? null);
+      expect(
+        await repo.findSessionById(conn, "s1", { forUpdate: true }),
+      ).toEqual(rows[0] ?? null);
+      expect(lock).toHaveBeenCalledWith("update");
+    }
+  });
+
+  test("conditional cancellation and refunds distinguish lost races from changed rows", async () => {
+    const missing = makeUpdateConn([]) as any;
+    expect(await repo.cancelSession(missing, "s1")).toBe(false);
+    expect(
+      await repo.updatePaymentStatusIfRefundable(missing, "p1"),
+    ).toBeNull();
+    const conn = makeUpdateConn([{ id: "changed" }]) as any;
+    expect(await repo.cancelSession(conn, "s1")).toBe(true);
+    expect(conn.set).toHaveBeenCalledWith({
+      currentState: "cancelled",
+      holdAmount: 0,
+    });
+    expect(await repo.updatePaymentStatusIfRefundable(conn, "p1")).toEqual({
+      id: "changed",
+    });
+    expect(conn.set).toHaveBeenLastCalledWith({
+      status: PAYMENT_STATUS.REFUNDED,
+      updatedAt: expect.any(Date),
+    });
+    await repo.updateParticipantHeldAmount(conn, "participant1", 7);
+    expect(conn.set).toHaveBeenLastCalledWith({ heldAmount: 7 });
+  });
   describe("updateBookingWithOverride", () => {
     test("returns null when booking not found", async () => {
       const selectLimit = mock(async () => []);

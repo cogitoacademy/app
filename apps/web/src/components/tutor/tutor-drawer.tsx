@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
@@ -19,7 +26,10 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
@@ -51,10 +61,6 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function formatClassSize(size: number) {
-  return `${size} ${size === 1 ? "student" : "students"}`;
-}
-
 type TutorDrawerProps = {
   tutor: {
     id: string;
@@ -69,10 +75,11 @@ type TutorDrawerProps = {
     modality: string | null;
     onlineMaxClassSize: number;
     offlineMaxClassSize: number;
-    prices: Record<string, number> | null;
-    pricesByModality?: Partial<
-      Record<"online" | "offline", Record<string, number>>
+    pricesByCompetition?: Record<
+      string,
+      Partial<Record<"online" | "offline", Record<string, number>>>
     > | null;
+    pricingRevision?: number | null;
     publishedAt: Date | null;
     user: { name: string | null; image: string | null } | null;
   } | null;
@@ -86,14 +93,8 @@ type PricingMap = Record<string, number>;
 type PricingByModality = Partial<Record<PricingModality, PricingMap>>;
 const PRICING_MODALITIES = ["online", "offline"] as const;
 
-function getPricingTableData(
-  pricesByModality: PricingByModality | null | undefined,
-  legacyPrices: PricingMap | null,
-  modality: string | null,
-) {
-  const priceMaps: PricingByModality = pricesByModality ?? {
-    [modality === "offline" ? "offline" : "online"]: legacyPrices ?? {},
-  };
+function getPricingTableData(pricesByModality: PricingByModality) {
+  const priceMaps = pricesByModality;
   const modalities = PRICING_MODALITIES.filter(
     (currentModality) =>
       Object.keys(priceMaps[currentModality] ?? {}).length > 0,
@@ -137,17 +138,21 @@ export function TutorDrawer({
   const selectedTutor = t;
   const tutorName = selectedTutor.user?.name ?? "Tutor";
 
-  const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
-    selectedTutor.pricesByModality,
-    selectedTutor.prices,
-    selectedTutor.modality,
-  );
   const subjectGroups = groupTutorSubjects(selectedTutor.subjects);
+  const competitionPriceTables = subjectGroups.flatMap((group) => {
+    const parent = group.parent;
+    const prices = parent
+      ? selectedTutor.pricesByCompetition?.[parent.slug]
+      : undefined;
+    if (!parent || !prices) return [];
+    const table = getPricingTableData(prices);
+    return [{ slug: parent.slug, name: parent.name, ...table }];
+  });
   const subjectLabels = subjectGroups.flatMap((group) =>
     group.children.map((subject) => ({
       id: subject.id,
-      field: group.parent?.slug ?? subject.slug,
       label: subject.name,
+      parentColors: group.parent?.parentColors,
     })),
   );
   const heroSubjects = subjectLabels.slice(0, 3);
@@ -192,7 +197,8 @@ export function TutorDrawer({
                   key={subject.id}
                   variant="secondary"
                   size="md"
-                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${getCompetitionFieldClass(subject.field, "solid")}`}
+                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${subject.parentColors ? competitionPaletteClassName : ""}`}
+                  style={getCompetitionPaletteStyle(subject.parentColors)}
                 >
                   {subject.label}
                 </Badge>
@@ -244,31 +250,45 @@ export function TutorDrawer({
             </div>
           )}
 
-          {priceRows.length > 0 && (
+          {
             <div className="mt-5">
               <Heading size="sm" className="mb-2">
                 Pricing
               </Heading>
-              <Text className="mb-3 text-sm text-muted">
-                {selectedTutor.modality === "both"
-                  ? `Maximum class size: ${formatClassSize(selectedTutor.onlineMaxClassSize)} online · ${formatClassSize(selectedTutor.offlineMaxClassSize)} offline`
-                  : `Maximum class size: ${formatClassSize(
-                      selectedTutor.modality === "offline"
-                        ? selectedTutor.offlineMaxClassSize
-                        : selectedTutor.onlineMaxClassSize,
-                    )}`}
-              </Text>
-              <TutorPricingTable
-                modalities={priceModalities}
-                rows={priceRows}
-                columnLabels={{
-                  online: "Online",
-                  offline: "Offline",
-                }}
-                renderValue={(value) => <CogitoMarks size="3" value={value} />}
-              />
+              {competitionPriceTables.length > 0 ? (
+                <Accordion
+                  key={selectedTutor.id}
+                  multiple
+                  defaultValue={[competitionPriceTables[0]!.slug]}
+                >
+                  {competitionPriceTables.map((table) => (
+                    <AccordionItem key={table.slug} value={table.slug}>
+                      <AccordionHeader>
+                        <AccordionTrigger>{table.name}</AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <TutorPricingTable
+                          modalities={table.modalities}
+                          rows={table.rows}
+                          columnLabels={{
+                            online: "Online",
+                            offline: "Offline",
+                          }}
+                          renderValue={(value) => (
+                            <CogitoMarks size="3" value={value} />
+                          )}
+                        />
+                      </AccordionPanel>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              ) : (
+                <Text className="text-sm text-muted">
+                  Pricing is not available yet.
+                </Text>
+              )}
             </div>
-          )}
+          }
 
           {hasProfileHighlights ? (
             <section

@@ -184,9 +184,9 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
   test("group no-show keeps the booking SCHEDULED and only forfeits the target's hold", async () => {
     const bookingId = await createFullScheduledGroup();
 
-    // 2-person online group holds 45 marks per student (prices["2"] = 45).
+    // Two-student online V3 debate pricing is 28 Marks per student.
     const bBefore = await proposerClient.booking.get({ bookingId });
-    expect(bBefore.holdAmount).toBe(90);
+    expect(bBefore.holdAmount).toBe(56);
     const [proposerWalletBefore] = await db
       .select()
       .from(wallet)
@@ -195,18 +195,18 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       .select()
       .from(wallet)
       .where(eq(wallet.userId, inviteeId));
-    expect(proposerWalletBefore!.heldBalance).toBe(45);
-    expect(inviteeWalletBefore!.heldBalance).toBe(45);
+    expect(proposerWalletBefore!.heldBalance).toBe(28);
+    expect(inviteeWalletBefore!.heldBalance).toBe(28);
 
     const result = await tutorClient.tutorActions.markParticipantNoShow({
       bookingId,
       participantUserId: inviteeId,
     });
-    expect(result.forfeitedMarks).toBe(45);
+    expect(result.forfeitedMarks).toBe(28);
 
     const b = await proposerClient.booking.get({ bookingId });
     expect(b.currentState).toBe("scheduled");
-    expect(b.holdAmount).toBe(45);
+    expect(b.holdAmount).toBe(28);
 
     // Target participant: hold forfeited, attendance ABSENT.
     const [inviteeParticipant] = await db
@@ -232,21 +232,21 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
         ),
       );
     expect(proposerParticipant!.attendanceState).not.toBe("absent");
-    expect(proposerParticipant!.heldAmount).toBe(45);
+    expect(proposerParticipant!.heldAmount).toBe(28);
 
     const [inviteeWallet] = await db
       .select()
       .from(wallet)
       .where(eq(wallet.userId, inviteeId));
     expect(inviteeWallet!.heldBalance).toBe(0);
-    expect(inviteeWallet!.totalBalance).toBe(455);
+    expect(inviteeWallet!.totalBalance).toBe(472);
 
     const [proposerWallet] = await db
       .select()
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
-    expect(proposerWallet!.heldBalance).toBe(45);
-    expect(proposerWallet!.availableBalance).toBe(455);
+    expect(proposerWallet!.heldBalance).toBe(28);
+    expect(proposerWallet!.availableBalance).toBe(472);
 
     // Only the target's hold was deducted (no release for the survivor; the
     // no-show ledger entry is a single deduct).
@@ -258,7 +258,7 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       (e) => e.entryType === "deduct" && e.eventKey.includes("no_show"),
     );
     expect(noShowDeducts.length).toBe(1);
-    expect(noShowDeducts[0]!.amount).toBe(45);
+    expect(noShowDeducts[0]!.amount).toBe(28);
     expect(noShowDeducts[0]!.walletId).toBe(inviteeWallet!.id);
   });
 
@@ -271,7 +271,7 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
 
     const b = await proposerClient.booking.get({ bookingId });
     expect(b.currentState).toBe("scheduled");
-    expect(b.holdAmount).toBe(45);
+    expect(b.holdAmount).toBe(28);
 
     // Expire the survivor's SCHEDULED booking: the no-show path now FORFEITS
     // the remaining hold (deduct, M2) while transition-or-skip transitions the
@@ -292,10 +292,10 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       .select()
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
-    expect(proposerWallet!.heldBalance).toBe(proposerBefore!.heldBalance - 45);
+    expect(proposerWallet!.heldBalance).toBe(proposerBefore!.heldBalance - 28);
     // Forfeit semantics: the hold is deducted (total drops), not released.
     expect(proposerWallet!.totalBalance).toBe(
-      proposerBefore!.totalBalance - 45,
+      proposerBefore!.totalBalance - b.holdAmount,
     );
 
     // The forfeited target is never double-credited: its hold stays consumed.
@@ -334,7 +334,7 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       bookingId: b.id,
       participantUserId: proposerId,
     });
-    expect(result.forfeitedMarks).toBe(50);
+    expect(result.forfeitedMarks).toBe(44);
 
     const fetched = await proposerClient.booking.get({ bookingId: b.id });
     expect(fetched.currentState).toBe("no_show");
@@ -379,13 +379,13 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       participantUserId: proposerId,
       sessionId: firstSession!.id,
     });
-    expect(result.forfeitedMarks).toBe(50);
+    expect(result.forfeitedMarks).toBe(44);
 
     const fetched = await proposerClient.booking.get({ bookingId: b.id });
     expect(fetched.currentState).toBe("scheduled");
     // Series no-show decrements the participant's held amount (H2), so the
     // booking hold drops to the remaining (1-of-2) session's hold.
-    expect(fetched.holdAmount).toBe(50);
+    expect(fetched.holdAmount).toBe(44);
 
     const [participant] = await db
       .select()

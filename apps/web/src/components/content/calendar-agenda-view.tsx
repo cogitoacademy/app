@@ -1,14 +1,13 @@
 "use client";
 
+import { format } from "date-fns";
+import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconCalendarEvent } from "@tabler/icons-react";
 import { useMemo, type MouseEvent } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { CalendarEventItem } from "./calendar-event-item";
-import {
-  AGENDA_DAYS_TO_SHOW,
-  getAgendaEventsForPeriod,
-} from "./calendar-utils";
+import { AGENDA_DAYS_TO_SHOW, getAgendaOccurrences } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 
 export function CalendarAgendaView({
@@ -21,7 +20,7 @@ export function CalendarAgendaView({
   onEventSelect: (event: CalendarCompetition) => void;
 }) {
   const agendaEvents = useMemo(
-    () => getAgendaEventsForPeriod(events, currentDate, AGENDA_DAYS_TO_SHOW),
+    () => getAgendaOccurrences(events, currentDate, AGENDA_DAYS_TO_SHOW),
     [currentDate, events],
   );
 
@@ -37,8 +36,11 @@ export function CalendarAgendaView({
         />
       ) : (
         <ul className="space-y-2 py-6">
-          {agendaEvents.map((event) => (
-            <li key={event.id}>
+          {agendaEvents.map(({ event, day, key }) => (
+            <li key={key}>
+              <Text className="mb-1 text-muted">
+                {format(day, "EEEE, d MMMM yyyy")} · WIB
+              </Text>
               <CalendarEventItem
                 event={event}
                 view="agenda"

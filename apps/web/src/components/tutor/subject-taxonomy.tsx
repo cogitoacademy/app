@@ -1,12 +1,18 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { IconX } from "@tabler/icons-react";
 
 export const MAX_TUTOR_SUBJECTS = 7;
@@ -15,6 +21,7 @@ export type SubjectOption = {
   id: string;
   slug: string;
   name: string;
+  parentColors?: CompetitionPalette | null;
 };
 
 export type SubjectCategory = SubjectOption & {
@@ -80,21 +87,24 @@ export function SubjectSelector({
   const { data: categories, isPending, isError } = useSubjectTaxonomy();
 
   const selectedSubjectMeta = useMemo(() => {
-    const metadata = new Map<string, { field: string; label: string }>();
+    const metadata = new Map<
+      string,
+      { label: string; parentColors?: CompetitionPalette | null }
+    >();
 
     for (const subject of selectedSubjects ?? []) {
       metadata.set(subject.id, {
-        field: subject.parent?.slug ?? subject.slug,
         label: subject.parent
           ? `${subject.parent.name} · ${subject.name}`
           : subject.name,
+        parentColors: subject.parent?.parentColors,
       });
     }
     for (const category of categories) {
       for (const child of category.children) {
         metadata.set(child.id, {
-          field: category.slug,
           label: `${category.name} · ${child.name}`,
+          parentColors: category.parentColors,
         });
       }
     }
@@ -102,7 +112,7 @@ export function SubjectSelector({
     return metadata;
   }, [categories, selectedSubjects]);
 
-  const legacySelectedSubjects = useMemo(
+  const archivedSelectedSubjects = useMemo(
     () =>
       (selectedSubjects ?? []).filter(
         (subject) => subject.isSelectable === false,
@@ -157,9 +167,13 @@ export function SubjectSelector({
               variant="primary"
               pill
               size="sm"
-              className={getCompetitionFieldClass(
-                selectedSubjectMeta.get(subjectId)?.field,
-                "solid",
+              className={
+                selectedSubjectMeta.get(subjectId)?.parentColors
+                  ? competitionPaletteClassName
+                  : undefined
+              }
+              style={getCompetitionPaletteStyle(
+                selectedSubjectMeta.get(subjectId)?.parentColors,
               )}
             >
               {selectedSubjectMeta.get(subjectId)?.label ??
@@ -176,21 +190,32 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {legacySelectedSubjects.length > 0 ? (
+      {archivedSelectedSubjects.length > 0 ? (
         <div className="rounded-lg border border-item-border bg-item p-3">
           <Text className="text-sm lg:text-base font-medium">
             Previously selected
           </Text>
           <Text className="mt-1 text-xs lg:text-sm text-muted">
-            These legacy specializations remain on your profile but are no
+            These archived specializations remain on your profile but are no
             longer available for new selection.
           </Text>
           <div
             className="mt-3 flex flex-wrap gap-2"
-            aria-label="Previously selected legacy specializations"
+            aria-label="Previously selected archived specializations"
           >
-            {legacySelectedSubjects.map((subject) => (
-              <Chip key={subject.id} variant="outline" pill size="sm">
+            {archivedSelectedSubjects.map((subject) => (
+              <Chip
+                key={subject.id}
+                variant="outline"
+                pill
+                size="sm"
+                className={
+                  subject.parent?.parentColors
+                    ? competitionPaletteClassName
+                    : undefined
+                }
+                style={getCompetitionPaletteStyle(subject.parent?.parentColors)}
+              >
                 {subject.parent
                   ? `${subject.parent.name} · ${subject.name}`
                   : subject.name}
@@ -200,11 +225,7 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {isPending ? (
-        <Text className="text-muted" role="status">
-          Loading competition categories…
-        </Text>
-      ) : null}
+      {isPending ? <Loader /> : null}
       {isError ? (
         <Text className="text-muted" role="status">
           Competition categories are temporarily unavailable. Your current

@@ -55,3 +55,23 @@ describe("tutor profile audit snapshots", () => {
     );
   });
 });
+
+test("audit overrides explicitly replace subjects, image, and null profile fields", () => {
+  expect(
+    createTutorProfileAuditSnapshot(null, {
+      subjectIds: ["subject-b", "subject-a"],
+      profileImageUrl: "https://example.test/replacement.jpg",
+      shortBio: "Replacement",
+    }),
+  ).toMatchObject({
+    subjectIds: ["subject-a", "subject-b"],
+    profileImageUrl: "https://example.test/replacement.jpg",
+    shortBio: "Replacement",
+  });
+  expect(
+    createTutorProfileAuditSnapshot(
+      { shortBio: "Old" },
+      { shortBio: null, profileImageUrl: null, subjectIds: [] },
+    ),
+  ).toMatchObject({ shortBio: null, profileImageUrl: null, subjectIds: [] });
+});

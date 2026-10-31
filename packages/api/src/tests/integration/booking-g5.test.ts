@@ -162,6 +162,7 @@ describe("G5: series session cancellation rules", () => {
     const target = sessions.find(
       (s) => s.scheduledStartAt.getTime() - Date.now() > 2 * 3600_000,
     )!;
+    const releasedHold = target.holdAmount;
 
     const wBefore = await studentClient.wallet.get({});
     const result = await studentClient.booking.cancelSession({
@@ -177,12 +178,13 @@ describe("G5: series session cancellation rules", () => {
     expect(row!.holdAmount).toBe(0);
 
     const wAfter = await studentClient.wallet.get({});
-    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
+    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - releasedHold);
   });
 
   test("TC-30: cancel a series session inside H-2 → forfeits the session hold", async () => {
     const sessions = await studentClient.booking.listSessions({ bookingId });
     const target = sessions.find((s) => s.currentState === "scheduled")!;
+    const forfeitedHold = target.holdAmount;
 
     // nudge the session to be within 2h of start
     await db
@@ -204,9 +206,9 @@ describe("G5: series session cancellation rules", () => {
     expect(row!.currentState).toBe("cancelled");
 
     const wAfter = await studentClient.wallet.get({});
-    // Forfeiting a 50-mark session hold deducts from the total balance.
-    expect(wAfter.totalBalance).toBe(wBefore.totalBalance - 50);
-    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
+    // Forfeiting the session's hold deducts it from total and held balances.
+    expect(wAfter.totalBalance).toBe(wBefore.totalBalance - forfeitedHold);
+    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - forfeitedHold);
   });
 
   test("group series bookings cannot have individual sessions cancelled", async () => {

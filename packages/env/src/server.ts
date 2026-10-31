@@ -30,7 +30,8 @@ const boolSchema = (defaultValue: boolean) =>
     // direct schema.parse() calls too (createEnv's emptyStringAsUndefined
     // only handles process.env, not explicit "" values).
     if (v === undefined || v === "") return defaultValue;
-    return boolFromEnv(v);
+    const normalized = boolFromEnv(v);
+    return normalized === undefined ? defaultValue : normalized;
   }, z.boolean());
 
 const serverShape = {
@@ -49,6 +50,11 @@ const serverShape = {
   PAYMENT_PROVIDER: z.enum(["stub", "midtrans"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
+  KB_SOURCE: z.enum(["sanity", "database"]).default("sanity"),
+  CC_SOURCE: z.enum(["sanity", "database"]).default("sanity"),
+  CONTENT_ADMIN_ENABLED: boolSchema(false),
+  KB_PRIVATE_DIR: z.string().optional(),
+  KB_PRIVATE_BUCKET: z.string().optional(),
   SANITY_PROJECT_ID: z.string().min(1).default("skfmwuke"),
   SANITY_DATASET: z.string().min(1).default("development"),
   SANITY_API_VERSION: z
@@ -106,21 +112,20 @@ const serverShape = {
 export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
   // Shared test-mode UAT allowlist validation: whenever set, every entry must
   // be a valid email and the trimmed list must not be empty.
-  const validateSharedTestAllowedEmails = () => {
-    if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
-      const emails = val.PAYMENT_TEST_ALLOWED_EMAILS.split(",")
-        .map((email) => email.trim())
-        .filter(Boolean);
-      if (
-        emails.length === 0 ||
-        emails.some((email) => !z.string().email().safeParse(email).success)
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
-          message: "must be a comma-separated list of valid email addresses",
-        });
-      }
+  const validateSharedTestAllowedEmails = (value: string) => {
+    const emails = value
+      .split(",")
+      .map((email) => email.trim())
+      .filter(Boolean);
+    if (
+      emails.length === 0 ||
+      emails.some((email) => !z.string().email().safeParse(email).success)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
+        message: "must be a comma-separated list of valid email addresses",
+      });
     }
   };
 
@@ -170,7 +175,7 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
       });
     }
     if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
-      validateSharedTestAllowedEmails();
+      validateSharedTestAllowedEmails(val.PAYMENT_TEST_ALLOWED_EMAILS);
     }
   }
 

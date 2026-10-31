@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { IconArrowRight, IconExternalLink } from "@tabler/icons-react";
+import { IconArrowRight, IconExternalLink, IconX } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -11,7 +11,7 @@ import {
   DrawerBody,
   DrawerClose,
   DrawerDescription,
-  DrawerFooter,
+  DrawerHeader,
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
@@ -25,6 +25,7 @@ import {
   getEducationLevelLabel,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
+import { getCompetitionPaletteStyle } from "@/lib/competition-colors";
 
 function formatScale(scale: string) {
   return scale.charAt(0).toUpperCase() + scale.slice(1).toLowerCase();
@@ -47,9 +48,10 @@ function CategoryBadges({ event }: { event: CalendarCompetition }) {
           key={`${event.id}-${category.coreCategory}`}
           variant="secondary"
           size="md"
-          className={getCategoryBadgeClass(category.coreCategory)}
+          className={getCategoryBadgeClass(category)}
+          style={getCompetitionPaletteStyle(category.parentColors)}
         >
-          {getCategoryLabel(category.coreCategory)}
+          {category.name || getCategoryLabel(category.coreCategory)}
         </Badge>
       ))}
     </div>
@@ -141,25 +143,25 @@ function EventLinks({ event }: { event: CalendarCompetition }) {
 }
 
 function EventDetailsContent({ event }: { event: CalendarCompetition }) {
-  const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  const revealTone =
-    "transition-all duration-300 motion-reduce:transition-none";
-  const revealState = entered
-    ? "opacity-100 translate-y-0"
-    : "pointer-events-none opacity-0 translate-y-2";
-
   return (
     <DrawerBody className="space-y-4">
-      <div>
+      <DrawerHeader className="justify-between px-0 pt-0">
         <DrawerTitle className="text-2xl font-bold tracking-tight">
           {event.title}
         </DrawerTitle>
+        <DrawerClose
+          render={
+            <Button
+              variant="plain"
+              size="icon"
+              aria-label="Close competition details"
+            >
+              <IconX />
+            </Button>
+          }
+        />
+      </DrawerHeader>
+      <div>
         <DrawerDescription className="sr-only">
           Competition details and information
         </DrawerDescription>
@@ -168,18 +170,12 @@ function EventDetailsContent({ event }: { event: CalendarCompetition }) {
         </div>
       </div>
 
-      <div
-        className={`${revealTone} ${revealState}`}
-        style={{ transitionDelay: "0ms" }}
-      >
+      <div>
         <InfoCards event={event} />
       </div>
 
       {event.description ? (
-        <div
-          className={`rounded-lg bg-accent/30 ${revealTone} ${revealState}`}
-          style={{ transitionDelay: "75ms" }}
-        >
+        <div className="rounded-lg bg-accent/30">
           <Heading size="sm" className="text-sm lg:text-base">
             Description
           </Heading>
@@ -187,10 +183,7 @@ function EventDetailsContent({ event }: { event: CalendarCompetition }) {
         </div>
       ) : null}
 
-      <div
-        className={`${revealTone} ${revealState}`}
-        style={{ transitionDelay: "150ms" }}
-      >
+      <div>
         <EventLinks event={event} />
       </div>
     </DrawerBody>
@@ -223,8 +216,6 @@ export function CalendarDetailsDrawer({
     return () => mediaQuery.removeEventListener("change", updateViewport);
   }, []);
 
-  if (!visibleEvent) return null;
-
   return (
     <Drawer
       open={open}
@@ -237,11 +228,9 @@ export function CalendarDetailsDrawer({
         direction={isDesktop ? "right" : "bottom"}
         className={isDesktop ? "w-full max-w-lg" : undefined}
       >
-        <EventDetailsContent key={visibleEvent.id} event={visibleEvent} />
-
-        <DrawerFooter>
-          <DrawerClose>Close</DrawerClose>
-        </DrawerFooter>
+        {visibleEvent ? (
+          <EventDetailsContent key={visibleEvent.id} event={visibleEvent} />
+        ) : null}
       </DrawerPopup>
     </Drawer>
   );

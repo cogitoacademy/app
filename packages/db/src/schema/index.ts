@@ -14,5 +14,19 @@ export * from "./booking";
 export * from "./contact-request";
 export * from "./support-ticket";
 export * from "./economy-config";
+export * from "./economy-v3-revision";
+export * from "./economy-v3-activation";
 export * from "./tutor-payout";
+export * from "./tutor-session-fee";
+export * from "./tutor-payout-allocation";
+export * from "./tutor-tax-config";
+export * from "./referral";
 export * from "./knowledge-bank-access";
+export * from "./faq";
+export * from "./academy-class";
+export * from "./academy-class-enrollment";
+export * from "./academy-class-session-report";
+
+export * from "./content-v3";
+
+export * from "./activity";

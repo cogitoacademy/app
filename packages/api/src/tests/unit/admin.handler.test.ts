@@ -51,6 +51,32 @@ function makeWalletPort() {
 }
 
 describe("AdminHandler", () => {
+  test("tax endpoints forward the admin identity and preserve the service result", async () => {
+    const config = { version: 1 };
+    const service = {
+      getTutorTaxConfig: mock(async () => config),
+      setTutorTaxRateOverride: mock(async () => ({
+        tutorId: "t1",
+        taxRateOverrideBps: null,
+      })),
+    };
+    const handler = createAdminHandler(service as any);
+    const context = { session: { user: { id: "admin1" } } } as any;
+    expect(await handler.getTutorTaxConfig({ context })).toBe(config);
+    const input = {
+      tutorId: "t1",
+      rateBps: null,
+      reason: "Clear verified override",
+    };
+    expect(await handler.setTutorTaxRateOverride({ context, input })).toEqual({
+      tutorId: "t1",
+      taxRateOverrideBps: null,
+    });
+    expect(service.setTutorTaxRateOverride).toHaveBeenCalledWith(
+      "admin1",
+      input,
+    );
+  });
   test("delegates dashboard analytics to the admin service", async () => {
     const service = {
       getDashboardAnalytics: mock(async (input: unknown) => ({ input })),
@@ -66,15 +92,33 @@ describe("AdminHandler", () => {
     });
   });
 
-  test("delegates tutor payout reads and payment marking", async () => {
+  test("delegates tutor payout reads, preparation, and external transfer records", async () => {
     const service = {
       getTutorPayoutReport: mock(async (input: unknown) => ({ input })),
       getPendingTutorPayouts: mock(async () => ({ total: 10 })),
-      markTutorPayoutPaid: mock(async () => ({ id: "p1" })),
+      prepareTutorPayout: mock(async (_adminId: string, input: unknown) => ({
+        id: "p1",
+        input,
+      })),
+      recordTutorPayoutTransfer: mock(
+        async (_adminId: string, input: unknown) => ({ id: "p1", input }),
+      ),
     } as any;
     const handler = createAdminHandler(service);
     const context = { session: { user: { id: "admin1" } } } as any;
     const input = { tutorId: "t1" };
+    const prepareInput = {
+      tutorId: "t1",
+      sourceKeys: ["fee:event-1"],
+      previewVersion: "a".repeat(64),
+      operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+    };
+    const transferInput = {
+      payoutId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      previewVersion: "a".repeat(64),
+      actualAmountIdr: 9750,
+      paidAt: "2026-08-10T03:00:00.000Z",
+    };
     const reportInput = {
       dateFrom: "2026-08-01T00:00:00.000Z",
       dateTo: "2026-08-31T23:59:59.999Z",
@@ -87,11 +131,21 @@ describe("AdminHandler", () => {
       handler.getPendingTutorPayouts({ context, input }),
     ).resolves.toEqual({ total: 10 });
     await expect(
-      handler.markTutorPayoutPaid({ context, input }),
-    ).resolves.toEqual({ id: "p1" });
+      handler.prepareTutorPayout({ context, input: prepareInput }),
+    ).resolves.toEqual({ id: "p1", input: prepareInput });
+    await expect(
+      handler.recordTutorPayoutTransfer({ context, input: transferInput }),
+    ).resolves.toEqual({ id: "p1", input: transferInput });
     expect(service.getTutorPayoutReport).toHaveBeenCalledWith(reportInput);
     expect(service.getPendingTutorPayouts).toHaveBeenCalledWith(input);
-    expect(service.markTutorPayoutPaid).toHaveBeenCalledWith("admin1", input);
+    expect(service.prepareTutorPayout).toHaveBeenCalledWith(
+      "admin1",
+      prepareInput,
+    );
+    expect(service.recordTutorPayoutTransfer).toHaveBeenCalledWith(
+      "admin1",
+      transferInput,
+    );
   });
 
   describe("listUsers", () => {
@@ -118,7 +172,7 @@ describe("AdminHandler", () => {
     });
   });
 
-  test("delegates admin user search to the service", async () => {
+  test("delegates the admin user search role filter to the service", async () => {
     const searchUsers = mock(async () => [
       {
         id: "u1",
@@ -132,7 +186,7 @@ describe("AdminHandler", () => {
     const context = {
       session: { user: { id: "admin1" } },
     } as any;
-    const input = { query: "ada", limit: 10 };
+    const input = { query: "ada", limit: 10, role: "student" as const };
 
     await expect(handler.searchUsers({ context, input })).resolves.toEqual([
       expect.objectContaining({ id: "u1" }),
@@ -391,4 +445,16 @@ describe("validateRoleChange", () => {
     );
     expect(result.previousRole).toBe("admin");
   });
+});
+
+test("admin optional list and payout-report handler inputs default to empty objects", async () => {
+  const service = {
+    listUsers: mock(async () => ({ users: [], total: 0 })),
+    getTutorPayoutReport: mock(async () => ({ items: [] })),
+  };
+  const handler = createAdminHandler(service as any);
+  await handler.listUsers({ input: undefined } as any);
+  await handler.getTutorPayoutReport({ input: undefined } as any);
+  expect(service.listUsers).toHaveBeenCalledWith({});
+  expect(service.getTutorPayoutReport).toHaveBeenCalledWith({});
 });

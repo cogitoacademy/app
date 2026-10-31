@@ -33,6 +33,7 @@ node_modules/
 .env.production
 !.env.example
 !.env.test.example
+!.env.test.payout.example
 .dev.vars
 
 # logs

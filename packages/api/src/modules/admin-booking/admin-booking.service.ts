@@ -1,4 +1,8 @@
-import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+import {
+  BOOKING_STATE,
+  TERMINAL_STATES,
+  type BookingState,
+} from "../booking/booking-state.types";
 import {
   BookingNotFoundError,
   BookingOverrideConflictError,
@@ -23,6 +27,7 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { log } from "../../lib/logger";
+import { lockBookingReschedule } from "../../lib/locks";
 import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
@@ -32,6 +37,7 @@ import type {
   AdminBookingRefundPort,
   AdminBookingNotificationPort,
   AdminBookingMeetingPort,
+  AdminBookingMeetingRetryPort,
 } from "./index";
 
 export const OVERRIDE_CATEGORIES = [
@@ -218,8 +224,18 @@ export function createAdminBookingService(deps: {
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
   meeting?: AdminBookingMeetingPort;
+  meetingRetry?: AdminBookingMeetingRetryPort;
 }) {
-  const { db, repo, auditPort, wallet, refund, notification, meeting } = deps;
+  const {
+    db,
+    repo,
+    auditPort,
+    wallet,
+    refund,
+    notification,
+    meeting,
+    meetingRetry,
+  } = deps;
 
   function projectWalletAfter(
     w: WalletBalances,
@@ -298,7 +314,7 @@ export function createAdminBookingService(deps: {
             bookingRow.tutorId,
           ]),
         ]
-      : (input.affectedParticipants ?? []);
+      : input.affectedParticipants!;
 
     const overrideMeta: Record<string, unknown> = {
       category: input.category,
@@ -447,7 +463,8 @@ export function createAdminBookingService(deps: {
             bookingId: input.bookingId,
           });
           totalReleased += impact.heldAmount;
-        } else if (impact.action === "compensate_deduct") {
+        } else {
+          // MarksAction is exhausted by release and credit above.
           // Forfeit semantics: release the hold, then deduct from available
           // (total -= H, held -= H, available net unchanged).
           // eslint-disable-next-line no-await-in-loop
@@ -632,12 +649,10 @@ export function createAdminBookingService(deps: {
       const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
       const items = rawItems.slice(0, limit);
       const hasMoreRows = rows.length > repoLimit;
-      const cursorItem =
-        rawItems.length > limit
-          ? items[items.length - 1]
-          : hasMoreRows
-            ? rawItems[rawItems.length - 1]
-            : undefined;
+      // Non-escalated repoLimit equals limit; rawItems cannot exceed it.
+      const cursorItem = hasMoreRows
+        ? rawItems[rawItems.length - 1]
+        : undefined;
       return {
         items,
         nextCursor: cursorItem ? toOverrideCursor(cursorItem) : null,
@@ -921,6 +936,21 @@ export function createAdminBookingService(deps: {
     });
   }
 
+  async function retryMeeting(adminId: string, bookingId: string) {
+    if (!meetingRetry) throw new Error("Meeting retry is unavailable");
+    const result = await meetingRetry.retryMeetingByAdmin(adminId, bookingId);
+    await auditPort.record({
+      db,
+      actorId: adminId,
+      actorType: ACTOR_TYPE.ADMIN,
+      action: "admin_retry_meeting",
+      targetId: bookingId,
+      targetType: "booking",
+      afterState: { scheduled: result.scheduled },
+    });
+    return result;
+  }
+
   /**
    * Cancels one series session with an explicit Marks-handling choice
    * (U6 / FR-20 TC-31). The session's per-participant hold is released,
@@ -941,8 +971,30 @@ export function createAdminBookingService(deps: {
     },
   ) {
     return db.transaction(async (tx) => {
-      const session = await repo.findSessionById(tx, input.sessionId);
-      if (!session) throw new BookingNotFoundError(input.sessionId);
+      const discoveredSession = await repo.findSessionById(tx, input.sessionId);
+      if (!discoveredSession) throw new BookingNotFoundError(input.sessionId);
+      await lockBookingReschedule(tx, discoveredSession.seriesBookingId);
+      const bookingRow = await repo.findBookingById(
+        tx,
+        discoveredSession.seriesBookingId,
+        { forUpdate: true },
+      );
+      if (!bookingRow) {
+        throw new BookingNotFoundError(discoveredSession.seriesBookingId);
+      }
+      const session = await repo.findSessionById(tx, input.sessionId, {
+        forUpdate: true,
+      });
+      if (!session || session.seriesBookingId !== bookingRow.id) {
+        throw new BookingNotFoundError(input.sessionId);
+      }
+      if (TERMINAL_STATES.includes(bookingRow.currentState as BookingState)) {
+        throw new BookingStateTransitionError(
+          bookingRow.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
       if (session.currentState !== BOOKING_STATE.SCHEDULED) {
         throw new BookingStateTransitionError(
           session.currentState,
@@ -950,15 +1002,10 @@ export function createAdminBookingService(deps: {
           BOOKING_STATE.CANCELLED,
         );
       }
-      const bookingRow = await repo.findBookingById(
-        tx,
-        session.seriesBookingId,
-      );
-      if (!bookingRow) throw new BookingNotFoundError(session.seriesBookingId);
-
       const participants = await repo.findParticipantsByBookingId(
         tx,
         session.seriesBookingId,
+        { forUpdate: true },
       );
       const confirmed = participants.filter(
         (p) =>
@@ -970,13 +1017,18 @@ export function createAdminBookingService(deps: {
         input.amount ?? session.holdAmount,
         session.holdAmount,
       );
+      let remainingConfirmedHoldAmount = 0;
 
       for (const p of confirmed) {
         const effective = Math.min(
           input.marksAction === "partial" ? partialAmount : session.holdAmount,
           p.heldAmount,
         );
-        if (effective <= 0) continue;
+        const remainingHeldAmount = Math.max(0, p.heldAmount - effective);
+        if (effective <= 0) {
+          remainingConfirmedHoldAmount += remainingHeldAmount;
+          continue;
+        }
 
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -1008,11 +1060,8 @@ export function createAdminBookingService(deps: {
           });
         }
         // eslint-disable-next-line no-await-in-loop
-        await repo.updateParticipantHeldAmount(
-          tx,
-          p.id,
-          Math.max(0, p.heldAmount - effective),
-        );
+        await repo.updateParticipantHeldAmount(tx, p.id, remainingHeldAmount);
+        remainingConfirmedHoldAmount += remainingHeldAmount;
         // eslint-disable-next-line no-await-in-loop
         await notification?.writeBestEffort({
           db: tx,
@@ -1030,7 +1079,22 @@ export function createAdminBookingService(deps: {
         });
       }
 
-      await repo.cancelSession(tx, session.id);
+      if (!(await repo.cancelSession(tx, session.id))) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
+
+      // A series parent hold is the aggregate of confirmed participant holds:
+      // the solo proposer for solo series, and each confirmed seat for a group
+      // series. Pending invitees do not contribute to the parent snapshot.
+      await repo.updateBookingHoldAmount(
+        tx,
+        bookingRow.id,
+        remainingConfirmedHoldAmount,
+      );
 
       await auditPort.record({
         db: tx,
@@ -1063,6 +1127,7 @@ export function createAdminBookingService(deps: {
     getBookingStateHistory,
     adminRefund,
     setMeetingLink,
+    retryMeeting,
     cancelSeriesSession,
   };
 }

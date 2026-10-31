@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-const absoluteOrSameOriginRelativeUrl = z
+export const absoluteOrSameOriginRelativeUrl = z
   .string()
   .min(1)
   .refine((value) => {

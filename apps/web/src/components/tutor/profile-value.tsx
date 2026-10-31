@@ -1,14 +1,7 @@
 "use client";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { CogitoMarks } from "@/components/cogito-marks";
 import {
   TutorAchievementsDisplay,
   type TutorAchievement,
@@ -18,7 +11,11 @@ import {
   TutorExperiencesDisplay,
   type TutorExperience,
 } from "./tutor-experiences";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import {
   getTutorProfileFieldKind,
@@ -28,7 +25,7 @@ import {
 
 type SubjectLabelMaps = {
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 };
 
 export type TutorProfileValueProps = SubjectLabelMaps & {
@@ -119,10 +116,6 @@ function formatNumber(value: number) {
   return value.toLocaleString("id-ID");
 }
 
-function formatMoney(value: unknown) {
-  return typeof value === "number" ? `Rp${formatNumber(value)}` : null;
-}
-
 function formatModality(value: unknown) {
   if (value === "online") return "Online";
   if (value === "offline") return "Offline (Campus)";
@@ -147,7 +140,6 @@ function formatScalar(path: string, value: unknown) {
   const root = getTutorProfileFieldRoot(path);
   if (typeof value === "boolean") return value ? "Accepted" : "Not accepted";
   if (typeof value === "number") {
-    if (root === "baseRatesIdr") return formatMoney(value);
     return formatNumber(value);
   }
   if (typeof value === "string") {
@@ -164,11 +156,11 @@ function formatScalar(path: string, value: unknown) {
 function SubjectValue({
   value,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
 }: {
   value: unknown;
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 }) {
   if (!Array.isArray(value) || value.length === 0) {
     return <Text className="text-sm text-dimmed">No specializations</Text>;
@@ -179,12 +171,13 @@ function SubjectValue({
         const id = String(subjectId);
         const label =
           subjectLabels?.get(id) ?? `Specialization unavailable (${id})`;
-        const field = subjectFieldSlugs?.get(id);
+        const parentColors = subjectPalettes?.get(id);
         return (
           <Badge
             key={id}
             variant="secondary"
-            className={getCompetitionFieldClass(field ?? "", "solid")}
+            className={parentColors ? competitionPaletteClassName : undefined}
+            style={getCompetitionPaletteStyle(parentColors)}
           >
             {label}
           </Badge>
@@ -216,68 +209,6 @@ function UrlValue({ value }: { value: unknown }) {
         );
       })}
     </ul>
-  );
-}
-
-function MoneyValue({ value }: { value: unknown }) {
-  if (!isRecord(value)) {
-    return <Text className="text-sm">{formatMoney(value) ?? "Not set"}</Text>;
-  }
-  const rates = Object.entries(value).filter(
-    ([, rate]) => typeof rate === "number",
-  );
-  if (rates.length === 0)
-    return <Text className="text-sm text-dimmed">Not set</Text>;
-  return (
-    <div className="overflow-hidden rounded-lg border border-item-border">
-      <Table className="text-sm">
-        <TableBody>
-          {rates.map(([mode, rate]) => (
-            <TableRow key={mode}>
-              <TableCell className="py-1.5! text-muted">
-                {formatModality(mode)}
-              </TableCell>
-              <TableCell className="py-1.5! text-right font-medium">
-                {formatMoney(rate)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function MarksValue({ value }: { value: unknown }) {
-  if (!isRecord(value)) {
-    return (
-      <Text className="text-sm">
-        {typeof value === "number" ? <CogitoMarks value={value} /> : "Not set"}
-      </Text>
-    );
-  }
-  const rows = Object.entries(value).filter(
-    (entry): entry is [string, number] => typeof entry[1] === "number",
-  );
-  if (rows.length === 0)
-    return <Text className="text-sm text-dimmed">Not set</Text>;
-  return (
-    <div className="overflow-hidden rounded-lg border border-item-border">
-      <Table className="text-sm">
-        <TableBody>
-          {rows.map(([size, price]) => (
-            <TableRow key={size}>
-              <TableCell className="py-1.5! text-muted">
-                {size} {size === "1" ? "student" : "students"}
-              </TableCell>
-              <TableCell className="py-1.5! text-right font-medium">
-                <CogitoMarks value={price} size="3" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
   );
 }
 
@@ -322,7 +253,7 @@ export function TutorProfileValue({
   path,
   value,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   emptyLabel = "Not set",
   idPrefix = "tutor-profile-value",
 }: TutorProfileValueProps) {
@@ -336,7 +267,7 @@ export function TutorProfileValue({
         <SubjectValue
           value={value}
           subjectLabels={subjectLabels}
-          subjectFieldSlugs={subjectFieldSlugs}
+          subjectPalettes={subjectPalettes}
         />
       );
     case "education": {
@@ -376,10 +307,6 @@ export function TutorProfileValue({
     }
     case "urls":
       return <UrlValue value={value} />;
-    case "money":
-      return <MoneyValue value={value} />;
-    case "marks":
-      return <MarksValue value={value} />;
     case "modality":
       return <Badge variant="info">{formatModality(value)}</Badge>;
     case "capacity":

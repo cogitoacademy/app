@@ -9,9 +9,27 @@ import {
   LastAdminError,
   WalletNotFoundError,
   InvalidLedgerFilterError,
-  EconomyConfigConflictError,
   TutorPayoutNotAvailableError,
 } from "../../modules/admin/admin.errors";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+
+const emptyOperations = {
+  privateMarks: 0,
+  privateSessions: 0,
+  academyMarks: 0,
+  academySeatSessions: 0,
+  privateFundedMarks: 0,
+  privateUnfundedMarks: 0,
+  privateSeatSessions: 0,
+  academyFundedMarks: 0,
+  academyUnfundedMarks: 0,
+  academyUpcomingSeatSessions: 0,
+  earnedIdr: 0,
+  paidIdr: 0,
+  unpaidIdr: 0,
+  unavailablePrivateRates: 0,
+  unavailablePaymentDates: 0,
+};
 
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
   return { id: "u1", role: "student", ...overrides };
@@ -27,10 +45,6 @@ describe("Admin Service", () => {
             completed: "2",
             exceptions: "1",
             activeLearners: "3",
-            grossMarks: "120",
-            platformTakeMarks: "24",
-            grossIdr: "600000",
-            platformTakeIdr: "120000",
           },
           userSummary: { newStudents: "3", newTutors: "1" },
           bookingTrend: [
@@ -38,8 +52,6 @@ describe("Admin Service", () => {
               date: "2026-08-31",
               bookings: "2",
               completed: "1",
-              grossMarks: "60",
-              platformTakeMarks: "12",
             },
           ],
           userTrend: [{ date: "2026-08-31", students: "3", tutors: "1" }],
@@ -64,9 +76,26 @@ describe("Admin Service", () => {
           },
           paymentSummary: {
             payingStudents: "6",
-            grossRevenueIdr: "1250000",
+            grossReceiptsIdr: "1250000",
           },
           refundSummary: { refundedIdr: "100000" },
+          operationsSummary: {
+            privateMarks: "84",
+            privateSessions: "2",
+            academyMarks: "20",
+            academySeatSessions: "1",
+            privateFundedMarks: "100",
+            privateUnfundedMarks: "20",
+            privateSeatSessions: "3",
+            academyFundedMarks: "40",
+            academyUnfundedMarks: "22",
+            academyUpcomingSeatSessions: "3",
+            earnedIdr: "600000",
+            paidIdr: "400000",
+            unpaidIdr: "200000",
+            unavailablePrivateRates: "1",
+            unavailablePaymentDates: "2",
+          },
         })),
       };
       const service = createAdminService({
@@ -79,14 +108,32 @@ describe("Admin Service", () => {
 
       const result = await service.getDashboardAnalytics({ period: "7d" });
 
+      expect(result.operationsSummary).toEqual({
+        delivered: {
+          privateMarks: 84,
+          privateSessions: 2,
+          academyMarks: 20,
+          academySeatSessions: 1,
+        },
+        upcoming: {
+          privateFundedMarks: 100,
+          privateUnfundedMarks: 20,
+          privateSeatSessions: 3,
+          academyFundedMarks: 40,
+          academyUnfundedMarks: 22,
+          academySeatSessions: 3,
+        },
+        tutorFees: { earnedIdr: 600000, paidIdr: 400000, unpaidIdr: 200000 },
+        unavailablePrivateRates: 1,
+        unavailablePaymentDates: 2,
+        asOf: expect.any(String),
+      });
       expect(result.period).toBe("7d");
       expect(result.bookingTrend).toHaveLength(7);
       expect(result.bookingTrend.at(-1)).toEqual({
         date: expect.any(String),
         bookings: expect.any(Number),
         completed: expect.any(Number),
-        grossMarks: expect.any(Number),
-        platformTakeMarks: expect.any(Number),
       });
       expect(result.summary).toEqual({
         bookings: 4,
@@ -96,10 +143,6 @@ describe("Admin Service", () => {
         activeLearners: 3,
         newStudents: 3,
         newTutors: 1,
-        grossMarks: 120,
-        platformTakeMarks: 24,
-        grossIdr: 600000,
-        platformTakeIdr: 120000,
       });
       expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
       expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);
@@ -117,9 +160,9 @@ describe("Admin Service", () => {
         studentsWithMarksRate: 56.3,
         payingStudents: 6,
         paidConversionRate: 37.5,
-        grossRevenueIdr: 1_250_000,
+        grossReceiptsIdr: 1_250_000,
         refundedIdr: 100_000,
-        netRevenueIdr: 1_150_000,
+        netReceiptsIdr: 1_150_000,
       });
       expect(repo.getDashboardAnalytics).toHaveBeenCalledWith(
         expect.anything(),
@@ -147,6 +190,7 @@ describe("Admin Service", () => {
           marksSummary: {},
           paymentSummary: {},
           refundSummary: {},
+          operationsSummary: emptyOperations,
         })),
       };
       const service = createAdminService({
@@ -178,6 +222,7 @@ describe("Admin Service", () => {
           marksSummary: {},
           paymentSummary: {},
           refundSummary: {},
+          operationsSummary: emptyOperations,
         })),
       };
       const service = createAdminService({
@@ -215,15 +260,158 @@ describe("Admin Service", () => {
       auditPort,
     });
 
+    test("rejects tax and settlement operations when their payout port is unavailable", async () => {
+      const { service } = makeService({});
+      const reason = { payoutId: "payout-1", reason: "Correct settlement" };
+      await Promise.all(
+        [
+          service.getTutorTaxConfig(),
+          service.updateTutorTaxConfig("admin1", {
+            expectedVersion: 0,
+            nikNpwpRateBps: 100,
+            nikOnlyRateBps: 200,
+            missingRateBps: 300,
+            reason: "Update policy",
+          }),
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "t1",
+            rateBps: null,
+            reason: "Clear override",
+          }),
+          service.voidTutorPayout("admin1", reason),
+          service.resolveTutorPayoutReconciliation("admin1", reason),
+          service.previewTutorPayout({ tutorId: "t1", sourceKeys: [] }),
+          service.recordTutorPayoutTransfer("admin1", {
+            payoutId: "payout-1",
+            previewVersion: "v1",
+            actualAmountIdr: 1000,
+            paidAt: "2026-10-28T00:00:00Z",
+          }),
+        ].map((pending) =>
+          expect(pending).rejects.toBeInstanceOf(TutorPayoutNotAvailableError),
+        ),
+      );
+    });
+
+    test("forwards admin identity and tax policy inputs to the payout service", async () => {
+      const config = {
+        version: 1,
+        nikNpwpRateBps: 100,
+        nikOnlyRateBps: 200,
+        missingRateBps: 300,
+      };
+      const payout = {
+        getTutorTaxConfig: mock(async () => config),
+        updateTutorTaxConfig: mock(async () => config),
+        setTutorTaxRateOverride: mock(async () => ({
+          tutorId: "t1",
+          taxRateOverrideBps: null,
+        })),
+      };
+      const { service } = makeService(payout);
+      const update = { expectedVersion: 0, ...config, reason: "Update policy" };
+      const override = {
+        tutorId: "t1",
+        rateBps: null,
+        reason: "Clear override",
+      };
+      expect(await service.getTutorTaxConfig()).toBe(config);
+      expect(await service.updateTutorTaxConfig("admin1", update)).toBe(config);
+      expect(payout.updateTutorTaxConfig).toHaveBeenCalledWith(
+        "admin1",
+        update,
+      );
+      expect(await service.setTutorTaxRateOverride("admin1", override)).toEqual(
+        { tutorId: "t1", taxRateOverrideBps: null },
+      );
+      expect(payout.setTutorTaxRateOverride).toHaveBeenCalledWith(
+        "admin1",
+        override,
+      );
+    });
+
+    test("economy previews validate their input and require configured services", async () => {
+      const previewV3Config = mock(() => ({ exactCostIdr: 100000 }));
+      const base = {
+        adminRepo: {} as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      };
+      const missing = createAdminService(base);
+      const save = {
+        expectedVersion: 0,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+        reason: "Update policy",
+      };
+      await expect(
+        missing.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Economy service is not configured");
+      await expect(missing.getV3EconomySettings()).rejects.toThrow(
+        "Economy service is not configured",
+      );
+      expect(() =>
+        missing.previewV3EconomySettings({ values: DEFAULT_V3_ECONOMY_CONFIG }),
+      ).toThrow("Economy service is not configured");
+      const service = createAdminService({
+        ...base,
+        economy: { previewV3Config } as any,
+      });
+      await expect(service.getV3EconomySettings()).rejects.toThrow(
+        "Competition catalog service is not configured",
+      );
+      await expect(
+        service.saveV3EconomySettings("admin1", save),
+      ).rejects.toThrow("Competition catalog service is not configured");
+      expect(() =>
+        service.previewV3EconomySettings({
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+          exactMarks: 0,
+        }),
+      ).toThrow();
+      expect(
+        service.previewV3EconomySettings({
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+          exactMarks: 42,
+        }),
+      ).toEqual({ exactCostIdr: 100000 });
+      expect(previewV3Config).toHaveBeenCalledWith(
+        DEFAULT_V3_ECONOMY_CONFIG,
+        42,
+      );
+    });
+
     test("returns pending payout data and rejects an unavailable port", async () => {
       const payout = {
-        getPendingTutorPayouts: mock(async () => ({ tutorId: "t1" })),
+        getPendingTutorPayouts: mock(async () => ({
+          tutorId: "t1",
+          items: [],
+        })),
       };
       await expect(
         makeService(payout).service.getPendingTutorPayouts({ tutorId: "t1" }),
-      ).resolves.toEqual({ tutorId: "t1" });
+      ).resolves.toEqual({ tutorId: "t1", items: [] });
       await expect(
         makeService({}).service.getPendingTutorPayouts({ tutorId: "t1" }),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+    });
+
+    test("returns paid session allocations and rejects an unavailable port", async () => {
+      const details = { detailsAvailable: true, items: [] };
+      const getTutorPayoutAllocations = mock(async () => details);
+      await expect(
+        makeService({
+          getTutorPayoutAllocations,
+        }).service.getTutorPayoutAllocations({
+          payoutId: "payout-1",
+        }),
+      ).resolves.toBe(details);
+      expect(getTutorPayoutAllocations).toHaveBeenCalledWith("payout-1");
+      await expect(
+        makeService({}).service.getTutorPayoutAllocations({
+          payoutId: "payout-1",
+        }),
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
 
@@ -258,31 +446,49 @@ describe("Admin Service", () => {
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
 
-    test("marks a payout paid and audits it", async () => {
-      const row = { id: "p1", tutorId: "t1", transferFeeIdr: 6500 };
-      const payout = { markTutorPayoutPaid: mock(async () => row) };
-      const { service, auditPort } = makeService(payout);
+    test("prepares a versioned batch and records only the exact external transfer", async () => {
+      const prepared = { id: "p1", status: "prepared" };
+      const paid = { id: "p1", status: "paid" };
+      const prepareTutorPayout = mock(async () => prepared);
+      const recordTutorPayoutTransfer = mock(async () => paid);
+      const { service } = makeService({
+        prepareTutorPayout,
+        recordTutorPayoutTransfer,
+      });
+      const prepareInput = {
+        tutorId: "t1",
+        sourceKeys: ["fee:event-1"],
+        previewVersion: "a".repeat(64),
+        operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      };
+      const transferInput = {
+        payoutId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+        previewVersion: "a".repeat(64),
+        actualAmountIdr: 9750,
+        paidAt: "2026-08-10T03:00:00.000Z",
+      };
+
       await expect(
-        service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
-      ).resolves.toBe(row);
-      expect(auditPort.record).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: "tutor_payout_paid",
-          targetId: "p1",
-        }),
-      );
+        service.prepareTutorPayout("admin1", prepareInput),
+      ).resolves.toBe(prepared);
+      expect(prepareTutorPayout).toHaveBeenCalledWith("admin1", prepareInput);
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", transferInput),
+      ).resolves.toBe(paid);
+      expect(recordTutorPayoutTransfer).toHaveBeenCalledWith("admin1", {
+        ...transferInput,
+        paidAt: new Date(transferInput.paidAt),
+      });
     });
 
-    test("rejects missing payout support and empty settlements", async () => {
+    test("rejects unsupported payout writes", async () => {
       await expect(
-        makeService({}).service.markTutorPayoutPaid("admin1", {
+        makeService({}).service.prepareTutorPayout("admin1", {
           tutorId: "t1",
+          sourceKeys: ["fee:event-1"],
+          previewVersion: "a".repeat(64),
+          operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
         }),
-      ).rejects.toThrow(TutorPayoutNotAvailableError);
-      await expect(
-        makeService({
-          markTutorPayoutPaid: mock(async () => null),
-        }).service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
   });
@@ -363,10 +569,15 @@ describe("Admin Service", () => {
       await expect(service.searchUsers({ query: "  ada " })).resolves.toEqual([
         expect.objectContaining({ id: "u1" }),
       ]);
-      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 10);
+      expect(searchUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        "ada",
+        10,
+        undefined,
+      );
     });
 
-    test("passes an explicit result limit", async () => {
+    test("passes an explicit result limit and role filter", async () => {
       const searchUsers = mock(async () => []);
       const service = createAdminService({
         adminRepo: { searchUsers } as any,
@@ -376,9 +587,14 @@ describe("Admin Service", () => {
         payout: {} as any,
       });
 
-      await service.searchUsers({ query: "ada", limit: 3 });
+      await service.searchUsers({ query: "ada", limit: 3, role: "student" });
 
-      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 3);
+      expect(searchUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        "ada",
+        3,
+        "student",
+      );
     });
   });
 
@@ -542,7 +758,7 @@ describe("Admin Service", () => {
     });
   });
 
-  describe("payouts and economy settings", () => {
+  describe("payout filters and economy API", () => {
     test("rejects invalid tutor payout dateFrom and dateTo filters", async () => {
       const payout = { getTutorPayouts: mock(async () => []) };
       const service = createAdminService({
@@ -561,89 +777,18 @@ describe("Admin Service", () => {
       ).rejects.toThrow(InvalidLedgerFilterError);
     });
 
-    test("maps a failed economy update to a conflict", async () => {
-      const economy = {
-        getConfig: mock(async () => ({
-          id: "default",
-          version: 1,
-          onlineCogitoBaseIdr: 50_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-        updateConfig: mock(async () => null),
-      };
-      const db = { transaction: mock(async (fn: any) => fn({})) };
+    test("exposes V3 settings without obsolete take-schedule methods", () => {
       const service = createAdminService({
         adminRepo: {} as any,
-        auditPort: { record: mock(async () => {}) },
-        db: db as any,
+        auditPort: {} as any,
+        db: {} as any,
         wallet: {} as any,
         payout: {} as any,
-        economy: economy as any,
       });
-
-      await expect(
-        service.updateEconomySettings("admin1", {
-          expectedVersion: 1,
-          onlineCogitoBaseIdr: 55_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        }),
-      ).rejects.toThrow(EconomyConfigConflictError);
-    });
-
-    test("economy updates do not fan out tutor notifications", async () => {
-      const economy = {
-        getConfig: mock(async () => ({
-          id: "default",
-          version: 1,
-          onlineCogitoBaseIdr: 50_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-        updateConfig: mock(async () => ({
-          id: "default",
-          version: 2,
-          onlineCogitoBaseIdr: 55_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-      };
-      const adminRepo = {
-        listUserIdsByRole: mock(async () => ["t1", "t2"]),
-      };
-      const tx = { isTx: true };
-      const db = { transaction: mock(async (fn: any) => fn(tx)) };
-      const auditPort = { record: mock(async () => {}) };
-      const notification = {
-        write: mock(async () => {
-          throw new Error("notification bus down");
-        }),
-      };
-      const service = createAdminService({
-        adminRepo: adminRepo as any,
-        auditPort,
-        db: db as any,
-        wallet: {} as any,
-        payout: {} as any,
-        economy: economy as any,
-      });
-
-      const updated = await service.updateEconomySettings("admin1", {
-        expectedVersion: 1,
-        onlineCogitoBaseIdr: 55_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
-      });
-      expect(updated.version).toBe(2);
-      expect(auditPort.record).toHaveBeenCalledTimes(1);
-      expect(adminRepo.listUserIdsByRole).not.toHaveBeenCalled();
-      expect(notification.write).not.toHaveBeenCalled();
+      expect(service).not.toHaveProperty("getEconomySettings");
+      expect(service).not.toHaveProperty("updateEconomySettings");
+      expect(service.getV3EconomySettings).toBeFunction();
+      expect(service.saveV3EconomySettings).toBeFunction();
     });
   });
 
@@ -670,6 +815,20 @@ describe("Admin Service", () => {
       });
       return { service, adminRepo, auditPort, tx };
     }
+
+    test("a concurrent role change fails before recording an audit event", async () => {
+      const { service, auditPort } = makeSetRoleService({
+        updateRoleWithExpected: mock(async () => []),
+      });
+      await expect(
+        service.setRole("admin1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        }),
+      ).rejects.toMatchObject({ code: "OPTIMISTIC_LOCK" });
+      expect(auditPort.record).not.toHaveBeenCalled();
+    });
 
     test("locks admin rows and validates the count inside the transaction (H6)", async () => {
       const { service, adminRepo } = makeSetRoleService();
@@ -715,4 +874,200 @@ describe("Admin Service", () => {
       expect(adminRepo.countAdmins).not.toHaveBeenCalled();
     });
   });
+});
+
+function makeAdminBoundaryService(extra: Record<string, unknown> = {}) {
+  return createAdminService({
+    db: {
+      transaction: mock(async (fn: any) =>
+        fn({ execute: mock(async () => undefined) }),
+      ),
+    },
+    adminRepo: {},
+    wallet: {},
+    payout: {},
+    auditPort: { record: mock(async () => undefined) },
+    ...extra,
+  } as any);
+}
+
+describe("Admin service adapter boundaries", () => {
+  test("search trims query and defaults its limit", async () => {
+    const adminRepo = { searchUsers: mock(async () => [{ id: "u1" }]) };
+    const service = makeAdminBoundaryService({ adminRepo });
+    await expect(
+      service.searchUsers({ query: "  student  " }),
+    ).resolves.toEqual([{ id: "u1" }]);
+    expect(adminRepo.searchUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      "student",
+      10,
+      undefined,
+    );
+    await service.searchUsers({ query: " tutor ", limit: 4, role: "tutor" });
+    expect(adminRepo.searchUsers).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "tutor",
+      4,
+      "tutor",
+    );
+  });
+
+  test("missing target fails role update before a write", async () => {
+    const adminRepo = {
+      getById: mock(async () => null),
+      updateRoleWithExpected: mock(async () => []),
+    };
+    await expect(
+      makeAdminBoundaryService({ adminRepo }).setRole("admin1", {
+        userId: "gone",
+        role: "student",
+        expectedRole: "tutor",
+      }),
+    ).rejects.toBeInstanceOf(UserNotFoundError);
+    expect(adminRepo.updateRoleWithExpected).not.toHaveBeenCalled();
+  });
+
+  test("payout date filters are optional and preserve valid boundaries", async () => {
+    const payout = {
+      getTutorPayouts: mock(async () => []),
+      getTutorPayoutReport: mock(async () => ({ items: [] })),
+    };
+    const service = makeAdminBoundaryService({ payout });
+    await service.getTutorPayouts({ tutorId: "t1" });
+    expect(payout.getTutorPayouts).toHaveBeenLastCalledWith({
+      tutorId: "t1",
+      dateFrom: undefined,
+      dateTo: undefined,
+    });
+    await service.getTutorPayouts({
+      tutorId: "t1",
+      dateFrom: "2026-01-01T00:00:00Z",
+      dateTo: "2026-01-02T00:00:00Z",
+    });
+    expect(payout.getTutorPayouts).toHaveBeenLastCalledWith({
+      tutorId: "t1",
+      dateFrom: new Date("2026-01-01"),
+      dateTo: new Date("2026-01-02"),
+    });
+    await service.getTutorPayoutReport();
+    expect(payout.getTutorPayoutReport).toHaveBeenCalledWith({
+      dateFrom: undefined,
+      dateTo: undefined,
+    });
+    await expect(
+      service.getTutorPayoutReport({ dateFrom: "invalid" }),
+    ).rejects.toBeInstanceOf(InvalidLedgerFilterError);
+  });
+
+  test("available payout adapters forward void, reconciliation and preview arguments", async () => {
+    const payout = {
+      voidTutorPayout: mock(async () => ({ status: "voided" })),
+      resolveTutorPayoutReconciliation: mock(async () => ({ resolved: true })),
+      previewTutorPayout: mock(async () => ({ amountIdr: 100 })),
+    };
+    const service = makeAdminBoundaryService({ payout });
+    const reason = { payoutId: "p1", reason: "Reviewed" };
+    await expect(service.voidTutorPayout("admin1", reason)).resolves.toEqual({
+      status: "voided",
+    });
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", reason),
+    ).resolves.toEqual({ resolved: true });
+    await expect(
+      service.previewTutorPayout({ tutorId: "t1", sourceKeys: ["session:s1"] }),
+    ).resolves.toEqual({ amountIdr: 100 });
+    expect(payout.voidTutorPayout).toHaveBeenCalledWith("admin1", reason);
+    expect(payout.resolveTutorPayoutReconciliation).toHaveBeenCalledWith(
+      "admin1",
+      reason,
+    );
+    expect(payout.previewTutorPayout).toHaveBeenCalledWith("t1", [
+      "session:s1",
+    ]);
+  });
+
+  test.each([
+    "missing-services",
+    "missing-revision",
+    "unknown-competition",
+  ] as const)(
+    "activation rejects %s without auditing success",
+    async (scenario) => {
+      const auditPort = { record: mock(async () => undefined) };
+      const economy = {
+        getV3ConfigByVersion: mock(async () =>
+          scenario === "missing-revision"
+            ? null
+            : {
+                values: {
+                  ...DEFAULT_V3_ECONOMY_CONFIG,
+                  competitionRates: {
+                    unknown: { soloMarks: 40, soloFeeIdr: 150000 },
+                  },
+                },
+              },
+        ),
+        activateV3Config: mock(async () => ({})),
+      };
+      const competitionCatalog = { listParents: mock(async () => []) };
+      const service = makeAdminBoundaryService({
+        auditPort,
+        ...(scenario === "missing-services"
+          ? {}
+          : { economy, competitionCatalog }),
+      });
+      await expect(
+        service.activateV3EconomySettings("admin1", {
+          version: 1,
+          expectedActiveRevision: null,
+          reason: "Approved",
+        }),
+      ).rejects.toThrow();
+      expect(auditPort.record).not.toHaveBeenCalled();
+      expect(economy.activateV3Config).not.toHaveBeenCalled();
+    },
+  );
+});
+
+test("admin listUsers preserves default and explicit pagination", async () => {
+  const adminRepo = {
+    listUsers: mock(async () => [{ id: "u1" }]),
+    countUsers: mock(async () => 3),
+  };
+  const service = makeAdminBoundaryService({ adminRepo });
+  const defaults = await service.listUsers();
+  expect(defaults).toMatchObject({
+    users: [{ id: "u1" }],
+    total: 3,
+    offset: 0,
+  });
+  expect(defaults.limit).toBeGreaterThan(0);
+  await expect(
+    service.listUsers({ limit: 5, offset: 2 }),
+  ).resolves.toMatchObject({ limit: 5, offset: 2 });
+  expect(adminRepo.listUsers).toHaveBeenLastCalledWith(expect.anything(), 5, 2);
+});
+
+test("admin analytics sanitizes a non-finite aggregate rather than exposing it", async () => {
+  const adminRepo = {
+    getDashboardAnalytics: mock(async () => ({
+      bookingSummary: { bookings: "NaN" },
+      userSummary: {},
+      bookingTrend: [],
+      userTrend: [],
+      stateBreakdown: [],
+      modalityBreakdown: [],
+      categoryBreakdown: [],
+      accountSummary: {},
+      marksSummary: {},
+      paymentSummary: {},
+      refundSummary: {},
+      operationsSummary: emptyOperations,
+    })),
+  };
+  const result = await makeAdminBoundaryService({
+    adminRepo,
+  }).getDashboardAnalytics();
+  expect(result.summary.bookings).toBe(0);
 });

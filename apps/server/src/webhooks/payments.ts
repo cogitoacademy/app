@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
@@ -24,11 +25,53 @@ export function paymentWebhookIdempotencyKey(
     providerEventId?: string | null;
     providerReference?: string | null;
     status: string;
+    amountIdr?: number;
+    refundAmountIdr?: number;
+    currency?: string;
+    refundKind?: "full" | "partial";
+    providerRefundIdentity?: string | null;
+    providerSuccessAt?: Date | string | null;
+    providerSuccessTimeStatus?: "verified" | "unavailable";
   },
 ) {
-  const eventReference =
-    payload.providerEventId || payload.providerReference || "missing-reference";
-  return `${provider}:${eventReference}:${payload.status}`;
+  const status = payload.status.trim().toUpperCase();
+  const providerSuccessAt =
+    payload.providerSuccessTimeStatus === "verified" &&
+    payload.providerSuccessAt !== null &&
+    payload.providerSuccessAt !== undefined
+      ? payload.providerSuccessAt instanceof Date
+        ? payload.providerSuccessAt
+        : new Date(payload.providerSuccessAt)
+      : null;
+  const canonical = JSON.stringify({
+    provider: provider.trim().toLowerCase().slice(0, 40),
+    eventId: (payload.providerEventId || "").trim().slice(0, 200),
+    reference: (payload.providerReference || "").trim().slice(0, 300),
+    status,
+    refundKind: payload.refundKind ?? (status === "REFUNDED" ? "full" : "none"),
+    refundAmountIdr:
+      Number.isSafeInteger(payload.refundAmountIdr) &&
+      (payload.refundAmountIdr ?? -1) >= 0
+        ? payload.refundAmountIdr
+        : null,
+    amountIdr:
+      Number.isSafeInteger(payload.amountIdr) && (payload.amountIdr ?? -1) > 0
+        ? payload.amountIdr
+        : null,
+    currency: payload.currency?.trim().toUpperCase().slice(0, 8) ?? null,
+    refundIdentity:
+      typeof payload.providerRefundIdentity === "string" &&
+      /^[a-f0-9]{64}$/.test(payload.providerRefundIdentity)
+        ? payload.providerRefundIdentity
+        : null,
+    providerSuccessAt:
+      providerSuccessAt && Number.isFinite(providerSuccessAt.getTime())
+        ? providerSuccessAt.toISOString()
+        : null,
+  });
+  // Fixed-length keys keep authenticated decision evidence bounded and stop a
+  // later refund or newly verified provider time from reusing an old claim.
+  return `payment-webhook:${createHash("sha256").update(canonical).digest("hex")}`;
 }
 
 /**
@@ -182,9 +225,10 @@ export function paymentsWebhook(app: Elysia) {
           return { error: "Webhook event is missing a payment reference" };
         }
 
-        // Include status so PENDING and PAID for one payment both run, while
-        // retries of the same lifecycle event remain idempotent. If event id
-        // is absent, isolate claim by provider payment reference.
+        // The verified refund facts and success time are decision-bearing:
+        // Midtrans can report partial and full refunds for one transaction ID,
+        // and a later authenticated lookup can expose a success time missing
+        // from an earlier delivery. Exact evidence replays keep the same key.
         const idempotencyKey = paymentWebhookIdempotencyKey(provider, payload);
         // Short 2-minute claim window (R7): a crash mid-processing only blocks
         // retries for 2 minutes instead of the 24h processed-record TTL, so the
@@ -207,6 +251,9 @@ export function paymentsWebhook(app: Elysia) {
             refundAmountIdr: payload.refundAmountIdr,
             currency: payload.currency,
             refundKind: payload.refundKind,
+            providerRefundIdentity: payload.providerRefundIdentity,
+            providerSuccessAt: payload.providerSuccessAt,
+            providerSuccessTimeStatus: payload.providerSuccessTimeStatus,
           });
 
           // T1: round-trip the traceId on the idempotency record so a replay
@@ -311,6 +358,7 @@ export function paymentsWebhook(app: Elysia) {
       providerReference: ref,
       providerEventId: eventId,
       status: "PAID",
+      providerSuccessAt: new Date(),
     });
 
     set.status = 200;

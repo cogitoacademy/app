@@ -1,54 +1,81 @@
 import { db } from "@cogito-app/db";
-import { sql } from "drizzle-orm";
 import { user, wallet } from "@cogito-app/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import {
+  assertSeedStudentFixture,
+  resolveSeedStudentResetTarget,
+  SEED_STUDENT_FIXTURE,
+} from "./reset-seed-student.guard";
 
-const SEED_STUDENT_EMAIL = "cogito.andre@yopmail.com";
-
-async function reset() {
-  const [seedStudent] = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, SEED_STUDENT_EMAIL))
-    .limit(1);
-
-  if (!seedStudent) {
-    console.log("Seed student does not exist yet; nothing to reset");
-    return;
+export async function resetSeedStudent() {
+  const target = resolveSeedStudentResetTarget(process.env);
+  if (target === "skip") {
+    console.log("Seed student reset skipped for reserved DB port 6767/6768.");
+    return "skipped" as const;
   }
-
-  const seedStudentId = seedStudent.id;
-  const [seedWallet] = await db
-    .select({ id: wallet.id })
-    .from(wallet)
-    .where(eq(wallet.userId, seedStudentId))
-    .limit(1);
-  const walletId = seedWallet?.id;
-
-  if (walletId) {
-    await db.execute(
-      sql`delete from ledger_entry where wallet_id = ${walletId}`,
+  if (target === "t05") {
+    console.log(
+      "Seed student reset skipped: T05 uses a fresh student identity per run.",
     );
+    return "run-scoped" as const;
   }
 
-  await db.execute(
-    sql`delete from booking_participant where user_id = ${seedStudentId}`,
-  );
-  await db.execute(
-    sql`delete from booking where proposer_id = ${seedStudentId}`,
-  );
+  const result = await db.transaction(async (tx) => {
+    const [seedStudent] = await tx
+      .select({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      })
+      .from(user)
+      .where(eq(user.email, SEED_STUDENT_FIXTURE.email))
+      .limit(1);
 
-  if (walletId) {
-    await db
-      .update(wallet)
-      .set({ totalBalance: 200, availableBalance: 200, heldBalance: 0 })
-      .where(eq(wallet.id, walletId));
-  }
+    if (!seedStudent) return "missing" as const;
+    assertSeedStudentFixture(seedStudent);
 
-  console.log("Reset seed student state");
+    const [seedWallet] = await tx
+      .select({ id: wallet.id })
+      .from(wallet)
+      .where(eq(wallet.userId, seedStudent.id))
+      .limit(1);
+    const walletId = seedWallet?.id;
+
+    if (walletId) {
+      await tx.execute(
+        sql`delete from ledger_entry where wallet_id = ${walletId}`,
+      );
+    }
+
+    await tx.execute(
+      sql`delete from booking_participant where user_id = ${seedStudent.id}`,
+    );
+    await tx.execute(
+      sql`delete from booking where proposer_id = ${seedStudent.id}`,
+    );
+
+    if (walletId) {
+      await tx
+        .update(wallet)
+        .set({ totalBalance: 200, availableBalance: 200, heldBalance: 0 })
+        .where(eq(wallet.id, walletId));
+    }
+
+    return "reset" as const;
+  });
+
+  console.log(
+    result === "missing"
+      ? "Seed student does not exist yet; nothing to reset"
+      : "Reset seed student state",
+  );
+  return result;
 }
 
-reset().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  resetSeedStudent().catch((err) => {
+    console.error("Seed student reset failed:", err);
+    process.exit(1);
+  });
+}

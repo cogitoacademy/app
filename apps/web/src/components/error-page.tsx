@@ -52,15 +52,10 @@ export function ErrorPageContent({
       <GradientCode code={code} />
 
       <div className="flex flex-col items-center gap-2">
-        <Heading
-          id={titleId}
-          className="text-xl leading-snug font-bold tracking-tight sm:text-2xl"
-        >
+        <Heading level={1} size="md">
           {title}
         </Heading>
-        <Text className="mx-auto max-w-xs text-sm leading-relaxed text-muted sm:max-w-sm sm:text-base">
-          {description}
-        </Text>
+        <Text className="max-w-full text-muted">{description}</Text>
       </div>
 
       {children}

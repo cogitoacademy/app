@@ -44,6 +44,16 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     return row as typeof meetingEvent.$inferSelect;
   }
 
+  async function createAcademyClassEvent() {
+    return {
+      provider: "manual" as const,
+      status: "failed" as const,
+      externalEventId: null,
+      meetingUrl: null,
+      errorReason: "Google Meet is not configured; retry after provider setup",
+    };
+  }
+
   // Manual links carry no provider-side event: a reschedule is a no-op (the
   // admin re-assigns a link as needed). On cancellation we still reflect the
   // terminal state locally so the booking GET stops surfacing the link.
@@ -108,5 +118,16 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     return created as typeof meetingEvent.$inferSelect;
   }
 
-  return { createEvent, updateEvent, cancelEvent, setManualLink };
+  return {
+    createEvent,
+    cancelAcademyClassEvent: async () => {
+      throw new Error(
+        "Google Calendar cancellation is unavailable; configure the provider before retrying",
+      );
+    },
+    createAcademyClassEvent,
+    updateEvent,
+    cancelEvent,
+    setManualLink,
+  };
 }

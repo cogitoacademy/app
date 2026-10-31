@@ -3,7 +3,7 @@ pre-commit:
   commands:
     lint:
       glob: "*.{ts,tsx,js,jsx}"
-      run: bunx oxlint {staged_files}
+      run: bun run lint -- {staged_files}
     format:
       glob: "*.{ts,tsx,js,jsx,json}"
       run: bunx oxfmt --write {staged_files}
@@ -14,7 +14,7 @@ pre-commit:
       run: bun scripts/check-sops-encrypted.ts {staged_files}
 
 pre-push:
-  parallel: true
+  parallel: false
   commands:
     typecheck:
       run: bun run check-types

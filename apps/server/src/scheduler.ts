@@ -10,6 +10,7 @@ import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler
 import { scheduleEscalateSupportTickets } from "@cogito-app/api/modules/scheduler/jobs/escalate-support-tickets.job";
 import { scheduleRetryFailedMeetings } from "@cogito-app/api/modules/scheduler/jobs/retry-failed-meetings.job";
 import { scheduleReconcilePayments } from "@cogito-app/api/modules/scheduler/jobs/reconcile-payments.job";
+import { scheduleClassEnrollmentCheck } from "@cogito-app/api/modules/scheduler/jobs/class-enrollment-check.job";
 import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
@@ -50,8 +51,27 @@ export async function initScheduler(): Promise<void> {
     onSendNotificationEmail: () =>
       services.notification.dispatchQueuedEmails(50),
     onEscalateSupportTickets: () => services.support.escalatePastSlaTickets(),
-    onRetryFailedMeetings: () => services.booking.retryFailedMeetings(),
+    onRetryFailedMeetings: async () => {
+      const [bookingResult, classResult] = await Promise.all([
+        services.booking.retryFailedMeetings(),
+        services.academyClass.retryFailedMeetings(),
+      ]);
+      return {
+        succeeded: bookingResult.succeeded + classResult.succeeded,
+        failed: bookingResult.failed + classResult.failed,
+      };
+    },
     onReconcilePayments: () => services.payment.reconcilePendingPayments(50),
+    onClassEnrollmentDueJobs: async () => {
+      const classEnrollment = await services.classEnrollment.processDueJobs();
+      const bookingReportReminders =
+        await services.bookingReportReminders.processPendingReportReminders();
+      return {
+        ...classEnrollment,
+        bookingReportRemindersQueued: bookingReportReminders.queued,
+        bookingReportRemindersFailed: bookingReportReminders.failed,
+      };
+    },
   });
 
   if (!scheduler) {
@@ -70,6 +90,7 @@ export async function initScheduler(): Promise<void> {
   await scheduleEscalateSupportTickets(scheduler.queue);
   await scheduleRetryFailedMeetings(scheduler.queue);
   await scheduleReconcilePayments(scheduler.queue);
+  await scheduleClassEnrollmentCheck(scheduler.queue);
 
   log({
     level: "info",

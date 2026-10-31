@@ -260,7 +260,7 @@ function RouteComponent() {
         <Heading level={1} size="md">
           Build a trusted tutor network
         </Heading>
-        <Text className="mt-1 text-muted">
+        <Text className="max-w-full text-muted">
           Invite new tutors, review their profiles, and keep the public
           directory accurate.
         </Text>
@@ -318,7 +318,7 @@ function RouteComponent() {
                 className="rounded-lg"
               />
             ) : (
-              <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+              <TableContainer className="min-w-0">
                 <Table className="min-w-[36rem]">
                   <TableHeader>
                     <TableRow>
@@ -511,7 +511,7 @@ function RouteComponent() {
               className="rounded-lg"
             />
           ) : (
-            <TableContainer className="w-[calc(100%+3rem)]!">
+            <TableContainer>
               <Table>
                 <TableHeader>
                   <TableRow>

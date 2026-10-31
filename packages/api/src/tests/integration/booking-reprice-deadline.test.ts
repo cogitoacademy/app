@@ -124,10 +124,14 @@ async function seedPartialGroup(params: {
     scheduledEndAt: new Date(start.getTime() + 3600_000),
     timezone: "Asia/Jakarta",
     priceSnapshot: {
-      perStudent: params.perStudent,
-      baseline: params.perStudent * params.targetGroupSize,
-      tutorShare: params.perStudent * params.targetGroupSize * 0.8,
-      cogitoTake: params.perStudent * params.targetGroupSize * 0.2,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-debate",
+      modality: "online",
+      headcount: params.confirmedUserIds.length,
+      perStudentMarks: params.perStudent,
+      collectedMarks: params.perStudent * params.confirmedUserIds.length,
+      tutorHonorariumIdr: 180_000 + 30_000 * (params.targetGroupSize - 1),
     },
     originalMarks: params.perStudent * params.targetGroupSize,
     holdAmount: params.perStudent * params.confirmedUserIds.length,
@@ -178,12 +182,12 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
   });
 
   test("partial group (3 of 5) at deadline reprices to awaiting_reconfirmation", async () => {
-    // Size 5 per-student price from the seeded tutor profile is 30.
+    // Size 5 V3 price is 19 Marks per student.
     const b = await seedPartialGroup({
       tutorId,
       confirmedUserIds: [studentA.id, studentB.id, studentC.id],
       targetGroupSize: 5,
-      perStudent: 30,
+      perStudent: 19,
     });
 
     const result = await services.booking.expireBookings();
@@ -192,8 +196,8 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
 
     const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
     expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
-    // Repriced to the size-3 rate: 3 × 40.
-    expect(row!.holdAmount).toBe(120);
+    // Repriced to the size-3 V3 rate: 3 × 23.
+    expect(row!.holdAmount).toBe(69);
     const deadlineMs = new Date(row!.deadlineAt!).getTime();
     expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
 
@@ -202,13 +206,13 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .from(bookingParticipant)
       .where(eq(bookingParticipant.bookingId, b.id));
     for (const p of participants) {
-      expect(p.heldAmount).toBe(40);
+      expect(p.heldAmount).toBe(23);
       expect(p.confirmationState).toBe("confirmed");
     }
 
     for (const id of [studentA.id, studentB.id, studentC.id]) {
       const w = await getWalletByUserId(id);
-      expect(w!.heldBalance).toBe(40);
+      expect(w!.heldBalance).toBe(23);
 
       const notifs = await db
         .select()
@@ -241,13 +245,17 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       scheduledEndAt: new Date(start.getTime() + 3600_000),
       timezone: "Asia/Jakarta",
       priceSnapshot: {
-        perStudent: 30,
-        baseline: 150,
-        tutorShare: 120,
-        cogitoTake: 30,
+        engine: "v3",
+        v3Revision: 1,
+        competition: "competition-debate",
+        modality: "online",
+        headcount: 1,
+        perStudentMarks: 19,
+        collectedMarks: 19,
+        tutorHonorariumIdr: 300_000,
       },
-      originalMarks: 150,
-      holdAmount: 30,
+      originalMarks: 95,
+      holdAmount: 19,
       deadlineAt: new Date(Date.now() - 60_000),
     });
 
@@ -256,9 +264,9 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       userId: soloStudent.id,
       role: "proposer",
       confirmationState: "confirmed",
-      heldAmount: 30,
+      heldAmount: 19,
     });
-    await holdMarks(soloStudent.id, 30, b.id);
+    await holdMarks(soloStudent.id, 19, b.id);
 
     const result = await services.booking.expireBookings();
     expect(result.failed).toBe(0);
@@ -274,18 +282,17 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
 
   test("B5: partial group at deadline whose reprice fails (insufficient marks) falls back to EXPIRED instead of wedging", async () => {
     const a = await createTestUser(`student.dl.b5.a.${ts}@cogito.test`);
-    await createTestWallet(a.id, 30);
+    await createTestWallet(a.id, 19);
     const c = await createTestUser(`student.dl.b5.c.${ts}@cogito.test`);
-    await createTestWallet(c.id, 30);
+    await createTestWallet(c.id, 19);
 
-    // 2-of-5 group, both students committed their entire balance to the
-    // size-5 hold (30 each): repricing to the size-2 rate (45/student) needs
-    // +15 available per student, which neither has — reprice must fail.
+    // 2-of-5 group, both students committed their entire size-5 V3 hold
+    // (19 each); repricing to 28 needs more Marks than either wallet has.
     const seeded = await seedPartialGroup({
       tutorId,
       confirmedUserIds: [a.id, c.id],
       targetGroupSize: 5,
-      perStudent: 30,
+      perStudent: 19,
     });
 
     const result = await services.booking.expireBookings();
@@ -303,7 +310,7 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     for (const id of [a.id, c.id]) {
       const w = await getWalletByUserId(id);
       expect(w!.heldBalance).toBe(0);
-      expect(w!.availableBalance).toBe(30);
+      expect(w!.availableBalance).toBe(19);
     }
   });
 
@@ -315,13 +322,13 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     const c = await createTestUser(`student.u3.c.${ts}@cogito.test`);
     await createTestWallet(c.id, 300);
 
-    // Already repriced once (3-of-5 at 40/student), now at its reconfirmation
+    // Already repriced once (3-of-5 at 23/student), now at its reconfirmation
     // deadline with the same valid partial headcount.
     const seeded = await seedPartialGroup({
       tutorId,
       confirmedUserIds: [a.id, b2.id, c.id],
       targetGroupSize: 5,
-      perStudent: 40,
+      perStudent: 23,
       state: BOOKING_STATE.AWAITING_RECONFIRMATION,
     });
 
@@ -334,13 +341,13 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .where(eq(booking.id, seeded.id));
     // Still awaiting reconfirmation with a fresh deadline — NOT expired.
     expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
-    expect(row!.holdAmount).toBe(120);
+    expect(row!.holdAmount).toBe(69);
     const deadlineMs = new Date(row!.deadlineAt!).getTime();
     expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
 
     for (const id of [a.id, b2.id, c.id]) {
       const w = await getWalletByUserId(id);
-      expect(w!.heldBalance).toBe(40);
+      expect(w!.heldBalance).toBe(23);
 
       const notifs = await db
         .select()
@@ -363,7 +370,7 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       tutorId,
       confirmedUserIds: [solo.id],
       targetGroupSize: 5,
-      perStudent: 40,
+      perStudent: 23,
       state: BOOKING_STATE.AWAITING_RECONFIRMATION,
     });
 
@@ -390,17 +397,17 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     const c = await createTestUser(`student.f3.c.${ts}@cogito.test`);
     await createTestWallet(c.id, 300);
 
-    // 3-of-5 group already repriced at the size-3 rate (40/student), sitting
+    // 3-of-5 group already repriced at the size-3 V3 rate (23/student), sitting
     // in its reconfirmation window.
     const seeded = await seedPartialGroup({
       tutorId,
       confirmedUserIds: [a.id, b2.id, c.id],
       targetGroupSize: 5,
-      perStudent: 40,
+      perStudent: 23,
       state: BOOKING_STATE.AWAITING_RECONFIRMATION,
     });
 
-    // Two of three reconfirm at the 40/student rate.
+    // Two of three reconfirm at the saved V3 rate.
     await services.booking.reconfirm(a.id, seeded.id, true);
     await services.booking.reconfirm(b2.id, seeded.id, true);
 
@@ -420,9 +427,9 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .from(booking)
       .where(eq(booking.id, seeded.id));
     expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
-    // Repriced to the size-2 rate: 2 × 45.
-    expect(row!.priceSnapshot?.perStudent).toBe(45);
-    expect(row!.holdAmount).toBe(90);
+    // Repriced to the size-2 V3 rate: 2 × 28.
+    expect(row!.priceSnapshot).toMatchObject({ perStudentMarks: 28 });
+    expect(row!.holdAmount).toBe(56);
     const deadlineMs = new Date(row!.deadlineAt!).getTime();
     expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
 
@@ -438,7 +445,7 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     expect(survivors.length).toBe(2);
     for (const p of survivors) {
       expect(p.confirmationState).toBe("confirmed");
-      expect(p.heldAmount).toBe(45);
+      expect(p.heldAmount).toBe(28);
     }
 
     // After the re-issued cycle, reconfirming both finalizes at the new price.
@@ -449,15 +456,10 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .from(booking)
       .where(eq(booking.id, seeded.id));
     expect(finalRow!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
-    expect(finalRow!.holdAmount).toBe(90);
+    expect(finalRow!.holdAmount).toBe(56);
   });
 
-  test("N1: flat legacy price map (equal per-student at sizes 2 and 3) does not loop the F3 reissue", async () => {
-    // Flat legacy price map: per-student is 40 at every group size. When the
-    // headcount drops 3 → 2, repriceGroupForHeadcount early-returns because
-    // the per-student price is unchanged — without the holdAmount sync the
-    // F3 branch would re-fire on every reconfirm accept, looping the booking
-    // forever without ever reaching AWAITING_TUTOR_REVIEW.
+  test("N1: V3 headcount repricing reissues confirmation at the current rate", async () => {
     const flatTutor = await createPublishedTutor(
       `tutor.n1.${ts}@cogito.test`,
       ts,
@@ -472,13 +474,13 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     const c = await createTestUser(`student.n1.c.${ts}@cogito.test`);
     await createTestWallet(c.id, 300);
 
-    // 3-of-3 group at the size-3 rate (40/student) sitting in its
+    // 3-of-3 group at the V3 size-3 rate (23/student) sitting in its
     // reconfirmation window.
     const seeded = await seedPartialGroup({
       tutorId: flatTutor.tutorId,
       confirmedUserIds: [a.id, b2.id, c.id],
       targetGroupSize: 3,
-      perStudent: 40,
+      perStudent: 23,
       state: BOOKING_STATE.AWAITING_RECONFIRMATION,
     });
 
@@ -492,17 +494,18 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       })
       .where(eq(booking.id, seeded.id));
 
-    // One participant withdraws mid-cycle: headcount 3 → 2. The flat map
-    // keeps the per-student price at 40, so the reprice early-returns — the
-    // pre-fix bug left holdAmount at the stale 3 × 40 = 120.
+    // One participant withdraws mid-cycle: headcount 3 → 2.
     await services.booking.withdraw(c.id, seeded.id, "schedule conflict");
 
-    // Every subsequent accept must converge: the first re-issues (F3), the
-    // reprice syncs holdAmount to the actual participant-held total (80),
-    // and the final round of accepts finalizes the booking.
+    // The first accept reissues the round at 28 Marks per student.
     await services.booking.reconfirm(a.id, seeded.id, true);
-    await services.booking.reconfirm(b2.id, seeded.id, true);
-    const result = await services.booking.reconfirm(a.id, seeded.id, true);
+    const [repriced] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(repriced!.holdAmount).toBe(56);
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    const result = await services.booking.reconfirm(b2.id, seeded.id, true);
     expect(result.reconfirmed).toBe(true);
 
     const [row] = await db
@@ -510,7 +513,7 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .from(booking)
       .where(eq(booking.id, seeded.id));
     expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
-    expect(row!.holdAmount).toBe(80);
+    expect(row!.holdAmount).toBe(56);
 
     const participants = await db
       .select()
@@ -522,7 +525,7 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     expect(survivors.length).toBe(2);
     for (const p of survivors) {
       expect(p.confirmationState).toBe("reconfirmed");
-      expect(p.heldAmount).toBe(40);
+      expect(p.heldAmount).toBe(28);
     }
   });
 
@@ -534,12 +537,12 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     const c = await createTestUser(`student.f8.c.${ts}@cogito.test`);
     await createTestWallet(c.id, 300);
 
-    // 3-of-5 group repriced at the size-3 rate (40/student).
+    // 3-of-5 group repriced at the size-3 V3 rate (23/student).
     const seeded = await seedPartialGroup({
       tutorId,
       confirmedUserIds: [a.id, b2.id, c.id],
       targetGroupSize: 5,
-      perStudent: 40,
+      perStudent: 23,
     });
 
     // Tutor marks attendance: inserts a CONFIRMED participant row with
@@ -571,8 +574,8 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .from(booking)
       .where(eq(booking.id, seeded.id));
     expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
-    // Repriced for 2 students at the size-2 rate (45), not 3 students (40).
-    expect(row!.priceSnapshot?.perStudent).toBe(45);
-    expect(row!.holdAmount).toBe(90);
+    // Repriced for 2 students at 28 Marks, not 3 students at 23.
+    expect(row!.priceSnapshot).toMatchObject({ perStudentMarks: 28 });
+    expect(row!.holdAmount).toBe(56);
   });
 });

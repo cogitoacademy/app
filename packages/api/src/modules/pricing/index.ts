@@ -16,3 +16,10 @@ export function createPricingModule(
 }
 
 export type { PricingPort };
+export {
+  calculateV3SessionPrice,
+  calculateV3TopUpPrice,
+  V3_COMPETITION_RATES,
+  V3_MARKS_PACKAGES,
+  type V3Competition,
+} from "./v3-rate-card";

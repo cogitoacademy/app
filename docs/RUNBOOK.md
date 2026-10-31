@@ -1,6 +1,2008 @@
 # Cogito Runbook
 
-Last updated: 2026-10-02
+## Integrated release branch validation (30 October 2026)
+
+Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
+
+## Q15 business insights implementation — 30 October 2026
+
+Dashboard analytics separates top-up receipts (IDR), delivered services (Marks/session counts), current future commitments (funded/unfunded Marks and seat-sessions), and earned tutor costs (IDR allocated paid/unpaid as of now). Marks are never converted into estimated booking IDR value or profit. The endpoint remains admin-only /rpc/admin/getDashboardAnalytics with the normal JSON envelope.
+
+The response adds operationsSummary.delivered/upcoming/tutorFees/asOf and source-quality counts unavailablePrivateRates/unavailablePaymentDates. businessSummary exposes grossReceiptsIdr/netReceiptsIdr/refundedIdr. Cash receipts use providerSuccessAt and include subsequently REFUNDED successful purchases in gross; recorded refunds use their own event dates. Missing payment success dates are excluded from dated totals with an explicit dashboard notice, never guessed from updatedAt.
+
+Delivery is counted from authoritative completion deductions for completed sessions; cancellation/no-show penalties are not counted as delivered service. Upcoming commitments are a current snapshot independent of selected-period filters. Tutor paid/unpaid measures the current payment allocation of fees earned during the selected period; paid is gross honorarium allocation, not bank net transfer or transfer cashflow during the period. Missing future private rates are excluded from amount totals with a visible notice.
+
+The dashboard reuses existing Selia patterns and presents new operational facts in semantic sections. No migration, seed or provider call is required by analytics reads. Live acceptance fixtures must be scoped and cleaned up; no reset is required. Verification is recorded in the active readiness plan.
+
+## Readiness acceptance follow-up — 30 October 2026
+
+Real dev pricing activation passed with original pointer restoration and temporary fixture cleanup (`bun run verify:pricing-activation`; tmp/v3-only-dev/pricing-activation-live.json). The booking unit suite now uses explicit subjects, V3 revisions/snapshots and fee-event payout expectations: 319 tests passed; no compatibility runtime was restored. Friend-code query fixtures now include the current friends-list joins.
+
+Class enrollment integration supports an explicit non-resetting dev acceptance mode: CLASS_ENROLLMENT_DEV_ACCEPTANCE=true, NODE_ENV=development, exact loopback:6767/cogito-app, reset flags absent, and zero existing Academy classes/enrollments. Normal mode still requires test loopback:6769/cogito-test. Never combine it with reset-oriented Academy suites. Private env copies must disable external payment/email delivery and be removed after the run. Scoped fixture cleanup preserves unrelated bookings. The suite uses controlled providers for race tests; real Google acceptance remains the separate verify:academy-meet harness with event cleanup.
+
+45 PostgreSQL enrollment tests passed (362 assertions): full/half/single, installment/expiry, cancellation/refund/races, minimum/postponement, reports, class fee and payout preparation, plus a masterclass 5-Mark enrollment→report→single Rp250,000 earned fee journey. Cleanup left zero Academy fixtures and preserved four private bookings. Evidence: tmp/v3-only-dev/enrollment-acceptance.json and enrollment-acceptance.log. Payment checkout/webhooks, email delivery, recorded class payout transfer and browser acceptance remain separate gates.
+
+REQ-CLASS-05 tutor absence and same-time replacement are implemented. Migration `0080_academy_tutor_absence.sql` is applied to authorized dev `localhost:6767/cogito-app`. Same-time replacement preserves schedule, fee and allocations, updates the existing Google event attendee, and creates no exit window. Ordinary schedule changes use the versioned admin reschedule and student Q04 quote/confirm RPCs.
+
+Migrations `0081_academy_schedule_change_exit.sql` and `0082_class_allocation_schedule_change_version.sql` are additive and applied to the authorized dev database. For deployment, preflight the exact database target and apply the normal forward migration runner (`bun run db:migrate`); do not reset or reseed. The deadline is `min(server notification time +24h, new session start)`, and confirmation is accepted strictly before it. Only funded/unfunded active allocations snapshotted at notification are eligible. Funded remaining Marks return once; an unfunded seat receives no credit and only its own unpaid installment obligation is reduced. Delivery/report/earned state is rechecked during quote and confirmation. Meet updates are queued transactionally and processed after commit; retry the durable class meeting job if provider work fails. Minimum-enrollment postponement retains its separate 72-hour window.
+
+## Live Academy publish verification — 30 October 2026
+
+Run `bun run verify:academy-meet` from the repository root for explicit live acceptance against authorized development `localhost:6767/cogito-app`. The script refuses other DB targets, reads Google OAuth credentials from apps/server/.env, creates temporary online masterclass/cohort drafts, publishes through the real Academy service and database with real Google Meet, and verifies custom fees, stale-version rejection, published-edit rejection and no duplicate meeting work. Google attendee notifications are disabled; payment/email providers are not exercised.
+
+A finally block deletes Google events by stable session identity (including after partial creation), then deletes only the created class fixtures and their scoped notifications/audits; session/meeting rows cascade. Cleanup failure fails the command and retains fixture identities in tmp/v3-only-dev/academy-meet-live.json for follow-up. This explicit provider check is separate from fast mocked unit/synthetic suites. It does not reset or reseed the database.
+
+Live result: masterclass Rp250,000 and cohort Rp500,000 both published with matching session snapshots and real Meet URLs; repeat processing created nothing; stale publish and edits after publication were rejected. Google events and all temporary DB fixtures were removed. Evidence: tmp/v3-only-dev/academy-meet-live.json. This verifies the service/database/provider journey, not browser UI or joining a call.
+
+## Per-class tutor fee — 30 October 2026
+
+Admin sets the agreed flat IDR tutor fee per class. New cohort/masterclass forms start at Rp400,000/Rp300,000; these are editable defaults, not publication limits. Draft save accepts a positive whole IDR amount up to Rp2,000,000,000 and copies it to each session. Publication validates that session fees match the class fee. Published pricing remains governed by existing draft/lifecycle restrictions; no global Economy setting or data migration is added.
+
+## Admin pricing activation — 30 October 2026
+
+Admin-only `POST /rpc/admin/activateV3EconomySettings` accepts `{json:{version,expectedActiveRevision,reason}}`. It activates only the latest saved revision, checks the previously observed active revision, validates saved pricing/catalog slugs, and writes the pointer plus audit in one transaction. Draft saving and activation share the revision advisory lock; catalog changes are locked too. Stale input returns a conflict. Existing quotes/bookings remain pinned. Economy UI requires an activation reason and distinguishes saved drafts from active pricing. No migration or automatic activation is needed; review and explicitly activate the saved pricing in admin settings.
+
+## V3 frontend cleanup — 30 October 2026
+
+After migration, seed initializes defaults and an initial active V3 revision when absent. Existing active configuration is preserved. Admin draft saves do not activate pricing: the missing activation workflow is tracked in plans/active/V3-UI-CLEANUP-AND-READINESS.md. Do not interpret a saved draft or mocked UI check as live pricing/provider acceptance.
+
+## V3 report and settings cleanup — 30 October 2026
+
+This completes the report-provenance, payout-source and old settings cleanup left by the pricing cutover. Admin `getEconomySettings` and `updateEconomySettings` are removed from router, handler, service and request schema. Use `getV3EconomySettings`, `previewV3EconomySettings` and `saveV3EconomySettings`; saving a draft still does not activate it.
+
+Report text is canonical plaintext on writes and reads. Entity-decoding and legacy-version PDF detection are removed. History statuses are `submitted`/`corrected`, with `admin`/`tutor` actors only. A correction requires the existing report version's history event; missing provenance returns a conflict instead of synthesizing an unknown legacy actor. Admin history UI shows the recorded role/actor. PDF exports retain normal continuation pages for long content, without a legacy flag or label.
+
+Payout allocations accept only `fee_event` and require a non-null `tutor_session_fee_id`. Migration 0079_v3_report_and_payout_contracts validates these rules without rewriting or deleting existing financial/report history. Invalid old rows cause migration failure and require explicit cleanup. Unused repository reads for old report-format detection, uncategorized tutor fallback and aggregate payout cutoff were removed.
+
+Migration 0079 was applied to authorized dev `localhost:6767/cogito-app` without another reset. Preflight found zero invalid history/allocation rows. Real PostgreSQL tests rejected both legacy report values, both legacy payout source types and null fee IDs. A current admin correction and request replay preserved report identity, literal entity text, ledger and fee rows. An invalid-provenance fixture was rejected without new history/fees and then removed. Current report listing/PDF export passed. A new V3 quote-to-payment-to-booking-to-report-to-fee-to-payout service journey also passed after 0079, using stub payments/manual meetings and a local simulated transfer record only.
+
+Evidence: `tmp/v3-only-dev/cleanup-verification.json` and `current-report.pdf`. Focused tests and server/E2E typechecks are recorded in the current handoff; full legacy-oriented suites and browser/provider acceptance were not run. Web typecheck remains blocked by the existing Accordion callback mismatch in academy-class-page.tsx. No test or production database was reset or migrated in this cleanup.
+
+## V3-only pricing cutover — 30 October 2026
+
+Current pricing behavior supersedes earlier activation-null compatibility notes:
+
+- New booking requests require an explicit `subjectId` and an active V3 revision. Missing configuration blocks creation before wallet holds; tutor `prices`/`baseRatesIdr` and old economy settings are never fallback inputs.
+- Discovery exposes competition-derived V3 prices only. With no active revision it exposes no prices, including for the seven canonical categories.
+- Booking repricing reads the booking's pinned immutable V3 revision, independently of the current activation pointer. Old snapshot formats are rejected by pricing and on-demand fee creation.
+- The old package-code purchase entry point always rejects; purchases use V3 quotes and an explicit package/custom/recommended choice. Webhook, quote and report replay protections remain.
+- Tutor payout aggregation reads immutable session fee events and source allocations only. Booking-snapshot fallback and historical aggregate cutoffs no longer determine payable earnings.
+- `/admin-economy` presents the V3 rate card and preview only; the obsolete Cogito take schedule panel has been removed. The old take-schedule APIs have since been removed by the report/settings cleanup below.
+- The temporary runtime filter for migration-0027 catalog IDs is removed: migration 0078 handles obsolete rows and fresh migrations insert no catalog data. Seed supplies the seven current parents and 34 children.
+
+Dev execution was explicitly authorized for `localhost:6767/cogito-app`, NODE_ENV=development. Its public/drizzle schemas were reset and migrations through 0078 applied. Before seed, catalog/package/old-economy row counts were all zero. Seed created canonical catalog, PRD packages and active revision 1; rerunning seed preserved existing records. No test/payout-test/production database was reset.
+
+Verified with real dev PostgreSQL service calls: 140-Mark custom quote recommends 150 Marks/Rp975000; stub payment replay credits once; a newly created solo booking reaches tutor acceptance, report, one fee event, payout preview, one allocation and simulated transfer-record replay. A partial group reprices N3 to N2 (21 to 25 Marks each for the seeded Essay category) from revision 1 even while the active pointer is temporarily null; reconfirmation and tutor acceptance succeed. Fixture timestamps were advanced in SQL to exercise report completion. Payment/email/Meet providers used stub/manual behavior; the payout transfer was a local record labelled DEV-SIMULATION-NO-BANK-TRANSFER, with no bank operation.
+
+Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts`. Focused V3/discovery/fee tests and selected booking tests passed; server typecheck passed. Web typecheck remains blocked by the unrelated Accordion callback type mismatch in academy-class-page.tsx. Full legacy-oriented test suites and browser/provider acceptance were not run. The later report/settings cleanup removes the legacy history/actor values, allocation source enum values and old settings APIs. Unused pricing utility methods remain separate from this cleanup.
+
+## Pending checkout cancellation regression (28 October 2026)
+
+Acceptance case: create an unfunded two-session half-plan checkout, then preview
+and confirm cancellation of its first session. The enrollment and both unpaid
+installments must become `cancelled`; both allocations must be `released` with
+zero funded, spent and released Marks, and no wallet hold/ledger entry. A full
+checkout with remaining first-installment sessions stays `checkout_pending`
+with its unpaid obligation resized. The regression failed on `c60c1054`; both
+full/half cases pass after the first-installment-specific fix in hosted run
+`40694971836` on `489786b4`. The fix uses the existing schema. Run the guarded
+`class-enrollment.test.ts` coverage partition.
+
+## Counter-based coverage and PR #332 security checks (28 October 2026)
+
+Hosted CI follow-up: the first counter run produced complete function identities (both unresolved-identity lists empty), but one private-PDF test failed because storage.test.ts permanently replaced the S3 SDK module. The SDK and presigner are now spied and restored after each storage test; replaying the old test before private KB reproduces the failure, while the repaired pair passes. New real-router unit contracts cover admin/student/tutor/anonymous permissions, trusted session actors, pending/unverified paid gates, quote/request identities, schedule validation and RPC error classifications for enrollment and referrals. Focused pinned-Bun instrumentation passes 89 tests / 374 assertions; referral and class-enrollment handlers reach 100% functions and branches in that focused run, and public storage reaches 100% functions/branches. This is bounded unit evidence, not full financial/provider acceptance. Run 40671516167 on `d7f70efb` passes all three API coverage partitions, server unit tests, build, lint and type-check. Its genuine merged coverage is API lines 9931/10515 (94.4%), overall lines 10270/10877 (94.4%), functions 2672/2766 (96.6%), and branches 7431/8757 (84.9%); the 100% gate remains open. The new focused FAQ rich-text and payment-handler tests pass 10 tests / 45 assertions; using the repository counter preload, each target file reaches 100% lines, functions and branches in that focused run. CodeQL and both `Analyze` checks pass on `d7f70efb`. E2E is outside this follow-up.
+
+The E2E job has a 45-minute timeout because the serialized regular browser suite and isolated payout browser partition share web-server ports. A timed-out regular partition may leave server children holding those ports, making the payout step fail during startup. The 28 October run hit the previous 20-minute job timeout before completing regular browser tests; verify both partitions on the next hosted run.
+
+Use `bun run test:coverage` for the supported local coverage path; it reads the ignored apps/server/.env.test file. Preflight both exact test targets and their owning containers, then explicitly set PAYOUT_DATABASE_URL and COVERAGE_DB_RESET_WINDOW=confirmed only for approved disposable fixtures. Do not use the retained 6769/6770 fixtures for this destructive full run. Ambient TEST_DATABASE_ALLOW_RESET/TEST_DATABASE_RESET_TARGET must be absent; the runner owns the scoped child overrides. CI declares the confirmed window only for its ephemeral service databases.
+
+The CI Test + Coverage job migrates its disposable primary database, then runs `bun run seed --defaults-only` from `apps/server` before API coverage. It separately migrates the payout database and seeds V3 defaults with `DATABASE_URL` explicitly set to the disposable 6770 payout database; Bun env files do not override the workflow's existing primary `DATABASE_URL`. This seeds competition taxonomy, Marks packages and active V3 pricing without demo users or bookings. `resetDatabase()` restores canonical V3 packages and pricing after each test reset; it does not seed legacy economy values. Never run this CI reset workflow against retained local 6769/6770 databases.
+
+The runner executes the broad API partition, one isolated process for every resetDatabase() suite discovered anywhere under packages/api/src/tests, then the fixture and payout partitions. Root-level and unit-directory database suites are isolated too. Each process owns coverage/<partition>/counters.json; use --list for the current mapping. `coverage-report.ts` merges these into coverage/counters.merged.json and coverage/lcov.merged.info, with the existing function-identity manifest. CI uses `--collect-only` and posts/enforces the gate in its existing later step; the local command enforces the same 100% gates itself. All failures remain blocking. Raw JSON and LCOV artifacts are uploaded on CI failure. Native `bun test --coverage` remains useful for reproducing the upstream reporting issue but is no longer the CI source of truth.
+
+Validation: `bun test ./.github/scripts/coverage-counters.test.ts ./.github/scripts/merge-lcov.test.ts` passes on pinned Bun 1.3.14. Counter regressions cover typed signatures, duplicate nested function names, real branches, query-suffixed imports, cleanup coverage, unloaded modules, stale/missing/incomplete/negative profiles, stale report removal, wrong DB targets, missing reset consent, ambient reset overrides, credential redaction, and exclusion of test support from the production source inventory. On Windows Bun 1.4 canary, the inventory regression passes 7 tests / 44 assertions; the scheduler and content-input tests pass 3 cases / 4 assertions; these are focused local checks, not a full application coverage run. The Google Meet provider suite passes 52 tests / 196 assertions after replacing the two substring URL matches with the exact token endpoint. Local instrumented application units pass 2,699 tests / 6,606 assertions on Windows canary; DB-backed role/verification unit files are excluded from that bounded local run and remain in the CI resettable partition. Workspace typechecks pass four tasks and the coverage scripts pass strict targeted type checking. Pinned Windows auth/DB runs timed out and Docker setup was interrupted under memory pressure; neither is counted as successful full Linux acceptance. Hosted run 40662816367 on c54fc6d4 fails the unchanged 100% gate: merged API/overall lines 93.0%, functions 95.6%, branches 83.1%. The focused Windows batch passes 207 tests / 492 assertions across 12 files. Run 40667837202 on df96f51d passed build/lint/typecheck but failed its `api-fixtures` partition because mock top-up quote IDs had no FK-backed `economy_v3_top_up_quote` rows; the coverage gate was not reached. The integration tests now persist valid test-owned quote/revision rows, and the V3 top-up unit suite passes 22 tests / 64 assertions for package selection, malformed snapshot rejection, and insertion races. The local 6769 DB was unavailable, so the new DB integration tests remain unexecuted locally and need hosted confirmation. E2E is not required for this follow-up.
+
+Instrumentation uses the [Bun runtime plugin API](https://bun.sh/docs/runtime/plugins) and [Istanbul instrumenter](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-lib-instrument). Counter profiles are bound to the source content and inventory rather than inferring function unions from summary-only native LCOV.
+
+## Linux acceptance and coverage blocker (28 October 2026)
+
+Pinned Bun 1.3.14 on isolated Linux now passes 3,116 resettable tests / 8,464 assertions, 88 reset-free fixture tests / 774 assertions, 11 payout tests / 105 assertions, and 156 server tests / 409 assertions. A separate guarded T05 rollback test passes 1 / 7. Four typecheck tasks, lint baseline and both build tasks pass; build uses real Node 24.22.1 and bounded memory, with one cached task. The Redis helper test now respects REDIS_URL; new tests cover private PDF storage failures/validation, admin content actor/version/redaction, and real PostgreSQL referral usage pagination/filter totals/literal wildcard search. Unrelated local Activities/client work remains outside this scope.
+
+The unchanged 100% coverage gate still fails: API 87.6%, overall 87.8%, function lower bounds 94.8%, 45 files with unverified function unions. A minimal reproduction proves partition-dependent Bun line denominators and absent function identities; zero branch records are not branch-coverage proof. See [BUN-COVERAGE-LIMITATION.md](BUN-COVERAGE-LIMITATION.md) for raw evidence, reproduction and next gate. No coverage filter/threshold was weakened. Initial interrupted/undersized-memory attempts are not passes. Hosted CI, genuine remaining coverage, provider/private-R2 acceptance, production restore/cutover and client approvals/UAT remain open.
+
+## Server acceptance follow-up (28 October 2026)
+
+Server tests pass 156 cases / 409 assertions across 30 files on both pinned Bun 1.3.14 and Windows Bun canary; one T05-only reset integration case is skipped on the separate scratch target. The server suite uses an owned PostgreSQL 16 schema clone at loopback 6770/v3_server_acceptance_20261028 and Redis 6382, with email and scheduler disabled. Two webhook test expectations now accept the existing SHA-256 idempotency key while checking the same key is claimed for 120 seconds and marked processed with the trace payload. No payment behavior changed. LCOV merger tests pass 11 cases / 145 assertions on both runtimes. Logs: tmp/v3-server-pinned.log and tmp/v3-server-unit-fixed.log. Hosted Linux CI, full merged coverage, real providers and production/client gates remain open.
+
+## V3 regression and restore checkpoint (28 October 2026)
+
+This slice repairs acceptance infrastructure and stale tests, not domain services. The OTP capture helper selects the code for its email under concurrent sends. Payment reconciliation fixtures include authoritative amount/currency; payment-module unit tests mock the authenticated status GET and reject unexpected URLs. Refund mocks follow cumulative upsert; stub success-time and legacy solo no-show entitlement expectations match existing contracts. Report-revision assertions order by version rather than physical row order. Class tests follow the current tabs, card links, enrollment copy and dates relative to their own sessions.
+
+T05 global setup now creates a fresh tutor (`E2E_TUTOR_EMAIL`/`SEED_REVIEW_TUTOR_EMAIL`) as well as fresh students. Seed names/copy and non-T05 defaults remain; prior availability, booking, wallet and ledger history is retained. This removes cross-run tutor-slot collisions without weakening booking conflict checks. Run the stored workflow from `packages/e2e` with `node node_modules/@playwright/test/cli.js test --config playwright.v3-acceptance.config.ts --retries=0`. Supply the existing exact T05 tuple: NODE_ENV=test, loopback DATABASE_URL 6769/cogito-test, REDIS_URL 6381, matching SERVER_URL/BETTER_AUTH_URL/VITE_SERVER_URL/PORT at localhost:3201 and WEB_URL/CORS_ORIGIN/WEB_PORT at localhost:3200, plus the four T05_ENROLLMENT_TEST_{DB,REDIS,SERVER,WEB}_PORT values. Reset flags must be absent. Set E2E_BROWSER_CHANNEL=msedge for installed Edge. The config enables T06/T07 role fixtures, disables the scheduler/email delivery, uses stub payments and retains the base config's disabled real Meet/test meeting adapter.
+
+Local evidence on the shared working tree based on `77bbd205`:
+
+- Browser: 13/13 real-RPC Edge journeys in 5.9 minutes using Bun 1.3.14 for server/seed commands. Covers publish/retry/public DTO, solo/group booking, reschedule/cancel/decline/outsider denial, full/half/single funding and installments, class cancellation/postponement/free exit, on-demand admin report/correction and tutor/admin/student class reports. This is local adapter-backed provider behavior, not real Google/payment delivery.
+- Unit/auth/env/DB module partition: 2,695 tests / 6,578 assertions pass. Two files under the unit directory actually reset a DB: `role-scope-drift.test.ts` and `verification-gate.test.ts`; run them separately on an owned resettable scratch target (12 tests / 18 assertions passed). Other auth tests include UUID-owned real-DB session fixtures, so still explicitly select a test DB.
+- Legacy/catalog/economy/payment/payout DB regression: 203 tests across 34 files pass, each on a fresh migrated-schema clone in the newly created local scratch PostgreSQL 16 container at 6770/cogito-test-payout, Redis 6382. Reset consent was limited to that owned scratch URL. This is per-suite isolation proof, not a single full CI/coverage run. Original retained 6769/6770 containers were not reset.
+- Combined non-reset partition: 87 tests / 760 assertions pass for `booking-admin-reports`, `class-enrollment`, `report-export`, `booking.report-reminders`, `referral-completion`, `referral-kol-commission` and `kb-calendar` on retained 6769/cogito-test, with reset flags absent and KB_DB_TEST_WINDOW=confirmed. CI now excludes all seven from the resettable partition and runs them here. Source-path invocations locally must start with `./` to avoid Bun also matching ignored historical copies under tmp.
+- FAQ/public tutor DB acceptance: 3 tests / 31 assertions pass on 6769/cogito-test. Four workspace typecheck tasks, both web/server build tasks and the lint baseline pass. Focused formatting/diff checks pass; existing sequential-await warnings remain.
+- PostgreSQL 17 DB restore rehearsal: pg_dump custom-format archive from retained test DB restored into a new local `v3_restore_20261026` database using the same PostgreSQL 17 tools. Exact counts and canonical row-content digests match across 21 critical tables, including wallet/ledger, booking/report/class/payout, KB/calendar/FAQ/referral and migration history. Dump/digests remain ignored under tmp. Private file/R2 object bytes were not restored. An earlier attempt with pg_restore 16 correctly rejected the PostgreSQL 17 archive and is not counted as success.
+
+Bun test evidence is local 1.4.0-canary.1 (b7a043103); attempts to run all DB suites with pinned Bun 1.3.14 on this Windows host had hangs/timeouts and were not promoted to passes. Browser startup/seed on 1.3.14 passed. Hosted Linux CI on the final integrated head, collection/merge of all LCOV partitions and the unchanged 100% gate remain required. Before the unit mock fix, obsolete Midtrans unit fixtures attempted sandbox status GETs with test credentials and received 401; the corrected tests mock those calls. No real payment/refund/transfer, email delivery, Google event or production operation is acceptance evidence here.
+
+The shared checkout also contained unrelated Activities public-DTO/docs edits during validation; they are preserved and excluded from this acceptance commit. Remaining gates: real new-Google-user consent/referral resume, provider retry/delivery/reconciliation, production private R2 denial, production backup plus DB/storage restore/cutover/rollback, native zoom/assistive-technology checks, policy/material approvals (Q04/Q14/Q15/OPS01), approved brand/content and named client UAT. Do not mark Release V3 launch-ready from this checkpoint.
+
+## KB/calendar live acceptance (26 October 2026)
+
+Installed Edge passed the real API/DB journey in `kb-calendar-live.spec.ts`: 1/1 test (7.0s; 44.7s total). KB browser save survives reload; a concurrent API edit makes the browser save conflict while preserving its draft. Calendar create/update/readback and stale-version HTTP 409 pass. Anonymous session is explicitly empty: private file returns 401, public uploads path returns 404. Admin, eligible student and tutor receive the exact synthetic PDF bytes with `private, no-store`; student/tutor admin list/remove return 403. PostgreSQL integration separately passes 3 tests/8 assertions for concurrent saves, audit rollback and reference protection.
+
+Use `node node_modules/@playwright/test/cli.js test --config playwright.kb-calendar-live.config.ts --retries=0` from `packages/e2e`, with the existing guarded T05 environment: NODE_ENV=test, DATABASE_URL at loopback 6769/cogito-test, REDIS_URL at loopback 6381, SERVER_URL/BETTER_AUTH_URL/VITE_SERVER_URL at localhost:3201, WEB_URL/CORS_ORIGIN at localhost:3200, PORT=3201, WEB_PORT=3200, and T05_ENROLLMENT_TEST_{DB,REDIS,SERVER,WEB}_PORT=6769/6381/3201/3200. ENV_FILE resolves the local test env; reset flags must be absent. The dedicated config selects database sources/authoring only for its test servers, private local storage under ignored E2E test-results, disabled scheduler/Meet/email delivery and stub payments. Default browser channel is msedge; override E2E_BROWSER_CHANNEL for an installed channel.
+
+No reset, migration, dev/prod activation or production storage operation. Resource/event fixtures are removed; seed accounts/audits and immutable synthetic PDF registrations/files remain in the isolated test environment. E2E TypeScript passes; sequential-request lint warnings remain. The PDF is a signature-only synthetic transport fixture, not PDF rendering evidence. Ineligible-student/grant expiry, production private R2 denial, full calendar browser editing/WIB agenda, native zoom/accessibility, rollback and client UAT remain open.
+
+## Competition catalog live acceptance (26 October 2026)
+
+Release head `63967826` plus the focused spec update passes 1/1 installed-Edge browser journey (11.5s test; 44.1s total) against real PostgreSQL `127.0.0.1:6769/cogito-test`, Redis `6381`, API `3201` and web `3200`. It covers admin archive/restore/move, API readback of persisted active/parent state, inherited destination palette, and HTTP 403 for student catalog list/archive requests. The previous Destination locator matched unrelated action labels; it now targets the exact combobox. Fixture catalog rows were deleted, with zero `e2e-catalog-%` rows remaining. E2E TypeScript passes; focused lint has no errors and one sequential-await warning.
+
+No reset or migration ran. Setup creates fresh student fixtures and refreshes shared test seed records; the first attempt also processed existing isolated scheduler jobs with email/payment stubs and Meet disabled. The successful rerun disabled the scheduler. Dev/production targets were not used. Historical-reference protection, concurrency/races, tutor/anonymous denial, other consumers, native zoom and assistive-technology acceptance remain separate; the reset-based API suite was not rerun.
+
+## Isolated competition types UI verification (26 October 2026)
+
+From repository root, run `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.competition-types-synthetic.config.ts`. This dedicated workflow uses installed Edge, web 3376, mocked API/session origin 3377, a separate Vite cache, one worker, no API server/global setup/seed/database/provider. Navigation waits for DOM content with a 60-second test budget for the cold Vite module graph. It does not stop or replace live dev 3000/3001.
+
+The synthetic catalog fixture exercises directory search/status, child parent context, version conflict/retry and dirty close, create/lifecycle impact guards, parent color validation/live preview, movement payloads, four responsive widths and non-admin redirect. Screenshots remain ignored in `packages/e2e/test-results/competition-types-synthetic/`. The live `competition-catalog.spec.ts` has updated locators but remains unrun; persistence, server authorization, native zoom and assistive-technology acceptance are separate gates. No real catalog writes or migration are performed by this workflow.
+
+Validation: 10/10 installed-Edge synthetic cases passed (44.7s), with card/field/button geometry at 320/390/768/1440px. Inspected directory and drawer screenshots. Initial cold-load timeouts were resolved by DOM-content navigation and a 60-second cold-load budget; a fixture was corrected to refresh nested parent relations after mutations. The live DB catalog suite remains unrun.
+
+## Isolated admin KOL campaign verification (26 October 2026)
+
+Run `bun test apps/web/src/components/admin/kol-campaign-input.test.ts apps/web/src/components/admin/tax-rate-input.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`, then `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`. Set `$env:KOL_BROWSER_CHANNEL='msedge'` to use installed Edge; no browser download is needed. The dedicated Vite server uses 3366, mocked API origin 3367, a separate cache, one worker, no reuse/global setup/seed/API server. All auth/session/RPC responses are intercepted; this does not prove real persistence, authorization, OAuth, provider, production, or DB behavior. Do not restart servers or create real campaigns as part of this workflow. In a real uncertain create result, refresh campaigns before deciding to submit again; requests have no idempotency key.
+
+Admin workflow: open Finance > Referral usage > Create KOL campaign. Enter the campaign name and chosen code, expiry/optional activation in WIB, attribution days and flat IDR and/or percentage commission, then Save KOL campaign. Review the immutable saved terms below. This does not create a student friend code. No real campaign was created during verification.
+
+Validation: 3 parser tests / 18 assertions passed; 11 installed-Edge synthetic cases passed (including the 3 existing usage cases). Four responsive cases were rerun with component scroll/client and button-height checks. Native 200% zoom, screen readers and real DB/auth/provider acceptance remain unverified.
+
+## Bounded V3 auth/referral/report regression (25 October 2026)
+
+Source `be14c454`: 58 tests / 160 assertions, plus 3 mocked Edge browser cases
+(43.0 seconds). Bun 1.4.0-canary.1 is local evidence, not pinned CI acceptance.
+Run from the repository root; explicit `./` file paths avoid accidental test
+substring discovery under ignored `tmp/`. The env file satisfies import-time
+configuration; the selected checks use pure functions, doubles or a memory
+adapter, not PostgreSQL acceptance. Do not broaden to integration/reset suites
+without their target-specific preflight.
+
+```powershell
+$regressionFiles = @(
+  './packages/auth/src/index.test.ts'
+  './packages/auth/src/google-callback.test.ts'
+  './apps/server/src/routes/session-response.test.ts'
+  './packages/api/src/tests/unit/referral.friend-code.test.ts'
+  './packages/api/src/tests/unit/referral.friend-code-service.test.ts'
+  './packages/api/src/tests/unit/referral.policy.test.ts'
+  './packages/api/src/tests/unit/referral.pagination.test.ts'
+  './packages/api/src/tests/unit/referral-usage.test.ts'
+  './packages/api/src/tests/unit/kol-settlement.test.ts'
+  './packages/api/src/tests/unit/report-export.access.test.ts'
+  './packages/api/src/tests/unit/report-export.window.test.ts'
+  './packages/api/src/tests/unit/report-export.service.test.ts'
+  './packages/api/src/tests/unit/report-export.pdf.test.ts'
+)
+bun test --timeout 30000 --env-file ./apps/server/.env.test @regressionFiles
+Push-Location packages/e2e
+try {
+  bunx playwright test --config playwright.google-referral-synthetic.config.ts
+} finally {
+  Pop-Location
+}
+```
+
+The browser config owns Vite 3320, mocks API origin 3321, uses installed Edge
+and starts no API/DB/global seed. Keep these ports free; it refuses server reuse.
+PostHog fetch warnings occurred while all three cases passed. Real Google OAuth,
+Redis/PostgreSQL, provider, restore and client UAT gates remain separate.
+
+## Referral session cache correction (24 October 2026)
+
+Live dev submits returned 200 and persisted pending=false, but Better Auth Redis
+sessions retained pending=true even with disableCookieCache. GET get-session
+now refreshes role/email verification/referral pending from DB using the same
+helper as RPC context, preserving auth cookies and marking the response no-store.
+No referral attribution or reward is reapplied; existing saved choices are retained.
+Two focused response tests cover stale pending and anonymous sessions.
+
+## Google referral error feedback (24 October 2026)
+
+Failed Google referral saves show a Selia error toast and retain the inline
+message/input. The existing synthetic browser workflow checks toast visibility.
+RPC and attribution rules remain unchanged.
+
+## Google referral keyboard submission (24 October 2026)
+
+Referral code entry uses native form submission: Enter applies a nonblank code.
+Blank or in-flight submission is ignored; no-code remains an explicit button.
+The existing Google referral synthetic workflow covers Enter and blank input.
+No RPC contract or referral business-rule change.
+
+## Isolated Google referral regression (24 October 2026)
+
+Use `node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.google-referral-synthetic.config.ts`.
+This named synthetic workflow starts only Vite on 3320, mocks all API traffic on
+3321 (no API listener), uses installed Edge, one worker and no DB/global setup.
+Three cases pass: friend, legacy KOL and no-code; each checks invalid rejection,
+pending reload, preserved /faq destination and fresh-session reads despite stale
+cached session data. Removing redirect forwarding makes the no-code case fail.
+
+For `bun test packages/auth/src/google-callback.test.ts packages/auth/src/index.test.ts`,
+set NODE_ENV=test, DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:1/never-connect,
+REDIS_URL=redis://127.0.0.1:1, BETTER_AUTH_URL=http://localhost:3321,
+CORS_ORIGIN=http://localhost:3320 and synthetic 32+ character BETTER_AUTH_SECRET
+and PAYMENT_WEBHOOK_SECRET. The callback test substitutes the memory adapter and
+provider methods; no external provider, mail, Redis or PostgreSQL connection is needed.
+13 tests / 34 assertions pass. Auth/web/e2e serial tsgo checks pass.
+
+Remaining live acceptance: with an authorized fresh Google identity, start from
+a protected safe destination, complete real consent, inspect pending=true in the
+fresh session, reject an invalid code, reload, save an actual friend/KOL/no-code
+choice and verify pending=false plus the original destination. Use separate new
+identities for each choice; verify real attribution/rewards and existing account
+reuse without reopening choice. No such provider/DB acceptance ran here. Already
+created affected accounts are not repaired by this source fix; no backfill authorized.
+
+## Real dev class-to-PDF checkpoint (24 October 2026)
+
+On source `94df801b92b779643068c8f823e107d00c2b02b9`, a bounded live
+HTTP/real PostgreSQL acceptance passed against explicitly validated loopback
+`6767/cogito-app`, using dedicated `journey-1792843607328` fixtures. Verified
+identities/password hashes and a published tutor profile were inserted directly;
+actual Better Auth password login issued sessions for admin/tutor/two students.
+Admin draft/publication, audited admin wallet correction (+100 Marks), student
+masterclass enrollment (20-Mark hold), assigned-tutor report and identical replay,
+student report visibility, and authenticated student/admin PDF download passed.
+Persistence shows one 20-Mark deduction, funded/spent allocation 20/20, report
+version 1, completed session, one Rp300,000 earned-fee event and final wallet
+80 total/available, zero held. No payout or provider settlement was executed.
+Student publication denied 403; student report submission denied 404; outsider
+report list excludes this session; cross-student/tutor PDF denied 403 and anonymous
+PDF denied 401. PDF private/no-store header, signature, all three feedback texts
+and one-page visual rendering passed. No business response was mocked.
+
+Controlled-time boundary: after future publication/enrollment, only the dedicated
+session timestamps were moved to now minus two/one hours. This is not a wall-clock
+session journey. No reset, seed command, migration, API restart, external send,
+payment/Meet call or existing-user balance modification was performed. Browser
+login initially hit 429, then succeeded after the limit window; preview snapshot
+attempts timed out. API acceptance is not full click-through browser acceptance.
+
+Class `87dcbb4c-255b-4626-aa2a-1684884c90b0`; session
+`354e79d8-e245-42b5-994e-183bff3d6856`; enrollment
+`6b5c6934-c01a-48f6-b87d-64b6f13556fb`. Retain fixture financial history for
+inspection; do not delete ledger, allocation, report or earned-fee records. Any
+future financial reversal must use an approved audited correction, never deletion.
+Local evidence/PDF/render remain ignored under this checkout's
+`tmp/dev-journey/`; private login/session files must never be committed or shared.
+Production, real provider delivery, full browser journey and client UAT remain gates.
+
+## KB/calendar local dev activation (24 October 2026)
+
+Owner-authorized local dev cutover completed on localhost:6767/cogito-app.
+Migration 0075 applied after a local custom-format pg_dump; existing 34 bookings
+and 91 ledger entries were unchanged. Imported 3 KB resources and 63 calendar
+events from the preserved published snapshot, with explicit core-category mapping
+to active parent catalog IDs. One empty education-level placeholder was omitted
+from a derived import manifest; original snapshot and normalization evidence remain
+local. All 66 imported identities/hashes reconcile and qualify for unchanged replay;
+all three local private PDFs match SHA-256. No source documents/PDFs are committed.
+
+Local ignored env now uses KB_SOURCE=database, CC_SOURCE=database and
+CONTENT_ADMIN_ENABLED=true. KB_PRIVATE_DIR points to a separate ignored local
+directory outside public uploads. API restarted; health returns 200, anonymous
+protected file access 401 and the corresponding public upload path 404.
+This establishes local storage denial only, not production R2 privacy. Production
+is untouched. Backup restore rehearsal, real client UAT and production cutover
+remain outstanding. Rollback: disable authoring, set both sources to sanity and
+restart API; retain additive tables and imported files for reconciliation.
+
+## KB/calendar integration acceptance (24 October 2026)
+
+Migration 0075 was applied only to guarded localhost:6769/cogito-test.
+Existing booking/ledger counts remained unchanged. Three PostgreSQL cases
+(8 assertions) passed: concurrent version conflict, atomic audit rollback and
+category/imported-record deletion protection. No reset/seed or dev/prod migration,
+content import, provider upload or activation was performed. Sanity remains the
+default and authoring remains disabled. This supersedes earlier test-unrun notes.
+
+The PDF upload RPC alone has a bounded 5 MiB base64-envelope budget, shared
+by declared-length and streamed-body guards; other RPCs retain 1 MiB.
+Private bucket denial, real import reconciliation, redirects, activation/rollback
+and client UAT remain outstanding.
+
+Integrated checks: 34 focused Bun tests / 95 assertions, 3 guarded PostgreSQL
+cases / 8 assertions, 6 Python audit tests, all 4 serial typecheck tasks and
+4 synthetic Edge cases passed. Browser initial cold navigation timed out at
+30 seconds; explicit 60-second-budget rerun passed in 14.8 seconds. Browser
+coverage is mocked UI/wire evidence, not real admin/provider acceptance.
+
+## Approved account email shell (24 October 2026)
+
+Account email branding is shared in `packages/auth/src/auth-email-layout.ts`.
+Edit that shell once to update OTP/welcome/reset header/footer; edit the separate
+builders for body-specific copy. The supplied report banner is copied byte-for-byte
+to `apps/web/public/auth-email-header.png`; deploy that asset with the web app
+before deploying sender code. Auth email headers are attached inline from the
+byte-identical report-export image using a CID, so email delivery does not rely
+on the web asset URL. CORS_ORIGIN must still be the public HTTPS frontend origin
+in production for links. Text/alt content remains readable if images are disabled.
+Run `bun test ./packages/auth/src/verification-email.test.ts ./packages/api/src/tests/unit/reset-password-email.test.ts`.
+No provider send or real Gmail/Outlook rendering is part of these checks.
+
+## Admin referral usage verification (24 October 2026)
+
+No migration is needed. Restart the API after loading the new adminReferral
+listUsage procedure, then open `/admin-referrals` as admin. Filters are literal
+search and choice type; totals cover matching saved choices. KOL settlement
+payments remain on `/admin-kol-commissions`. Do not interpret pending/zero rewards
+as paid or decision commission as cash settlement.
+Focused unit checks: `bun test packages/api/src/tests/unit/referral-usage.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`.
+From packages/e2e: `bunx playwright test --config playwright.admin-referrals.config.ts`.
+This uses Edge, isolated Vite 3300, synthetic session/RPCs and no DB/provider
+setup. Three cases cover filters, paging/details, empty/error/mobile and student
+redirect. A separate read-only dev query verified the real Yopmail signup choice,
+15 welcome Marks, pending friend decision and literal wildcard search; no DB
+write/reset/import/migration is part of that readback.
+
+## Auth form focus regression (24 October 2026)
+
+From `packages/e2e`, run
+`bunx playwright test --config playwright.auth-form-focus.config.ts`.
+This uses installed Microsoft Edge and an isolated Vite on 3300, mocked
+anonymous session responses, and no DB/API/seed/provider setup. Two cases fill
+signup/sign-in, trigger visibilitychange, verify session refetches occurred,
+then assert drafts remain. The pre-fix failure was email becoming empty after
+the pending loader unmounted forms. The dev app receives the UI fix via Vite;
+no DB migration or API restart is required.
+
+## Student report banner and layout QA (24 October 2026)
+
+The report banner source is
+`packages/api/src/modules/report-export/assets/student-report-header.png`.
+Its adjacent JSON stores the exact image bytes as a base64 JSON string for
+bundling, following the existing embedded-font approach. When replacing the PNG,
+regenerate its JSON before build; do not introduce a cwd-dependent runtime read.
+Run `bun test packages/api/src/tests/unit/report-export.pdf.test.ts` for header
+embedding, dense bullets, long metadata, Unicode/legacy and pagination coverage.
+Visual QA should include short, populated, long continuation and mixed reports.
+The reference layout uses narrower feedback text; long reports can use more
+pages. Bullets have a hanging indent and remain separate even in dense lists.
+Empty eligible sets still return 204, without creating a blank PDF.
+
+## KB/calendar activation and rollback (24 October 2026)
+
+Migration `0075_kb_calendar_content` is applied to guarded TEST only. No dev/prod DB
+import/reset/seed, provider upload, production write or runtime activation ran.
+Extracted calendars/KB data, manifests and PDFs MUST remain ignored/local and
+must not be pushed to GitHub. Tooling tests contain synthetic content only.
+
+1. Keep `KB_SOURCE=sanity`, `CC_SOURCE=sanity`, `CONTENT_ADMIN_ENABLED=false`.
+   Back up the exact destination and rehearse restore. Verify the migration
+   journal and regenerate/renumber 0075 if another integration owns that number.
+2. Obtain a guarded DB window and apply the additive migration using the normal
+   runner. This is a separate operator action, never an app-startup side effect.
+3. Configure `KB_PRIVATE_BUCKET` distinct from public `R2_BUCKET`, using existing
+   R2 account credentials; disable r2.dev/custom public domains and prove an
+   anonymous GET cannot read any private PDF. A different bucket name alone is
+   not evidence of privacy. In local development, `KB_PRIVATE_DIR` defaults to
+   `./private-kb`, outside `UPLOAD_DIR`; protect/persist that directory. Production/
+   staging fails private storage use without a private bucket; no local fallback.
+4. Preserve raw published snapshot, assets and 80 text selections in a durable
+   private archive; published-only extraction is not a full history/draft backup.
+   Review the explicit local mapping JSON `{sourceCategoryId: catalogParentId}`.
+   No title/date-based duplicate merge or automatic category-name mapping exists.
+5. From repo root, dry-run with local files:
+   `bun migration/sanity-content/import.ts --manifest <local-prepared.json> --mapping <local-map.json> --assets <local-assets-dir>`.
+   It checks source IDs, dates, links, categories and local PDF size/SHA-256 without
+   loading server env or connecting to DB. It reports only counts/digests.
+6. Only in a separately authorized window, run the same command with server env
+   loaded, `--apply --expect-target <host:port/database> --actor <existing-admin-id>`.
+   Both consumers must still use Sanity and authoring must be disabled. This uploads
+   PDFs privately and inserts per-record transactions/audits. Replay skips identical
+   version-1 source records; edits/different input conflict, never overwrite.
+   Partial failure retains successful records and possible private orphans. Rerun
+   identical inputs after fixing the failure; reconcile changed/edited rows manually.
+   Alternatively enable authoring after migration and manually upload/create in
+   `/knowledge-bank` or `/calendar`; explicitly reconcile old IDs/links before switching if manual
+   creation replaces imported source IDs. Do not combine manual copies and import
+   without resolving identity conflicts.
+7. Reconcile counts, stable IDs, categories, prose selections, links, file bytes/
+   hashes and active states. Test anonymous/unsupported/ineligible denials,
+   eligible student/admin-grant/tutor/admin readbacks, metadata privacy, stale
+   admin saves, replay, WIB boundaries, multi-day agenda and website redirects.
+   PostgreSQL test `kb-calendar.test.ts` requires explicit guarded 6769 window and
+   `KB_DB_TEST_WINDOW=confirmed`; it never resets and was authored but not run here.
+8. Activate KB first (`KB_SOURCE=database`), restart only the owning API, verify;
+   activate CC separately (`CC_SOURCE=database`), verify again. Set
+   `CONTENT_ADMIN_ENABLED=true` only after reconciliation. New tables are not
+   automatically read merely by deploying this commit. DB-mode failures never
+   cause a silent Sanity fallback. Keep Activities on its existing source.
+9. Rollback: pause authoring, reconcile/archive DB changes made after activation,
+   explicitly restore each source flag to `sanity` and restart the owning API.
+   Do not drop destination tables/files or remove migration history. A rollback
+   changes the source and can temporarily hide post-cutover entries; confirm
+   this consequence with the owner before executing it. Rehearse website redirect.
+
+PDF upload uses admin RPC base64 with a 5 MiB decoded cap; ensure deployment proxy
+body limits permit its roughly 7 MiB JSON envelope. Never expose private bucket
+objects through generic `/uploads` serving or signed public upload helpers.
+
+## Earlier read-only extraction checkpoint (before implementation)
+
+From the repository root, run
+`python -m unittest discover -s migration/sanity-content -p test_audit.py`, then
+`python migration/sanity-content/audit.py tmp/v3-content/20261024-123211/sanity-published.json --download-kb`.
+Python 3.12+ standard library is sufficient. The snapshot is ignored/local and
+published-only; drafts/history and durable off-machine backup are not covered.
+The tool writes audit and prepared manifests alongside the unchanged snapshot,
+verifies three PDF hashes/sizes, and makes no DB or source writes. Review the
+80 legacy text selections before import. KB/calendar now require one input per
+field in any language; English title absence is not an import failure. Runtime
+still reads Sanity; no migration, upload, cutover or production action ran.
+
+## Short FRIEND allocation operations (24 October 2026)
+
+This source change needs no schema migration, reset, seed or code rotation.
+Previously shared codes remain valid. `REFERRAL_CODE_EXHAUSTED` (HTTP 409) means
+all 1,000 values under an identity/name prefix are occupied, including KOL codes.
+Do not delete attribution or rotate issued codes to free slots. Support should
+escalate the prefix-capacity decision to the product owner: explicitly authorize
+an alternate identity prefix or a larger format before changing allocation policy.
+A typical new allocation reads occupied values and inserts once; a fully contended
+allocation is bounded by 1,000 insert attempts plus owner rereads. Existing-owner
+requests do not scan the namespace. DB concurrency/provider/browser acceptance
+has not been run for this source slice.
+
+## KOL settlement release/dev sync (24 October 2026)
+
+PR #319 is merged into release at 61031cc9, following sidebar #318 and
+synthetic auth/referral/KOL acceptance #317. Root dev source is synchronized.
+The normal Drizzle postgres-js runner applied additive 0073/0074 only to dev
+localhost:6767/cogito-app; journal count advanced 74 -> 76. Booking (34), ledger
+(90) and completion-feedback (2) counts stayed unchanged; settlement entries
+start empty. No reset, seed or external transfer ran. Production is unchanged.
+
+API was explicitly restarted to load shared module changes; health is HTTP 200
+and unauthenticated /rpc/adminReferral/getKolSettlement returns 401. Web remains
+on localhost:3000, Midtrans uses its existing sandbox config, and scheduler is
+disabled only for the preview process. Logs: tmp/v3-dev/runtime/api-settlement.*.
+
+The extra pre-settlement Docker dump command did not return and was stopped;
+no fresh dump from that attempt is verified. Earlier checkpoint dumps remain
+under ignored tmp/v3-dev/checkpoint. Re-establish a fresh verified backup and
+restore rehearsal before any production rollout. This supersedes earlier
+0073/0074 dev-unapplied notes; live provider/OAuth and client UAT remain open.
+
+## KOL settlement browser acceptance (24 October 2026)
+
+Seven synthetic Chromium settlement cases pass (19.8s): admin opening,
+partial/history/overpayment display, transfer payload and WIB date, identical
+retry payload, adjustment reason/precondition, blocked adjustments, monthly
+CSV download bytes/name and non-admin redirect. Run from packages/e2e:
+`bunx playwright test --config playwright.kol-settlement-synthetic.config.ts`.
+RPC responses are mocked; the separate 21 PostgreSQL cases verify persistence,
+replay/concurrency, rollback, refunds and generated CSV. Five policy/CSV units
+also pass (combined 26 / 227). Full server build and normal four-workspace
+pre-push typechecks/lint pass. The bounded source rereview found no remaining
+findings after the numeric CSV, replay-precondition and timestamp-binding fixes.
+
+## KOL settlement parent verification (24 October 2026)
+
+Review fixes retain numeric negative adjustments in CSV, persist and compare
+adjustment replay preconditions, and bind WIB month boundaries as explicit ISO
+timestamptz values. Migration 0074 adds only expected_obligation_idr; applied
+0073 remains unchanged. Both migrations are applied only to guarded test
+6769/cogito-test (journal 75), without reset/seed. Current acceptance passes
+26 tests / 227 assertions across 21 PostgreSQL cases (including prior PR312
+ordering/refund regressions) and five settlement policy/CSV units. Concurrent
+transfer/replay, stale corrections, audit rollback, refund retention and the
+monthly CSV path and exact half-open WIB purchase boundaries pass. The combined auth/referral/KOL synthetic Chromium suite passes 10/10 after updating the commission-cell locator for settlement controls. Dev/production migration and browser settlement
+acceptance remain pending at this checkpoint.
+
+## KOL settlement source handoff (23 October 2026)
+
+0073_kol_external_settlement is additive (one table, two restrictive FKs, operation
+unique index, decision index and entry-shape check). SQL, snapshot and journal are
+generated/reviewed only; no DB migration, provider, seed/reset or worker ran.
+Generation used ENV_FILE pointing to a nonexistent path and an unused loopback
+port-1 URL; drizzle-kit generate does not connect. Parent must own application
+and verification on the guarded test DB before exposing settlement routes/UI.
+
+Parent: apply 0073 to isolated test 6769/cogito-test, run only the existing guarded
+non-reset `referral-kol-commission.test.ts` acceptance with NODE_ENV=test and no
+reset flags. New cases cover AC-K03, concurrent same/distinct-key transfers,
+conflicting/stale adjustments, cross-decision operation reuse, audit rollback,
+refund after/concurrent with transfer, retained choice/history. Existing PR312
+cases must continue passing. Also verify actual partial-refund reconciliation,
+earlier-provider correction after settled transfers, schema FK/CHECK/unique
+constraints, CSV month-end/backdated transfer and snapshot consistency, and admin
+versus non-admin access in browser/RPC. No parent acceptance is claimed here.
+
+UI: existing admin KOL commission page -> View settlement -> record actual amount,
+WIB date and reference after external transfer. Record signed obligation correction
+only with approved amount and reason; negative reduces liability, positive adds.
+No proration is supplied. On uncertain request, retry same operation; review
+history before starting a new record. Do not edit/delete cash history or offset
+future commissions. Full refund shows zero obligation and retained cash as
+overpayment; partial refund remains flagged even after a manual adjustment.
+Export selects a WIB activity month but reports current lifetime balances;
+sum only summary rows. This is reconciliation, not historical closing/tax reporting.
+
+DB-free checks: 19 focused settlement/referral units / 47 expectations, normal
+check-types (4 tasks; 2 cached), changed-file lint and formatting. Raw API-project
+typecheck includes pre-existing test typing errors;
+use normal project hook checks for the source gate. Browser and DB proof remain
+parent-owned. Earlier transfer-deferred source notes below are historical.
+
+## DB-free referral/KOL browser regression
+
+From `packages/e2e`, run:
+
+```powershell
+bun run test --config=playwright.v3-referral-kol.config.ts
+bun run check-types
+```
+
+The isolated config starts only Vite on 3304, refuses an existing server, and
+uses its own cache/output directory. API origin 3305 is intercepted by synthetic
+session/RPC fixtures; no API process or global setup runs. Do not substitute the
+main Playwright config: its setup can seed retained DB state. Ten Chromium
+cases pass; these cover UI contracts only, not OAuth, DB or provider acceptance.
+Development ports 3000/3001 and the sidebar test port 3302 are untouched.
+
+## Development sync checkpoint (23 October 2026)
+
+Root checkout is synchronized to integrated release source `31774397`. The
+normal dev environment targets `localhost:6767/cogito-app`, API 3001, web 3000
+and Redis 6379. After a custom-format backup under ignored
+`tmp/v3-dev/checkpoint/`, the standard Drizzle postgres-js migrator applied
+0071 and 0072. Journal row count advanced 72 -> 74; booking (34), ledger (90)
+and completion-feedback (2) counts stayed unchanged. No reset or seed ran.
+This supersedes earlier notes saying 0071/0072 were test-only or dev-unapplied;
+production remains unmigrated by this work.
+
+Web and API dev processes are running; web HTML, `/health` and auth session
+read return HTTP 200, and the login page renders. Midtrans retains existing
+sandbox (`test`) configuration. The process-level scheduler is disabled for
+manual preview to avoid automatically processing existing background jobs;
+`.env` is unchanged. Google Meet remains configured; its boot credential probe
+succeeded. Real authenticated feature journeys and actual reminder dispatch
+were not exercised during this sync. Runtime logs are under ignored
+`tmp/v3-dev/runtime/`. Existing accounts/data and client document artifacts
+are preserved. See the integrated checkpoint for feature and acceptance status.
+
+## Reminder SQL cursor precision correction (23 October 2026)
+
+The cursor projection, SQL ordering, and keyset predicates now use the same
+millisecond precision. Computed timestamp projections use Drizzle's timestamp
+decoder, and cursor parameters are explicit ISO timestamptz values. The focused
+suite passes 9 tests / 40 assertions, including database-free Drizzle adapter
+decoding/binding and the 100-failure rotation regression. A guarded PostgreSQL
+case now exercises the production SQL finder against 101 owned rows with
+sub-millisecond timestamps; that DB case remains unrun. No DB, migration, reset,
+seed, browser, or provider operation ran for this correction.
+
+Parent verification also passes all four workspace typecheck tasks uncached in
+34.469 seconds with one checker, serial execution, and a local 1 GiB Go heap
+target. That resource setting is local tooling configuration, not an app limit.
+
+## Booking reminder parent verification (23 October 2026)
+
+At source commit `c328d6ad`, the parent reran the reminder unit suite: 7 tests
+and 27 assertions pass. All four workspace typecheck tasks pass uncached in
+8.002 seconds with serial execution and the repo-pinned single checker.
+The earlier broad type errors were caused by an incomplete local Zod 4.4.3
+package; restoring its missing declarations resolved the errors without source
+changes. PostgreSQL concurrency, actual email delivery, and browser acceptance
+remain unverified. No database, Redis, provider, reset, seed, or migration ran.
+
+## KOL PostgreSQL integration checkpoint (23 October 2026)
+
+Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
+journal 73); development and production remain unmigrated. The standard
+Drizzle postgres-js migrator ran after exact target/readback checks, without
+reset or seed. PostgreSQL acceptance passes 15 tests / 180 assertions for
+concurrent callback ordering, immutable correction audits, partial/full refund
+credit and reversal replay, cumulative refund snapshots, and microsecond admin
+pagination. Two fixture defects found on the first run were repaired: inject
+the production refund repo and use unqualified SET target columns.
+The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
+browser reconciliation display and broader release UAT remain separate gates.
+This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
+
+## KOL first commission source checkpoint (23 October 2026)
+
+The branch contains additive Drizzle migration
+`0072_kol_first_successful_topup_commission`; it has not been applied to any
+database. Do not use `db:push`, reset, seed, or migration commands as part of this
+source checkpoint. Apply it only through the normal reviewed deployment
+migration process after PR integration and the assigned DB acceptance window.
+The migration adds `payment_record.provider_success_at` and authenticated refund
+facts, the KOL decision table, provider-time and refund-reconciliation snapshots,
+payment/refund integrity checks, and an index for the admin cursor order.
+
+Every successful Midtrans notification now triggers an authenticated status API
+lookup; the webhook signature does not cover timestamps. The notification docs
+define `transaction_time` as transaction initiation, and the status API exposes
+no `capture_time`. A card `capture` is still treated as a successful payment and
+credits Marks, but its KOL decision is held at zero as unresolved because the
+exact capture success time cannot be proven. Non-card settlement uses
+authenticated `settlement_time`. Provider/API failure keeps the notification
+retryable. Never substitute webhook or local receipt time.
+
+An authenticated REFUNDED status received before local success reserves the
+first KOL event without a Marks credit. If its original success time is not
+available, the decision stays unresolved at zero and later purchases remain
+held until the provider supplies an authoritative exact time. A later exact
+time re-evaluates ordering with an audit correction. Do not rewrite any settled
+external transfer; transfer settlement, CSV, and settled-transfer reversal
+adjustments remain deferred. The existing one-time wallet Marks reversal for a
+full refund remains in this slice.
+
+Midtrans `refund` and `partial_refund` both normalize to provider status
+`REFUNDED`; the authenticated status API's `transaction_status` distinguishes
+full `refund` from `partial_refund`. Check
+`payment_record.provider_refund_kind` and the KOL admin row's
+`refundReconciliationState` to distinguish an authenticated partial refund. If
+partial-refund status is the first local success evidence, the payment advances
+to `SETTLED` and saved package Marks are credited once. It also writes
+`partial_refund_reconciliation` audit evidence and keeps the KOL decision flagged
+for manual reconciliation. The partial cash refund does not prorate or reverse
+Marks. The status API returns cumulative `refund_amount`; successive snapshots
+update one `refund_record` by transaction event ID with a monotonic maximum, so
+an older response cannot reduce the reported total. See [Midtrans refund
+details](https://docs.midtrans.com/docs/get-status-api-requests#refund-details).
+A calculated commission remains historical; this slice defines no prorated
+amount or automatic cash refund.
+If a later full refund arrives for the same Midtrans transaction ID, it advances
+the payment to REFUNDED and uses the existing one-time wallet reversal. The
+partial-refund manual-reconciliation record remains idempotent by provider
+event ID. The later full-refund transition and wallet reversal use the payment
+state and wallet event key, so they still run once for the shared transaction.
+
+The admin endpoint `adminReferral.listKolCommissions` takes `limit` (1..100,
+default 50) and an optional keyset cursor. Page order is decision creation time
+descending then decision ID descending. Invalid cursor payloads are rejected;
+the admin route remains protected by `adminProcedure`.
+
+Current review-fix focused proof passes 140 tests / 355 expectations across
+the Midtrans provider, payment service, webhook idempotency, and cursor codec
+unit files; `git diff --check` is clean. Provider network calls are mocked and
+the PostgreSQL integration scenarios are not part of this run. The serial
+four-workspace typecheck and normal Lefthook pre-push hook have not been rerun
+for this review-fix delta; the earlier checkpoint results do not validate the
+current diff. Guarded PostgreSQL acceptance is authored but remains pending the
+parent-provided exact test target. Migration 0072 remains unapplied. No database
+migration, reset, seed, or real provider webhook ran in this worktree.
+Transfer settlement, partial-refund proration/accounting, overpayment, CSV,
+settled-transfer corrections, and reversal adjustment workflows remain
+deferred.
+
+## Referral parent PostgreSQL acceptance (22 October 2026)
+
+Migration 0071 was applied using the Drizzle PostgreSQL migration runner after
+checking NODE_ENV=test, exact loopback 6769/cogito-test, absent reset flags and
+current_database(). Six referral tables are present. No dev/production migration,
+reset, seed or provider call ran. The existing isolated test containers were
+started without recreating their volumes.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/referral-completion.test.ts packages/api/src/tests/unit/settlement-transaction.test.ts
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/booking-admin-reports.test.ts
+```
+
+The first command passes 5 tests / 26 assertions: saved signup terms survive a
+15-to-20 Mark revision and no code grants no welcome; a forced real wallet/usage
+deadlock is retried, both completions stay within the cap, exhausted zero-credit
+decisions do not replay in another semester, and promoted participants receive
+no new reward. Retry-unit coverage bounds repeated deadlocks and rejects retries
+for uniqueness errors. The on-demand suite passes 12 / 118, including audited
+solo no-show delivery, one charge/fee/reward, report entitlement and receipt replay.
+Fixtures use run-owned identities and targeted cleanup. Test settings use a
+future effective date and are removed; ordinary current settings are preserved.
+The guarded class enrollment/lifecycle/report suite also passes 44 tests / 354
+assertions (14.32s) with controlled provider adapters. Web and server typechecks
+pass after the review corrections. No development database was migrated.
+Real Google/browser and full client release acceptance remain open.
+
+## AUTH-02 and friend referral handoff (22 October 2026)
+
+The feature source branch contains Google pending-choice resume, email signup
+attribution, friend welcome/completion credits, student referral display, and
+KOL signup campaign validation/snapshots. Parent generated
+`0071_referral_registration_rewards` after 0070 without a database connection.
+Snapshot comparison verifies its predecessor ID, six new tables, and only
+`user.referral_choice_pending` added to prior tables. It is now applied to the
+guarded test target as recorded above; dev/production remain unmigrated. Do not start this schema
+against an unmigrated database or reset/seed a database for unit checks.
+
+Parent reran the focused suite below: 46 tests / 101 expectations pass. Web
+`bun run check-types` and server `bun run check-types` both pass after repairing
+the sidebar icon import, Marks props, referral form schema, session nullability,
+and wallet upsert transaction type. These are source/compiler checks, not
+financial or OAuth integration acceptance.
+
+Focused database-free regression commands:
+
+```powershell
+bun test --timeout 30000 apps/server/src/signup-body.test.ts packages/api/src/tests/unit/referral.policy.test.ts packages/api/src/tests/unit/procedures.test.ts packages/api/src/tests/unit/context.test.ts packages/auth/src/index.test.ts
+bun test --timeout 30000 --test-name-pattern Q06 packages/api/src/tests/unit/booking.service.test.ts
+```
+
+The first command passed 46 tests / 101 expectations; the Q06-filtered booking
+command passed 2 tests / 4 expectations. The run used process-scoped dummy auth,
+database and Redis settings pointing at loopback port 1; no DB or Redis
+connection was made. A broader combined run of the whole booking service file
+observed one unrelated failure at `booking.service.test.ts:9547`: an existing
+payout projection expectation wanted bank account `00456`, while the fixture
+returned null. The referral changes do not touch that payout path. The existing
+guarded signup integration suite resets its local test database in `beforeAll`;
+it was not run in this source slice and must wait for parent migration/application
+and the assigned guarded test window. Do not run it with the source-only referral
+schema.
+
+At the 22 October source milestone, KOL first-IDR-top-up decisions and transfer
+history were still outstanding. The 23 October source checkpoint above now
+records first-purchase commissions and audited late-earlier corrections. Transfer
+settlement, partial/overpayment history, CSV, settled-transfer correction, and
+reversal adjustment remain separate work. Referral choice/code/term snapshots
+remain the attribution source.
+
+## Report PDF parent checks (22 October 2026)
+
+Focused route/access/window/layout/rate-limit checks pass 29 tests / 104
+assertions. Web and server typechecks pass; a full server `bun run build`
+(tsdown) passes with the embedded font. The layout regression rerun after
+preserving ordinary/legacy line breaks passes 4 tests / 8 assertions. Rendered
+normal, dense-bullet and long-metadata samples were visually inspected.
+
+The non-reset test command below passed 1 test / 16 assertions after starting
+the existing isolated PostgreSQL container. Its runtime preflight requires
+`NODE_ENV=test`, exact loopback `6769/cogito-test`, no reset flags and a matching
+database readback. Fixtures are run-owned and removed individually; no reset,
+seed, migration or production/provider call occurred.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/report-export.test.ts
+```
+
+Synthetic Chromium download checks pass 3 journeys (11.7s): student self,
+admin student selection, empty state and tutor UI denial. Auth and API responses
+are mocked, so these complement the PostgreSQL and HTTP authorization tests.
+Run from `packages/e2e`:
+
+```powershell
+bun run test --config=playwright.classes-layout.config.ts --grep 'private report|explicit empty'
+```
+
+The cold first run timed out on initial Vite load; its retry used the warmed
+cache and bounded 60-second navigation budget. A filename expectation was fixed
+to match the UI's dated download name. Final brand approval, deployed/runtime
+and client acceptance remain open.
+
+## E2E strict-mode environment (22 October 2026)
+
+`bun run test:e2e` runs Playwright through Turbo's strict environment filtering.
+`packages/e2e/turbo.json` allowlists the E2E runtime variables for that package;
+keep `WEB_URL` and `WEB_PORT` together. CI's generated `apps/server/.env.test`
+contains `WEB_PORT=3200` but omits `WEB_URL`, so dotenv cannot restore the URL
+if Turbo has filtered it from the parent environment. The resolver must keep
+rejecting non-loopback URLs and URL/port mismatches. `playwright test --list`
+loads the configuration and discovers tests without starting servers or
+running global setup. With the CI loopback environment set, check the same
+Turbo task from the repository root without starting a database or browser:
+
+```powershell
+.\node_modules\.bin\turbo.exe run test --filter=@cogito-app/e2e --env-mode=strict -- --list
+```
+
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker passes `role: "student"` to the search RPC, which
+filters before applying the result limit. Private PDF legacy layout follows the
+current report version's history actor; short legacy feedback keeps line breaks
+and can use labelled continuation pages.
+
+The focused unit run passes 81 tests / 208 assertions. Server and web typechecks
+pass with one checker each:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/admin.repo.test.ts packages/api/src/tests/unit/admin.service.test.ts packages/api/src/tests/unit/admin.handler.test.ts packages/api/src/tests/unit/admin.types.test.ts packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.service.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun run --filter=server check-types --checkers 1
+bun run --filter=web check-types --checkers 1
+```
+
+This continuation did not rerun the parent's PostgreSQL or Chromium checks and
+used no database, browser, migration, reset, seed, or provider. The saved PDF
+sample was left unchanged.
+
+## Windows workspace typecheck memory
+
+Run the workspace check with `bun run check-types`. Package scripts limit
+TypeScript-Go to one checker, and the root Turbo command runs package tasks one
+at a time. The pre-push hook also runs its typecheck and lint baseline in
+sequence. This is the supported Windows memory-pressure path; `NODE_OPTIONS`
+does not set TypeScript-Go's Go checker count. The current workspace check
+passed 4/4 tasks in 12.832 seconds.
+
+## Classes UI acceptance (22 October 2026)
+
+Run the synthetic, database-free UI suite from `packages/e2e`:
+
+```powershell
+bun run test --config=playwright.classes-layout.config.ts
+```
+
+It starts only web 3300 with synthetic session/RPC responses; no API, seed or
+provider runs. The test Vite config allows linked package/font assets and uses a
+separate cache. Eleven Chromium cases pass: catalog/filter/enrollment and admin
+draft/management at 320/390/768/1440px, plus student/tutor/admin mobile reports.
+The 768px student case uses dark mode. Geometry assertions check page overflow;
+mobile report selection checks focus and visibility. Real enrollment, publish and
+cancellation E2E helpers now open the new tabs/accordion; their full DB-backed
+journeys were not rerun for this presentation-only change.
+
+Manual check: browse/search classes, open details, review enrollment; in Class
+studio switch Drafts & editor, change a draft, switch tabs and return without
+losing edits. Open Manage class to review the existing audited lifecycle controls.
+In reports, select a session on mobile and verify its report comes into view.
+
+## On-demand report acceptance (22 October 2026)
+
+PR #305 is verified against current V3, including the sidebar/profile repairs.
+The guarded PostgreSQL suite passes 11 tests / 106 assertions; feedback/service
+units pass 31 / 112. The real-RPC Chromium journey passes (1 test, 52.3s): initial
+admin report, version-2 correction, immutable history and no second settlement.
+Fixtures accept text authentication IDs, verify the run-owned student and exact
+synthetic booking, choose an unoccupied tutor slot, and preserve unrelated holds.
+
+Migration 0070 is applied through the normal runner to test 6769/cogito-test
+(journal 71) and development 6767/cogito-app (journal 91). SQL SHA-256:
+`eacfa97b013f23fa2e74be6d6d8e410b2b9c0f354b1d9ae6bb121370f40fc0f4`.
+A local pre-migration dump is retained under ignored
+`tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
+ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
+reset/seed, production migration, or live provider action ran. Test history is
+retained under run-scoped identities. PDF source and local evidence are recorded
+below; parent DB/browser/deployment acceptance and broader legacy reminders remain open.
+This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## Private report PDF source and local evidence (22 October 2026)
+
+The isolated source adds `/reports/student/summary` and `/reports/student/pdf`.
+Student requests resolve to the authenticated student; admins must choose a
+student from the existing search; tutors are denied. The summary is metadata
+only and the PDF response is private/no-store. The report query uses a read-only
+repeatable-read snapshot, Q06 private-booking entitlement, the charged funded
+class allocation, and WIB calendar-month boundaries. The header uses the
+authorized placeholder while branding assets are unavailable.
+
+Focused source checks run from the worktree root:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun test --timeout 30000 apps/server/src/rpc-rate-limit.test.ts
+```
+
+The export suite passes 9 tests / 31 expectations, the rate-limit routing suite
+passes 18 / 67, and the combined focused run passes 27 / 98. A seven-page
+fictional-data PDF at `output/pdf/report-export-sample.pdf` was rendered with
+`pdftoppm` and inspected page-by-page. The sample covers solo, group, series,
+cohort and masterclass metadata, a one-page 3 × 600-character feedback report,
+and long Unicode/newline
+legacy text across continuation pages. These are local source-slice results;
+the focused `bun build packages/api/src/modules/report-export/report-export.pdf.ts
+--target=bun --outdir tmp/pdfs/bundle-check` check emitted one 3.16 MB JavaScript
+entry containing the 1,008,096-byte font and no separate JSON/font asset. This
+does not replace the focused `tsdown` PDF-module bundle check below, which
+emitted one 3.28 MB JavaScript entry with the complete 1,008,096-character font
+embedded (tsdown 0.22.14, Rolldown 1.2.3):
+
+```powershell
+bunx tsdown packages/api/src/modules/report-export/report-export.pdf.ts --no-config --out-dir tmp/pdfs/tsdown-font-check --format esm --no-minify
+```
+
+The full server tsdown/Docker build remains parent-owned. The parent also owns
+guarded database/entitlement coverage, authenticated student/admin browser
+flows, and full web/API/server typechecks. No database, browser, migration,
+reset, seed or provider call was run for the PDF slice.
+
+## Ongoing experience smoke check (22 October 2026)
+
+In tutor profile Experiences, verify Start year and End year align. Checking
+"I currently work in this role" clears and disables End year while leaving the
+control in place. Uncheck to enable it with the current/start-year default.
+Existing ongoing entries start checked. The focused synthetic browser test
+checks toggling, retained geometry, existing null values and mobile rendering;
+it performs no database writes. No environment or migration changes apply.
+At desktop and mobile widths, also verify the Education, Achievements &
+Experiences info button stays beside the title when the text wraps; the
+focused synthetic browser check asserts their relative geometry.
+
+## Compact tutor status acceptance (22 October 2026)
+
+Check `/profile` at desktop and mobile widths: one badge appears beside the
+heading, with no Profile status card. Published/no-pending-edit profiles show
+no notice. Pending edits explain that the profile is live while edits await
+review; requested revisions preserve admin feedback. Draft, pending review,
+approved/unpublished and suspended profiles keep their next-step guidance.
+`tutor-profile-render.spec.ts` covers these states with synthetic session/RPC
+responses and no database writes. No environment changes are required.
+
+## Tutor profile render check (22 October 2026)
+
+`tutor-profile-render.spec.ts` mocks session/RPC responses and performs no DB
+writes. It checks `/profile` renders tax guidance and legal-name inputs without
+browser errors. The focused local Chromium run against web 3000 passed after
+replacing the standalone tax introduction's `FieldDescription` with `Text`.
+For manual acceptance, sign in as a tutor and reload `/profile`; verify the tax
+section renders. Saving profile changes and real-account acceptance were not
+exercised by this synthetic rendering check.
+
+## Local development restarted (22 October 2026)
+
+Docker Desktop and the existing development Postgres/Redis containers are running.
+Web `http://localhost:3000/login` returns 200; API `http://localhost:3001/health`
+returns 200 with database, Redis, scheduler and DLQ checks all `ok`.
+The API runs `bun --smol --env-file=apps/server/.env tmp/v3-dev/start-local-safe.ts`
+from the repository root, using retained `6767/cogito-app` data, stub payments,
+stub email and disabled Google Calendar. No migration, reset or seed was run.
+Runtime logs are in `tmp/v3-dev/ui-dev-api.out.log` and `ui-dev-api.err.log`.
+The earlier offline blocker is resolved; authenticated UI route acceptance is
+still pending and is separate from this startup health check.
+
+## UI control and table verification (22 October 2026)
+
+Spacing regression: on `/admin-economy`, measure from the lower of the take and
+preview Cards to the V3 rate card. It should be the normal 24px Stack gap, at
+both mobile and desktop widths, not the 128–250px blank region seen with Card-root
+inline-size containment. Confirm icon-header actions still use column 3 on wide
+headers and wrap below the title on narrow headers. The E2E economy spec includes
+this rendered-gap assertion.
+
+Tax form follow-up: defaults and custom tutor rates use percentages, not bps.
+Verify default 250 displays as 2.5, 300 as 3; typing 2.55 should show Rp10,200
+tax on Rp400,000. Save payloads retain 255 basis points. Empty override restores
+the default. Browser typing/stepping and the conversion regression passed without
+saving a configuration; the temporary audit account was removed afterward.
+
+Authenticated follow-up completed the admin route smoke checks at 390/1440px and
+the student route smoke checks at 390px (balance also at 1440px). Academy's
+user-reported rate clipping was reproduced with 0px available numeric text width,
+then repaired and checked at 390/1024/1440px. Check all three 20/22/25 rate values,
+not only the overall page scroll width. Temporary audit accounts were removed.
+See the UI audit plan for the exact route/state coverage and remaining write flows.
+
+Run package checks directly to avoid unrelated workspace builds:
+
+```powershell
+bun run --cwd packages/ui check-types
+bun run --cwd apps/web check-types
+bun run --cwd packages/e2e check-types
+bun --smol test apps/web/src/lib/calendar-ui.test.tsx apps/web/src/components/booking/minute-time-input.test.ts apps/web/src/components/admin/academy-class-page-utils.test.ts
+```
+
+Verify Academy schedules/minimum checks, lifecycle replacement times, payout
+amount/time/tax fields, V3 economy cells, competition order and custom Marks.
+Check empty, min/max, read-only and disabled states. On narrow Cards, header
+actions should wrap beneath the title. Wide tables must scroll inside the Card;
+filters and pagination must not overlap rows. Confirm October displays as October
+before opening the calendar month dropdown. Use 320/390/768/1440px widths.
+
+This audit passed the three package typechecks and 7 focused tests / 13 assertions.
+A temporary browser fixture passed control and layout smoke checks; it was removed
+after verification. Authenticated routes/DB-backed Academy publish were not run:
+API 3001 and DB 6767 were not listening during the initial pass. The authenticated
+follow-up above supersedes that offline blocker. Do not treat component smoke evidence as
+full route acceptance. No migration, reset, seed or external provider call is
+needed for these UI changes. Full coverage is in the UI audit plan.
+
+## Local runtime checkpoint (22 October)
+
+The integrated reminder source and combined regression are on local
+`f/release-v3` through `e5a7ec41`: 44 PostgreSQL cases / 354 expectations and
+7 reminder units / 25 expectations passed. The session-owned API was restarted
+on port 3001 using the ignored local helper `tmp/v3-dev/start-local-safe.ts`.
+It retains the existing loopback `6767/cogito-app` database and overrides only
+this process to stub email/payments and disable Google Calendar. The saved
+server env file is unchanged; its normal launch still uses its configured
+providers. `/health` reports database, Redis and scheduler healthy. No migration
+or development seed was needed for reminders.
+
+The additional post-reminder full web typecheck was deliberately stopped when
+C: free space reached approximately 136 MiB. It has no passing result; the
+previous T06 web typecheck does not verify the later notification UI changes.
+Keep subsequent work bounded and avoid installs/browser downloads while storage
+is constrained. On-demand report source remains isolated; migration 0070 is unapplied and guarded DB/Chromium acceptance is pending.
+
+## On-demand booking report source verification (2026-10-22)
+
+The isolated source worktree has migration
+`0070_on_demand_report_admin_audit.sql` after 0069. Its SQL SHA-256 remains
+`EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`; do not
+apply it until the parent has reviewed the SQL and confirmed the exact guarded
+test target. It is unapplied here. Pure feedback validation passed 12 tests / 33
+expectations, focused admin-service validation passed 4 / 21, and completeSession mock regressions passed 15 / 58 (exit 0 each). Cached
+oxfmt passed; cached oxlint exited 0 with warnings. The guarded Postgres cases
+and solo Chromium journey are authored but were not run; no database write,
+migration, browser, full typecheck, or provider call occurred in this slice.
+
+After parent review/application of 0070 to loopback `6769/cogito-test` through
+the normal migration runner with no reset flags, keep the current directory at
+the worktree root and run the guarded service suite there. The database helper
+requires `NODE_ENV=test`, that exact target, and no reset override variables:
+
+```powershell
+bun test packages/api/src/tests/integration/booking-admin-reports.test.ts
+```
+
+For the authored solo admin-browser journey, keep the shell at the worktree root
+and use the isolated T05 ports with one worker:
+
+```powershell
+$env:T07_ON_DEMAND_BOOKING_REPORTS_E2E = "1"
+$env:T05_ENROLLMENT_TEST_DB_PORT = "6769"
+$env:T05_ENROLLMENT_TEST_REDIS_PORT = "6381"
+$env:T05_ENROLLMENT_TEST_SERVER_PORT = "3201"
+$env:T05_ENROLLMENT_TEST_WEB_PORT = "3200"
+$e2eWorktreePath = Join-Path (Get-Location) "packages/e2e"
+bun --cwd $e2eWorktreePath run test src/specs/booking-admin-reports.spec.ts --config=playwright.booking-admin-reports.config.ts --workers=1
+```
+
+These commands are for the parent validation window only. Do not add reset flags.
+The source integration fixture deletes only its own UUID-owned bookings/users;
+the browser fixture advances and cleans up only its run-owned booking. The
+browser journey covers solo; the authored guarded Postgres suite covers solo,
+group, series, corrections, request-key races, and Q06 chargeable no-show reads.
+
+History follows existing FK retention: its feedback and booking references
+cascade; the current feedback's session reference also cascades. `history.session_id`
+is text, so it does not retain history after booking/current-feedback hard
+deletion. No current application hard-delete path was found; this records the
+existing schema behavior and does not add a new release gate.
+
+## T06 parent integration and local verification (2026-10-21)
+
+T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
+unchanged. After restarting Docker, the parent applied additive migration 0069
+to guarded loopback `6769/cogito-test` with the normal migration runner and no
+reset flags. The non-reset enrollment/lifecycle/report suite passed 41 tests /
+319 expectations (exit 0), including payment-first and cancellation-first lock
+orders, stale-lease requeue, and durable generation recovery after event deletion.
+A second run from the integrated root checkout also passed 41 / 319 in 12.68s.
+
+Development `6767/cogito-app` is migrated through 0069 using the normal runner:
+journal id 90, timestamp `1792593114908`, SQL SHA-256
+`a6a442562692e34cea132cbd4bb20de6561906fb45ad9441add19dbf8b8c2617`.
+Migration 0068 is journal id 89, timestamp `1792584327849`, hash
+`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`.
+Dev ledger count 89 and booking count 34 were unchanged across migration; no dev
+reset or seed ran. Root workspace dependency junctions were repaired to resolve
+root packages rather than a saved feature worktree, then local API/web restarted.
+API port 3001 health reports database/Redis/scheduler healthy; web port 3000
+returns 200. These checks do not exercise live Google Calendar or payments.
+
+Browser acceptance: the integrated enrollment and whole-class cancellation
+journeys passed in the two-case run. The new lifecycle journey initially found
+missing admin storage state, then an ambiguous text locator; it now signs in
+using the per-run credentials and matches the postponed badge exactly. Its
+focused rerun passed (1 Chromium test, 32.4s; exit 0), covering session
+cancellation, one-time postponement and exact fee-free withdrawal. Integrated
+root web and E2E typechecks passed (exit 0). Focused provider 52/196,
+cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
+exposed a duplicate class-card React key during list refresh. The admin page now
+keeps the highest-version row per class ID across its published/postponed query
+snapshots. Its focused helper regression passes 2 tests / 4 expectations in the
+implementation worktree. Parent integrated `ede98094`; the root regression
+passes 2 / 4 and lifecycle Chromium passes (35.1s, exit 0), with zero
+duplicate-key warnings in the captured server/browser logs.
+Ordinary rescheduling policy, broader V3 acceptance and previously recorded
+API/web full-compiler limitations remain open.
+
+## Test database reset incident and current guard (2026-10-21)
+
+At about 13:17:59 UTC, `academy-class.test.ts` called the API helper's
+`resetDatabase()` with loopback `cogito-test` on port 6767. The helper truncated
+its broad table list with `CASCADE`, then fixture setup failed because
+`tax_legal_name` was missing. The separate development database `cogito-app`
+on 6767 was read back intact and was not truncated. No test-data recovery,
+restore or reseed has been verified.
+
+API integration helpers now reject reset on 6767 and 6768 unconditionally.
+The only resettable pairs are exact local `cogito-test:6769` and
+`cogito-test-payout:6770`, and each needs both `TEST_DATABASE_ALLOW_RESET=true`
+and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. Developer
+environments and examples remain opt-out. GitHub Actions grants reset consent
+only to reset-based tests on that run's disposable 6769 service and to the
+dedicated payout test command on its separate disposable 6770 service. The
+three report fixture suites that assert reset overrides are absent run separately
+on 6769 with both variables unset. Bun writes its LCOV report to the configured
+`coverage/lcov.info`; CI clears that file before each coverage partition and
+snapshots its fresh, non-empty output under `coverage/api-*` before the next
+process runs. Integration files that call the shared `resetDatabase()` helper
+run in a dedicated `--parallel=1` partition so one file's truncate cannot erase
+another file's fixtures; the remaining API, unit, and fixture partitions retain
+parallel execution. Guarded manual acceptance suites that reject reset flags
+stay outside this coverage run. The reset helper snapshots and restores the
+seed-owned competition taxonomy around `TRUNCATE ... CASCADE`. CI writes its
+LCOV output to the configured path because Bun does not produce the custom
+`--coverage-dir` paths here. The four raw profiles are merged before the
+existing gate. The test job has a 30-minute timeout because the serialized reset
+suite plus the remaining partitions exceeded the previous 20-minute limit. The
+merge rejects missing, empty, or recordless LCOV profiles. For Bun profiles that
+include `FNF`/`FNH` but omit function identities, the merger preserves maximum
+summary counts and the exact named-function union, then writes a sidecar identifying sources whose function
+identity is incomplete. The PR comment labels these counts as lower bounds and
+the 100% gate fails if unidentified functions remain uncovered; configured
+thresholds are unchanged. `.github/scripts/merge-lcov.test.ts` covers overlapping
+summary-only profiles, mixed named/summary profiles, raw-profile preservation,
+and invalid or incomplete details. The payout schema is migrated through a
+separate `apps/server/.env.test-payout` file. `test-setup.ts` has no database URL fallback; provide a target
+explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures
+were not reset in this task. The non-reset T05 per-run E2E identity path remains
+unchanged. A source scan found 69 API test files calling the shared helper;
+their call sites are unchanged, but old 6767/6768 env files now fail closed
+before the helper issues SQL. The pure guard suite passed 6 tests / 40
+expectations; no DB-backed verification was run.
+
+## Earlier T06 worker checkpoint (superseded by parent verification above)
+
+At the earlier worker handoff, `t3/finish-v3-t06` continued `f/release-v3`
+from `dc1da96a` and was not yet integrated. It implements preview/confirm for cancelling
+one future scheduled class session with a required reason, stable request UUID,
+exact quote hash and class/session version checks. Cancellation returns only the
+target session's unspent funded Marks with a zero fee, adjusts/cancels the
+affected unpaid installment, and preserves original enrollment prices/session
+history, delivered holds, reports and earned fees. Audit and student/tutor
+notifications commit with the transaction; the meeting worker retries calendar
+cleanup.
+
+The minimum check runs once from the saved check date and counts unique active
+paid full/half-plan students with funded scheduled allocations. Single-session
+buyers, expired checkouts, cancelled enrollments and plans with a defaulted
+installment do not count. Admin may continue or postpone once. Every replacement
+session must start strictly after the authoritative 72-hour free-exit deadline;
+session identity, order, duration, funding and rates remain unchanged. Tutor and
+managed-room conflicts are checked. Pending installment due dates and reminder
+markers follow the replacement schedule. Students can still see the postponed
+cohort and their own enrollment, while `createEnrollment` rejects new
+enrollments. Whole-enrollment withdrawal is fee-free through the inclusive
+deadline. Ordinary schedule changes separately carry 24 hours from notification for the affected undelivered session, refunded as Marks; whether replacement can start before that window ends remains open. This implementation does not perform ordinary rescheduling.
+
+The existing meeting worker updates a class event using its stored Google event
+ID, preserves event metadata, and retries transient provider errors such as 503.
+If the saved event is deleted/tombstoned (404/410), a durable
+`creationGeneration` advances before the next insert; an
+accepted-but-response-lost attempt retries with the same generation key. A late
+provider write after lease recovery leaves the latest schedule queued while
+retaining a newer active lease and cancellation work. Additive migration
+`0069_academy_class_meeting_creation_generation.sql` adds an integer defaulting
+to 1 with a positive constraint. SQL SHA-256:
+`A6A442562692E34CEA132CBD4BB20DE6561906FB45AD9441ADD19DBF8B8C2617`.
+
+This continuation ran `bun --smol test
+packages/api/src/tests/unit/google-meeting.provider.test.ts` (52 passed / 196
+expectations), `.../class-enrollment.cancellation.test.ts` (8 / 16), and
+`.../test-client.safety.test.ts` (6 / 40). Cached oxfmt 0.65.0 `--check` passed
+on changed code/JSON files, and cached oxlint 1.80.0 exited 0 with warnings. The
+integration file was inspected: it requires `NODE_ENV=test`, loopback
+`6769/cogito-test`, no reset flags, and afterAll deletes only UUID-owned fixture
+rows; it contains no `resetDatabase()` or `TRUNCATE` path.
+
+The exact-target env preflight passed, but `6769` refused a read-only database
+connection and Docker Desktop's daemon was unavailable. Therefore the non-reset
+`class-enrollment.test.ts` suite, 0069 migration application, and migration
+journal readback were not run. No database write, migration command, reset,
+seed, Calendar/API provider traffic, email or payment call ran in this
+continuation. Migration 0069 remains unapplied by this work; the earlier 0068
+test readback is preserved as historical evidence, not reverified. A prior T06
+checkpoint recorded 35 Postgres tests / 252 expectations and one Chromium
+journey; those checks were not rerun against the latest provider/enrollment WIP.
+Package-wide API typechecking and the full web compiler remain unverified due
+the previously recorded baseline diagnostics/Windows memory limits. Parent
+review/dev integration and full Release V3 acceptance remain pending.
+
+## T06 class Calendar retry continuation (21 October)
+
+The provider and worker changes in this continuation are the calendar
+implementation above. Focused provider tests now pass; live Calendar behavior
+has not been exercised. Preserve migration 0068 unchanged and apply only
+additive 0069 to the exact approved test target after the DB is available and
+the migration journal confirms the expected predecessor. Never run reset-based
+suites for this work. The failure to connect to loopback `6769/cogito-test` is
+the active validation blocker; restore the existing test database service, then
+rerun the guarded suite and verify database identity plus migration journal
+readback. No dev database action is authorized in this continuation.
+
+## Prior T07 UI and browser acceptance checkpoint (21 October)
+
+The role-based `/class-reports` page uses real `classes.listSessionReports` and
+`classes.submitSessionReport` RPCs. Tutor/admin rows include a settlement preview
+or persisted readback; student rows carry `settlement: null` and no peer identity.
+The shared page supports versioned admin edits with a required reason, while a
+dedicated on-demand admin correction workflow, PDF export, and repeated reminders
+remain pending. Stale-version conflicts preserve the user's draft.
+
+Validation used the guarded loopback test targets only: Postgres `cogito-test`
+6769, Redis 6381, API 3201 and web 3200. The class-report Chromium journey passed
+1 test in 52.7s with tutor submission, admin correction, student read/privacy,
+settlement, replay/edit behavior and a stale-version conflict. The existing class
+enrollment spec passed 2 Chromium tests twice (42.6s and 41.5s); the fresh T05
+student ID differed between runs. Web and E2E no-emit typechecks passed with
+reduced Go memory settings. Saved parent-run report evidence remains 29 focused
+class-enrollment/report tests / 203 assertions, one reset-fixture test / 7
+assertions, and 2 pure report-settlement cases; those database suites were not
+rerun in this UI recovery.
+
+The runs used one Playwright worker and the cached Playwright 1.62.1 CLI through
+Bun. T07 role sessions were authenticated sequentially before Chromium launch
+with real Better Auth and reused via storage state; no auth or RPC behavior was
+mocked. Providers were stubs/fakes only; no email, payment, Calendar, or other
+external provider was called. A final read-only query matched migration 0067
+journal row 68, timestamp `1792572957418`, and SQL hash
+`0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. Its
+lineage/hash remains unchanged and test-only on 6769. No development migration or
+development DB reset/seed ran; guarded test runs used their per-run synthetic
+fixtures. The parent retains ownership of the development migration. Logs are in the ignored
+`tmp/v3-dev/t07-recovery-*` files.
+
+## T07 report and payout checkpoint (21 October)
+
+Migration `0067_class-session-reports.sql` was reviewed against snapshot
+0066 and applied with the standard Drizzle migration runner only to the guarded
+loopback `cogito-test` database on port 6769. Readback shows migration journal
+row 68, timestamp `1792572957418`, SQL hash
+`0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`, and both
+report tables present. The focused class-report integration group passed 6 tests
+and 53 assertions; report, revision, and class-fee row counts were zero after
+fixture cleanup. Two pure report-settlement unit cases, direct formatting, and
+focused oxlint passed. The run used provider fakes only and did not reset or seed
+the database. No development migration, browser run, or broad typecheck was run;
+the parent owns those checks and the development migration decision.
+
+## T07 pending-report reminders (21 October)
+
+### Parent integration verification (22 October)
+
+The reminder worker is integrated into local `f/release-v3` at `1f9b6dd7`; the
+existing production job remains global. From the repository root, the guarded
+PostgreSQL `class-enrollment.test.ts` suite passed 44 tests / 354 expectations
+(exit 0, 9.62s), and the pure report-reminder suite passed 7 tests / 25
+expectations (exit 0, 0.15s). Reproduce sequentially from the repository root:
+
+```sh
+bun --smol --env-file=tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/class-enrollment.test.ts
+bun --smol test --timeout 30000 packages/api/src/tests/unit/class-enrollment.report-reminders.test.ts
+```
+
+The installment assertions require the exact
+fixture-owned 7-day and 1-day event keys, recipient and enrollment; replay queues
+no additional installment notice, and a late join receives only its 1-day
+notice. The guard verified `NODE_ENV=test`, exact loopback `6769/cogito-test`, no
+URL query/hash, both reset overrides absent, and `SELECT current_database()`
+before fixture writes. Cleanup deletes only owned UUID fixtures. No reset,
+truncate, development seed or migration ran; no live email, browser or external
+provider ran. Focused oxfmt 0.65.0 `--check` and oxlint 1.80.0 exited 0 on the
+changed integration test; lint reported only existing file warnings. The full
+check was not a typecheck or browser acceptance run. PDF export, dedicated
+At this 22 October checkpoint, dedicated on-demand admin correction and legacy
+reminder coverage remained pending; see the 23 October continuation below.
+Logs: `tmp/v3-dev/t07-reminders-integrated-db-final.log` and
+`tmp/v3-dev/t07-reminders-pure-final.log`.
+
+### Initial isolated implementation checkpoint
+
+In this isolated T07 worktree, the existing `class-enrollment-check` scheduler
+runs every minute and now queues
+at most 100 pending report reminders per pass for ended scheduled sessions in
+published/postponed cohorts and masterclasses, plus retained past scheduled
+sessions on cancelled classes. The first reminder is due at the session `endAt`;
+later reminders are due once per 24 elapsed hours. A late or restarted scheduler
+emits only the current due period, not missed daily copies. Cancelled or completed
+sessions, completed classes and sessions with a report are ineligible.
+The key `academy-class-session:{sessionId}:missing-report:day:{period}` is
+deduplicated by the existing unique notification event-key index. The existing
+notification dispatch job sends the paired email from its durable outbox and
+retries dispatch failures. Notifications go only to the assigned tutor and link
+to the authenticated `/class-reports` workspace; no student identity is included.
+
+The worker locks and rechecks the class/session before writing. A new report,
+session cancellation, completion, or stale schedule/tutor candidate suppresses a
+stale write; parent class cancellation preserves reminder eligibility for a past
+session that remains scheduled. It does not mutate reports, session state, holds,
+or tutor fees, and does not interpret a no-show expiry as delivery. No migration
+or new environment variable is required. Observe `class_report_reminder_failed` and the
+`class_enrollment_due_jobs_complete` `reportRemindersQueued`/
+`reportRemindersFailed` fields; email sends still appear under the existing
+notification dispatch logs. At this class-only checkpoint, legacy
+solo/group/series reminder coverage remained pending; the 23 October section
+below records its implementation and current verification state.
+
+The focused fake-clock suite passed 7 tests / 25 expectations. Guarded PostgreSQL
+tests passed 3 / 34 on exact loopback `6769/cogito-test`; the integration test
+refuses URL query/hash, requires both reset override variables to be absent, and
+checks `SELECT current_database()` before fixture writes. It creates and cleans
+only its own UUID fixtures and never calls `resetDatabase()` or truncates tables.
+The database cases verify the ISO-serialized timestamp query, concurrent/replay
+dedupe with one queued outbox row per period, current/next-day/catch-up periods,
+report and class-cancellation races, cancelled/completed exclusions, notification
+failure rollback/retry, and unchanged wallet/allocation/ledger/fee/report/session
+facts. No live email, browser, payment or Calendar provider was used. The initial isolated source slice did not include a broad typecheck or browser
+acceptance.
+
+Initial isolated source checks used cached oxfmt 0.65.0 `--check` on six source
+files and focused oxlint 1.80.0 (exit 0; existing non-fatal loop/scoping
+warnings). No broad typecheck or browser run was performed for that bounded
+source slice.
+
+PDF report export, the dedicated on-demand admin correction workflow and overall
+release acceptance remain pending T07 work. Legacy on-demand reminder coverage
+is recorded in the 23 October continuation below.
+
+## T07 legacy on-demand missing-report reminders (23 October)
+
+The existing `class-enrollment-check` scheduler invokes the legacy booking worker
+after the class-enrollment due jobs. It scans at most 100 ended solo/group
+bookings or series children per pass. Whole-booking/session cancel, completed
+and no-show states are excluded; participant-level group/series no-show does
+not by itself prove that no delivery occurred. A stable current-period event key
+and the existing notification email outbox keep each tutor notification
+idempotent. The first reminder is due at the scheduled end, then every 24 elapsed
+hours; a delayed scheduler queues only the current period.
+
+Before enqueue, the worker locks the booking and series child in completion lock
+order and rechecks tutor ownership, scheduled state, exact schedule, matching
+report absence and event key in the notification transaction. The message directs
+the tutor to submit a report only if the session was delivered. The worker does
+not write report, delivery, settlement, wallet, allocation or fee state, and it
+needs no schema migration or environment variable. The job result adds
+`bookingReportRemindersQueued` and `bookingReportRemindersFailed` counters; per-
+candidate failures log `booking_report_reminder_failed`.
+
+Elapsed periods and exact schedule fingerprints use the full stored PostgreSQL
+timestamp precision; millisecond normalization is limited to keyset
+pagination. The initial focused pure suite passed 7 tests / 27 expectations and
+its fairness follow-up passed 8 / 33; the current suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. Normal pre-push lint and
+serial typecheck passed on the current reminder head; typecheck was 4/4 tasks
+in 14.961s (2 cached). Parent's guarded non-reset PostgreSQL suite then passed
+3 tests / 32 expectations at 127.0.0.1:6769/cogito-test against the
+production finder and locked writer. No migration, reset, seed, or provider
+call ran. Browser acceptance and actual email delivery remain unverified.
+
+The worker rotates through a stable keyset cursor after each candidate, including
+failed writes, and wraps to retry older due items once it reaches the end. The
+cursor is process-local and resets to the oldest due item on restart; event-key
+dedupe and email outbox rows remain persistent. No retry state migration is
+required. `packages/api/src/tests/integration/booking.report-reminders.test.ts`
+adds guarded non-reset coverage for report/state rechecks, duplicate jobs and
+notification/outbox identity. Later regressions exercise the production SQL
+finder and locked writer at microsecond boundaries, including 101-row cursor
+progress, single and series-child day boundaries, due-at-end, and same-
+millisecond reschedule rejection. Parent ran the guarded tests only against
+loopback 127.0.0.1:6769/cogito-test with reset overrides absent; all 3 tests /
+32 expectations passed. The test-only epoch formatter now matches PostgreSQL's
+six-digit fractional precision, and year-0100 fixtures avoid Bun's year-0001
+date parsing quirk. The current focused
+unit suite passes 10 tests / 44 expectations. Parent's serial workspace check
+passed at `b0b80bec`; the current normal pre-push typecheck passed 4/4 tasks in
+14.961s (2 cached). Guarded DB acceptance is complete; browser acceptance and
+actual email delivery remain pending.
+
+## Prior local integration checkpoint (21 October)
+
+f/release-v3 includes admin cancellation
+446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
+0066 applied through the standard runner to guarded loopback cogito-app/6767.
+Dev readback: journal id 87, timestamp 1792559482042, hash
+70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
+The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
+or live-provider test ran. At this baseline checkpoint T07 class reports/completion/settlement was next; lifecycle
+follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
+
+Admin class cancellation migration 0066 was generated from snapshot 0065;
+only public.academy_class_meeting changes (terminal cancelled status check).
+SQL SHA-256: 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd;
+journal timestamp 1792559482042. It is applied only to the verified disposable
+T05 DB on 6769. Dev still has 0065 until final integration. No old migration
+SQL/snapshot was rewritten and no database was reset for this change.
+The normal class meeting scheduler also retries deletion after cancellation;
+restore Google credentials/configuration to clear failed deletes. Manual fallback
+refuses to claim a known provider event deleted while Google is unavailable.
+Creation and cancellation provider operations remain outside database transactions;
+financial cancellation and notifications commit independently from provider retry.
+Verification currently passes 22 Postgres cases / 140 assertions and 46 Google
+provider fake tests / 148 assertions, including in-flight and expired-lease creates.
+Web and E2E typechecks pass; two Chromium real-RPC journeys pass in 59.2s. No real Calendar or
+email provider was contacted by these tests.
+
+Cancellation browser command from packages/e2e: with the guarded T05 ENV_FILE,
+run `bun run test src/specs/class-enrollment.spec.ts --config=playwright.class-enrollment.config.ts --workers=1`.
+The wrapper runs Vite directly on Bun with native TypeScript config loading.
+The Windows executable shim spawned Node and intermittently stalled before
+startup; a direct Bun probe started in 901ms. Student and admin journeys use
+separate tests to release browser renderers between roles. VITE_TEST_CACHE_DIR
+can isolate the T05 dependency cache without deleting shared dev cache files.
+The disposable T05 DB was migrated through existing 0065 before the integrated
+browser seed (no schema was generated). Dev and T05 now both include payout tax
+columns; no dev reset or seed was performed.
+
+Student class cancellation requires no new migration beyond enrollment 0064.
+The parent implementation is on f/v3-class-cancellation, based on integrated
+f/release-v3. Verification uses only the disposable T05 target 6769/6381,
+API/web 3201/3200. Its PostgreSQL enrollment/cancellation suite passes 15 tests /
+101 assertions, including replay, pay/withdraw race, rollback after fee deduction,
+24h boundary and late-seat retention. Web no-emit typecheck passes with one Go
+worker and reduced GC memory settings. Seven focused policy units pass. Chromium acceptance passes (1 integrated journey / 1.2m) using real RPCs; E2E typecheck passes. Do not mark the full T06 complete. This slice returns available
+Marks only; it performs no bank/cash refund and sends no real-provider test mail.
+
+Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
+payout 2482d7ec. The standard migration runner applied 0065 only after the exact
+loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,
+hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939,
+and tutor_tax_config exists. The owned API was restarted; no dev reset or seed ran.
+T06 cancellation and T07 completion/report remain next, and main is unchanged.
+
+T03 parent verification (21 October): reused only the dedicated payout container
+cogito-app-postgres-test-payout / volume cogito-t03-payout-20261021-data at 6770,
+with Redis 6382 and API/web 3111/3110. Its journal row 66 matches migration 0065,
+timestamp 1792525224597 and hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939.
+Postgres 11/105, units 11/32, service 7/13, Chromium 3/3 and E2E typecheck pass.
+Evidence is preserved locally in the root tmp/v3-dev/payout-parent-* logs.
+Dev migration must use its normal runner with exact loopback cogito-app/6767 guard;
+never point these reset/seed suites at development. Final broad compiler acceptance
+is still unverified; the parent encountered Windows VirtualAlloc errno 1455.
+
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent signup verification (21 October): after the enrollment browser pass,
+the known disposable T05 volume at 6769/6381 was reused serially for signup,
+without resetting dev or the preserved older signup volume. The combined
+signup and existing-account OTP DB suites pass 15 tests / 73 assertions.
+The local test OTP fixture/cleanup also accepts this exact port with the same
+test-mode, loopback and database-name guards. Browser security probes consume
+the real auth IP budget; the fixture resets only `cogito:rl:auth:*` between
+test phases using a guarded paired test DB/Redis script and a 10-second child
+timeout. Application rate limits remain enabled. The reset safety and path
+matching checks pass 19 tests / 69 assertions.
+The final Edge run passes both `pre-account-signup.spec.ts` journeys in 1.4m.
+The fixture reset uses Bun's native Redis client and a bounded child timeout;
+the earlier helper/client and shared-cache failures are superseded by this
+completed run. Fonts from the shared package cache emitted a Vite allow-list
+warning in this isolated worktree; the assertions and app journeys still passed.
+
+Integrated parent checkpoint: `f/release-v3` fast-forwarded to `bd123ce4` and
+the owned API process was restarted. Web port 3000 and API port 3001 returned
+200; API DB/Redis/scheduler/DLQ checks were healthy. The parent reran
+`src/specs/class-enrollment.spec.ts` from the integrated root against the exact
+T05 target and observed 1 Chromium pass in 1.6m. No dev data was seeded/reset.
+Parent evidence logs are local under `tmp/v3-dev/`; they contain synthetic test
+identities and are not release/client artifacts.
+
+Parent verification follow-up (21 October): the enrollment worktree's Drizzle
+links were aligned, source-level allocation state and public tutor relation
+query type errors were corrected, and web `check-types` passed with
+`GOMAXPROCS=1`, `GOMEMLIMIT=256MiB`, `GOGC=20`. Earlier failed typecheck attempts
+remain historical evidence; the parent pass supersedes the web blocker below.
+Docker processes were restarted without resetting volumes after its CLI hung.
+The parent then ran the complete guarded T05 Postgres suite on the verified
+`cogito-t05-enrollment-pgdata` volume: 9 tests / 69 expectations passed, including
+new regressions for expiry during database waits and sessions starting before
+checkout confirmation. Pricing/funding/public DTO units passed 12 / 37.
+The initial DB attempt used the example credentials and failed authentication;
+the verified test container's credentials were loaded privately for the rerun.
+
+## T05 enrollment isolated test target and evidence (2026-10-21)
+
+Destructive seed/reset and enrollment integration work used only the newly
+created disposable Docker resources `cogito-t05-enrollment-postgres` with named
+volume `cogito-t05-enrollment-pgdata` at loopback port 6769, database
+`cogito-test`, and `cogito-t05-enrollment-redis` at loopback port 6381. This
+volume was created because the pre-existing `cogito-test` volume contained
+signup fixtures and user data; it was preserved. Development Postgres
+`localhost:6767/cogito-app`, signup Postgres `localhost:6768`, and the signup
+volume were not reset or migrated by T05 testing. The T05 volume is the only
+target used by this feature's guarded database tests; the current 6769 seed
+reset path is a no-op.
+
+The integration test asserts `NODE_ENV=test`, PostgreSQL, a loopback hostname,
+port `6769`, and exact database path `/cogito-test` before its first database
+write. The Playwright spec additionally checks T05 DB/Redis/server/web ports
+`6769/6381/3201/3200`; its global setup uses the same exact DB guard before
+seeding. Provider behavior is stubbed. The synthetic V3 economy revision used
+to exercise the existing top-up quote path is appended/activated only inside
+this exact guarded test database; no customer pricing pointer or external
+provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
+the T05 browser server to avoid contending with the existing app's Vite cache.
+
+The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets fresh seeded student identities, including the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the run independent wallets. The T05 booking/lifecycle student starts with 326 Marks: booking-flow reserves 126 Marks before class-enrollment coverage, which retains its established 200-Mark funding assertions. Global setup also creates a second run-scoped student with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle tests; its 80/44/25 pricing and insufficient-funds assertions remain active. With the T07 class-report opt-in, setup creates a third isolated 200-Mark report student and storage state so parallel enrollment journeys cannot consume report funding. Other seed targets keep the 200-Mark default. The test seed blanks Resend credentials. The disposable T05 database accumulates run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
+
+Pure guard and identity regression commands: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts packages/e2e/src/fixtures/test-accounts.test.ts`. The 6769 integration guard is authored in `apps/server/src/seed/reset-seed-student.integration.test.ts`; run it only during the assigned database window. The current authoring slice did not run reset, database integration, migration, browser E2E or full typecheck.
+
+The fresh T05 database was migrated through `0064_academy_class_enrollment.sql`
+using the normal Drizzle runner. Latest journal readback is timestamp
+`1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`. The same
+additive migration was applied to dev by the parent; T05 did not apply it to
+dev. No existing migration, journal, snapshot, or test data outside the named
+T05 volume was changed.
+
+Focused evidence, with no dependency installation or browser download:
+
+| Check                                           | Command / target                                                                                                                                                                                                                                        | Result                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Pricing + funding invariants                    | `bun --smol test --timeout 30000 packages/api/src/tests/unit/class-enrollment.pricing.test.ts packages/api/src/tests/unit/class-enrollment.funding.test.ts`                                                                                             | 11 tests / 36 expectations passed |
+| PostgreSQL enrollment concurrency and lifecycle | `bun --smol --env-file=$env:ENV_FILE test --timeout 30000 packages/api/src/tests/integration/class-enrollment.test.ts`, with the guarded T05 env file and 6769 DB                                                                                       | 7 tests / 64 expectations passed  |
+| Public class DTO allowlist                      | `bun --smol test --timeout 30000 packages/api/src/tests/unit/academy-class.public.test.ts`                                                                                                                                                              | 1 test / 1 expectation passed     |
+| Student enrollment browser journey              | From `packages/e2e`, `bun --smol --env-file=$envPath C:\.Projects\cogito-app\node_modules\.bun\@playwright+test@1.62.1\node_modules\@playwright\test\cli.js test src/specs/class-enrollment.spec.ts --workers=1 --reporter=line`; exact T05 ports above | 1 Chromium spec passed in 58.7s   |
+
+The API database cases cover request replay and last-seat contention, atomic
+rollback, rate snapshot immutability, insufficient balance and expiry, late
+join/rejoin, deadline default and reminder catch-up, and role/ownership denial.
+The browser journey covers full, half and single enrollment, no-seat denial,
+repeat request and reload, insufficient Marks/top-up quote, and concurrent
+duplicate second-installment payment. Reload waits for navigation commit and
+then asserts the reloaded enrollment state; this avoids waiting on Vite's full
+`load` event, which stalled on unresolved dev-source requests in the isolated
+test server. The E2E package typecheck passed before the final reload-wait
+assertions. API/web typechecks were attempted but are blocked by the existing
+worktree dependency links resolving two distinct Drizzle ORM 0.45.2 builds in
+`packages/api` and `packages/db` (`shouldInlineParams` type conflicts across
+unrelated modules); no dependency link or installation was changed. Focused
+`oxlint` exited 0 with style warnings, and `oxfmt --check` passed 27 changed
+source/doc files; the very wide task table was excluded to avoid reflow. No T05
+browser/API process remains on 3200/3201; the T05 Postgres/Redis containers
+remain on 6769/6381 for parent review.
+
+## Enrollment dev migration (2026-10-21)
+
+Parent reviewed and integrated additive `0064_academy_class_enrollment.sql`
+(`385fc959`, source `2f9786d0`). The first runner attempt failed because the
+Docker Linux engine was unavailable. After starting Docker Desktop hidden and
+the existing dev Postgres/Redis containers, the standard `bun run db:migrate`
+from `packages/db`, with `ENV_FILE` explicitly selecting `apps/server/.env`,
+succeeded against guarded loopback port 6767, database `cogito-app`.
+No volumes were reset and no prior migration SQL/snapshot tables were changed.
+
+Readback verified all four `academy_class_enrollment*` tables and latest journal
+timestamp `1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`.
+This operation did not migrate/reset a test database or validate enrollment
+runtime behavior. Generate the next migration from snapshot/journal idx64.
+
+## Local V3 development startup (2026-10-20)
+
+`f/release-v3` contains integrated baseline `10a733cd`. The local web app at
+`http://localhost:3000` and API health at `http://localhost:3001/health` returned
+HTTP 200 after Docker restart and the pending class migration. API health
+reported database, Redis and scheduler healthy. The background development
+processes write logs under `tmp/v3-dev/`; these are development processes,
+separate from the exclusive test servers on ports 3100/3101.
+
+The pre-integration dirty source is retained in the named
+`v3 pre-integration source backup 20261020` stash. Do not pop it over the
+integrated branch: those changes are already incorporated. Client document
+artifacts and the old fee worktree remain preserved.
+
+## V3 local integration database state (2026-10-20)
+
+Read-only inspection used loopback URLs from `apps/server/.env` and
+`apps/server/.env.test`; secrets were not printed. Migration tracking is in
+`drizzle.__drizzle_migrations`. The four migration files and recorded hashes
+match exactly:
+
+| Migration                           | Applied timestamp | SHA-256                                                            | `cogito-app` dev | `cogito-test` |
+| ----------------------------------- | ----------------: | ------------------------------------------------------------------ | ---------------- | ------------- |
+| `0059_massive_blindfold.sql`        |     1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied          | Applied       |
+| `0059_faq_rich_text.sql`            |     1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied          | Applied       |
+| `0060_tutor_payout_allocations.sql` |     1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied          | Applied       |
+| `0061_academy_class_drafts.sql`     |     1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied          | Applied       |
+
+Both local databases now have `faq_entry`, `tutor_session_fee`,
+`tutor_payout_allocation`, `academy_class` and `academy_class_session`.
+`question_en_rich` and `answer_en_rich` are required JSONB columns, while
+`question_id_rich` and `answer_id_rich` are nullable. Existing SQL files,
+timestamps, hashes and journal rows were preserved. The unified journal orders
+the four entries by their recorded timestamps, so Drizzle does not skip an
+earlier imported migration behind the latest applied timestamp. No
+reconciliation migration or historical fee backfill is required for the
+observed databases.
+
+After SQL/hash review and confirming no other worker was using the shared dev
+database, the parent applied only `0061_academy_class_drafts.sql` to local
+development through the standard Drizzle migration command. The command was
+run from the B worktree's `packages/db` with the local dev env explicitly
+selected:
+
+```powershell
+Push-Location C:/.Projects/cogito-app/.worktrees/v3-session-fee-contract/packages/db
+$env:ENV_FILE = 'C:/.Projects/cogito-app/apps/server/.env'
+bun run db:migrate
+Remove-Item Env:ENV_FILE
+Pop-Location
+```
+
+Read-only post-migration verification confirmed both
+`drizzle.__drizzle_migrations` journals end with timestamp `1792394899225`, hash
+`db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8`; each also
+contains the preceding three hashes above. Their row IDs differ as expected.
+No migration in this four-file V3 integration set remains pending for these
+two local databases. The Playwright setup below has its own seed-target guard.
+Separately, API tests that call `resetDatabase()` can reset only the exact
+dedicated 6769/6770 pairs with explicit consent; port 6767/6768 are always
+rejected by that helper. Neither policy authorizes use of `cogito-app` or
+production.
+
+## Guarded Playwright E2E runs (2026-10-20)
+
+The E2E config and global setup resolve and load the same env file with ambient
+values preserved, then both validate the target. Set `NODE_ENV=test` exactly;
+`DATABASE_URL` must use PostgreSQL and a loopback host (`localhost`,
+`127.0.0.1` or `::1`) with one of the exact database/port pairs: `/cogito-test`
+on 6767/6768/6769 or `/cogito-test-payout` on 6770. API and web URLs must be
+loopback HTTP origins, and `PORT` / `WEB_PORT` must match those URLs. Optional
+`BETTER_AUTH_URL` and `VITE_SERVER_URL` must resolve to the same local API.
+Validation runs before seed setup. Global setup uses its own guarded seed path;
+this does not authorize the API test helper's broad `resetDatabase()` call.
+That helper has the stricter 6769/6770 reset policy documented above and below.
+
+The GitHub Actions E2E Browser Workflow is temporarily disabled. If running
+Playwright manually, keep its dependencies disposable: Postgres maps `6769`
+to `cogito-test` and `6770` to `cogito-test-payout`; Redis maps `6381` and
+`6382` to separate services. The regular browser partition uses `6769/6381`,
+API and web ports `3201/3200`, and the full `T05_ENROLLMENT_TEST_*` tuple. Its
+generated `.env.test`, migration step, Playwright config and global setup
+resolve that same target. T05 setup creates a fresh UUID-scoped student and
+skips the legacy seed-student delete path. A manual E2E run opts in to the
+T06/T07 role states and keeps report fixture reset overrides absent. Run the
+three tutor payout specs separately against `6770/cogito-test-payout` and
+Redis `6382`, with T05 variables unset.
+`E2E_AUTH_RATE_LIMIT_RESET=true` is explicit consent for the helper to clear
+only auth limiter keys on those exact disposable loopback pairs before seeded
+sign-ins; it does not change the product limit. No `resetDatabase()` consent
+flags are set. Never run this CI seed path against a retained local
+6769/6770 fixture; its databases and Redis services are disposable for the
+workflow run. Do not set this flag for the retained 6767/6768 development
+targets.
+
+Nested Bun seed, cleanup and fixture-update helpers resolve `ENV_FILE` from the
+E2E package directory and pass its absolute path to Bun. Their working
+directory is `apps/server`; passing the original relative path could select
+the regular `.env.test` during the isolated payout run instead of
+`.env.test-payout`. Keep the explicit target guards in place for both
+6769/6381 and 6770/6382.
+
+Playwright starts its own API and web servers with `reuseExistingServer: false`;
+the default ports are 3101 and 3100. Keep both free, or configure different
+free loopback origins and matching port variables. The specs run serially with
+one worker. Traces use `retain-on-failure` even when retries are disabled.
+Google Meet is explicitly disabled in both the test server and seed setup.
+
+From the repository root in PowerShell, run a FAQ browser spec this way:
+
+```powershell
+Push-Location packages/e2e
+$env:NODE_ENV = 'test'
+$env:ENV_FILE = '../../apps/server/.env.test'
+bun run test -- faq-admin.spec.ts --retries=0
+Remove-Item Env:NODE_ENV, Env:ENV_FILE
+Pop-Location
+```
+
+Keep credentials in the selected env file; do not print them in logs. The
+2026-10-20 guard checkpoint (`ad290158`, cherry-picked from `2e424c4e`) passed
+7 unit tests / 32 expectations and the E2E package typecheck, as reported by
+the parent. No destructive/browser E2E was run during this integration
+checkpoint. The local test DB guard does not replace the separate guarded test
+database requirement for automated destructive tests.
+
+## Series cancellation and settlement verification (2026-10-20)
+
+Historical runs used the retained `cogito-test-settlement` database on port 6767. The API reset helper now refuses every 6767 target, so the commands below
+will fail before truncation. Do not redirect them to the retained 6769 or 6770
+databases: those contain preserved fixtures and are not disposable reset
+targets for this incident follow-up. Reruns require a separately prepared
+fresh target matching the current reset guard. The test counts and snapshot
+below describe the prior run only.
+
+```powershell
+bun --env-file apps/server/.env.settlement.test -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname) || u.port !== '6767' || u.pathname !== '/cogito-test-settlement') throw new Error('Settlement DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/unit/booking.service.test.ts packages/api/src/tests/unit/admin-booking.service.test.ts packages/api/src/tests/unit/booking.repo.test.ts packages/api/src/tests/unit/admin-booking.repo.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/admin-series-cancel-u6.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-noshow-complete.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-g18.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-cancel-m4.test.ts
+```
+
+The 20 October review follow-up passed: service/repository unit suites **447/447
+tests, 1,153 expectations**; admin U6 **7/7 tests, 70 expectations**; student
+M4 **1/1 test, 4 expectations**; no-show settlement **7/7 tests, 69
+expectations**; and G18 series completion **8/8 tests, 29 expectations**. U6
+uses real admin/tutor API clients to verify solo release, forfeit, partial
+release, and group-series release followed by completion; all cases assert
+wallet/participant/booking holds and the parent terminal state. Settlement also
+covers a lock-gated cancellation/completion race, solo/group no-show allocation,
+repeated and concurrent settlement, malformed V3 honorarium rejection, and
+fee-insert rollback. Logs showed the manual meeting adapter; email delivery was
+not configured. No Google/Meet, payment, or email provider call was made.
+Browser E2E and TypeScript checks were not run for this follow-up.
+The retained test database contains only local test data and remains available
+for review. After the last run (M4), its snapshot was: `booking` 2,
+`booking_session` 2, `booking_participant` 2, `ledger_entry` 3,
+`tutor_session_fee` 0, and `session_completion_feedback` 0. Each integration
+suite resets this database, so rerunning any suite changes the snapshot.
+
+## Catalog migration/acceptance gate — implementation in progress
+
+Migrations `0056_complex_ricochet.sql` and `0057_legacy_competition_palette_backfill.sql`
+have been applied to the guarded local `cogito-test` database only. Migration 0056
+adds localized labels, row versions, inactive-by-default behavior for new rows, and
+four nullable color columns constrained to complete parent palettes/no child
+overrides. It preserves existing IDs, slugs, flags, and backfills the seven current
+competition palettes. Migration 0057 restores those same palettes for seven legacy
+0027 root aliases. The focused Postgres CRUD suite passed after both migrations;
+the exact cases and remaining acceptance gaps are in
+[`RELEASE-V3-TASKS.md`](./plans/active/RELEASE-V3-TASKS.md).
+
+The guarded Postgres catalog suite now passes assignment/delete in both orders,
+booking/archive in both orders over `booking.sessionTopic`, and stale concurrent
+admin edits in addition to historical-reference protection, non-admin denial and
+audit rollback. Run it with
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/competition-catalog.test.ts`;
+latest result: 6 tests/72 expectations. The next reset-based dynamic-rate suite
+also passed 1 test/5 expectations and asserted that draft saving leaves the V3
+activation pointer unset. Run these reset-based suites sequentially against the
+guarded local `cogito-test` DB only. The move/archive/restore browser journey is
+`packages/e2e/src/specs/competition-catalog.spec.ts`; on Windows PowerShell, run
+it with dedicated local ports so Playwright starts its own test server rather
+than reusing a dev server:
+
+```powershell
+Push-Location packages/e2e
+$env:ENV_FILE = '../../apps/server/.env.test'
+$env:WEB_URL = 'http://localhost:3170'
+$env:SERVER_URL = 'http://localhost:3171'
+$env:PORT = '3171'
+$env:WEB_PORT = '3170'
+$env:BETTER_AUTH_URL = 'http://localhost:3171'
+$env:CORS_ORIGIN = 'http://localhost:3170'
+$env:VITE_SERVER_URL = 'http://localhost:3171'
+$env:CI = '1'
+bunx playwright test src/specs/competition-catalog.spec.ts --retries=0
+Pop-Location
+```
+
+Latest run passed 1 Chromium test, covering child-slug search, archive impact
+preview and confirmation, restore confirmation, moving an unused child, and the
+inherited destination palette. The E2E setup seeds test accounts; run it
+sequentially against guarded `cogito-test` only, and keep its ports separate
+from any running dev app. Before production rollout, complete all
+tutor/booking/discovery/calendar consumers and broader regression. New parents
+remain unsellable until a valid rate is configured through the dynamic economy
+flow. Do not activate customer V3 pricing until catalog consumers and
+app/website cache behavior pass. A local test migration does not authorize
+production rollout or change the commercial delivery date.
+
+New parent creation requires four bounded numeric opaque OKLCH values; a partial
+parent update retains omitted values, and children inherit the parent palette.
+Arbitrary CSS, variables, URLs, and alpha are rejected. Current and archived
+catalog references resolve to their stored parent palette for appearance without
+rewriting booking names, prices, or financial snapshots.
+
+## Marketing landing T11 smoke check (2026-10-19)
+
+The non-video landing work is in `C:\.Projects\cogito-acad` on branch
+`f/release-v3-nonvideo`. Run `bun run dev` or `bun run build` from
+`C:\.Projects\cogito-acad\apps\web`. The latest production build completed;
+static generation logged connection-refused errors from the existing public
+approved-achievements request, so confirm that endpoint before relying on
+achievement data in a local preview.
+
+In `/en` and `/id`, check desktop and mobile navigation for the removed
+Activities links and Start Learning CTA, and verify that the homepage no longer
+renders the Events section. Direct localized `/en/events/townhall-and-101-series`,
+`/en/events/simulation-days`, and their `/id/` counterparts still exist; leave
+route mapping/redirect decisions to T10. Check the school strip with mouse
+controls, focused ArrowLeft/ArrowRight keys, touch swipes, and
+`prefers-reduced-motion` (scroll should be instant). Check testimonials at
+320px, 390px, 469px, 470px, 768px, 1023px, 1024px and 1280px widths: the visible
+card surface fits its frame (including at 470px), with no horizontal page
+overflow or overlapping controls; arrows, dots and touch swipe change the active
+card; autoplay advances after 6.5 seconds; hover/focus and an active touch
+gesture pause it; the visible Play/Pause control works; reduced motion disables
+autoplay/transitions.
+Confirm accessible names and keyboard focus rings. Confirm the refined Why
+Cogito label-to-heading (16px) and heading-to-cards (32px) spacing with the
+client; the approved feature showcase still requires M02/Q14. A headless Edge run on 2026-10-19 passed at 320, 390, 469, 470, 768,
+1023, 1024 and 1280px widths, including mobile menu checks in `/en` and `/id`,
+manual logo scrolling, carousel autoplay/pause/resume, touch hold and swipe, and
+reduced-motion behavior. The testimonial surface stayed within its frame, its
+controls remained below it, and the page had no horizontal overflow or client
+errors after the FAQ viewport hydration fix. This did not cover a physical
+device, screen reader, or client visual acceptance.
+
+## V3 checkout verification and activation gate (2026-10-18)
+
+Migrations `0054`–`0057` were exercised only against the guarded local
+`cogito-test` database. A missing/null `economy_v3_activation.active_revision`
+keeps customer pricing legacy; applying migrations or saving a draft does not
+activate V3. Discovery and booking price projection now use the selected
+catalog parent's rate from the active revision, and a new unconfigured parent
+cannot fall back to a tutor's legacy base rate. Active V3 group-series prices
+at target headcount, pins its revision and recalculates viable partial groups at
+confirmed headcount before reconfirmation; each participant's remaining package
+hold and the booking/scheduled-session snapshots are updated together. A null
+pointer keeps legacy group-series behavior. Do not set a production pointer yet:
+analytics interpretation, website cutover, balance UI browser QA, and
+release/provider acceptance remain incomplete.
+
+Tutor profile reads use the active V3 pointer for their fee projection. A null
+pointer returns no V3 projection and keeps legacy base-rate writes available.
+An active pointer makes changed legacy `baseRatesIdr`/`prices` writes fail with
+`INVALID_TUTOR_PRICING`; admin edit approval ignores queued `baseRatesIdr`.
+Review submission reads the activation pointer in the same transaction as the
+status update: active V3 does not require legacy fee fields, while a null pointer
+keeps the current legacy fee requirement. The web form also skips legacy fee
+validation when it has an active V3 projection.
+Admin Business insights expose booking pricing-snapshot counts by engine; they
+do not convert V3 Marks to IDR or report booking platform take. Successful
+payment and refund rows remain the source for net top-up revenue. Resolve Q15 in
+the decision register before adding booked-service money totals. Snapshot counts
+use booking creation time and include every booking state.
+Verify the engine buckets against guarded PostgreSQL with
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-dashboard-analytics.test.ts`.
+Verify the guard and projection with:
+`bun test packages/api/src/tests/unit/tutor.service.test.ts packages/api/src/tests/unit/admin-tutor.service.test.ts`.
+No migration is required for this profile/API slice.
+
+Verify V3 group-series target pricing, pinned-revision partial repricing,
+reconfirmation and insufficient-funds preflight with:
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/booking.service.test.ts`.
+This focused unit suite does not write the activation pointer or use a production
+database.
+
+Verify that the repository updates only scheduled child-session snapshots and
+holds with:
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/booking-group-series.test.ts`.
+This suite resets only the guarded `cogito-test` database and does not set the
+V3 activation pointer.
+
+Run the isolated DB suite with:
+`bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/v3-top-up.test.ts`.
+It resets only a guarded test DB, enables a fixture revision, proves concurrent
+purchase uniqueness and late credit, then clears activation in teardown. Do not
+run reset-based suites alongside browser fixtures or other database tests.
+
+Dynamic catalog-rate admin integration is covered by
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/v3-dynamic-competition.test.ts`.
+It creates a parent through admin RPC, verifies it starts unpriced, saves its
+rate into a draft revision, and asserts the activation pointer remains unset.
+The catalog CRUD and economy-role suites also reset the guarded test DB; run
+those sequentially, never against development or production data.
+
+V3 uncertain checkout retains one payment/order identity. Use authoritative
+provider reconciliation on that record; an absent checkout URL or quote expiry
+does not prove the provider failed. Do not manually issue another provider POST
+or replace the payment ID to recover it. Live Midtrans operation, new balance UI
+browser QA and production migration remain unverified.
+
+## V3 report input smoke check (2026-10-18)
+
+Run `bun test --env-file apps/server/.env.test packages/api/src/tests/unit/booking-completion-feedback.test.ts packages/api/src/tests/unit/booking.service.test.ts`.
+Evidence: 295 tests pass, including aggregate 600/601 boundaries, emoji, CRLF,
+prefixes, empty lines, more than 30 short bullets and direct-service rejection
+before financial/report writes. No database migration is required for this slice.
+In browser, open Complete session as the assigned tutor: check all three counters,
+paste multiline text/emoji, exceed 600 and confirm completion is disabled without
+losing the draft. This browser smoke passed at exact 600 and over-limit 601; the
+exact-limit button enabled and the over-limit button disabled. No report was
+submitted, so settlement is still unverified here. Historical reports must remain
+readable.
+
+## V3 class draft admin smoke check (2026-10-19)
+
+Migration `0061_academy_class_drafts.sql` is additive and creates empty class/session tables; it does not backfill or publish records. It is applied to both local `cogito-app` and isolated `cogito-test`; the parent applied it to dev after SQL/hash review. The focused test command was:
+
+```
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/academy-class.test.ts
+```
+
+It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
+
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload and notifications are implemented and browser-verified. Published-only public list/detail and the student enrollment flow are browser-verified. T02 delivery fees and T07 report/expiry settlement remain open. T06 lifecycle controls are implemented in the current worktree, with parent review/dev integration pending. Do not present the draft page as launch-ready; M01 class content/assets remain pending. The T05 API/web typecheck blocker and focused evidence are recorded above.
+
+## V3 published class read contract (2026-10-20)
+
+Pure DTO test:
+
+```
+bun test packages/api/src/tests/unit/academy-class.public.test.ts
+```
+
+It passed 1 test / 1 expectation and verified the response omits tutor payout/account fields, room details, and roster data. `bun run --cwd apps/web check-types` passed after linking the existing workspace dependencies from `C:\.Projects\cogito-app`; no dependencies were installed. Browser E2E and database tests were not run. `classes.list` and `classes.get` are public reads of published classes only; they do not enable enrollment.
+
+## V3 class publish and Meet retry verification (2026-10-20)
+
+`0063_academy_class_meetings.sql` is an additive migration for per-session provider work. The author first applied it to guarded loopback `cogito-test`. After reviewing the SQL and fixes, the parent applied it through the standard runner to guarded `localhost:6767/cogito-app` and verified `academy_class_meeting` plus journal timestamp `1792496861907`, hash `f3c0a5888c23dc94ef487f8e4d9aca7052e338705ab34c9c62b3be207ccfb41e`. Existing migration SQL, hashes, and timestamps were preserved.
+
+Publish is version-checked under a class-row lock. Before commit the service rechecks active competition ancestry, tutor publication/mode/capacity, future sessions, approved flat class fees, cohort rules, managed-room capacity and conflicts. Publication, session scheduling, audit, one deduplicated notification per assigned tutor, and online-session meeting jobs commit atomically. Provider calls happen after commit; leased jobs retry with backoff and stable Google event identity. Test mode uses a controlled provider adapter and the E2E server disables Google credentials.
+
+The guarded API integration suite passed 9 tests / 51 expectations, including deterministic gated races where room capacity changes from 10 to 4, a room is deactivated, and a competition is archived while publication waits. The focused meeting-provider unit files passed 42 tests / 146 expectations. The Playwright admin-to-student journey passed 1 Chromium spec (15.8s; about 1.2m including server startup and fixture seed), including the controlled case where Calendar accepts the event, Meet URL generation is pending, and retry resumes the same event. The test adapter is local-only; Google Meet is disabled. All database work targeted loopback `cogito-test`; dev and production were not touched.
+
+Run provider unit tests with `bun test packages/api/src/tests/unit/google-meeting.provider.test.ts packages/api/src/tests/unit/academy-class.meeting-provider.test.ts`. Database-backed `academy-class.test.ts` callers of `resetDatabase()` now require a fresh approved target and explicit reset consent; the shared `.env.test.example` intentionally leaves `DATABASE_URL` unset. For the browser spec, provide an explicit E2E env file with `NODE_ENV=test`, `ENV_FILE`, `GOMAXPROCS=2`, and `GOMEMLIMIT=768MiB`, then run `bun scripts/run-test-suite.mjs e2e src/specs/academy-class-publish.spec.ts`. Playwright launches the Vite test server via Bun's `run --bun` mode. Migration `0063_academy_class_meetings.sql` is applied to both local dev and the class test database; parent dev table/hash readback passed.
+
+## V3 draft economy editor (2026-10-18)
+
+Migration `0054_v3_economy_revision.sql` was applied only to the isolated
+`cogito-test` database. No production migration was run. The migration and suite
+were exercised with:
+
+```
+bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/economy-roles.test.ts
+```
+
+That file now includes two simultaneous same-version V3 saves (one winner),
+immutable previous revision, transactional audit failure rollback and unchanged
+active legacy settings. The suite passed 7 tests/26 expectations. The test reset
+helper explicitly truncates the new table in the guarded dedicated test DB. Do
+not run that reset against development data or production.
+
+Open `/admin-economy` as admin after migration: edit package and surcharge
+values, review every current parent, and enter both rates for any additional
+parent that should be priced. Incomplete dynamic rates remain blank/unavailable;
+children inherit their parent's rate. Verify the 1–6 student preview, custom
+440 Marks recommendation at equal package price, invalid-rate/missing-reason
+rejection, save/reload, and stale-version conflict. Student/tutor direct RPCs
+must fail. Browser QA passed for draft controls and 390px mobile layout; the
+Selia preview table scrolls inside its card. Draft saves do not change live
+checkout while the activation pointer is unset.
+
+The dynamic parent admin path passed one PostgreSQL integration test (5
+expectations); catalog CRUD and concurrency passed 6 tests/72 expectations; economy roles passed
+7 tests/26 expectations. Run each reset-based integration file sequentially
+against the guarded `cogito-test` database only.
+Screenshots are in `tmp/v3-admin-440.png` and `tmp/v3-admin-mobile-fixed.png`.
+
+Unit check: `bun test --env-file apps/server/.env.test packages/api/src/tests/unit/v3-rate-card.test.ts packages/api/src/tests/unit/v3-economy-config.test.ts packages/api/src/tests/unit/v3-economy-service.test.ts packages/api/src/tests/unit/pricing.service.test.ts packages/api/src/tests/unit/admin.service.test.ts`.
+For low-memory Windows typecheck, set child-process `GOMAXPROCS=2` and
+`GOMEMLIMIT=768MiB` before `bunx --no-install tsgo --noEmit -p apps/web/tsconfig.json`.
+Free disk space and start Docker before database verification; C: had ~250 MB.
+
+## V3 rate-card groundwork (2026-10-18)
+
+The admin V3 rate editor and competition catalog omit superseded migration 0027
+seed rows; current catalog parents drive rate editing and preview. Confirm the
+seven canonical migration 0029 parents remain present in the V3 editor.
+
+Run `bun test packages/api/src/tests/unit/v3-rate-card.test.ts packages/api/src/tests/unit/pricing.service.test.ts`
+for the V3 default matrices/top-up boundaries and existing pricing regression.
+This slice requires no database, secrets, migration or environment changes.
+There is no V3 pricing activation command yet: do not seed new package amounts
+or replace current economy defaults to simulate rollout. Activation must wait
+for persisted config/quote/booking snapshots and compatibility checks in T01.
+
+## SnapCN video tooling (2026-10-18)
+
+Run `bun install`, then `bun run video:studio` from the repository root
+(port 3002). `bun run video:still` writes `apps/video/out/cogito-intro.png`;
+`bun run video:render` writes `apps/video/out/cogito-intro.mp4`.
+Verify with `bunx turbo run check-types build --filter=@cogito-app/video`.
+First render downloads Chromium; upstream font loaders need network access.
+No backend services or application env files are required. Keep all Remotion
+package versions aligned. Add registry components only from `apps/video`;
+see its README for the command and alias configuration.
+If the first render fails with `ENOSPC`, free disk space before retrying;
+the Chromium download alone is about 120 MB, plus extraction and bundler caches.
+
+Last updated: 2026-10-19
 
 ## Student dashboard balance CTA fit (2026-10-02)
 
@@ -122,7 +2124,24 @@ below; Student notes and tutor Session feedback remain in the Session overview, 
 
 ## Competition field palette
 
-The competition palette is compiled into the shared UI CSS and requires no environment variables, secrets, migrations, or deployment-time configuration. Competition-field badges in tutor discovery, tutor drawers, onboarding selections, and calendar details should use solid field backgrounds with white foregrounds except for Business Plan's dark foreground. Calendar event tiles intentionally remain soft. After changing a field token or slug mapping, run the UI/web typecheck and web build so Tailwind verifies every generated utility.
+Competition colors are catalog data rather than a fixed seven-slug UI map. Parent
+rows own light text/background and dark text/background OKLCH values; child rows
+inherit them. API projections resolve current and archived references by stable ID
+first and exact stored slug second. Unknown legacy content receives the documented
+neutral compatibility palette. UI consumers render the configured foreground and
+background for the active theme, while event labels and financial snapshots retain
+their stored identity and terms. Admin preview and consumer QA remain part of the
+T00A acceptance gate in `RELEASE-V3-TASKS.md`.
+
+For the authenticated `/calendar` filter smoke check, confirm each option uses the
+loaded event category's parent `coreCategory` slug and English `name`; when a
+category name is missing, the seven legacy slugs keep their familiar labels. Add
+or publish an event for a new parent slug and refresh the data: its option should
+appear selected while any previously excluded types stay excluded. Select only
+the new type and confirm both month and agenda views show matching events. With
+all current options selected, uncategorized events remain visible. Use **Reset**
+after excluding types and confirm it restores every option currently in the
+loaded event data.
 
 > **Start here for ops:** [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) is the entry
 > point (scenario → command table). This document holds the detailed
@@ -342,9 +2361,9 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests, and that the Payout details info icons open their respective unpaid-honorarium and transfer-fee explanations and remain keyboard accessible. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
 - Admin: a normal login must land on `/dashboard`; open the admin workspace and verify the compact escalated-operation, tutor-review, and achievement-review counts above Business insights. Use the sidebar to open `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. Confirm the override opens as a bottom drawer below 640px and a width-constrained right-side drawer at 640px and above. Scroll long content independently while keeping Cancel, Preview, and Override visible in the footer. Confirm students show name/avatar, confirmation state, and held Marks; confirm the assigned tutor appears separately as payout-only. Change category and verify the policy explanation updates. Preview must show named student balance changes, booking-state change, and tutor payout eligibility without manual participant or Marks controls. Preview/Apply must succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
-- In `/admin-tutor-payouts`, verify the default operational table shows tutors who need payment with the tutor name, bank, account number, account holder, gross honorarium, fee, net transfer, transfer status, transfer date, and an **Open** action. Check the date range controls and 7/30/90-day shortcuts; paid rows are filtered by transfer date while current unpaid balances remain visible. Switch between unpaid, paid, and all statuses, verify sorting by payment priority/amount/name/latest transfer, and download the filtered result as a CSV that opens in Excel or Google Sheets. Open an unpaid tutor, verify the full private destination account plus gross/fee/net breakdown, confirm the transfer dialog, and check that **Mark as paid** refreshes the report. A tutor with incomplete payout details must not be payable. The page must remain horizontally usable at a narrow viewport.
+- In `/admin-tutor-payouts`, verify that selecting unpaid source rows builds a versioned preview with current fee/profile/rate/bank details and the exact net. Confirm a stale profile/config/fee preview cannot prepare, tax-incomplete profiles cannot prepare while tutors can still teach, and two admin requests cannot reserve a source twice. Record an exact externally performed amount/date and optional reference/proof; a mismatch must be rejected and the app must never submit a bank transfer. Void a recorded transfer and confirm evidence stays in history, sessions remain blocked until reasoned reconciliation, then verify audited resolution allows repayment. Exercise actual-paid-date Asia/Jakarta month boundaries, mixed saved rates, formula-safe CSV cells, leading-zero bank/NIK/NPWP strings, and a separate void/reconciliation export section. On the tutor dashboard, verify own gross/rate/tax/fee/net/covered sessions and ensure no NIK/NPWP or another tutor financial data appears.
 - Complete-session feedback: as tutor, open a scheduled booking past end time and verify the booking detail shows the read-only Student notes. Click **Complete session**, fill Session discussion / Strengths observed / Areas for improvement (each textarea line is one bullet and Enter adds another), confirm disabled until all 3 have ≥1 bullet, submit and verify success toast + booking completed. Confirm the same detail page refreshes and shows Session feedback directly below Student notes in the Session overview, with all 3 bullet sections (per-session rows for series). As student/admin, open the completed booking and verify the Student notes and Session feedback are both visible.
-- In the admin dashboard's **Business insights** section, verify the default 30-day view loads booking KPIs plus Accounts & activity and Marks & revenue cards. Total accounts, rolling MAU/inactive/churn, current Marks ownership, and lifetime paid conversion must retain their labeled scopes when the date filter changes. Signups and gross/refund/net top-up revenue must follow the selected period. Switch among 7/30/90 days, then apply a custom start/end range; confirm inclusive WIB dates, a 366-day maximum, continuous trend labels, and matching signup/revenue changes. Cross-check successful payment totals against `payment_record.updated_at` for `PAID`/`SETTLED` rows and refunds against `refund_record.created_at`. Confirm booking activity, current booking portfolio, audience growth, session-format mix, and top categories still load; zero-data periods show intentional empty states and retry remains actionable. Confirm locked booking value stays distinct from realized top-up revenue.
+- In the admin dashboard's **Business insights** section, verify the default 30-day view loads booking KPIs plus Accounts & activity, top-up revenue, and pricing-snapshot count cards. Total accounts, rolling MAU/inactive/churn, current Marks ownership, and lifetime paid conversion must retain their labeled scopes when the date filter changes. Signups and gross/refund/net top-up revenue must follow the selected period. Switch among 7/30/90 days, then apply a custom start/end range; confirm inclusive WIB dates, a 366-day maximum, continuous trend labels, and matching signup/revenue changes. Cross-check successful payment totals against `payment_record.updated_at` for `PAID`/`SETTLED` rows and refunds against `refund_record.created_at`. Confirm booking activity, current booking portfolio, audience growth, session-format mix, and top categories still load; zero-data periods show intentional empty states and retry remains actionable. Pricing-snapshot buckets count booking records created in the selected period, include all states, and do not imply financial value: V3 is engine-tagged, legacy requires the known untagged numeric shape, unknown/malformed non-null snapshots are other, and SQL `NULL` is missing. Do not reintroduce booking-derived Marks, IDR, or platform-share totals until Q15 defines their population, participant, session, and date basis.
 - In the Operations → Room approvals tab, verify the Active rooms catalog loads. Use **Add room**, enter a name, location, and positive whole-number capacity, submit, and confirm the new room appears in the list and in the Offline room selector. Use **Edit** to change the name, location, or capacity and confirm the active catalog and room selectors refresh. Use **Deactivate**, confirm the danger dialog, and verify the room disappears from the active catalog and new selectors while existing assignments remain intact. Confirm blank names/locations and invalid capacity stay in the dialog without an RPC request. Then verify the pending offline room-approval queue loads. Use **Assign** for a requested room. Use **Choose another** (or **Choose room** when the original request conflicted) to open the admin booking detail; confirm the Offline room card shows the booking schedule without a UUID/date-time form, lets the admin select a target room, and calls **Assign room** or **Relocate room**. Confirm **Cancel** opens a confirmation dialog explaining the booking/hold impact, then refreshes the queue after confirmation.
 - In `/admin-tutors`, open a profile with pending edits and confirm the proposed specialization changes show readable category/specialization labels instead of raw UUIDs. Resize to a narrow viewport and verify specialization badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 - In the focused `/admin-tutors/:profileId` review workspace, open a profile with mixed pending values and verify the **Tutor profile → review** summary announces the added, changed, removed, and empty counts. Use the **All**, **Added**, **Changed**, **Removed**, and **Empty** chips together with field search; confirm the list and relevant section badges respond to both controls. Expand and collapse fields with mouse and keyboard, confirm `aria-expanded` changes, and verify the current/proposed panes use readable text plus symbols and labels. Confirm Profile, Teaching setup, Credentials, Proofs, Marks, Profile photo, and Payout account remain visible even when empty, with inline empty states and section badges; the photo panel continues to show current versus proposed assets separately. Resize to a narrow viewport and enable reduced motion; there must be no page-level horizontal overflow or custom animated diff transition. The review request/response payloads must remain unchanged.
@@ -371,6 +2390,36 @@ access state refresh. Use the Active, Expired, and All filters, then remove the
 grant and verify the student is locked again. An expired grant must remain
 visible as **Expired** but must not bypass the 35-Mark gate; this behavior is
 read-time and does not depend on a scheduler.
+
+### Role-based sidebar grouping smoke check
+
+Run isolated synthetic Chromium checks (mocked auth/RPC, no backend or DB):
+`cd packages/e2e; bun run test --config=playwright.sidebar.config.ts`.
+This starts its own frontend on port 3302, refuses an existing server, and uses
+an isolated Vite cache. The fixture follows `vite.classes-layout.config.ts`.
+For each role at desktop/mobile widths, all sections start expanded. Use Enter
+and Space on a section heading: only that section collapses, its links leave
+the tab order, and the chevron/expanded state changes. Reopen it and check the
+active link and booking badge. Collapse Resources and confirm the account menu
+remains available; reopen it and check support. On mobile, section toggles keep
+the sidebar open and following a link closes the overlay. No saved state is
+expected after a fresh mount.
+
+As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
+Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,
+Economy), Content & reviews (Competitions, Achievements, Knowledge access, FAQ,
+FAQ), then Resources. Verify every link opens its existing route,
+selected links retain their active styling, and Bookings retains its action
+badge when there are actionable bookings. At desktop and mobile widths, scroll
+the sidebar to reach Resources and the account menu.
+
+As a student, confirm Overview contains Dashboard and Balance, followed by
+Learning with Tutors, Classes, My Bookings, Session reports, and Achievements.
+As a tutor, confirm Overview contains Dashboard, followed by Teaching with
+Bookings, Session reports, Availability, and Tutor Profile. Both roles show FAQ
+in Resources after Knowledge Bank, exactly once. Check the booking action badge,
+active-link styling, mobile sidebar scrolling, and account footer for both roles.
+No environment or service changes are required.
 
 ### Empty-state consistency smoke check
 
@@ -409,28 +2458,9 @@ As a signed-in student or tutor, open `/notifications` and confirm the list show
 
 ### Economy rate-control smoke check
 
-As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,
-and online/offline Cogito take schedule are visible and read-only by default. Select
-**Edit schedule**, confirm the editing badge and cancel action appear, then change a Cogito base or increment
-either by typing an IDR amount or using the Rp5,000 stepper controls, confirm the
-shared class-size pricing table preview updates by a valid Rp5,000 step, then save,
-reload, and verify the version increments and the
-preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
-only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
-After a successful change, verify no `Cogito rate updated` in-app notification appears
-for tutors. Re-saving the same values should not increment the version, add an audit
-row, or create another notification.
-As a student or tutor, opening `/admin-economy` must redirect away and direct
-`admin.getEconomySettings`/update calls must return FORBIDDEN.
+As an admin, open `/admin-economy` and confirm only the V3 rate card and price preview are present. Select **Edit V3 draft**, edit a competition solo Marks/IDR pair or group/offline adjustments, and inspect the 1–6-student preview. Enter a revision reason and save. Confirm immutable draft versioning, stale-version rejection and draft persistence after reload; saving a draft does not activate it or change existing snapshots. Fresh seed initializes active V3 defaults. Verify negative or incomplete rates block save. The obsolete Cogito take schedule controls must not appear.
 
-The tutor profile at `/profile` should show IDR base honorarium fields (online/offline), enforce the
-Rp50,000 minimum and Rp5,000 steps, show one combined six-row preview matrix for the
-selected modalities, and must not describe Marks as cash-out. Student
-tutor discovery and booking previews should show computed Marks per student for the
-selected modality; legacy profiles without `baseRatesIdr` remain readable. Change a
-published tutor's base honorarium, confirm it is available for a new booking, and
-verify a booking created before the change still pays out using its original
-`priceSnapshot` honorarium.
+Students/tutors must be redirected away from `/admin-economy`; V3 admin RPCs must deny their access. The removed get/update take-schedule RPCs must not be registered. Tutor profiles display projected IDR fees by assigned competition and cannot mutate their own rates. Discovery/booking prices require active V3 configuration and an explicit specialization.
 
 The tutor payout form must collect bank name, account number, account-holder name,
 account-opening city/regency, account ownership (the tutor's own account or a
@@ -824,6 +2854,26 @@ database migration problem, not an empty ticket list.
 For isolated local test runs, the test runner migrates `cogito-test` automatically
 using `apps/server/.env.test` or `apps/server/.env.test.example`.
 
+Migration `0059_massive_blindfold.sql` creates `tutor_session_fee`. Apply it
+before starting an API build that records completed-session fees. It adds one
+source-keyed row per completed solo/group booking or completed series child and
+does not backfill historical bookings. Tutor/admin payout summaries consume
+these rows, suppress the corresponding legacy booking/session snapshot, and
+retain the legacy fallback for sources with no fee event. Pending cutoffs filter
+new events by `earnedAt` and preserve the existing completion-time fallback for
+legacy sources. Paid rows are still aggregate cutoff records, not allocations
+to individual fee events. Only the successful completion transaction writes
+these fee facts.
+
+For a browser preview against the local development database, `apps/server/.env`
+selects `cogito-app` and the API's port; keep that database URL but disable
+external side effects (`PAYMENT_PROVIDER=stub`, `SCHEDULER_ENABLED=false`,
+`GOOGLE_MEET_ENABLED=false`, blank `RESEND_API_KEY`, and local-only analytics).
+Use an explicitly configured local test environment for database-backed
+integration tests. `resetDatabase()` requires the exact dedicated 6769/6770
+target plus both reset-consent variables; 6767/6768 are always blocked, and
+`cogito-app` is never an allowed reset target.
+
 #### Migration rollback
 
 Up migrations are the only automatic path; rollback SQL for the 2026 taxonomy
@@ -865,7 +2915,7 @@ Andre only; Argya and Athena remain fixed defaults.
 
 The full production/staging seed creates or reuses the separate review address
 from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
-every production-like server boot, the `ADMIN_EMAILS` operator allowlist
+every server boot outside test mode, the `ADMIN_EMAILS` operator allowlist
 promotes matching existing accounts
 case-insensitively without demoting other admins. A matching account created
 after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
@@ -1613,11 +3663,76 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 
 ## Test and Coverage
 
-Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
+The CI coverage collection has three separate Bun processes. The former
+combined API coverage command is unsupported as a CI-equivalent: it mixes
+resettable tests, reset-free report fixtures, and payout tests, and it does not
+produce the three raw profiles that CI merges. Run the commands below from the
+repository root only against explicitly prepared disposable databases. Keep the
+reset guards limited to the resettable API and payout commands; the report
+fixture command must run without either reset variable.
+
+For the resettable and report-fixture partitions, provide the same test
+environment shape as CI: `NODE_ENV=test`, `DATABASE_URL` exactly targeting
+`localhost:6769/cogito-test`, Redis at `localhost:6379`, and the test auth,
+CORS, payment-webhook, and Sanity settings. Migrate that disposable database
+before running tests. CI also creates `apps/server/.env` for Drizzle, with
+`PAYMENT_PROVIDER=stub`. Never target the old 6767/6768 databases or the
+retained local 6769/6770 fixtures.
+
+The resettable API/env/auth/DB/OpenAPI partition requires both reset values to
+match `DATABASE_URL` exactly:
+
+Each partition is only a partial coverage profile, so CI uses a temporary copy
+of the root Bun config without its per-file `coverageThreshold`; the merged
+LCOV gate below applies the 100% requirements after all profiles are combined.
+Create that config before running the coverage partitions and pass it to each
+Bun process:
 
 ```bash
-bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+coverage_config="$(mktemp .coverage-collection-bunfig.XXXXXX.toml)"
+trap 'rm -f "$coverage_config"' EXIT
+sed '/^coverageThreshold[[:space:]]*=/d' bunfig.toml > "$coverage_config"
 ```
+
+```bash
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  --path-ignore-patterns '**/booking-admin-reports.test.ts' \
+  --path-ignore-patterns '**/class-enrollment.test.ts' \
+  --path-ignore-patterns '**/report-export.test.ts' \
+  --path-ignore-patterns '**/booking-payout-g16.test.ts' \
+  packages/api/src/tests/ packages/env/src/ packages/auth/src/ \
+  packages/db/src/ apps/server/src/openapi.test.ts
+```
+
+The reset-free report fixture partition uses the 6769 `DATABASE_URL`, with
+`TEST_DATABASE_ALLOW_RESET` and `TEST_DATABASE_RESET_TARGET` unset:
+
+```bash
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-admin-reports.test.ts \
+  packages/api/src/tests/integration/class-enrollment.test.ts \
+  packages/api/src/tests/integration/report-export.test.ts
+```
+
+The payout partition uses a separately migrated `cogito-test-payout` at
+`localhost:6770`, normally via `apps/server/.env.test-payout`. Set
+`PAYOUT_DATABASE_URL` to that exact URL; the test command must point
+`DATABASE_URL` and both reset values at it:
+
+```bash
+DATABASE_URL="$PAYOUT_DATABASE_URL" \
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-payout-g16.test.ts
+```
+
+CI clears `coverage/lcov.info` before each process, snapshots each fresh profile
+to its `coverage/api-*` path, then merges those three profiles before applying
+the coverage gate. Running the three commands manually without the workflow's
+profile capture/merge steps does not reproduce the complete CI gate.
 
 For the contact-sharing regression path, run the database-preparing wrapper
 with the focused integration test, then the Playwright privacy spec against the
@@ -1628,19 +3743,47 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
-The workflow runs this single coverage-instrumented suite and then runs the
-server suite in a separate process because its webhook test uses module
-mocking. The previous duplicate uninstrumented API pass is intentionally not
-run. Test + Coverage starts independently from lint and typecheck. The
-coverage comment script enforces 100% coverage for `packages/api` lines,
-overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
-total is treated as 100%. If this gate fails, inspect the missing function/line
-records in the generated lcov report and add a behavior-level test before
-pushing. A failed coverage test command is also propagated explicitly after
-the comment step. The generated PR comment uses blank lines between its status
-blockquote and tables; preserve these separators when editing the renderer.
+Resettable integration files run sequentially in separate Bun processes with a unique
+counter profile per file. Do not collect multiple isolated worker files into one
+COUNTER_COVERAGE_FILE: each worker flushes its own coverage global and overwrites
+the previous worker's profile. The runner merges every per-file profile with the
+unit, fixture, and payout profiles. This also releases crypto allocations between
+files. Coverage counter and merger regression tests enforce distinct partitions.
+
+The workflow runs resettable API/env/auth/DB/OpenAPI tests, reset-free report
+fixture suites, and payout integration tests against their exact database. It
+then runs the server suite in a separate process because its webhook test uses
+module mocking. The previous duplicate uninstrumented API pass is
+intentionally not run. Test + Coverage starts independently from lint and
+typecheck. Each process writes a fresh coverage/<partition>/counters.json. The collector removes stale outputs before execution; the reporter validates source hashes and counter identities across all profiles before merging coverage/counters.merged.json and coverage/lcov.merged.info. Stable function identities include declaration positions so nested functions with identical names remain distinct. Missing or stale partitions fail collection. It enforces the unchanged 100% for
+`packages/api` lines, overall lines, functions, and branches; a 0/0 branch total
+is treated as 100%. It runs only after successful test and merge commands, so
+an incomplete raw profile cannot be reported as merged coverage. A failed
+coverage command is propagated explicitly by the following step. If the gate
+fails on a merged profile, inspect the missing function/line records and add a
+behavior-level test before pushing. CI uploads the three raw partitions, merged
+LCOV profile, and function-identity manifest as the
+`api-coverage-profiles-<run-id>` artifact when collection, merging, or the gate
+fails. Use those profiles to identify uncovered source lines and functions
+before changing tests or thresholds. The generated PR comment
+uses blank lines between its status blockquote and tables; preserve these
+separators when editing the renderer.
+The DB unit test's environment mock includes an auth secret because Bun can
+share module mocks with integration tests in the resettable process. Its tests
+restore the mocked environment after each case so a development-mode SSL test
+cannot affect the following auth integration cases.
 The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
+
+PR310 CI run [#39913840116](https://github.com/cogitoacademy/app/actions/runs/39913840116)
+passed its server and coverage test partitions but failed the LCOV merge because
+Bun 1.3.14 omitted function identities while keeping the `FNF`/`FNH` summaries;
+it did not reach the 100% threshold step. E2E had 48 regular passes and 3
+failures, while the separate payout partition passed all 3 tests. Current
+focused proof is 6 LCOV merger tests / 55 expectations and 2 E2E identity tests
+/ 4 expectations. The serial hook and one hosted rerun on the updated branch
+remain pending. Do not use local database or browser acceptance as a substitute
+for the isolated hosted jobs.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
 emits **documented-intentional warnings**: `no-await-in-loop` = sequential
@@ -1655,6 +3798,61 @@ Do not "fix" the warnings by parallelizing the loops or by silencing the rules
 in `.oxlintrc.json` (that config is shared with the local run). The lint
 auto-fix commit sets `LEFTHOOK=0`; the baseline and format steps remain the
 authoritative CI gates.
+
+## Public Tutor API Verification
+
+`publicContent.tutors.list` is an anonymous server-side API for the future
+marketing-site consumer. Verify its HTTP contract locally with a `POST` to
+`http://localhost:3001/rpc/publicContent/tutors/list`, no cookie, and body
+`{"json": {}}`. The RPC response wraps the tutor array as `json`; an empty
+published set is `json: []`, while a non-success response indicates an API or
+database failure. The route does not enable browser CORS; use the marketing
+Next server for the fetch unless a later browser-read requirement adds an
+explicit origin policy.
+
+Run the focused API check from the repo root:
+
+```powershell
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/public-content.test.ts packages/api/src/tests/integration/public-content-tutors.test.ts
+```
+
+The integration fixture guard requires `NODE_ENV=test`, a local database host,
+and the exact `cogito-test` database name before any fixture write or cleanup;
+this suite does not reset or truncate the shared test database. Never load
+`apps/server/.env` for this fixture suite. It verifies an anonymous read, a
+published profile beside a draft profile, the exact public key set while
+sensitive columns are populated, active-vs-inactive catalog selection, the
+seeded published profile's presence and draft profile's absence, and the
+unchanged student gate on `tutors.listPublished`; it does not assume the shared
+test database has no other published tutors. The unit suite adds future/unknown
+top-level and nested fields to a simulated database row, verifies the positive
+selected-column allowlist, and checks that empty and error responses remain
+distinct. The 2026-10-19 integration run passed (1 test, 18 assertions) and the
+unit run passed (5 tests, 30 assertions); fixture cleanup was verified after
+the test.
+
+## FAQ content verification
+
+Open `/faq` as an admin to manage content; `/admin-faq` no longer exists.
+Check All/Active/Inactive filters, add/edit, desktop split editor (1024px+),
+mobile drawer, and Discard/Keep editing before abandoning a changed draft.
+Verify a successful save refreshes the list and the student/tutor FAQ view.
+
+The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`; it retains the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents. Older consumers can ignore these additive fields. Entries are alphabetized by the question displayed for the requested locale. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/faq`; the rich editor supports bold, italic, safe links, and ordered/unordered lists, with optional Indonesian fields hidden by default. Only active rows are public, and at most six active rows may be selected for the landing surface.
+
+Run the focused FAQ checks from the repository root:
+
+```powershell
+bun test --timeout 30000 apps/web/src/lib/faq-rich-text.test.ts packages/api/src/tests/unit/faq.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/faq.test.ts
+bun run --filter @cogito-app/e2e test -- faq-admin.spec.ts --retries=0
+```
+
+The integration fixture guard requires `NODE_ENV=test`, a loopback host, and the exact `cogito-test` database before writes or cleanup. It deletes only recorded fixture IDs; it does not reset or truncate the database. Migrations `0058` and `0059` are applied to local `cogito-test`; migration `0059` is also applied to local development `cogito-app`. In shared/production, apply migrations `0058` then `0059` through the approved release process before deploying API code that selects the rich columns. The marketing reader accepts responses without rich fields, so it may deploy before or after the API release. On 2026-10-19, the rich-text/API unit checks passed (8 tests, 28 expectations), FAQ Postgres integration passed (2 tests, 13 expectations), the FAQ admin Playwright spec passed (1 Chromium test), and the E2E TypeScript check passed. A local development-database create probe succeeded after applying `0059` and its throwaway row was deleted. The scoped FAQ web typecheck and web production build also passed; the full web typecheck was not rerun because earlier attempts exhausted available memory.
+
+If `POST /rpc/adminFaq/create` returns `500` with `INTERNAL_SERVER_ERROR` / `Unexpected error`, first check that migration `0059_faq_rich_text.sql` is applied to the exact database used by that API server. It adds `question_en_rich`, `question_id_rich`, `answer_en_rich`, and `answer_id_rich`; migrating `cogito-test` does not update development `cogito-app`. For local development, run `bun run db:migrate` from `packages/db` with the default `apps/server/.env` target, then restart the API. Verify the target before migrating; never point this local command at a shared/production database.
+
+The marketing site reads both FAQ surfaces server-side using `COGITO_APP_API_URL`, `POST /rpc/publicContent/faq/list`, and `cache: "no-store"`. The parser requires a `json` field and accepts `meta` when absent or an array; the configured API omits empty metadata. Missing configuration, HTTP failure, invalid JSON/envelope, or invalid entries produce a localized FAQ error state; a valid empty array produces a separate empty state. The adapter validates rich documents and safe link schemes, uses rich fields when present, and falls back to legacy answer/question text when an older API omits them. FAQ JSON-LD continues to use the plain projection. Landing FAQ failures stay inside that section, and failed requests do not render FAQ JSON-LD. Local mock coverage returned HTTP 503 while `/{en,id}/faq` remained HTTP 200 with retry text; do not use the production API URL for local verification. From `C:/.Projects/cogito-acad`, run `bun test apps/web/tests`; FAQ-specific rendering/parser tests and the marketing typecheck/build have passed. A headless-browser smoke against a local FAQ mock verified Enter/Space operation for the desktop/mobile landing cards and full FAQ accordion, plus the answer-region ARIA links; Tab-sequence and screen-reader behavior remain unverified. The marketing production build passed with `COGITO_APP_API_URL=http://127.0.0.1:4300`; both FAQ and landing routes are dynamic and no API data is baked into the build. Do not seed client FAQ copy without the approved M01 content inventory.
 
 ## Common Errors
 
@@ -1733,8 +3931,8 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Test Safety Guard
 
-- `Refusing to run tests against a non-test database` — The test harness detected a `DATABASE_URL` whose database name does not include `test`.
-- `resetDatabase() is blocked outside a dedicated test database` — An integration test tried to truncate tables while pointed at a non-test database.
+- `Database URL must target an approved local test database` — The connection URL did not exactly match an approved local PostgreSQL test target.
+- `resetDatabase() requires explicit consent for an exact dedicated local test database` — Reset lacked the exact 6769/6770 target, `TEST_DATABASE_ALLOW_RESET=true`, or a matching `TEST_DATABASE_RESET_TARGET`; 6767/6768 are always refused.
 
 ### Role-boundary errors
 
@@ -1828,6 +4026,8 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
+Boolean environment values accept `true`/`1` and `false`/`0` (case-insensitive); empty or whitespace-only values use the documented default, while unknown spellings fail startup validation.
+
 | Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                      |
 | --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                     |
@@ -1916,6 +4116,26 @@ The production app can run provider Test Mode first. The switch to Live Mode hap
 6. **Refund path:** confirm `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL; no provider cash refund is issued (PRD §677).
 7. **Emergency stop:** set `PAYMENT_PROVIDER=stub` only after confirming no real checkout can be created. In-flight Midtrans payments require status reconciliation before or after the stop.
 
+### Local V3 Sandbox and email acceptance harnesses
+
+Run the Midtrans scripts from the repository root. They read `apps/server/.env`, refuse any DB target except development `localhost:6767/cogito-app` with `MIDTRANS_MODE=test`, and blank Resend/Google Meet integrations. The checkout harness uses a Midtrans Sandbox test card and leaves its captured Sandbox transaction in provider history; it removes only its UUID-scoped local fixtures and verifies existing bookings and the pricing pointer remain unchanged. The second command consumes the first command's ignored evidence, reads the authenticated Sandbox status, and sends that signed status twice to the in-process local webhook to check idempotency.
+
+```sh
+bun run scripts/verify-midtrans-sandbox.ts
+bun run scripts/verify-midtrans-sandbox-webhook.ts
+```
+
+These commands do not prove external Midtrans notification delivery or the browser return/balance-refresh journey.
+
+For a one-off Resend delivery test, run from `apps/server` so Bun loads that directory's `.env` and the harness writes its ignored metadata under the repository's `tmp/`:
+
+```sh
+cd apps/server
+bun run ../../scripts/verify-resend-email.ts
+```
+
+The harness sends only to its fixed approved test recipient and refuses a repeat when prior metadata shows an accepted, in-progress or outcome-unknown send. Resend provider acceptance does not prove inbox arrival or OTP signup delivery.
+
 ### Google Meet refresh-token acquisition (X3)
 
 The repeatable setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md). Use the OAuth refresh-token path for a normal Gmail account; use the service-account path only with Workspace domain-wide delegation.
@@ -1946,14 +4166,18 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
 
-New email/password signups receive one combined welcome + verification email: it contains the onboarding/dashboard entry point, login link, platform introduction, and six-digit OTP. **Resend code** and verification for legacy accounts remain verification-only, so they do not repeat the signup welcome copy.
+New email/password signups receive the six-digit OTP before any account exists. The server commits the proof and cooldown before calling the mail provider, so provider latency does not hold a database transaction or email lock. A send failure deletes only that request's proof row and returns an inline error; it cannot remove a newer resend. After verified account creation commits, the server makes one separate best-effort attempt to send the welcome/onboarding email with the login link and platform introduction. Resending a code sends only the OTP. Legacy account verification and email-OTP sign-in remain verification-only; the email-OTP plugin cannot create users and does not send sign-in codes to unknown emails.
 
 Manual signup smoke test:
 
-1. Create a new email/password account with a fresh address.
-2. Confirm exactly one auth email is delivered and that it contains both the welcome content and the six-digit verification code.
-3. Enter the code on `/verify-email` and confirm the account reaches its normal destination.
-4. Use **Resend code** and confirm the replacement message is verification-only.
+1. Create a new email/password account with a fresh address and confirm the OTP email arrives before an account exists.
+2. Enter the six-digit code in the signup form. Confirm the account is created only after the code is accepted and the separate welcome email is attempted after commit.
+3. Request another code after the cooldown and confirm the new code works while the previous code is rejected.
+4. Change the email field and confirm the code input clears; return to the original address during cooldown and confirm the browser recovers its own attempt without exposing another attempt ID.
+5. Confirm existing-account email verification/sign-in still works and an unknown address cannot receive a sign-in OTP or create an account through the Better Auth email-OTP plugin.
+6. Simulate a provider send failure and confirm no account is created, the failed proof cannot be used, and a later resend remains usable if it replaced the failed request's proof while delivery was pending.
+
+Auth diagnostics must not print OTP values, signup attempt IDs, passwords, reset URLs, or reset tokens. The development reset-mail log may identify the user and action but omits the one-time link.
 
 Manual smoke test after an auth or web deploy:
 
@@ -2080,7 +4304,56 @@ Default local test ports:
 
 - Web: `3100`
 - Server: `3101`
-- PostgreSQL: `6767` (test container; shared with dev container — see note above)
+- PostgreSQL: `6767` (test container; override with `TEST_POSTGRES_PORT`)
+- Redis: `6379` (override with `TEST_REDIS_PORT`)
+
+### Isolated pre-account signup E2E (REQ-AUTH-01)
+
+Use a task-local ignored env file such as
+`apps/server/.env.signup-test.local`. Keep it pointed at loopback PostgreSQL
+`cogito-test` and Redis, with `SERVER_URL=http://localhost:3201`,
+`WEB_URL=http://localhost:3200`, `PORT=3201`, and `WEB_PORT=3200`. Leave
+`RESEND_API_KEY` and Google/Meet credentials blank. The test server captures
+signup OTPs in memory and suppresses signup/welcome mail; the browser fixture
+reads that code through a route available only in the exact local test target.
+
+To avoid colliding with the shared `6767`/`6379` test services, start a separate
+local Compose project with loopback-only port overrides:
+
+```powershell
+$env:TEST_POSTGRES_PORT = "6768"
+$env:TEST_REDIS_PORT = "6380"
+docker compose -p cogito-signup -f docker-compose.test.yml up -d
+```
+
+Before reusing a previously initialized target, inspect its data and preserve
+anything unexpected. Do not use `down --volumes` or remove database volumes.
+Run the standard migration before Playwright setup, and keep `ENV_FILE` pointed
+at the same task-local file in both commands:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run db:migrate
+
+Push-Location packages/e2e
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run test --config=playwright.signup.config.ts src/specs/pre-account-signup.spec.ts
+Pop-Location
+```
+
+The Playwright guard checks `NODE_ENV=test`, loopback HTTP origins, and the
+exact `cogito-test` database before its seed/reset setup. The spec must use a
+free dedicated API/web pair, and server reuse stays disabled. Do not point this
+run at development data or add live mail, Google OAuth, or Google Meet
+credentials.
+
+Signup verification covers the same 10/minute/IP auth bucket for canonical,
+encoded, repeatedly encoded, case-varied, and trailing-slash forms of auth
+paths. The browser keeps the per-email attempt UUID in session storage so it
+can recover its own cooldown after changing the email field or reloading; the
+OTP input is cleared on email change and must be entered again. The test-only
+OTP capture remains in memory and emits no OTP or credential values to logs.
 
 Economy role checks:
 
@@ -2162,9 +4435,85 @@ drawer on a short viewport. Scroll and overscroll the profile body; it may bounc
 locally, but the header and booking/review footer must remain visible and must not
 move with the body.
 
-## Tutor payout operations (2026-08-28)
+## Tutor payout operations (2026-10-21)
 
-Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `0036_worried_groot.sql` before deploying the tutor payout-account UI. Operations may process tutor honoraria weekly, but the balance does not reset on a calendar boundary. Review the unpaid amount, transfer the net amount, then call the admin mark-paid procedure; this advances the completion-time cutoff and clears only the sessions included in that payout. Completion and mark-paid operations are serialized per tutor to avoid a boundary race. Only conventional BCA (exact bank name `BCA`) is fee-free; BCA Syariah, blu (BCA Digital), and any other destination incur Rp2,500 once on that payout. The application records the payment audit trail but does not execute a bank transfer. Confirm the tutor's account number, holder name, opening city/regency, ownership choice, and transfer disclaimer before initiating the transfer.
+Migrations `0060_tutor_payout_allocations.sql` and the reviewed Release V3 payout migration must be applied before using the tax/payout workflow. For Release V3, review and apply `0065_*` only after verifying it was generated from the parent-integrated `0064` snapshot and contains only tutor tax/payout schema changes. Never regenerate or rewrite earlier SQL, snapshots, hashes, or timestamps as part of this rollout. Do not backfill historical paid aggregates or fabricate fee/tax snapshots. Payout review uses the legacy cutoff only for rows with no source allocations; existing T02 allocations remain source-scoped even when T03 preview columns are NULL. A void row with reconciliation required blocks its released source keys until audited resolution. Where legacy allocation or tax snapshots are absent, the admin/tutor history and export show that the details are unavailable instead of reporting zero sessions or a zero tax rate.
+
+Release V3 migration `0065_tutor_payout_tax.sql` was generated with the
+lockfile version of Drizzle Kit `0.31.10` after merging parent commit
+`385fc959`. Its journal entry is idx `65`, timestamp `1792525224597`, tag
+`0065_tutor_payout_tax`, and SQL SHA-256
+`876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`. It was
+generated from snapshot `0064` and changes only tutor tax/payout schema. The
+parent confirms `0064` is applied to local development; `0065` is not applied
+to development or test and remains gated on parent review and database
+verification. Preserve all earlier migration files, snapshots, hashes, and
+timestamps.
+
+### Dedicated T03 payout test target
+
+The isolated target is prepared but must not be started, migrated, reset, or
+tested until the parent assigns the database/browser window. It uses
+`docker-compose.test-payout.yml`: PostgreSQL database `cogito-test-payout` on
+`127.0.0.1:6770`, Redis on `127.0.0.1:6382`, API/web ports 3111/3110, and the
+explicit named volume `cogito-t03-payout-20261021-data`. At the last port check
+on 2026-10-21, 6770, 6382, 3110 and 3111 were free; 6767 and 6769 were occupied
+and remain assigned to other work. The env template is
+`apps/server/.env.test.payout.example`; it pins `NODE_ENV=test`, the exact
+loopback database URL, disabled Google Meet, and the stub payment provider.
+Keep bank, calendar, and email providers fake; do not send real email or execute
+a bank transfer.
+
+After the parent grants the window, copy the template and use the same absolute
+env file for the target guard, migration, service integration test, and browser
+test:
+
+```powershell
+Copy-Item apps/server/.env.test.payout.example apps/server/.env.test.payout
+$payoutEnvFile = (Resolve-Path apps/server/.env.test.payout).Path
+$env:ENV_FILE = $payoutEnvFile
+$env:NODE_ENV = 'test'
+docker compose -f docker-compose.test-payout.yml up -d postgres redis
+bun --env-file $payoutEnvFile packages/db/ensure-test-database.mjs
+bun --env-file $payoutEnvFile run db:migrate
+bun --env-file $payoutEnvFile test --timeout 30000 packages/api/src/tests/integration/booking-payout-g16.test.ts
+Push-Location packages/e2e
+bun run test -- tutor-payout-tax.spec.ts --retries=0
+Pop-Location
+Remove-Item Env:ENV_FILE, Env:NODE_ENV
+```
+
+Verify the exact target before any write. The test helper independently refuses
+reset/migration against any other database/port pair:
+
+```powershell
+$payoutEnvFile = (Resolve-Path apps/server/.env.test.payout).Path
+bun --env-file $payoutEnvFile -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname.replace(/^\[|\]$/g, '')) || u.port !== '6770' || u.pathname !== '/cogito-test-payout') throw new Error('Payout DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
+```
+
+Do not use `0065` until its reviewed SQL is cleared and the parent authorizes
+database verification. The authored acceptance covers selected-source
+cutoffs, legacy reconciliation, concurrent preview/transfer behavior,
+allocation immutability, roles, and the tutor payout journey; all remain pending
+the assigned window.
+
+Honoraria do not reset on a calendar boundary. In `/admin-tutor-payouts`, review the selected unpaid sessions, legal-name/NIK completeness, configured rate, saved bank destination, whole-IDR withholding, one transfer fee and exact net. Current defaults are 2.50% for NIK+NPWP, 3.00% for NIK-only and missing identity; admins may change defaults or set a tutor override with a reason. These are configurable defaults, not legal validation. OPS01 tax-adviser confirmation remains a release operational gate.
+
+Prepare the versioned batch before performing a transfer. The app reserves each selected source atomically and does not call a bank. After the external transfer, record its exact calculated net, actual payment date and optional reference/proof URL. A mismatch cannot be marked paid. Verify the saved payout snapshot and transfer evidence in the admin detail. The tutor notification and email outbox record are written transactionally; do not test with real email delivery or bank transfers.
+
+Only exact bank name `BCA` is fee-free; other banks incur Rp2,500 once per batch. A reasoned void retains payout and transfer evidence and releases its fee allocations. If an external transfer was recorded, verify its real-world reconciliation and record an audited resolution before the same sessions can be prepared again. The monthly CSV groups paid rows by actual `paidAt` in Asia/Jakarta and exports their saved tax/bank snapshots; void and reconciliation rows remain in a separate section. Legacy paid rows without saved fee allocations remain aggregate-only and unchanged.
+
+New source-based payouts are excluded from the next unpaid summary through
+their per-session allocations, so preparing or paying selected sessions leaves
+other unpaid legacy and fee-event sources visible. The time cutoff applies only
+to historical aggregate rows with no saved source keys/version. An allocationless
+legacy payout voided while transfer reconciliation is required keeps its
+historical cutoff; after audited resolution, the previous paid legacy cutoff
+continues to prevent older covered bookings from reappearing. A repeated
+transfer record with the same normalized preview version, amount, date,
+reference and proof returns the saved result without another audit or tutor
+notification. Conflicting details are rejected. Tutor history and the payout
+notification identify each covered booking by booking number, type and date.
 
 ## Cogito Marks visual smoke check
 
@@ -2173,3 +4522,231 @@ Check wallet balances/history, tutor pricing, booking creation/detail/cards, Kno
 ## Invite Tutor card visual smoke check
 
 On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly after its footer. The adjacent Invitations card may be taller, but it must not stretch the form card or leave a white strip below the footer. Filter Invitations to reduce its records and verify pagination stays aligned to the bottom of the height supplied by its parent grid row.
+
+## T07 development migration acceptance (21 October)
+
+Integrated report workspace and settlement through `d508467b` into local `f/release-v3`. Applied `0067_class-session-reports.sql` to verified loopback development `cogito-app:6767` with the normal Drizzle runner, without reset or seed. Readback: journal id 88, timestamp `1792572957418`, SHA-256 `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. The session-owned API was restarted; `/health` reports database/Redis/scheduler healthy and anonymous `/rpc/classes/listSessionReports` returns 401. `/class-reports` on web port 3000 returns 200. Authenticated browser acceptance remains the isolated test result, not a development seed or production-provider test.
+
+### KOL responsive polish checkpoint
+
+KOL settlement responsive checkpoint (2026-10-25): use the existing database-free synthetic workflow with isolated ports:
+
+```powershell
+$env:KOL_WEB_PORT='3346'
+$env:KOL_API_PORT='3347'
+$env:KOL_BROWSER_CHANNEL='msedge'
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-settlement-synthetic.config.ts
+```
+
+Unset overrides to retain Chromium and ports 3306/3307. The optional browser channel uses an already installed browser; no browser install is needed for Edge. Vite cache is separated by web port, reuseExistingServer remains false, and all API requests are intercepted. No API/DB/provider/seed starts. 13/13 checks passed on Edge: seven existing settlement wire/render cases, five reflow widths (320/390/720/768/1440), and a 320px keyboard retry/review case. A 185-character bank reference measured 1743px scroll width before; after, panel scroll/client widths match at 288/358/688/736/1119px respectively. Original retry review button: 38px height versus 49px scroll height; after: 56/56px, keyboard Tab/Enter reaches and activates review. Screenshots are local test-results artifacts, with baseline viewport captures retained in tmp/responsive-before. The 720px case is only a reflow proxy for 1440px at 200%, not native browser zoom proof. Native zoom, RTL, screen reader, real persistence/provider/auth, and other V3 screens remain unverified. No release-readiness claim.
+
+Validation also passed scoped oxlint/oxfmt and the serial repository check-types command (four tasks: e2e/web executed, ui/server cache hits). The first typecheck caught two new fixture/log typing errors, corrected before the passing run. Layout guidance: https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md (content handling and flex minimum sizing).
+
+### Isolated economy/payout layout checks (25 October 2026)
+
+Run from the checkout root with existing dependencies and installed Microsoft Edge:
+
+```powershell
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.finance-layout.config.ts
+```
+
+This dedicated config reuses the classes-layout Vite configuration, owns web port 3356 and cache `tmp/finance-layout-vite-cache-3356`, and uses mock origin 3357 without an API listener. No global setup, live sign-in, database, seed, migration, provider or parent 3000/3001 restart is used. Browser requests outside 3356/3357 are aborted and unexpected write procedures fail the check. Do not substitute `economy-roles.spec.ts` or `tutor-payout-tax.spec.ts`: they require live auth/DB workflows.
+
+Baseline on 834f525f: 2 failed / 6 passed after settling drawer animations and excluding intended local table scrolling. At 320/390px, V3 package price `2000000000` required 100.6px of text width but had 92px. The 14rem minimum raises available width to 128px at both widths. The green run passes 8/8 Edge tests: four economy and four payout cases, each payout case traversing prepared, unpaid-preview and void/reconciliation drawers. Component scroll/client bounds, button content height, numeric text width, local table scrolling and keyboard action reachability are checked; hidden document overflow alone is not the assertion.
+
+Payout table scroll/client widths are 1500/288, 1500/358, 1500/736 and 1500/1119 at 320/390/768/1440px; these are contained horizontal scrollers. At 320px, economy package and competition tables scroll at 578/288 and 602/288, preserving readable inputs rather than shrinking them. Screenshots are written to `test-results/finance-layout/` in the checkout root (read-only/edit economy, payout page, drawers and focused actions); traces on failure are under `packages/e2e/test-results/finance-layout/`.
+
+Web and E2E TypeScript use serial TS-Go `--checkers 1` with `GOMEMLIMIT=1GiB` and `GOMAXPROCS=2`. Focused lint and formatting checks cover only changed code. Native 200% browser zoom is unverified; viewport sizing, CSS zoom and deviceScaleFactor are not substitutes. RTL, screen-reader/contrast audit, live persistence/authorization, financial acceptance and broader release checks remain parent gates. No separate confirmation modal exists on these routes; the checks exercise the existing payout drawer actions without activating financial writes.
+
+### KB/calendar management on canonical pages (25 October 2026)
+
+Use `/knowledge-bank` → Manage resources for PDF resources, or `/calendar` → Manage calendar for events. View resources/calendar returns to the original reader UI; an open draft requires discard confirmation. The former `/admin-content` URL redirects admins to Knowledge Bank. Non-admin roles retain their existing reader/access rules.
+
+Synthetic verification with installed Edge:
+
+```powershell
+$env:KB_BROWSER_CHANNEL='msedge'
+node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kb-calendar-synthetic.config.ts
+```
+
+This existing isolated harness owns 3316 web / 3317 mocked origin and its own Vite cache, with no API process, DB/global setup, provider or live auth. It checks versioned KB save/conflict retention, calendar timestamps/catalog IDs, calendar agenda behavior, student/tutor reader isolation, legacy redirects, and both editors at 320/390/768/1440px including View/discard confirmation. Screenshots are under `packages/e2e/test-results/kb-calendar-synthetic/`. Mocked writes prove UI/wire behavior only; live persistence, PDF storage, authorization, native zoom, screen-reader and production acceptance remain separate gates.
+
+Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
+
+Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+## Activities website local verification (2026-10-26)
+
+Marketing route: `http://localhost:2001/en/activities` (also `/id/activities`).
+Configure marketing server `COGITO_APP_API_URL` to the app API origin and
+`NEXT_PUBLIC_APP_URL` to the app browser origin. Existing Sanity configuration
+continues to supply Others. Requests are read-only; no DB reset/migration,
+provider send or production activation is needed for this website slice.
+Restart/redeploy the API with the public DTO update before expecting Indonesian
+class titles/descriptions; older API versions remain readable with English fallback.
+Both localized legacy `/events/townhall-and-101-series` and
+`/events/simulation-days` routes return permanent redirects to Activities.
+
+Focused checks: marketing `bun test apps/web/tests/activities-api.test.mjs`;
+API `bun test ./packages/api/src/tests/unit/academy-class.public.test.ts`.
+Browser acceptance covers class filtering/empty state, app links, article detail
+open/close, EN/ID navigation and redirects, and overflow at desktop/mobile widths.
+Published content and current class availability depend on the configured sources;
+local fixture content does not establish production content acceptance. Others
+DB migration/admin CRUD and deployment remain separate gates.
+
+Verification outcome: marketing adapter **4 tests / 18 expectations** and the
+focused public DTO **1 test** pass. Marketing production build (including
+TypeScript), standalone web typecheck, scoped lint/format and diff checks pass.
+Edge against the local production server verifies class filters/empty state,
+app class links, article modal open/Escape, mobile Activities navigation, all
+four localized legacy URL HTTP 308 redirects and no horizontal overflow at
+1280/390/320px, with no page errors. The configured live sources returned one
+cohort and six legacy events. Masterclass/postponed and optional Indonesian
+class fields have adapter/source verification; these are not full live fixture
+journeys. The DB, provider and production environment were not mutated.
+
+Activities image-free follow-up: verify Classes contains no image/cover slot,
+with date tiles and compact booking-style rows at desktop/mobile widths.
+Others retains its article images. The class adapter suite now has 4 tests /
+13 expectations after removing unused cover URL derivation.
+Final follow-up checks pass: production build/typecheck, 4 adapter tests, scoped
+lint/format, and Edge at 1280/390/320px. Classes has zero image elements and
+one date tile per row; filtering, detail links, Others modal, navigation and
+redirect checks remain passing. No production deployment was performed.
+
+Activities text follow-up: compare compact title and icon-led time/mode/tutor
+metadata with app My Bookings; check competition/session/price wrapping and
+the full-width mobile detail action at 320/390px. No API/schema change.
+Verified after the text follow-up: production build/typecheck and scoped lint
+pass; Edge checks at 1280/390/320px pass with no overflow or page errors.
+Class filtering, detail links, modal and locale redirects still pass.
+
+### Academy capacity policy (2026-10-29)
+
+Academy capacity changes require no migration or environment change. Restart the API to load updated draft/publish validation. For acceptance, save and publish online and in-person sessions above the assigned tutor private teaching limit; keep in-person capacity within the room limit and confirm schedule conflicts still fail.
+
+<!-- Student referral dashboard, 2026-10-29 -->
+
+Student referrals: `/rpc/referral/getMine` now includes `friends` scoped to the authenticated referrer (name, signup date, first completed paid session date, credited Marks). The page shows a semester sidebar and invited-friends table with account-created/completed-session states; zero credited Marks remains visible when no reward was granted. No migration or environment changes required.
+
+Classes layout checks can use installed Edge with PLAYWRIGHT_CHANNEL=msedge. Set PLAYWRIGHT_NO_ARTIFACTS=1 to disable traces and screenshots on constrained disks. Run node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.classes-layout.config.ts from the repository root. These use synthetic auth/RPC responses, without database seeds or provider calls.
+
+### Tutor honorarium in booking detail (2026-10-29)
+
+Admin booking honorarium display requires existing tutor session fee and payout allocation tables; no new migration or environment configuration. Historical aggregate-only payouts without source allocation cannot establish payment for an individual fee.
+
+Academy class scheduling (2026-10-29): the admin session form accepts start date/time and duration in minutes (default 60). Editing derives duration from existing timestamps; saving computes endAt as startAt plus duration. The API and stored startAt/endAt contract remain unchanged; no migration or environment change is required.
+
+Academic class references (2026-10-30): academy_class.class_number is a database-generated serial with a unique constraint (migration 0076_academy_class_number). Admin class reads, public catalog responses and class session report rows expose classNumber. Session Reports displays/searches CLS-{classNumber}; UUIDs remain the relational identifiers. Applying 0076 and restarting API processes is required before running this schema. Migration has not been applied by this change.
+
+Tutor pricing (V3 only): Cogito admins own all honorarium rates. Tutor profile updates reject changed `prices` or `baseRatesIdr` even before an economy revision is active. Tutor onboarding does not require legacy rates; without active pricing, the UI shows an admin-configuration message instead of editable inputs. Configure pricing through admin economy settings before new sales.
+
+## Referral layout refresh (30 October 2026)
+
+No migrations, environment changes or API restart required. The synthetic referral UI workflow is `KOL_BROWSER_CHANNEL=msedge node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts` (set the environment variable with PowerShell syntax on Windows). It uses an isolated Vite server and mocked RPC/auth; no database or providers. Covers admin search/pagination/drawer and campaigns plus student pending/completed/zero-reward layouts at 390 and 1440px. Live reward persistence and provider acceptance are separate gates.
+
+Validation: web typecheck and focused oxlint passed; 13/13 installed-Edge synthetic browser cases passed in 1.3 minutes. Reviewed student 390/1440px and admin 390px screenshots; fixed admin intrinsic-width clipping found during visual inspection. No live DB/provider acceptance was run.
+
+Navigation query caching: fresh query data is reused for 60 seconds on remount; stale or invalidated queries still refetch. First visits still fetch from the API. Live navigation latency has not yet been measured.
+
+Referral empty-state validation (30 October): focused oxlint and web typecheck pass. Two installed-Edge synthetic cases pass at 390/1440px, covering student empty invite, admin filtered-empty recovery, and first-campaign action; desktop student and mobile admin screenshots inspected. Full workspace typecheck stops at unrelated unused MODALITY import in tutor.service.ts. No DB/provider validation.
+
+Admin referral table/drawer validation (30 October): web typecheck and focused oxlint pass. Seven synthetic installed-Edge cases pass (33.7s), including drawer open/exit lifecycle, search/pagination, responsive layouts and empty recovery. Drawer keeps selected evidence during exit; null technical fields are omitted and business results are grouped separately. Workspace typecheck remains blocked by unrelated unused MODALITY import in tutor.service.ts. No live DB/provider checks.
+
+## Bulk student report exports (30 October 2026)
+
+Restart the API for POST /reports/student/list and selected-ID PDF payload support, then reload web. No new migration/environment variable is introduced by bulk export; existing academy class-number migration must already be applied to the exact target. An admin chooses one student; a student is scoped to self; tutors use Session Reporting and cannot export student PDFs. Select up to 100 reports, across filters/pages, and download one PDF. A 409 means selection eligibility changed: reload/reselect; never substitute an all-report download. Report list and PDFs remain private, no-store and use the existing reportExport rate-limit category.
+
+Verification for this slice: route/selection/access/window/PDF-layout tests pass 19 cases / 71 assertions; focused lint and web typecheck pass. Server typecheck is blocked by the existing unused MODALITY import in tutor.service.ts. Eight synthetic Edge journeys pass: exact selected-ID payloads, empty states, mobile report drawers/editors, and selection retained across filters/pages at 320/1440px. E2E typecheck passes. The guarded DB integration fixture now checks exact subset rendering and unknown-ID rejection but was not run. Live DB/auth, end-to-end selected PDF content and accessibility acceptance remain open.
+
+Compact admin referral rows (30 October): web typecheck, focused lint and two synthetic Edge desktop/mobile workflows pass. Browser assertion limits each fixture row to 52px; desktop screenshot inspected. Extra identity/reward evidence remains in drawer. No DB/provider checks.
+
+Latest shared-checkout typecheck (30 October 2026): web passed before concurrent changes; the final rerun is blocked by academy-class-page.tsx:1274 (Accordion onValueChange unknown[] versus number[]). Server check remains blocked by the unrelated unused MODALITY import in tutor.service.ts. No errors from the bulk-report files were reported. Focused lint, formatting, route/selection/PDF tests and the eight synthetic Edge journeys passed; these do not prove live API/database acceptance.
+
+### Unified session reporting deployment
+
+Restart the API after deploying `booking.listReportSessions`; a frontend-only reload cannot register the new RPC. No database migration or seed is needed for this workspace change. Smoke-test tutor ownership, ended private series children, admin correction/version conflicts, class report recording, and Student Reports selected PDF download. Synthetic browser coverage uses mocked RPC responses and does not establish live settlement behavior.
+
+## Others article cutover (2026-10-30)
+
+Apply migration 0077 before deploying the API/website. Local preflight confirmed
+`localhost:6767/cogito-app` at migration 0076; only 0077 was applied, without reset.
+Admin editor is `/activities`; published articles appear at marketing
+`/en/activities` and `/id/activities` using server `COGITO_APP_API_URL`.
+Cover is an HTTP(S) image URL; use an image reachable from the website browser.
+Registration links go inside rich text; no separate CTA field is retained.
+The local example has id `e7da3184-ec78-4ebf-9611-7d444842e82b` and English title
+Example: Ideas into Action; it is demonstration content, not a real event.
+Only the local DB was changed. Production rollout remains unperformed.
+
+Verification: 4 validator tests / 8 expectations pass. Direct oRPC/real-local-DB
+acceptance verifies anonymous and student admin denial, draft exclusion,
+publishing, stale update conflict, localized public content and private field
+exclusion. Live HTTP public read returns the example, anonymous admin list 401.
+App Vite and marketing production builds pass. App/server typechecks remain
+blocked by unrelated dirty `academy-class-page.tsx` Accordion typing and
+`tutor.service.ts` unused MODALITY; changed activity files have no reported
+TypeScript errors. These checks do not establish real admin-browser acceptance.
+Final Others checks: live website public example/modal/body registration link
+passes in EN/ID at 1280/390/320px with no page errors or horizontal overflow.
+A temporary local fixture verified automatic Completed status and versioned
+admin deletion; the fixture was deleted and the published example retained.
+Marketing standalone tsc and scoped lint pass. App/server unrelated type errors
+remain as recorded above; real authenticated admin-browser editing was not run.
+
+Competition types directory hides superseded migration-0027 seed records without database cleanup. Expand a competition row to inspect specializations; Edit opens the existing drawer. No migration is required for this presentation change.
+
+Others article layout follow-up (2026-10-30): at desktop widths (1024px+),
+the detail modal places cover/title/schedule/location in the left column and
+rich article content in the right column. Narrower screens stack metadata
+above the body. No data/API change. Scoped lint and marketing tsc pass.
+
+Activities admin editor layout correction (2026-10-30): the owner intended
+the cogito-app authoring form. At 1024px+, metadata/publication occupies the
+left column and English/optional Indonesian rich-text editors occupy the right
+column, with a larger desktop editing area. Mobile stacks fields above editors.
+Save/cancel remain in the same form. Scoped lint passes; whole-app typecheck
+still reports the pre-existing academy-class-page Accordion type error.
+
+### KB/calendar management controls (2026-10-30)
+
+Admin resource and event lists use tables. Calendar education levels are `sd`, `smp`, `sma`, `mahasiswa`; scale is `international` or `national`, validated by the authoring API. Dates use the shared date picker in WIB, preserving existing times. Manual order is hidden; new entries default to zero and edits retain stored order. Resource categories render verbatim. Admin-only `/rpc/adminContent/previewPdf` accepts `{ "json": { "fileId": "..." } }` and returns a base64 PDF plus its filename, including archived/unattached files; authoring must be enabled. The browser renders a temporary PDF blob and revokes its URL when closed/replaced. Web CSP permits blob frames; deploy the updated nginx configuration with the web app. No database migration is required.
+
+KB/calendar management refinement: compact rows, shared TablePagination (10 records per page over the loaded admin collection), search resets pagination, no active/archive filter or manual reload control. Existing TanStack Query refresh and mutation invalidation remain. Calendar create/update/delete accept an omitted reason and generate an operation-specific audit reason; Knowledge Bank changes still require a reason. Deploy matching API and web changes together; no environment or database migration changes.
+
+### Booking exact top-up (2026-10-30)
+
+Private booking summaries now quote the current Marks shortfall using the existing payment quote and purchase RPCs. A drawer confirms the exact IDR price and opens hosted payment in a separate tab so booking selections remain available. Returning to the booking tab refreshes the wallet; Check balance also refreshes it. Continue booking becomes available when the wallet has sufficient available Marks. Booking submission still validates current availability and price; payment does not reserve a slot. Same-tab redirect restoration and automatic booking submission are not implemented. Provider/browser acceptance remains pending.
+
+Classes exact top-up now uses a confirmation drawer and opens hosted payment in a separate tab. Returning refreshes wallet and enrollment state. Check balance and Continue class checkout allow explicit refresh and return to the existing installment funding controls. Payment still does not extend seat reservation expiry; funding continues through existing server validation. Browser/provider acceptance is pending.
+
+Migration 0078_remove_superseded_competition_seeds removes only the seven parent and 21 specialization seed IDs from migration 0027. It aborts atomically if pending tutor selections, booking snapshots/topics, economy revisions or foreign-key references still use them; clean up those references explicitly before retrying. Canonical migration 0029 rows and audit history remain. Migration authored but not applied or database-tested.
+
+Seed competition taxonomy: seed.ts now inserts the seven canonical parent competitions and 34 specializations (including Law Debate), with migration-0056 parent palettes, before assigning review tutor subjects. Missing rows are inserted by slug in one transaction; existing catalog edits and archive status are preserved. Seed code updated only; database seed not executed.
+
+Initial data ownership (2026-10-30): migration 0027/0028 retain schema creation only; 0029/0041/0047 retain no-op journal slots. Competition taxonomy (7 parents, 34 specializations including Law Debate), Marks packages and default economy config are inserted only by apps/server/src/seed/seed.ts. Non-test seed preserves existing config/catalog values; test seed retains its explicit economy reset. Existing databases are not retroactively changed by editing these migrations; 0078 remains the cleanup for obsolete 0027 seeds. Migration 0056/0057 palette backfills remain for existing rows; they create no records. For a fresh database, run schema migrations then the server seed. No migration or seed was executed for this change.
+
+V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive package defaults from DEFAULT_V3_ECONOMY_CONFIG (50/350000, 150/975000, 250/1500000, 500/2750000). After canonical taxonomy and review admin creation, server seed transactionally initializes and activates a new PRD-default V3 revision only when no revision is active; it preserves and validates an existing active revision and does not activate an unrelated saved draft. Review tutor seed no longer writes legacy prices/baseRatesIdr and clears those fields on its existing demo profile. New presentation bookings use an assigned active specialization, active V3 revision, V3 snapshots and quote-derived Marks holds. Existing legacy presentation bookings cause an explicit reset-required error. This supersedes earlier notes describing seedEconomyConfig and legacy seed pricing. Runtime compatibility removal is still pending. No database migrate, seed or reset was executed. Focused package-default test passed (1 test, 4 assertions); server typecheck remains blocked by the existing unused MODALITY import in tutor.service.ts; live seeding is unverified.
+
+### Academy tutor absence coverage
+
+The rollback-only academy absence integration suite runs in the coverage fixture partition against loopback port 6769, database cogito-test, with NODE_ENV=test and no reset overrides. It also retains the explicit development acceptance opt-in for 6767/cogito-app. The suite rolls back its own fixtures and verifies cleanup; it exercises absence reporting and repeated tutor replacement.
+
+FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.
+
+## Meeting creation failures
+
+For a confirmed online booking with a failed Google Meet event, an admin can trigger a one-booking retry from booking detail. The action is audited. If the retry continues to fail, use the existing manual meeting-link control or check API runtime DNS/egress to `oauth2.googleapis.com:443`. Academy class failures use the retry control on the admin Classes page.
+
+## API test groups
+
+Observed retry recovery (31 October): `EAI_AGAIN oauth2.googleapis.com` and a subsequent `Circuit breaker is open` were recorded for a dev Academy class session. After DNS and HTTPS recovered, the admin retry handler created the Meet URL and event successfully. No Google Cloud Console change was needed. If recurring, fix DNS/egress from the API runtime; the Google Meet circuit breaker permits a half-open probe after its 60-second reset window.
+
+### Selective coverage runs
+
+List current process groups without DB access: `bun run test:coverage --list`.
+Run one group with `bun run test:coverage --group api-payout`; repeat `--group NAME` to select several. The same disposable-target and confirmed-reset requirements above apply. Integration group numbers are generated from the sorted current file inventory; use `--list` to find the current file mapping.
+Selected runs replace only their own `coverage/<group>/counters.json`, print PASS/FAIL per process, and fail if a selected process fails. They do not regenerate the canonical merged report or enforce the global gate. Existing merged reports are therefore not evidence for a selected run. Run `bun run test:coverage` without group selection for fresh complete coverage and all unchanged 100% gates. Groups sharing a resettable DB must not run concurrently. CI uploads every `coverage/api-*/counters.json`, including individually isolated integration profiles.
+
+Coverage collections must run one at a time against the same test databases. Concurrent resets invalidate fixture isolation and can cause duplicate revision or foreign-key failures. A server restart cancels running collectors; verify both test containers are running before restarting collection. Source changes, including formatting, require recollecting any profiles with stale source hashes. Partial group runs leave the canonical merged report unchanged.
