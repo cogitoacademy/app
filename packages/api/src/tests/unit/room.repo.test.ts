@@ -1,4 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
+import * as roomRepo from "../../modules/room/room.repo";
+import type { DbOrTx } from "../../lib/tx";
 import {
   createRoomRepo,
   findActiveRooms,
@@ -39,6 +41,82 @@ function makeQueryConn(roomResult: any = null) {
   const findFirst = mock(async () => roomResult);
   return { query: { room: { findFirst } } };
 }
+
+test("room assignment queries retain locking and nullable pending-booking semantics", async () => {
+  for (const rows of [[], [{ id: "room1" }]]) {
+    const lock = mock(async () => rows);
+    const where = () => ({ limit: async () => rows, for: lock });
+    const conn = {
+      select: () => ({ from: () => ({ where }) }),
+    } as unknown as DbOrTx;
+    expect(
+      await roomRepo.findPendingApprovalBookingById(conn, "booking1"),
+    ).toEqual(rows[0] ?? null);
+    expect(await roomRepo.lockRoomRecordById(conn, "room1")).toEqual(
+      rows[0] ?? null,
+    );
+    expect(lock).toHaveBeenCalledWith("update");
+  }
+});
+
+test("pending approvals default to fifty rows and missing catalog mutations return null", async () => {
+  const limit = mock(async () => []);
+  const chain = {
+    leftJoin: () => chain,
+    where: () => chain,
+    orderBy: () => ({ limit }),
+  };
+  const conn = {
+    select: () => ({ from: () => chain }),
+    update: () => ({
+      set: () => ({ where: () => ({ returning: async () => [] }) }),
+    }),
+  } as unknown as DbOrTx;
+  expect(await findPendingRoomApprovals(conn)).toEqual([]);
+  expect(limit).toHaveBeenCalledWith(50);
+  expect(
+    await updateRoom(conn, "missing", {
+      name: "Room",
+      location: "Floor 1",
+      capacity: 2,
+    }),
+  ).toBeNull();
+  expect(await deactivateRoom(conn, "missing")).toBeNull();
+});
+
+test("finds active and cancellable assignments and persists schedule and status", async () => {
+  const findFirst = mock(async () => ({ id: "assignment1" }));
+  const writes: unknown[] = [];
+  const conn = {
+    query: { roomBooking: { findFirst } },
+    update: () => ({
+      set: (value: unknown) => {
+        writes.push(value);
+        return {
+          where: () => ({ returning: async () => [{ id: "assignment1" }] }),
+        };
+      },
+    }),
+  } as unknown as DbOrTx;
+  expect(
+    await roomRepo.findActiveRoomBookingByBookingId(conn, "booking1"),
+  ).toEqual({ id: "assignment1" });
+  expect(
+    await roomRepo.findCancellableRoomBookingByBookingId(conn, "booking1"),
+  ).toEqual({ id: "assignment1" });
+  const start = new Date();
+  const end = new Date(start.getTime() + 3600000);
+  expect(
+    await roomRepo.updateRoomBookingStatus(conn, "assignment1", "cancelled"),
+  ).toEqual({ id: "assignment1" });
+  expect(
+    await roomRepo.updateRoomBookingSchedule(conn, "assignment1", start, end),
+  ).toEqual({ id: "assignment1" });
+  expect(writes).toEqual([
+    { status: "cancelled" },
+    { startAt: start, endAt: end },
+  ]);
+});
 
 describe("findActiveRooms", () => {
   test("returns active rooms", async () => {

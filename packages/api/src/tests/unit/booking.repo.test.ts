@@ -63,6 +63,113 @@ function makeBookingRepo() {
 }
 
 describe("createBookingRepo", () => {
+  test("ledger and fee event keys preserve identities and short circuit empty requests", async () => {
+    const repo = makeBookingRepo();
+    const conn = makeSelectConn([{ eventKey: "event1" }]) as any;
+    expect(await repo.findLedgerEventKeys(conn, "b1", [])).toEqual([]);
+    expect(await repo.listTutorSessionFeeEventKeysByBookings(conn, [])).toEqual(
+      [],
+    );
+    expect(conn.select).not.toHaveBeenCalled();
+    expect(await repo.findLedgerEventKeys(conn, "b1", ["event1"])).toEqual([
+      "event1",
+    ]);
+    expect(
+      await repo.listTutorSessionFeeEventKeysByBookings(conn, ["b1"]),
+    ).toEqual(["event1"]);
+    expect(await repo.findUsersByIds(conn, [])).toEqual([]);
+    expect(
+      await repo.findUsersByIds(makeSelectConn([{ id: "u1" }]) as any, ["u1"]),
+    ).toEqual([{ id: "u1" }]);
+    expect(
+      await repo.findPendingInvitees(
+        makeSelectConn([{ id: "invite1" }]) as any,
+        "b1",
+      ),
+    ).toEqual([{ id: "invite1" }]);
+  });
+
+  test("reschedule and tutor participant lookups return explicit null for missing rows", async () => {
+    const repo = makeBookingRepo();
+    for (const rows of [[], [{ id: "found" }]]) {
+      const conn = makeSelectConn(rows) as any;
+      expect(await repo.findPendingRescheduleProposal(conn, "b1")).toEqual(
+        rows[0] ?? null,
+      );
+      expect(await repo.findTutorParticipant(conn, "b1")).toEqual(
+        rows[0] ?? null,
+      );
+    }
+  });
+
+  test("persists booking and series schedules, pricing, and proposal decisions", async () => {
+    const repo = makeBookingRepo();
+    const conn = makeUpdateConn() as any;
+    const schedule = {
+      scheduledStartAt: new Date(),
+      scheduledEndAt: new Date(),
+    };
+    const price = { priceSnapshot: {} as any, holdAmount: 10 };
+    await repo.updateBookingSchedule(conn, "b1", schedule);
+    expect(conn.set).toHaveBeenLastCalledWith(schedule);
+    await repo.updateSessionSchedule(conn, "s1", schedule);
+    expect(conn.set).toHaveBeenLastCalledWith(schedule);
+    await repo.updateBookingPriceSnapshot(conn, "b1", price);
+    expect(conn.set).toHaveBeenLastCalledWith(price);
+    await repo.updateScheduledSeriesPriceSnapshot(conn, "b1", price);
+    expect(conn.set).toHaveBeenLastCalledWith(price);
+    const decisions = {
+      status: "accepted",
+      decisions: { u1: "accepted" as const },
+    };
+    await repo.updateRescheduleProposal(conn, "proposal1", decisions);
+    expect(conn.set).toHaveBeenLastCalledWith(decisions);
+    await repo.decrementBookingConfirmedHeadcount(conn, "b1");
+    expect(conn.set).toHaveBeenLastCalledWith({
+      confirmedHeadcount: expect.any(Object),
+    });
+  });
+
+  test("session cancellation reports whether a scheduled session changed and notes return persisted rows", async () => {
+    const repo = makeBookingRepo();
+    expect(await repo.cancelSession(makeUpdateConn([]) as any, "s1")).toBe(
+      false,
+    );
+    const conn = makeUpdateConn([{ id: "s1" }]) as any;
+    expect(await repo.cancelSession(conn, "s1")).toBe(true);
+    expect(conn.set).toHaveBeenCalledWith({
+      currentState: "cancelled",
+      holdAmount: 0,
+    });
+    const note = { bookingId: "b1", authorId: "u1", content: "Progress" };
+    const insert = makeInsertConn([{ id: "note1", ...note }]) as any;
+    expect(await repo.insertSessionNote(insert, note)).toMatchObject({
+      id: "note1",
+    });
+    expect(insert.values).toHaveBeenCalledWith(note);
+    expect(
+      await repo.listSessionNotes(
+        makeSelectConn([{ id: "note1" }]) as any,
+        "b1",
+      ),
+    ).toEqual([{ id: "note1" }]);
+  });
+
+  test("returns private tutor fee breakdown and bounded meeting retry candidates", async () => {
+    const repo = createBookingRepo(makeJoinSelectConn([{ id: "fee1" }]) as any);
+    expect(await repo.findBookingTutorFees("b1", "t1")).toEqual([
+      { id: "fee1" },
+    ]);
+    const conn = makeSelectConn([{ id: "retry1" }]) as any;
+    expect(await repo.findConfirmedMeetingsPendingRetry(conn)).toEqual([
+      { id: "retry1" },
+    ]);
+    expect(conn.limit).toHaveBeenLastCalledWith(50);
+    expect(await repo.findConfirmedMeetingsPendingRetry(conn, 5)).toEqual([
+      { id: "retry1" },
+    ]);
+    expect(conn.limit).toHaveBeenLastCalledWith(5);
+  });
   test("resolves active tutor subject topics and rejects inactive relations", async () => {
     const repo = createBookingRepo({} as any);
     const active = {
