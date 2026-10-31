@@ -135,49 +135,43 @@ test("absence notices and same-time replacement preserve assignment history and 
       });
       const enrollmentId = crypto.randomUUID();
       const installmentId = crypto.randomUUID();
-      await tx
-        .insert(s.academyClassEnrollment)
-        .values({
-          id: enrollmentId,
-          classId,
-          studentId,
-          requestKey: crypto.randomUUID(),
-          plan: "masterclass",
-          state: "active",
-          sessionCount: 1,
-          firstRateMarks: 5,
-          firstInstallmentMarks: 5,
-          secondInstallmentMarks: 0,
-          totalMarks: 5,
-        });
-      await tx
-        .insert(s.academyClassEnrollmentInstallment)
-        .values({
-          id: installmentId,
-          enrollmentId,
-          ordinal: 1,
-          rateMarks: 5,
-          sessionCount: 1,
-          amountMarks: 5,
-          state: "funded",
-        });
-      await tx
-        .insert(s.academyClassEnrollmentAllocation)
-        .values({
-          enrollmentId,
-          installmentId,
-          classId,
-          sessionId,
-          studentId,
-          ordinal: 1,
-          sequenceNumber: 1,
-          rateMarks: 5,
-          state: "funded",
-          fundedMarks: 5,
-          fundedAt: new Date(),
-          fundingEventKey: `funding-${tag}`,
-          fundingSourceReference: `source-${tag}`,
-        });
+      await tx.insert(s.academyClassEnrollment).values({
+        id: enrollmentId,
+        classId,
+        studentId,
+        requestKey: crypto.randomUUID(),
+        plan: "masterclass",
+        state: "active",
+        sessionCount: 1,
+        firstRateMarks: 5,
+        firstInstallmentMarks: 5,
+        secondInstallmentMarks: 0,
+        totalMarks: 5,
+      });
+      await tx.insert(s.academyClassEnrollmentInstallment).values({
+        id: installmentId,
+        enrollmentId,
+        ordinal: 1,
+        rateMarks: 5,
+        sessionCount: 1,
+        amountMarks: 5,
+        state: "funded",
+      });
+      await tx.insert(s.academyClassEnrollmentAllocation).values({
+        enrollmentId,
+        installmentId,
+        classId,
+        sessionId,
+        studentId,
+        ordinal: 1,
+        sequenceNumber: 1,
+        rateMarks: 5,
+        state: "funded",
+        fundedMarks: 5,
+        fundedAt: new Date(),
+        fundingEventKey: `funding-${tag}`,
+        fundingSourceReference: `source-${tag}`,
+      });
       const feeSessionId = crypto.randomUUID();
       await tx.insert(s.academyClassSession).values({
         id: feeSessionId,
