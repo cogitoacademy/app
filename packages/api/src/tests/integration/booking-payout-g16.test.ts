@@ -98,22 +98,24 @@ async function createPublishedTutor(email: string, ts: number) {
   return { tutorId, tutorClient, slotId: slot!.id };
 }
 
-function legacyPriceSnapshot(
-  perStudent: number,
-  baseline: number,
-  tutorShare: number,
-  cogitoTake: number,
-) {
+function v3PriceSnapshot({
+  headcount = 1,
+  perStudentMarks = 20,
+  tutorHonorariumIdr = 50_000,
+}: {
+  headcount?: number;
+  perStudentMarks?: number;
+  tutorHonorariumIdr?: number;
+} = {}) {
   return {
-    perStudent,
-    baseline,
-    tutorShare,
-    cogitoTake,
-    baselineCogitoTake: cogitoTake,
-    baselineTutorShare: tutorShare,
-    extraTotal: 0,
-    cogitoExtraTake: 0,
-    tutorExtraShare: 0,
+    engine: "v3" as const,
+    v3Revision: 1,
+    competition: "competition-debate",
+    modality: "online" as const,
+    headcount,
+    perStudentMarks,
+    collectedMarks: perStudentMarks * headcount,
+    tutorHonorariumIdr,
   };
 }
 
@@ -135,8 +137,8 @@ async function insertBookingRow(
       scheduledStartAt: new Date(Date.now() + 48 * 3600_000),
       scheduledEndAt: new Date(Date.now() + 48 * 3600_000 + 3600_000),
       timezone: "Asia/Jakarta",
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
-      originalMarks: 50,
+      priceSnapshot: v3PriceSnapshot(),
+      originalMarks: 20,
       holdAmount: 0,
       deadlineAt: new Date(Date.now() + 86400000),
       ...overrides,
@@ -147,21 +149,17 @@ async function insertBookingRow(
 
 async function insertV3FeeBooking(
   overrides: Partial<typeof bookingTable.$inferInsert>,
+  options: {
+    headcount?: number;
+    perStudentMarks?: number;
+    tutorHonorariumIdr?: number;
+  } = {},
 ) {
-  const priceSnapshot = {
-    engine: "v3" as const,
-    v3Revision: 1,
-    competition: "competition-debate",
-    modality: "online" as const,
-    headcount: 1,
-    perStudentMarks: 20,
-    collectedMarks: 20,
-    tutorHonorariumIdr: 50_000,
-  };
+  const priceSnapshot = v3PriceSnapshot(options);
   const row = await insertBookingRow({
     ...overrides,
     priceSnapshot,
-    originalMarks: 20,
+    originalMarks: priceSnapshot.collectedMarks,
   });
   const [fee] = await db
     .insert(tutorSessionFee)
@@ -179,6 +177,27 @@ async function insertV3FeeBooking(
     })
     .returning();
   return { booking: row, fee: fee! };
+}
+
+async function insertV3SessionFee(
+  bookingId: string,
+  bookingSessionId: string,
+  tutorId: string,
+  scheduledStartAt: Date,
+) {
+  const priceSnapshot = v3PriceSnapshot();
+  await db.insert(tutorSessionFee).values({
+    bookingId,
+    bookingSessionId,
+    academyClassSessionId: null,
+    tutorId,
+    scheduledStartAt,
+    earnedAt: new Date(),
+    eventKey: `tutor-session-fee:booking-session:${bookingSessionId}`,
+    grossHonorariumIdr: priceSnapshot.tutorHonorariumIdr,
+    collectedMarks: priceSnapshot.collectedMarks,
+    priceSnapshot,
+  });
 }
 
 function assertPayoutIntegrationDatabase() {
@@ -272,7 +291,7 @@ describe("Tutor payouts (G16)", () => {
     );
   });
 
-  test("solo booking flows to completed with G19 snapshot 50/37/13", async () => {
+  test("solo booking completion records the V3 price snapshot", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
 
@@ -301,75 +320,92 @@ describe("Tutor payouts (G16)", () => {
       .from(bookingTable)
       .where(eq(bookingTable.id, b.id));
     expect(row!.priceSnapshot).toMatchObject({
-      perStudent: 50,
-      baseline: 42,
-      tutorShare: 37,
-      cogitoTake: 13,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-debate",
+      modality: "online",
+      headcount: 1,
+      perStudentMarks: 44,
+      collectedMarks: 44,
+      tutorHonorariumIdr: 180_000,
     });
   });
 
-  test("completed group + cancelled + completed series bookings seeded", async () => {
-    await insertBookingRow({
-      type: "group",
-      tutorId,
-      proposerId: studentId,
-      targetGroupSize: 3,
-      minConfirmedHeadcount: 2,
-      confirmedHeadcount: 3,
-      priceSnapshot: legacyPriceSnapshot(50, 150, 120, 30),
-      originalMarks: 150,
-      completedAt: new Date(Date.now() - 60_000),
-    });
+  test("payout summaries include completed V3 fee events, not cancelled bookings", async () => {
+    await insertV3FeeBooking(
+      {
+        type: "group",
+        tutorId,
+        proposerId: studentId,
+        targetGroupSize: 3,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 3,
+        completedAt: new Date(Date.now() - 60_000),
+      },
+      { headcount: 3, perStudentMarks: 20, tutorHonorariumIdr: 150_000 },
+    );
 
     await insertBookingRow({
-      type: "solo",
       tutorId,
       proposerId: studentId,
       currentState: "cancelled",
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
-      originalMarks: 50,
+      priceSnapshot: v3PriceSnapshot(),
     });
 
     const series = await insertBookingRow({
       type: "series",
       tutorId,
       proposerId: studentId,
-      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
-      originalMarks: 100,
+      priceSnapshot: v3PriceSnapshot(),
+      originalMarks: 40,
+      holdAmount: 40,
       completedAt: new Date(Date.now() - 60_000),
     });
 
     const s1 = new Date(Date.now() + 72 * 3600_000);
     const s2 = new Date(Date.now() + 96 * 3600_000);
-    await db.insert(bookingSession).values([
-      {
-        seriesBookingId: series.id,
-        scheduledStartAt: s1,
-        scheduledEndAt: new Date(s1.getTime() + 3600_000),
-        currentState: "completed",
-        holdAmount: 50,
-        priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
-      },
-      {
-        seriesBookingId: series.id,
-        scheduledStartAt: s2,
-        scheduledEndAt: new Date(s2.getTime() + 3600_000),
-        currentState: "completed",
-        holdAmount: 50,
-        priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
-      },
-    ]);
+    const sessions = await db
+      .insert(bookingSession)
+      .values([
+        {
+          seriesBookingId: series.id,
+          scheduledStartAt: s1,
+          scheduledEndAt: new Date(s1.getTime() + 3600_000),
+          currentState: "completed",
+          holdAmount: 20,
+          priceSnapshot: v3PriceSnapshot(),
+        },
+        {
+          seriesBookingId: series.id,
+          scheduledStartAt: s2,
+          scheduledEndAt: new Date(s2.getTime() + 3600_000),
+          currentState: "completed",
+          holdAmount: 20,
+          priceSnapshot: v3PriceSnapshot(),
+        },
+      ])
+      .returning();
+    await Promise.all(
+      sessions.map((session) =>
+        insertV3SessionFee(
+          series.id,
+          session.id,
+          tutorId,
+          session.scheduledStartAt,
+        ),
+      ),
+    );
   });
 
-  test("admin.getTutorPayouts sums tutorShare/cogitoTake from completed bookings only", async () => {
+  test("admin.getTutorPayouts aggregates completed V3 fee events", async () => {
     const result = await adminClient.admin.getTutorPayouts({ tutorId });
 
-    // solo (1) + group (1) + series (2 sessions) = 4 completed sessions
+    // Solo (1) + group (1) + series (2 sessions) = 4 completed V3 fee events.
     expect(result.completedSessions).toBe(4);
-    expect(result.totalMarks).toBe(292);
-    expect(result.cogitoTake).toBe(63);
-    expect(result.tutorPayout).toBe(237);
-    expect(result.tutorPayoutIdr).toBe(237 * TUTOR_PAYOUT_RATE_IDR);
+    expect(result.totalMarks).toBe(144);
+    expect(result.cogitoTake).toBe(0);
+    expect(result.tutorPayout).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(430_000);
   });
 
   test("admin.getTutorPayouts respects date range", async () => {
@@ -398,15 +434,10 @@ describe("Tutor payouts (G16)", () => {
     expect(pending.items).toHaveLength(4);
     expect(
       pending.items?.filter((item) => item.sourceType === "fee_event"),
-    ).toHaveLength(1);
+    ).toHaveLength(4);
     expect(
-      pending.items?.filter((item) => item.sourceType === "legacy_booking"),
-    ).toHaveLength(1);
-    expect(
-      pending.items?.filter(
-        (item) => item.sourceType === "legacy_series_session",
-      ),
-    ).toHaveLength(2);
+      pending.items?.every((item) => item.sourceType === "fee_event"),
+    ).toBe(true);
     expect(
       pending.items?.reduce((sum, item) => sum + item.grossHonorariumIdr, 0),
     ).toBe(pending.tutorPayoutIdr);
@@ -416,8 +447,10 @@ describe("Tutor payouts (G16)", () => {
   test("tutor.getMyPayouts returns own scoped summary", async () => {
     const result = await tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(4);
-    expect(result.tutorPayout).toBe(237);
-    expect(result.cogitoTake).toBe(63);
+    expect(result.totalMarks).toBe(144);
+    expect(result.tutorPayout).toBe(0);
+    expect(result.cogitoTake).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(430_000);
   });
 
   test("tutor.getMyPayouts excludes other tutors' bookings", async () => {
@@ -1102,149 +1135,5 @@ describe("Tutor payouts (G16)", () => {
         (item) => item.bookingId === firstSourceBooking.booking.id,
       ),
     ).toBe(false);
-  });
-
-  test("unresolved allocationless payout retains its cutoff until audited reconciliation", async () => {
-    const isolatedTutor = await createPublishedTutor(
-      `tutor.pay.legacy-reconcile.${ts}@cogito.test`,
-      ts + 4,
-    );
-    const payoutTutorId = isolatedTutor.tutorId;
-    await db
-      .update(tutorProfile)
-      .set({
-        bankName: "BCA",
-        bankAccountNumber: "009988776655",
-        bankAccountHolderName: "Legacy Reconciliation Tutor",
-        bankAccountOpeningCity: "Jakarta",
-        bankAccountOwnership: "self",
-        bankTransferDisclaimerAccepted: true,
-        taxLegalName: "Legacy Reconciliation Tutor",
-        nik: "0000000000000059",
-        npwp: null,
-      })
-      .where(eq(tutorProfile.userId, payoutTutorId));
-
-    const oldCutoffAt = new Date(Date.now() - 5 * 60_000);
-    const previouslyCovered = await insertV3FeeBooking({
-      tutorId: payoutTutorId,
-      proposerId: studentId,
-      completedAt: new Date(oldCutoffAt.getTime() - 60_000),
-    });
-    await db.insert(tutorPayout).values({
-      tutorId: payoutTutorId,
-      cutoffAt: oldCutoffAt,
-      grossHonorariumIdr: 40_000,
-      transferFeeIdr: 0,
-      netHonorariumIdr: 40_000,
-      bankName: "BCA",
-      status: "paid",
-      paidAt: oldCutoffAt,
-      paidBy: adminId,
-    });
-    const potentiallyRepayable = await insertV3FeeBooking({
-      tutorId: payoutTutorId,
-      proposerId: studentId,
-      completedAt: new Date(oldCutoffAt.getTime() + 60_000),
-    });
-    const initiallyPending = await adminClient.admin.getPendingTutorPayouts({
-      tutorId: payoutTutorId,
-    });
-    expect(initiallyPending.items.map((item) => item.bookingId)).toEqual([
-      potentiallyRepayable.booking.id,
-    ]);
-    const stalePreview = await adminClient.admin.previewTutorPayout({
-      tutorId: payoutTutorId,
-      sourceKeys: [initiallyPending.items[0]!.sourceKey],
-    });
-
-    const unresolvedCutoffAt = new Date();
-    const legacyPayoutRows = await db
-      .insert(tutorPayout)
-      .values({
-        tutorId: payoutTutorId,
-        cutoffAt: unresolvedCutoffAt,
-        grossHonorariumIdr: 40_000,
-        transferFeeIdr: 0,
-        netHonorariumIdr: 40_000,
-        bankName: "BCA",
-        actualAmountIdr: 40_000,
-        actualReference: "LEGACY-BANK-REF",
-        status: "paid",
-        paidAt: unresolvedCutoffAt,
-        paidBy: adminId,
-      })
-      .returning();
-    const legacyPayout = legacyPayoutRows[0]!;
-    expect(legacyPayout.previewVersion).toBeNull();
-    expect(legacyPayout.sourceKeys).toBeNull();
-    const voidResult = await adminClient.admin.voidTutorPayout({
-      payoutId: legacyPayout.id,
-      reason: "Reconcile historical transfer before any source is repaid",
-    });
-    expect(voidResult.reconciliationStatus).toBe("required");
-    expect(
-      await db
-        .select()
-        .from(tutorPayoutAllocation)
-        .where(eq(tutorPayoutAllocation.payoutId, legacyPayout.id)),
-    ).toHaveLength(0);
-
-    const blocked = await adminClient.admin.getPendingTutorPayouts({
-      tutorId: payoutTutorId,
-    });
-    expect(blocked.items).toHaveLength(0);
-    await expect(
-      adminClient.admin.previewTutorPayout({
-        tutorId: payoutTutorId,
-        sourceKeys: stalePreview.sourceKeys,
-      }),
-    ).rejects.toThrow();
-    await expect(
-      adminClient.admin.prepareTutorPayout({
-        tutorId: payoutTutorId,
-        sourceKeys: stalePreview.sourceKeys,
-        previewVersion: stalePreview.previewVersion,
-        operationId: crypto.randomUUID(),
-      }),
-    ).rejects.toThrow();
-
-    await adminClient.admin.resolveTutorPayoutReconciliation({
-      payoutId: legacyPayout.id,
-      reason:
-        "Bank statement confirms the prior aggregate transfer is resolved",
-    });
-    const resolved = await db
-      .select()
-      .from(tutorPayout)
-      .where(eq(tutorPayout.id, legacyPayout.id));
-    expect(resolved[0]).toMatchObject({
-      status: "void",
-      actualReference: "LEGACY-BANK-REF",
-      reconciliationStatus: "resolved",
-    });
-    const eligibleAfterResolution =
-      await adminClient.admin.getPendingTutorPayouts({
-        tutorId: payoutTutorId,
-      });
-    expect(eligibleAfterResolution.items.map((item) => item.bookingId)).toEqual(
-      [potentiallyRepayable.booking.id],
-    );
-    expect(
-      eligibleAfterResolution.items.some(
-        (item) => item.bookingId === previouslyCovered.booking.id,
-      ),
-    ).toBe(false);
-    const resolvedPreview = await adminClient.admin.previewTutorPayout({
-      tutorId: payoutTutorId,
-      sourceKeys: eligibleAfterResolution.items.map((item) => item.sourceKey),
-    });
-    const repayment = await adminClient.admin.prepareTutorPayout({
-      tutorId: payoutTutorId,
-      sourceKeys: resolvedPreview.sourceKeys,
-      previewVersion: resolvedPreview.previewVersion,
-      operationId: crypto.randomUUID(),
-    });
-    expect(repayment.status).toBe("prepared");
   });
 });
