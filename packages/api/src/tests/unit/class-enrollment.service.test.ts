@@ -41,6 +41,7 @@ function fixture(
   notification: Record<string, unknown> = {},
   payment: Record<string, unknown> = {},
   wallet: Record<string, unknown> = { hold: mock(async () => undefined) },
+  transaction?: unknown,
 ) {
   let requestReads = 0;
   let recordReads = 0;
@@ -73,7 +74,7 @@ function fixture(
   );
   const db = {
     transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ execute: async () => undefined }),
+      fn(transaction ?? { execute: async () => undefined }),
   };
   const service = createClassEnrollmentService({
     db,
@@ -87,6 +88,570 @@ function fixture(
 }
 
 describe("class enrollment locked request replay", () => {
+  test.each([
+    "missing-initial",
+    "missing-locked",
+    "null-details",
+    "bad-date",
+    "bad-output",
+    "wrong-hash",
+    "wrong-session",
+    "wrong-version",
+    "matching-replay",
+  ] as const)(
+    "changed-session confirmation validates saved receipts: %s",
+    async (scenario) => {
+      const enrollmentId = crypto.randomUUID();
+      const sessionId = crypto.randomUUID();
+      const saved = {
+        enrollmentId,
+        sessionId,
+        scheduleChangeVersion: 2,
+        notifiedAt: new Date(now.getTime() - 1000),
+        exitUntil: new Date(now.getTime() + 3600000),
+        refundableMarks: 25,
+        fundingState: "funded",
+        quoteVersion: "f".repeat(64),
+      };
+      const encoded = {
+        ...saved,
+        notifiedAt: saved.notifiedAt.toISOString(),
+        exitUntil: saved.exitUntil.toISOString(),
+        ...(scenario === "bad-date" ? { notifiedAt: "invalid" } : {}),
+        ...(scenario === "bad-output" ? { refundableMarks: -1 } : {}),
+        ...(scenario === "wrong-hash" ? { quoteVersion: "e".repeat(64) } : {}),
+        ...(scenario === "wrong-session"
+          ? { sessionId: crypto.randomUUID() }
+          : {}),
+        ...(scenario === "wrong-version" ? { scheduleChangeVersion: 3 } : {}),
+      };
+      const selections = [
+        [],
+        [{ details: scenario === "null-details" ? null : { quote: encoded } }],
+      ];
+      const query = () => {
+        const chain = {
+          from: () => chain,
+          where: () => chain,
+          limit: () => chain,
+          for: () => chain,
+          // eslint-disable-next-line unicorn/no-thenable -- Model Drizzle query execution.
+          then: (resolve: (rows: unknown[]) => unknown) =>
+            Promise.resolve(selections.shift() ?? []).then(resolve),
+        };
+        return chain;
+      };
+      let reads = 0;
+      const f = fixture(
+        {
+          findEnrollment: mock(async () => {
+            reads++;
+            return scenario === "missing-initial" ||
+              (scenario === "missing-locked" && reads > 1)
+              ? null
+              : { ...enrollment, id: enrollmentId };
+          }),
+          findInstallments: mock(async () => []),
+        },
+        {},
+        {},
+        {},
+        { select: query },
+      );
+      const input = {
+        enrollmentId,
+        sessionId,
+        scheduleChangeVersion: 2,
+        quoteVersion: saved.quoteVersion,
+        requestKey: crypto.randomUUID(),
+      };
+      try {
+        if (scenario === "matching-replay")
+          expect(
+            await f.service.confirmChangedSessionCancellation(
+              "student1",
+              input,
+            ),
+          ).toEqual(saved);
+        else
+          await expect(
+            f.service.confirmChangedSessionCancellation("student1", input),
+          ).rejects.toMatchObject({
+            code: scenario.startsWith("missing")
+              ? "CLASS_ENROLLMENT_NOT_FOUND"
+              : "CLASS_ENROLLMENT_CONFLICT",
+          });
+      } finally {
+        f.restore();
+      }
+    },
+  );
+  test.each([
+    "missing-enrollment",
+    "missing-session",
+    "inactive-enrollment",
+    "different-class",
+    "different-version",
+    "completed-session",
+    "not-notified",
+    "no-window",
+    "future-notification",
+    "expired-window",
+    "reported",
+    "earned",
+    "started",
+    "missing-seat",
+    "newer-seat",
+    "released-seat",
+    "unfunded-seat",
+  ] as const)(
+    "changed-session quote revalidates cancellation rights: %s",
+    async (scenario) => {
+      const row = {
+        ...session,
+        scheduleChangeVersion: scenario === "different-version" ? 3 : 2,
+        classId: scenario === "different-class" ? "other" : session.classId,
+        state: scenario === "completed-session" ? "completed" : "scheduled",
+        startAt: scenario === "started" ? now : session.startAt,
+        scheduleChangeNotifiedAt:
+          scenario === "not-notified"
+            ? null
+            : new Date(
+                now.getTime() +
+                  (scenario === "future-notification" ? 1000 : -1000),
+              ),
+        scheduleChangeExitUntil:
+          scenario === "no-window"
+            ? null
+            : new Date(
+                now.getTime() +
+                  (scenario === "expired-window" ? -1000 : 3600000),
+              ),
+      };
+      const seat = {
+        id: "allocation1",
+        scheduleChangeVersion: scenario === "newer-seat" ? 3 : 2,
+        state: scenario === "released-seat" ? "released" : "unfunded_reserved",
+        fundedMarks: 0,
+        spentMarks: 0,
+        releasedMarks: 0,
+        rateMarks: 25,
+      };
+      const selections = [
+        [],
+        scenario === "missing-session" ? [] : [row],
+        scenario === "reported" ? [{ id: "report1" }] : [],
+        scenario === "earned" ? [{ id: "fee1" }] : [],
+        scenario === "missing-seat" ? [] : [seat],
+      ];
+      const query = () => {
+        const chain = {
+          from: () => chain,
+          where: () => chain,
+          limit: () => chain,
+          for: () => chain,
+          // eslint-disable-next-line unicorn/no-thenable -- Model Drizzle awaited results.
+          then: (resolve: (value: unknown[]) => unknown) =>
+            Promise.resolve(selections.shift() ?? []).then(resolve),
+        };
+        return chain;
+      };
+      const f = fixture(
+        {
+          findEnrollment: mock(async () =>
+            scenario === "missing-enrollment"
+              ? null
+              : {
+                  ...enrollment,
+                  state:
+                    scenario === "inactive-enrollment" ? "cancelled" : "active",
+                },
+          ),
+          findInstallments: mock(async () => []),
+        },
+        {},
+        {},
+        {},
+        { select: query },
+      );
+      const input = {
+        enrollmentId: enrollment.id,
+        sessionId: session.id,
+        scheduleChangeVersion: 2,
+      };
+      try {
+        if (scenario === "unfunded-seat") {
+          expect(
+            await f.service.quoteChangedSessionCancellation("student1", input),
+          ).toMatchObject({
+            refundableMarks: 0,
+            fundingState: "unfunded",
+            quoteVersion: expect.stringMatching(/^[a-f0-9]{64}$/),
+          });
+        } else {
+          const code = [
+            "missing-enrollment",
+            "missing-session",
+            "inactive-enrollment",
+          ].includes(scenario)
+            ? "CLASS_ENROLLMENT_NOT_FOUND"
+            : [
+                  "reported",
+                  "earned",
+                  "started",
+                  "missing-seat",
+                  "newer-seat",
+                  "released-seat",
+                ].includes(scenario)
+              ? "CLASS_ENROLLMENT_INVALID_OPERATION"
+              : "CLASS_ENROLLMENT_CONFLICT";
+          await expect(
+            f.service.quoteChangedSessionCancellation("student1", input),
+          ).rejects.toMatchObject({ code });
+        }
+      } finally {
+        f.restore();
+      }
+    },
+  );
+  test("changed-session refund recalculates the pending installment and moves its due session to the earliest remaining seat", async () => {
+    const changedSession = {
+      ...session,
+      scheduleChangeVersion: 2,
+      scheduleChangeNotifiedAt: new Date(now.getTime() - 3600000),
+      scheduleChangeExitUntil: new Date(now.getTime() + 3600000),
+    };
+    const allocation = {
+      id: "allocation1",
+      sessionId: session.id,
+      installmentId: "second",
+      state: "funded",
+      scheduleChangeVersion: 2,
+      fundedMarks: 25,
+      rateMarks: 25,
+      spentMarks: 0,
+      releasedMarks: 0,
+      fundingSourceReference: "funding1",
+    };
+    const remainingDates = [
+      { id: "later", startAt: new Date("2040-01-05T00:00:00Z") },
+      { id: "earlier", startAt: new Date("2040-01-03T00:00:00Z") },
+    ];
+    const selects: unknown[][] = [[], [changedSession], [], [], [allocation]];
+    const writes: unknown[] = [];
+    const selection = () => {
+      const chain = {
+        from: () => chain,
+        where: () => chain,
+        limit: () => chain,
+        for: () => chain,
+        // eslint-disable-next-line unicorn/no-thenable -- Drizzle query mock consumes results when awaited.
+        then: (resolve: (value: unknown[]) => unknown) =>
+          Promise.resolve(selects.shift() ?? []).then(resolve),
+      };
+      return chain;
+    };
+    const tx = {
+      execute: async () => undefined,
+      select: selection,
+      update: () => ({
+        set: (values: unknown) => {
+          writes.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: allocation.id }] }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: async (values: unknown) => {
+          writes.push(values);
+        },
+      }),
+    };
+    const release = mock(async () => undefined);
+    const f = fixture(
+      {
+        findEnrollment: mock(async () => ({ ...enrollment, state: "active" })),
+        findInstallments: mock(async () => []),
+        findAllocations: mock(async () => [allocation]),
+        getWalletByUser: mock(async () => ({ id: "wallet1" })),
+      },
+      { write: mock(async () => undefined) },
+      {},
+      { release },
+      tx,
+    );
+    const input = {
+      enrollmentId: enrollment.id,
+      sessionId: session.id,
+      scheduleChangeVersion: 2,
+    };
+    try {
+      const quote = await f.service.quoteChangedSessionCancellation(
+        "student1",
+        input,
+      );
+      expect(quote.refundableMarks).toBe(25);
+      selects.push(
+        [],
+        [],
+        [changedSession],
+        [],
+        [],
+        [allocation],
+        [{ id: "second", state: "pending", dueSessionId: session.id }],
+        [
+          { sessionId: "later", rateMarks: 20 },
+          { sessionId: "earlier", rateMarks: 30 },
+        ],
+        remainingDates,
+        [{ count: 2 }],
+      );
+      expect(
+        await f.service.confirmChangedSessionCancellation("student1", {
+          ...input,
+          quoteVersion: quote.quoteVersion,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).toEqual(quote);
+      expect(release).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({
+          walletId: "wallet1",
+          amount: 25,
+          sourceReference: "funding1",
+        }),
+      );
+      expect(writes).toContainEqual(
+        expect.objectContaining({
+          sessionCount: 2,
+          amountMarks: 50,
+          dueSessionId: "earlier",
+          dueAt: remainingDates[1]!.startAt,
+        }),
+      );
+      expect(selects).toEqual([]);
+    } finally {
+      f.restore();
+    }
+  });
+  test.each(["missing", "inactive", "no-expiry", "future", "expired"] as const)(
+    "checkout expiry rechecks locked state: %s",
+    async (scenario) => {
+      const reports = spyOn(
+        reportReminderRepoModule,
+        "createClassReportReminderRepo",
+      ).mockReturnValue({
+        findDue: mock(async () => []),
+        writeIfPending: mock(async () => false),
+      } as any);
+      const release = mock(async () => undefined);
+      const f = fixture({
+        findExpiredCheckouts: mock(async () => [{ id: enrollment.id }]),
+        findDueInstallments: mock(async () => []),
+        findReminderCandidates: mock(async () => []),
+        findEnrollmentById: mock(async () =>
+          scenario === "missing"
+            ? null
+            : {
+                ...enrollment,
+                state: scenario === "inactive" ? "active" : "checkout_pending",
+                checkoutExpiresAt:
+                  scenario === "no-expiry"
+                    ? null
+                    : new Date(
+                        now.getTime() + (scenario === "future" ? 1 : -1),
+                      ),
+              },
+        ),
+        releaseCheckout: release,
+      });
+      try {
+        expect(await f.service.processDueJobs()).toMatchObject({
+          expiredCheckouts: scenario === "expired" ? 1 : 0,
+        });
+        expect(release).toHaveBeenCalledTimes(scenario === "expired" ? 1 : 0);
+      } finally {
+        f.restore();
+        reports.mockRestore();
+      }
+    },
+  );
+
+  test.each([
+    "already-processed",
+    "not-due",
+    "new-enrollment",
+    "send-both",
+  ] as const)(
+    "installment reminders respect schedule identity and creation time: %s",
+    async (scenario) => {
+      const reports = spyOn(
+        reportReminderRepoModule,
+        "createClassReportReminderRepo",
+      ).mockReturnValue({
+        findDue: mock(async () => []),
+        writeIfPending: mock(async () => false),
+      } as any);
+      const dueAt = new Date(
+        now.getTime() +
+          (scenario === "not-due"
+            ? 8
+            : scenario === "new-enrollment"
+              ? 0.5
+              : 1) *
+            24 *
+            3600000,
+      );
+      const write = mock(async () => undefined);
+      const mark = mock(async () => undefined);
+      const installment = {
+        id: "second",
+        state: "pending",
+        dueSessionId: session.id,
+        dueAt,
+        amountMarks: 25,
+        reminder7dProcessedAt: scenario === "already-processed" ? now : null,
+        reminder7dForAt: dueAt,
+        reminder1dProcessedAt: scenario === "already-processed" ? now : null,
+        reminder1dForAt: dueAt,
+      };
+      const f = fixture(
+        {
+          findExpiredCheckouts: mock(async () => []),
+          findDueInstallments: mock(async () => []),
+          findReminderCandidates: mock(async () => [
+            { enrollmentId: enrollment.id, installmentId: "second" },
+          ]),
+          findEnrollmentById: mock(async () => ({
+            ...enrollment,
+            state: "active",
+            studentId: "student1",
+            createdAt: new Date(
+              now.getTime() -
+                (scenario === "new-enrollment" ? 0 : 10 * 24 * 3600000),
+            ),
+          })),
+          findInstallment: mock(async () => installment),
+          lockSessions: mock(async () => [{ ...session, startAt: dueAt }]),
+          markReminderProcessed: mark,
+        },
+        { write },
+      );
+      try {
+        expect(await f.service.processDueJobs()).toMatchObject({
+          remindersQueued: scenario === "send-both" ? 2 : 0,
+        });
+        expect(mark).toHaveBeenCalledTimes(
+          scenario === "send-both" || scenario === "new-enrollment" ? 2 : 0,
+        );
+        expect(write).toHaveBeenCalledTimes(scenario === "send-both" ? 2 : 0);
+        if (scenario === "send-both") {
+          expect(write.mock.calls).toEqual(
+            expect.arrayContaining([
+              [
+                expect.objectContaining({
+                  title: "Class installment due in 7 days",
+                  userId: "student1",
+                }),
+              ],
+              [
+                expect.objectContaining({
+                  title: "Class installment due in 1 day",
+                  userId: "student1",
+                }),
+              ],
+            ]),
+          );
+        }
+      } finally {
+        f.restore();
+        reports.mockRestore();
+      }
+    },
+  );
+  test.each([
+    "missing-enrollment",
+    "inactive",
+    "missing-installment",
+    "wrong-installment",
+    "paid",
+    "missing-due-id",
+    "missing-session",
+    "cancelled-session",
+    "future-session",
+  ] as const)("due jobs revalidate stale candidates: %s", async (scenario) => {
+    const reports = spyOn(
+      reportReminderRepoModule,
+      "createClassReportReminderRepo",
+    ).mockReturnValue({
+      findDue: mock(async () => []),
+      writeIfPending: mock(async () => false),
+    } as any);
+    const due = {
+      ...session,
+      startAt: new Date(now.getTime() + 24 * 3600000),
+      state: scenario === "cancelled-session" ? "cancelled" : "scheduled",
+    };
+    const installment = {
+      id: "second",
+      state: "pending",
+      dueSessionId: session.id,
+      dueAt: new Date(0),
+    };
+    const changed = {
+      ...installment,
+      ...(scenario === "wrong-installment" ? { id: "other" } : {}),
+      ...(scenario === "paid" ? { state: "paid" } : {}),
+      ...(scenario === "missing-due-id" ? { dueSessionId: null } : {}),
+    };
+    const defaulted = mock(async () => true);
+    const write = mock(async () => undefined);
+    const f = fixture(
+      {
+        findExpiredCheckouts: mock(async () => []),
+        findDueInstallments: mock(async () => [
+          { enrollmentId: enrollment.id, installmentId: "second" },
+        ]),
+        findReminderCandidates: mock(async () => [
+          { enrollmentId: enrollment.id, installmentId: "second" },
+        ]),
+        findEnrollmentById: mock(async () =>
+          scenario === "missing-enrollment"
+            ? null
+            : {
+                ...enrollment,
+                state: scenario === "inactive" ? "cancelled" : "active",
+                studentId: "student1",
+                createdAt: now,
+              },
+        ),
+        findInstallment: mock(async () =>
+          scenario === "missing-installment" ? null : changed,
+        ),
+        lockSessions: mock(async () => []),
+        getSessionDueInfo: mock(async () =>
+          scenario === "missing-session" ? null : due,
+        ),
+        updateInstallmentDueAt: mock(async () => undefined),
+        markInstallmentDefaulted: defaulted,
+        markReminderProcessed: mock(async () => undefined),
+      },
+      { write },
+    );
+    try {
+      expect(await f.service.processDueJobs()).toMatchObject({
+        expiredCheckouts: 0,
+        defaultedInstallments: 0,
+      });
+      expect(defaulted).not.toHaveBeenCalled();
+      if (scenario !== "future-session") expect(write).not.toHaveBeenCalled();
+      else expect(f.repo.updateInstallmentDueAt).toHaveBeenCalledTimes(2);
+    } finally {
+      f.restore();
+      reports.mockRestore();
+    }
+  });
   test.each([
     "deleted-under-lock",
     "different-plan",
