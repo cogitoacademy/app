@@ -49,6 +49,11 @@ async function main() {
   ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
   const payout =
     "./packages/api/src/tests/integration/booking-payout-g16.test.ts";
+  const guardedAcceptance = [
+    "class-payout-lifecycle",
+    "admin-operations-analytics",
+    "academy-class-absence",
+  ].map((name) => `./packages/api/src/tests/integration/${name}.test.ts`);
   const resettableIntegrationFiles = [
     ...new Bun.Glob("**/*.test.ts").scanSync({
       cwd: "packages/api/src/tests/integration",
@@ -64,7 +69,7 @@ async function main() {
   const partitions = [
     {
       name: "api-resettable",
-      arguments: [...fixtures, payout]
+      arguments: [...fixtures, payout, ...guardedAcceptance]
         .concat(resettableIntegrationFiles)
         .flatMap((path) => [
           "--path-ignore-patterns",

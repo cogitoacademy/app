@@ -1130,11 +1130,12 @@ snapshots its fresh, non-empty output under `coverage/api-*` before the next
 process runs. Integration files that call the shared `resetDatabase()` helper
 run in a dedicated `--parallel=1` partition so one file's truncate cannot erase
 another file's fixtures; the remaining API, unit, and fixture partitions retain
-parallel execution. The reset helper deletes tutor profiles before truncating
-disposable fixtures, preserving seed-owned competition taxonomy reachable
-through `TRUNCATE ... CASCADE`. The workflow uses this configured output because
-CI did not produce the requested custom `--coverage-dir` paths. Those four raw profiles
-are merged before the existing gate. The merge rejects missing, empty, or
+parallel execution. Guarded manual acceptance suites that reject reset flags
+stay outside this coverage run. The reset helper snapshots and restores the
+seed-owned competition taxonomy around `TRUNCATE ... CASCADE`. CI writes its
+LCOV output to the configured path because the custom `--coverage-dir` paths
+were not produced. The four raw profiles are merged before the existing gate.
+The merge rejects missing, empty, or
 recordless LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
 function identities, the merger preserves maximum summary counts and the exact
 named-function union, then writes a sidecar identifying sources whose function

@@ -206,6 +206,7 @@ const TRUNCATE_TABLES = [
   "meeting_event",
   "room_booking",
   "room",
+  "tutor_profile",
   "tutor_invite",
   "wallet",
   "achievement",
@@ -217,6 +218,7 @@ const TRUNCATE_TABLES = [
   "account",
   "session",
   "verification",
+  "user",
 ];
 
 export async function resetDatabase() {
@@ -227,13 +229,26 @@ export async function resetDatabase() {
     process.env.TEST_DATABASE_ALLOW_RESET,
     process.env.TEST_DATABASE_RESET_TARGET,
   );
-  // Delete profiles first so truncating tutor_invite cannot cascade through
-  // tutor_profile_subject into the shared subject taxonomy.
-  await db.execute(`DELETE FROM "tutor_profile"`);
+  const taxonomy = await db.select().from(subjectCategory);
   await db.execute(
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );
-  await db.execute(`DELETE FROM "user"`);
+  const taxonomyParents = taxonomy.filter((entry) => entry.parentId === null);
+  const taxonomySpecializations = taxonomy.filter(
+    (entry) => entry.parentId !== null,
+  );
+  if (taxonomyParents.length) {
+    await db
+      .insert(subjectCategory)
+      .values(taxonomyParents)
+      .onConflictDoNothing({ target: subjectCategory.id });
+  }
+  if (taxonomySpecializations.length) {
+    await db
+      .insert(subjectCategory)
+      .values(taxonomySpecializations)
+      .onConflictDoNothing({ target: subjectCategory.id });
+  }
   await seedMarkPackages();
   await db.insert(economyV3Revision).values({
     version: 1,
