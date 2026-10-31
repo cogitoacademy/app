@@ -46,7 +46,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       {
         name: "description",
         content:
-          "Cogito Academy — find expert tutors, book lessons, and track achievements.",
+          "Cogito Academy: find expert tutors, book lessons, and track achievements.",
       },
       {
         name: "theme-color",

@@ -43,7 +43,7 @@ export function QuarterHourTimeStepper({
         aria-live="polite"
         className="flex h-9.5 min-w-24 flex-1 items-center justify-center rounded border border-input-border bg-background px-3 font-mono text-base font-medium shadow-input"
       >
-        {value || "—"}
+        {value || "Select time"}
       </output>
       <Button
         type="button"
@@ -210,7 +210,7 @@ export function isValidMinuteTime(value: string) {
 }
 
 export function addMinutesToTime(value: string, minutes: number) {
-  if (!isValidMinuteTime(value)) return "—";
+  if (!isValidMinuteTime(value)) return "Select time";
   const [hour, minute] = value.split(":").map(Number) as [number, number];
   const total = hour * 60 + minute + minutes;
   const normalized = ((total % 1440) + 1440) % 1440;

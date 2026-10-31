@@ -56,7 +56,7 @@ function date(value: string | Date | null) {
         timeStyle: "short",
         timeZone: "Asia/Jakarta",
       }).format(new Date(value)) + " WIB"
-    : "—";
+    : "Not provided";
 }
 
 export function AdminReferralsPage() {
@@ -524,7 +524,8 @@ export function AdminReferralsPage() {
                                 ],
                               ]
                                 .filter(
-                                  ([, value]) => value != null && value !== "—",
+                                  ([, value]) =>
+                                    value != null && value !== "Not provided",
                                 )
                                 .map(([label, value]) => (
                                   <div
@@ -535,7 +536,7 @@ export function AdminReferralsPage() {
                                       {label}
                                     </dt>
                                     <dd className="break-all font-mono text-sm">
-                                      {value ?? "—"}
+                                      {value ?? "Not provided"}
                                     </dd>
                                   </div>
                                 ))}

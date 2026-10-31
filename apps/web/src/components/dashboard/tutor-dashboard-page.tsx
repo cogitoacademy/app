@@ -46,14 +46,14 @@ import { orpc } from "@/utils/orpc";
 
 function formatIdr(value: number | null | undefined) {
   return value === null || value === undefined
-    ? "—"
+    ? "Not available"
     : `Rp${value.toLocaleString("id-ID")}`;
 }
 
 function formatPayoutDate(value: Date | string | null) {
   if (!value) return "Not transferred";
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeZone: "Asia/Jakarta",

@@ -492,7 +492,7 @@ export function KnowledgeBankAccessPage() {
                           </TableCell>
                           <TableCell>
                             <Text className="max-w-56 text-sm text-muted">
-                              {grant.note || "—"}
+                              {grant.note || "No note"}
                             </Text>
                           </TableCell>
                           <TableCell>

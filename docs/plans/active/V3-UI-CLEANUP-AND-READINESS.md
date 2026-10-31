@@ -129,3 +129,9 @@ A Rp350,000 Midtrans Sandbox Snap test-card purchase completed. An authenticated
 Resend accepted one branded auth-template delivery-test email. Inbox arrival was not checked; this is provider acceptance only, not verified OTP delivery. Evidence is in ignored `tmp/v3onlydev/resend-email-acceptance.json`.
 
 This does not establish external Midtrans notification delivery, browser return/balance refresh, OTP inbox delivery or signup/referral/KOL integration. See the guarded harness commands in `docs/RUNBOOK.md`. Full hosted CI remains pending on the delivery branch.
+
+- Tutor profile drawer pricing uses a Selia accordion per competition, retaining the tutor subject/pricing filter. The first competition opens by default; multiple competitions can remain open.
+
+- Booking specialization options and selected summary use a center dot between competition and specialization, matching the taxonomy and class pages.
+
+- UI em-dash audit: empty values use contextual English labels; prose uses sentences or colons, status separators use center dots. Wallet Marks loading retains the icon with an accessible, inline Selia spinner.

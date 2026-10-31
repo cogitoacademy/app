@@ -210,7 +210,7 @@ export function BalancePage() {
                 </div>
                 <Text className="text-dimmed text-sm">
                   {kbAccessible ? (
-                    "Unlocked — explore your learning materials."
+                    "Unlocked. Explore your learning materials."
                   ) : (
                     <>
                       <CogitoMarks

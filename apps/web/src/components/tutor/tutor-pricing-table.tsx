@@ -63,7 +63,7 @@ export function TutorPricingTable({
                   {row.online !== undefined ? (
                     renderValue(row.online)
                   ) : (
-                    <span className="text-dimmed">—</span>
+                    <span className="text-dimmed">Not available</span>
                   )}
                 </TableCell>
               ) : null}
@@ -72,7 +72,7 @@ export function TutorPricingTable({
                   {row.offline !== undefined ? (
                     renderValue(row.offline)
                   ) : (
-                    <span className="text-dimmed">—</span>
+                    <span className="text-dimmed">Not available</span>
                   )}
                 </TableCell>
               ) : null}

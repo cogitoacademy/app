@@ -88,7 +88,9 @@ type SortOption = "priority" | "amount" | "name" | "latest";
 const EMPTY_PAYOUT_ROWS: PayoutReportRow[] = [];
 
 function formatIdr(value: number | null) {
-  return value === null ? "—" : `Rp${value.toLocaleString("id-ID")}`;
+  return value === null
+    ? "Not available"
+    : `Rp${value.toLocaleString("id-ID")}`;
 }
 
 function asDate(value: Date | string | null) {
@@ -99,7 +101,7 @@ function asDate(value: Date | string | null) {
 
 function formatDateTime(value: Date | string | null) {
   const date = asDate(value);
-  if (!date) return "—";
+  if (!date) return "Not recorded";
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -852,9 +854,9 @@ export function AdminTutorPayoutsPage() {
                           {row.tutorName}
                         </Text>
                       </TableCell>
-                      <TableCell>{row.bankName || "—"}</TableCell>
+                      <TableCell>{row.bankName || "Not provided"}</TableCell>
                       <TableCell className="font-mono">
-                        {row.bankAccountNumber || "—"}
+                        {row.bankAccountNumber || "Not provided"}
                       </TableCell>
                       <TableCell>
                         {formatPayoutCoverageLabel(
@@ -959,23 +961,27 @@ export function AdminTutorPayoutsPage() {
                   <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
                     <PayoutDetail
                       label="Bank"
-                      value={selectedRow.bankName || "—"}
+                      value={selectedRow.bankName || "Not provided"}
                     />
                     <PayoutDetail
                       label="Account number"
-                      value={selectedRow.bankAccountNumber || "—"}
+                      value={selectedRow.bankAccountNumber || "Not provided"}
                     />
                     <PayoutDetail
                       label="Account holder"
-                      value={selectedRow.bankAccountHolderName || "—"}
+                      value={
+                        selectedRow.bankAccountHolderName || "Not provided"
+                      }
                     />
                     <PayoutDetail
                       label="Account opening city"
-                      value={selectedRow.bankAccountOpeningCity || "—"}
+                      value={
+                        selectedRow.bankAccountOpeningCity || "Not provided"
+                      }
                     />
                     <PayoutDetail
                       label="Account ownership"
-                      value={selectedRow.bankAccountOwnership || "—"}
+                      value={selectedRow.bankAccountOwnership || "Not provided"}
                     />
                     <PayoutDetail
                       label="Gross"
@@ -983,7 +989,7 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Tax legal name"
-                      value={selectedRow.taxLegalName || "—"}
+                      value={selectedRow.taxLegalName || "Not provided"}
                     />
                     <PayoutDetail
                       label="Tax status"
@@ -995,11 +1001,11 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="NIK ending"
-                      value={selectedRow.taxNik?.slice(-4) || "—"}
+                      value={selectedRow.taxNik?.slice(-4) || "Not provided"}
                     />
                     <PayoutDetail
                       label="NPWP ending"
-                      value={selectedRow.taxNpwp?.slice(-4) || "—"}
+                      value={selectedRow.taxNpwp?.slice(-4) || "Not provided"}
                     />
                     <PayoutDetail
                       label="Tax withheld"
@@ -1031,11 +1037,11 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Recorded by"
-                      value={selectedRow.transferRecordedBy ?? "—"}
+                      value={selectedRow.transferRecordedBy ?? "Not provided"}
                     />
                     <PayoutDetail
                       label="Reference"
-                      value={selectedRow.actualReference || "—"}
+                      value={selectedRow.actualReference || "Not provided"}
                     />
                   </div>
                   {selectedRow.actualProofUrl ? (
@@ -1051,7 +1057,7 @@ export function AdminTutorPayoutsPage() {
                   ) : null}
                   {selectedRow.status === "void" ? (
                     <Text className="mt-3 text-sm text-muted">
-                      Void reason: {selectedRow.voidReason || "—"}.
+                      Void reason: {selectedRow.voidReason || "Not provided"}.
                       Reconciliation: {selectedRow.reconciliationStatus}
                       {selectedRow.reconciliationReason
                         ? ` · ${selectedRow.reconciliationReason}`
@@ -1198,21 +1204,29 @@ export function AdminTutorPayoutsPage() {
                           />
                           <PayoutDetail
                             label="Bank"
-                            value={selectedPreview.bankName || "—"}
+                            value={selectedPreview.bankName || "Not provided"}
                           />
                           <PayoutDetail
                             label="Account number"
-                            value={selectedPreview.bankAccountNumber || "—"}
+                            value={
+                              selectedPreview.bankAccountNumber ||
+                              "Not provided"
+                            }
                           />
                           <PayoutDetail
                             label="Account holder"
-                            value={selectedPreview.bankAccountHolderName || "—"}
+                            value={
+                              selectedPreview.bankAccountHolderName ||
+                              "Not provided"
+                            }
                           />
                         </div>
                         <Text className="mt-3 text-sm text-muted">
                           Identity: {selectedPreview.legalName || "Incomplete"}{" "}
-                          · NIK ending {selectedPreview.nik?.slice(-4) || "—"} ·
-                          NPWP ending {selectedPreview.npwp?.slice(-4) || "—"}
+                          · NIK ending{" "}
+                          {selectedPreview.nik?.slice(-4) || "Not provided"} ·
+                          NPWP ending{" "}
+                          {selectedPreview.npwp?.slice(-4) || "Not provided"}
                         </Text>
                         {!selectedRow.payoutAccountComplete ? (
                           <FieldError className="mt-2 block">

@@ -275,7 +275,7 @@ function HistoryPhotoChange({
             </a>
           ) : (
             <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-xs text-dimmed">
-              —
+              <span className="sr-only">No image</span>
             </span>
           )}
           <Text className="text-xs text-muted">{thumb.label}</Text>

@@ -229,7 +229,7 @@ export function ContactRequestPanel({ bookingId }: { bookingId: string }) {
                         ? "Wants to exchange contact details"
                         : request?.direction === "outgoing" &&
                             request.status === "pending"
-                          ? "Request sent — waiting for a response"
+                          ? "Request sent · waiting for a response"
                           : request?.status === "accepted"
                             ? request.email
                               ? "Email shared"

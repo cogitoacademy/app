@@ -1372,8 +1372,8 @@ function OverrideDialog({
   const previewHint = preview
     ? null
     : !reason.trim()
-      ? "Reason required — fill it to unlock Preview."
-      : "Run Preview first — Apply unlocks after a successful preview.";
+      ? "Reason required. Fill it to unlock Preview."
+      : "Run Preview first. Apply unlocks after a successful preview.";
 
   return (
     <Drawer
@@ -2064,7 +2064,9 @@ function WalletLookup() {
                           <TableCell>
                             <CogitoMarks value={entry.amount} size="3" />
                           </TableCell>
-                          <TableCell>{entry.bookingId ?? "—"}</TableCell>
+                          <TableCell>
+                            {entry.bookingId ?? "Not linked"}
+                          </TableCell>
                           <TableCell>
                             {formatBookingDate(entry.createdAt)}
                           </TableCell>

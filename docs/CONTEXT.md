@@ -3647,3 +3647,7 @@ V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive 
 ### PR #332 coverage continuation (28 October 2026)
 
 Hosted run `40671516167` on `d7f70efb` passes all three API coverage test partitions and server unit tests, then fails only the unchanged 100% coverage thresholds: API lines 94.4% (9,931/10,515), overall lines 94.4% (10,270/10,877), functions 96.6% (2,672/2,766), branches 84.9% (7,431/8,757). This validates the persisted top-up quote/revision/payment fixtures. CodeQL and both language/action analyses pass on this head. New focused tests cover FAQ rich-text safety/conversion and payment-handler Test Mode/catalog/purchase/reconciliation paths; under the repository counter preload, both target files reach 100% lines, functions and branches in the focused run (10 tests / 45 assertions). Full merged coverage is still open; E2E is not required for this follow-up.
+
+- Tutor profile drawer pricing uses a Selia accordion per competition, retaining the tutor subject/pricing filter. The first competition opens by default; multiple competitions can remain open.
+
+- UI em-dash audit: empty values use contextual English labels; prose uses sentences or colons, status separators use center dots. Wallet Marks loading retains the icon with an accessible, inline Selia spinner.

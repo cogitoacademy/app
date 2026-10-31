@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
@@ -249,23 +256,32 @@ export function TutorDrawer({
                 Pricing
               </Heading>
               {competitionPriceTables.length > 0 ? (
-                <div className="flex flex-col gap-4">
+                <Accordion
+                  key={selectedTutor.id}
+                  multiple
+                  defaultValue={[competitionPriceTables[0]!.slug]}
+                >
                   {competitionPriceTables.map((table) => (
-                    <section key={table.slug}>
-                      <Heading size="sm" level={4} className="mb-2">
-                        {table.name}
-                      </Heading>
-                      <TutorPricingTable
-                        modalities={table.modalities}
-                        rows={table.rows}
-                        columnLabels={{ online: "Online", offline: "Offline" }}
-                        renderValue={(value) => (
-                          <CogitoMarks size="3" value={value} />
-                        )}
-                      />
-                    </section>
+                    <AccordionItem key={table.slug} value={table.slug}>
+                      <AccordionHeader>
+                        <AccordionTrigger>{table.name}</AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <TutorPricingTable
+                          modalities={table.modalities}
+                          rows={table.rows}
+                          columnLabels={{
+                            online: "Online",
+                            offline: "Offline",
+                          }}
+                          renderValue={(value) => (
+                            <CogitoMarks size="3" value={value} />
+                          )}
+                        />
+                      </AccordionPanel>
+                    </AccordionItem>
                   ))}
-                </div>
+                </Accordion>
               ) : (
                 <Text className="text-sm text-muted">
                   Pricing is not available yet.

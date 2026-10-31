@@ -1,5 +1,7 @@
 "use client";
 
+import { Spinner } from "@cogito-app/ui/components/selia/spinner";
+
 import { cn } from "@cogito-app/ui/lib/utils";
 
 const MARK_ICON_SIZES = {
@@ -18,12 +20,14 @@ const MARK_ICON_DIMENSIONS = {
 
 export type CogitoMarksProps = {
   value: number | string;
+  loading?: boolean;
   size?: keyof typeof MARK_ICON_SIZES;
   className?: string;
 };
 
 export function CogitoMarks({
   value,
+  loading = false,
   size = "4",
   className,
 }: CogitoMarksProps) {
@@ -33,7 +37,8 @@ export function CogitoMarks({
         "inline-flex items-center gap-1 whitespace-nowrap align-middle leading-none",
         className,
       )}
-      aria-label={`${value} Marks`}
+      aria-label={loading ? "Loading Marks" : `${value} Marks`}
+      aria-busy={loading}
     >
       <img
         src="/cogito-mark.png"
@@ -43,7 +48,11 @@ export function CogitoMarks({
         height={MARK_ICON_DIMENSIONS[size]}
         className={cn(MARK_ICON_SIZES[size], "shrink-0 object-contain")}
       />
-      <span>{value}</span>
+      {loading ? (
+        <Spinner aria-hidden="true" className={MARK_ICON_SIZES[size]} />
+      ) : (
+        <span>{value}</span>
+      )}
     </span>
   );
 }

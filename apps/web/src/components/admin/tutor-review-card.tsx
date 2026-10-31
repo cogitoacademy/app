@@ -317,7 +317,7 @@ export type SpecializationItem = {
 
 function SpecBadges({ items }: { items: SpecializationItem[] }) {
   if (items.length === 0) {
-    return <Text className="text-sm text-dimmed">—</Text>;
+    return <Text className="text-sm text-dimmed">Not provided</Text>;
   }
   return (
     <div className="flex min-w-0 flex-wrap gap-1.5">

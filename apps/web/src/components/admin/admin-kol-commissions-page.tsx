@@ -243,7 +243,7 @@ export function AdminKolCommissionsPage() {
                         ) : row.providerSuccessAt ? (
                           formatDate(row.providerSuccessAt)
                         ) : (
-                          "—"
+                          "Not received"
                         )}
                       </TableCell>
                       <TableCell>

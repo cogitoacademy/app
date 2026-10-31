@@ -28,7 +28,8 @@ export type CompletionFeedbackHistoryItem = {
 };
 
 function BulletList({ items }: { items: string[] }) {
-  if (items.length === 0) return <Text className="text-sm text-muted">—</Text>;
+  if (items.length === 0)
+    return <Text className="text-sm text-muted">No feedback provided</Text>;
   return (
     <ul className="list-disc space-y-1 pl-5 text-sm">
       {items.map((item, i) => (

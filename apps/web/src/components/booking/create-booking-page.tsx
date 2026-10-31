@@ -539,7 +539,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const hasEnoughMarks = priceAvailable && availableBalance >= requiredHold;
   const tutorName = profile.user?.name ?? "Cogito tutor";
   const subjectSummary = selectedSubject
-    ? `${selectedSubject.parent.name} — ${selectedSubject.name}`
+    ? `${selectedSubject.parent.name} · ${selectedSubject.name}`
     : "Not specified";
   const participantSummary = isGroupBooking
     ? `You + ${invitees.length} ${invitees.length === 1 ? "invitee" : "invitees"}`
@@ -727,7 +727,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         <SelectList>
                           {subjects.map((subject) => (
                             <SelectItem key={subject.id} value={subject.id}>
-                              {subject.parent.name} — {subject.name}
+                              {subject.parent.name} · {subject.name}
                             </SelectItem>
                           ))}
                         </SelectList>
@@ -1285,7 +1285,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   priceAvailable ? (
                     <CogitoMarks value={requiredHold} size="3" />
                   ) : (
-                    "—"
+                    "Pricing unavailable"
                   )
                 }
               />
@@ -1533,7 +1533,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <SummaryRow
               label="Reserved now"
               value={
-                priceAvailable ? <CogitoMarks value={requiredHold} /> : "—"
+                priceAvailable ? (
+                  <CogitoMarks value={requiredHold} />
+                ) : (
+                  "Pricing unavailable"
+                )
               }
             />
             <SummaryRow

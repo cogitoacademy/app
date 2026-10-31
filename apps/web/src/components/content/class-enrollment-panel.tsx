@@ -260,7 +260,7 @@ export function ClassEnrollmentPanel({
             ? modes[0] === "online"
               ? "Online"
               : "In person"
-            : "—",
+            : "Not specified",
     },
     {
       label: "Schedule",
@@ -973,7 +973,7 @@ export function ClassEnrollmentPanel({
                     value: quoteReady ? (
                       <CogitoMarks value={firstInstallmentMarks} />
                     ) : (
-                      "—"
+                      "Pricing unavailable"
                     ),
                   },
                   ...(secondInstallmentMarks > 0
@@ -989,7 +989,7 @@ export function ClassEnrollmentPanel({
                     value: quoteReady ? (
                       <CogitoMarks value={quoteTotalMarks} />
                     ) : (
-                      "—"
+                      "Pricing unavailable"
                     ),
                   },
                   {

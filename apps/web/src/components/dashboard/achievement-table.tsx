@@ -96,7 +96,7 @@ const STATUS_CONFIG: Record<
 };
 
 export function formatAchievementDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not provided";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -338,7 +338,9 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
                   <div className="min-w-0">
                     <Text className="font-medium">{studentName}</Text>
                     <Text className="truncate text-sm text-muted">
-                      {achievement.student?.email ?? achievement.userId ?? "—"}
+                      {achievement.student?.email ??
+                        achievement.userId ??
+                        "Not provided"}
                     </Text>
                   </div>
                 </div>
