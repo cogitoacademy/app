@@ -5222,6 +5222,50 @@ describe("BookingService", () => {
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
 
+    test("skips wallet changes when remaining participants already hold the repriced amount", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "confirmed",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
+        },
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 42 }),
+          ),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 31 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 31 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({ holdAmount: 62 }),
+      );
+    });
+
     test("M7: group withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the requested roomBooking and refreshes the reconfirmation deadline", async () => {
       const booking = makeBooking({
         type: "group",

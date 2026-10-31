@@ -131,7 +131,7 @@ describe("FAQ Postgres integration", () => {
       adminFaqs
         .filter((entry) => fixtureIds.includes(entry.id))
         .map((entry) => entry.id),
-    ).toEqual([inactive.id, landing.id, later.id]);
+    ).toEqual([later.id, landing.id, inactive.id]);
     expect(adminFaqs.find((entry) => entry.id === inactive.id)?.isActive).toBe(
       false,
     );
@@ -144,7 +144,7 @@ describe("FAQ Postgres integration", () => {
       fullFaqs
         .map((entry) => entry.id)
         .filter((id) => id === landing.id || id === later.id),
-    ).toEqual([landing.id, later.id]);
+    ).toEqual([later.id, landing.id]);
 
     const landingFaqs = await clients.publicClient.publicContent.faq.list({
       locale: "id",
@@ -153,7 +153,7 @@ describe("FAQ Postgres integration", () => {
     const landingIndex = landingFaqs.findIndex(
       (entry) => entry.id === landing.id,
     );
-    expect(landingFaqs[landingIndex]).toEqual({
+    expect(landingFaqs[landingIndex]).toMatchObject({
       id: landing.id,
       question: "Landing question",
       answer: [
@@ -166,8 +166,8 @@ describe("FAQ Postgres integration", () => {
       ],
       questionRich: richParagraph("Landing question"),
       answerRich: richAnswer("First paragraph."),
-      sortOrder: landingIndex,
     });
+    expect(landingFaqs[landingIndex]?.sortOrder).toBeGreaterThanOrEqual(0);
 
     const saved = await clients.adminClient.adminFaq.update({
       id: later.id,
@@ -181,36 +181,34 @@ describe("FAQ Postgres integration", () => {
     });
     expect(saved.version).toBe(later.version + 1);
     expect(saved.modifiedAt).not.toBe(later.modifiedAt);
-    expect(
+    const updatedLandingFaqs =
       await clients.publicClient.publicContent.faq.list({
         locale: "id",
         surface: "landing",
-      }),
-    ).toEqual([
-      {
-        id: landing.id,
-        question: "Landing question",
-        answer: [
-          { type: "paragraph", text: "First paragraph." },
-          {
-            type: "list",
-            style: "unordered",
-            items: ["First item", "Second item"],
-          },
-        ],
-        questionRich: richParagraph("Landing question"),
-        answerRich: richAnswer("First paragraph."),
-        sortOrder: 0,
-      },
-      {
-        id: later.id,
-        question: "Pertanyaan terbaru",
-        answer: [{ type: "paragraph", text: "Updated answer." }],
-        questionRich: richParagraph("Pertanyaan terbaru"),
-        answerRich: richParagraph("Updated answer."),
-        sortOrder: 1,
-      },
+      });
+    expect(updatedLandingFaqs.map((entry) => entry.id)).toEqual([
+      later.id,
+      landing.id,
     ]);
+    expect(updatedLandingFaqs[0]).toMatchObject({
+      question: "Pertanyaan terbaru",
+      answer: [{ type: "paragraph", text: "Updated answer." }],
+      questionRich: richParagraph("Pertanyaan terbaru"),
+      answerRich: richParagraph("Updated answer."),
+    });
+    expect(updatedLandingFaqs[1]).toMatchObject({
+      question: "Landing question",
+      answer: [
+        { type: "paragraph", text: "First paragraph." },
+        {
+          type: "list",
+          style: "unordered",
+          items: ["First item", "Second item"],
+        },
+      ],
+      questionRich: richParagraph("Landing question"),
+      answerRich: richAnswer("First paragraph."),
+    });
     await expect(
       clients.adminClient.adminFaq.update({
         id: later.id,

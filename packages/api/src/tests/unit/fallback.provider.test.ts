@@ -212,6 +212,44 @@ describe("createFallbackMeetingProvider", () => {
     });
   });
 
+  test("setManualLink updates the latest existing meeting event", async () => {
+    const existing = { id: "me-existing" };
+    const updated = {
+      id: "me-existing",
+      bookingId: "b-existing",
+      meetingUrl: "https://meet.example.com/new",
+      status: "created",
+    };
+    const returning = mock(async () => [updated]);
+    const whereUpdate = mock(() => ({ returning }));
+    const set = mock(() => ({ where: whereUpdate }));
+    const update = mock(() => ({ set }));
+    const limit = mock(async () => [existing]);
+    const orderBy = mock(() => ({ limit }));
+    const whereSelect = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where: whereSelect }));
+    const select = mock(() => ({ from }));
+    const insert = mock(() => {
+      throw new Error("existing event should be updated");
+    });
+    const provider = createFallbackMeetingProvider({
+      select,
+      update,
+      insert,
+    } as any);
+
+    expect(
+      await provider.setManualLink("b-existing", updated.meetingUrl),
+    ).toEqual(updated);
+    expect(set).toHaveBeenCalledWith({
+      provider: "manual",
+      status: "created",
+      meetingUrl: updated.meetingUrl,
+      errorReason: null,
+    });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   test("F10: setManualLink writes through the passed conn (tx) so a rollback leaves no orphan row", async () => {
     const createdRow = {
       id: "me_tx",

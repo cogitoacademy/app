@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { DomainError } from "../../lib/domain-errors";
 import {
   FaqLandingLimitError,
@@ -7,22 +7,15 @@ import {
   mapFaqError,
 } from "../../modules/faq/faq.errors";
 
-class UnexpectedFaqError extends DomainError {
-  readonly domain = "faq";
-  constructor() {
-    super("UNEXPECTED", "Unexpected error");
-  }
-}
-
-const mappings: Array<[DomainError, number]> = [
-  [new FaqNotFoundError("faq-1"), 404],
-  [new FaqLandingLimitError(), 400],
-  [new FaqVersionConflictError("faq-1", 2, 3), 409],
-  [new UnexpectedFaqError(), 500],
-];
-
-for (const [error, status] of mappings) {
-  test(`maps ${error.name} to HTTP ${status}`, () => {
-    expect(mapFaqError(error).status).toBe(status);
+describe("FAQ error mapping", () => {
+  test("maps domain errors to the expected RPC status", () => {
+    expect(mapFaqError(new FaqNotFoundError("faq-1")).code).toBe("NOT_FOUND");
+    expect(mapFaqError(new FaqLandingLimitError()).code).toBe("BAD_REQUEST");
+    expect(mapFaqError(new FaqVersionConflictError("faq-1", 1, 2)).code).toBe(
+      "CONFLICT",
+    );
+    expect(mapFaqError(new DomainError("OTHER", "other")).code).toBe(
+      "INTERNAL_SERVER_ERROR",
+    );
   });
-}
+});

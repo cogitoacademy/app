@@ -190,7 +190,7 @@ describe("FAQ content", () => {
         answer: rowWithQuestionOnly.answerEn,
         questionRich: rowWithQuestionOnly.questionIdRich,
         answerRich: rowWithQuestionOnly.answerEnRich,
-        sortOrder: 0,
+        sortOrder: rowWithQuestionOnly.sortOrder,
       },
       {
         id: "faq-answer-id",
@@ -198,7 +198,7 @@ describe("FAQ content", () => {
         answer: rowWithAnswerOnly.answerId,
         questionRich: rowWithAnswerOnly.questionEnRich,
         answerRich: rowWithAnswerOnly.answerIdRich,
-        sortOrder: 1,
+        sortOrder: rowWithAnswerOnly.sortOrder,
       },
     ]);
     expect(Object.keys(entries[0]!)).toEqual([
@@ -299,12 +299,22 @@ describe("FAQ content", () => {
     );
   });
 
-  test("sorts public entries alphabetically in the requested locale", async () => {
+  test("preserves repository ordering and persisted sort positions for each locale", async () => {
     const service = createFaqService({
       repo: makeRepo({
         listPublic: mock(async () => [
-          makeRow({ id: "z", questionEn: "When?", questionId: "Kapan?" }),
-          makeRow({ id: "a", questionEn: "How?", questionId: "Bagaimana?" }),
+          makeRow({
+            id: "a",
+            questionEn: "How?",
+            questionId: "Bagaimana?",
+            sortOrder: 0,
+          }),
+          makeRow({
+            id: "z",
+            questionEn: "When?",
+            questionId: "Kapan?",
+            sortOrder: 1,
+          }),
         ]),
       }) as FaqRepo,
     });
@@ -327,12 +337,12 @@ describe("FAQ content", () => {
     ]);
   });
 
-  test("uses stable IDs to order public entries with equal questions", async () => {
+  test("preserves repository ordering when localized questions match", async () => {
     const service = createFaqService({
       repo: makeRepo({
         listPublic: mock(async () => [
-          makeRow({ id: "z", questionEn: "Same?" }),
-          makeRow({ id: "a", questionEn: "Same?" }),
+          makeRow({ id: "a", questionEn: "Same?", sortOrder: 0 }),
+          makeRow({ id: "z", questionEn: "Same?", sortOrder: 1 }),
         ]),
       }) as FaqRepo,
     });
