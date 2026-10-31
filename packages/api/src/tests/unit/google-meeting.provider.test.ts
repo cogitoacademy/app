@@ -1747,6 +1747,40 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
   });
 });
 
+function isGoogleOAuthTokenRequest(input: unknown) {
+  try {
+    const url = new URL(String(input));
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "oauth2.googleapis.com" &&
+      url.pathname === "/token"
+    );
+  } catch {
+    return false;
+  }
+}
+
+describe("Google OAuth token URL matcher", () => {
+  test("matches only the HTTPS Google token endpoint", () => {
+    expect(
+      isGoogleOAuthTokenRequest("https://oauth2.googleapis.com/token"),
+    ).toBe(true);
+    expect(
+      isGoogleOAuthTokenRequest(
+        "https://evil.test/oauth2.googleapis.com/token",
+      ),
+    ).toBe(false);
+    expect(
+      isGoogleOAuthTokenRequest(
+        "https://oauth2.googleapis.com.evil.test/token",
+      ),
+    ).toBe(false);
+    expect(
+      isGoogleOAuthTokenRequest("http://oauth2.googleapis.com/token"),
+    ).toBe(false);
+  });
+});
+
 describe("createGoogleMeetingProvider academy class events", () => {
   const config = {
     authType: "service_account" as const,
@@ -2713,7 +2747,7 @@ describe("provider focused calendar mutation fallbacks", () => {
       }));
       const requests: { method?: string; body?: string }[] = [];
       globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
-        if (String(input).includes("oauth2.googleapis.com"))
+        if (isGoogleOAuthTokenRequest(input))
           return new Response(JSON.stringify({ access_token: "token" }));
         requests.push({ method: init?.method, body: init?.body as string });
         return new Response(
@@ -2741,7 +2775,7 @@ describe("provider focused calendar mutation fallbacks", () => {
     };
     let sent: any;
     globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
-      if (String(input).includes("oauth2.googleapis.com"))
+      if (isGoogleOAuthTokenRequest(input))
         return new Response(JSON.stringify({ access_token: "token" }));
       if (init?.method === "PUT") sent = JSON.parse(init.body as string);
       return new Response(JSON.stringify(current));
@@ -2772,7 +2806,7 @@ describe("provider focused calendar mutation fallbacks", () => {
   test("OAuth offline creation derives event identity from booking and supplies room", async () => {
     let sent: any;
     globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
-      if (String(input).includes("oauth2.googleapis.com"))
+      if (isGoogleOAuthTokenRequest(input))
         return new Response(JSON.stringify({ access_token: "token" }));
       sent = JSON.parse(init?.body as string);
       return new Response(JSON.stringify({ id: sent.id }));
@@ -2849,7 +2883,7 @@ describe("provider retry evidence", () => {
   test("OAuth creation polls a pending conference until the URL is ready", async () => {
     let gets = 0;
     globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
-      if (String(input).includes("oauth2.googleapis.com"))
+      if (isGoogleOAuthTokenRequest(input))
         return new Response(JSON.stringify({ access_token: "token" }));
       if (init?.method === "POST")
         return new Response(JSON.stringify({ id: "pending-event" }));
