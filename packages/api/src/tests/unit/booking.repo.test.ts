@@ -63,6 +63,126 @@ function makeBookingRepo() {
 }
 
 describe("createBookingRepo", () => {
+  test("empty booking aggregates and optimistic feedback updates have explicit zero/null results", async () => {
+    const bound = createBookingRepo(makeSelectConn([]) as any);
+    expect(
+      await bound.countBookingsForAccess("admin1", { includeAll: true }),
+    ).toEqual({
+      action: 0,
+      upcoming: 0,
+      recurring: 0,
+      history: 0,
+      completed: 0,
+      problem: 0,
+      all: 0,
+    });
+    expect(
+      await bound.findSessionById(makeSelectConn([]) as any, "missing"),
+    ).toBeNull();
+    const conn = makeUpdateConn([]) as any;
+    expect(
+      await bound.updateCompletionFeedback(conn, {
+        id: "feedback1",
+        expectedVersion: 1,
+        version: 2,
+        discussion: ["Discussion"],
+        strengths: ["Strength"],
+        improvements: ["Improve"],
+      }),
+    ).toBeNull();
+    await bound.completeSession(conn, "session1");
+    expect(conn.set).toHaveBeenLastCalledWith({
+      currentState: "completed",
+      completedAt: expect.any(Date),
+    });
+    expect(
+      await bound.findCompletedBookingsByTutor(
+        makeSelectConn([]) as any,
+        "tutor1",
+      ),
+    ).toEqual([]);
+    expect(
+      await bound.findCompletedBookingsByTutor(
+        makeSelectConn([]) as any,
+        "tutor1",
+        new Date(0),
+        new Date(),
+      ),
+    ).toEqual([]);
+  });
+  test("empty lookup and payout allocation inputs avoid database calls", async () => {
+    const repo = makeBookingRepo();
+    const conn = { select: mock(), insert: mock() } as any;
+    expect(await repo.findLedgerEventAmounts(conn, "b1", [])).toEqual(
+      new Map(),
+    );
+    expect(await repo.findUserEmails(conn, [])).toEqual([]);
+    expect(await repo.insertTutorPayoutAllocations(conn, [])).toEqual([]);
+    expect(conn.select).not.toHaveBeenCalled();
+    expect(conn.insert).not.toHaveBeenCalled();
+  });
+
+  test("headcount increment rejects a booking deleted before the update", async () => {
+    await expect(
+      makeBookingRepo().incrementBookingConfirmedHeadcount(
+        makeUpdateConn([]) as any,
+        "missing",
+      ),
+    ).rejects.toThrow("not found for headcount increment");
+  });
+
+  test.each(["missing", "tutor", "no-events"] as const)(
+    "feedback entitlement excludes %s",
+    async (scenario) => {
+      const conn = makeSelectConn(
+        scenario === "missing"
+          ? []
+          : [{ role: scenario === "tutor" ? "tutor" : "invitee" }],
+      ) as any;
+      expect(
+        await makeBookingRepo().hasChargeableFeedbackEntitlement(
+          conn,
+          "b1",
+          "u1",
+          scenario === "no-events" ? [] : ["event1"],
+        ),
+      ).toBe(false);
+      expect(conn.select).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("fee event retries return an exactly matching persisted source", async () => {
+    const start = new Date();
+    const input = {
+      eventKey: "event1",
+      bookingId: "b1",
+      tutorId: "t1",
+      grossHonorariumIdr: 50000,
+      scheduledStartAt: start,
+    };
+    const existing = { ...input, bookingSessionId: null, priceSnapshot: null };
+    const conn = {
+      ...makeSelectConn([existing]),
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({ returning: async () => [] }),
+        }),
+      }),
+    } as any;
+    expect(
+      await makeBookingRepo().insertTutorSessionFee(conn, input as any),
+    ).toEqual(existing);
+  });
+
+  test("booking detail lookup returns null when the booking is absent", async () => {
+    const conn = {
+      ...makeSelectConn([]),
+      query: { booking: { findFirst: mock(async () => null) } },
+    } as any;
+    expect(
+      await createBookingRepo(conn).findBookingWithParticipants("missing"),
+    ).toBeNull();
+  });
   test("ledger and fee event keys preserve identities and short circuit empty requests", async () => {
     const repo = makeBookingRepo();
     const conn = makeSelectConn([{ eventKey: "event1" }]) as any;
@@ -1243,5 +1363,49 @@ describe("createBookingRepo additional query paths", () => {
     expect(select).toHaveBeenCalledTimes(3);
     expect(nestedWhere).toHaveBeenCalledTimes(2);
     expect(countWhere).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("booking repository uncovered safety boundaries", () => {
+  test("findBookingById requests a row lock only when explicitly requested and returns null for a missing locked row", async () => {
+    const query: any = Promise.resolve([]);
+    const forUpdate = mock(() => query);
+    query.for = forUpdate;
+    const select = mock(() => ({
+      from: mock(() => ({ where: mock(() => ({ limit: mock(() => query) })) })),
+    }));
+    const repo = createBookingRepo({} as any);
+
+    await expect(
+      repo.findBookingById({ select } as any, "missing", { forUpdate: true }),
+    ).resolves.toBeNull();
+    expect(forUpdate).toHaveBeenCalledWith("update");
+  });
+
+  test("completed booking date bounds include scheduled fallback when completion timestamp is null", async () => {
+    const rows = [{ id: "completed-without-timestamp", completedAt: null }];
+    const conn = makeSelectConn(rows);
+    const repo = makeBookingRepo();
+    const from = new Date("2026-08-01T00:00:00.000Z");
+    const to = new Date("2026-08-31T23:59:59.999Z");
+
+    await expect(
+      repo.findCompletedBookingsByTutor(
+        conn as any,
+        "tutor-1",
+        from,
+        to,
+        "completedAt",
+      ),
+    ).resolves.toEqual(rows);
+    expect(conn.select).toHaveBeenCalledTimes(1);
+    expect(conn.where).toHaveBeenCalledTimes(1);
+    expect(conn.where.mock.calls[0]?.[0]).toBeDefined();
+  });
+
+  test("invalid cursor timestamp remains invalid and does not silently become a valid page boundary", () => {
+    const decoded = decodeBookingCursor("not-a-date|");
+    expect(Number.isNaN(decoded.scheduledStartAt.getTime())).toBe(true);
+    expect(decoded.id).toBeNull();
   });
 });

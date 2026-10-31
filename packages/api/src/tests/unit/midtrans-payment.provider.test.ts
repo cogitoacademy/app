@@ -8,6 +8,81 @@ const opts = {
   mode: "test" as const,
 };
 
+test("authenticated status rejects a response bound to another order", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  statusApiState = {
+    order_id: "different-order",
+    transaction_status: "pending",
+  };
+  await expect(
+    provider.getPaymentRequestStatus!("requested-order"),
+  ).rejects.toThrow("provider returned a different order");
+});
+
+test("refund webhook requires the authenticated provider state to confirm the refund", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  const body = notificationBody({ transaction_status: "refund" });
+  statusApiState = { ...statusApiState, transaction_status: "pending" };
+  await expect(
+    provider.verifyWebhook(JSON.stringify(body), ""),
+  ).rejects.toThrow("provider has not confirmed a refund");
+});
+
+test.each([
+  null,
+  123,
+  "not-a-time",
+  "2026-01-01T10:00:00",
+  "2026-01-01T10:00:00+99:99",
+])(
+  "status tolerates unusable success timestamp %s without inventing provider time",
+  async (timestamp) => {
+    const provider = createMidtransPaymentProvider(opts);
+    statusApiState = {
+      order_id: "order1",
+      transaction_status: "settlement",
+      gross_amount: "50000.00",
+      currency: "IDR",
+      payment_type: "bank_transfer",
+      settlement_time: timestamp,
+    };
+    const result = await provider.getPaymentRequestStatus!("order1");
+    expect(result.providerSuccessAt).toBeUndefined();
+    expect(result.providerSuccessTimeStatus).toBe("unavailable");
+  },
+);
+
+test("refund history without usable evidence cannot supply a refund identity", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  statusApiState = {
+    order_id: "order1",
+    transaction_status: "refund",
+    gross_amount: "50000.00",
+    currency: "IDR",
+    refunds: [null, "invalid", {}, { refund_key: "" }],
+  };
+  expect(
+    (await provider.getPaymentRequestStatus!("order1")).providerRefundIdentity,
+  ).toBeUndefined();
+});
+
+test("provider failures tolerate non-string diagnostic code and message", async () => {
+  const provider = createMidtransPaymentProvider(opts);
+  globalThis.fetch = mock(async () =>
+    Response.json(
+      { status_code: 502, status_message: { private: "invalid" } },
+      { status: 502 },
+    ),
+  ) as never;
+  await expect(
+    provider.createIntent({
+      paymentId: "pay1",
+      amountIdr: 50000,
+      providerReference: "ref1",
+    }),
+  ).rejects.toThrow("Payment provider");
+});
+
 const originalFetch = globalThis.fetch;
 let statusApiState: Record<string, unknown>;
 

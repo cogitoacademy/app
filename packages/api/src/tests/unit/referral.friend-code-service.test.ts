@@ -513,3 +513,46 @@ test("RPC reports prefix exhaustion as conflict", async () => {
     } as Parameters<typeof handler.getMine>[0]),
   ).rejects.toMatchObject({ code: "CONFLICT", status: 409 });
 });
+
+test("signup without a code is a no-op for a non-student account", async () => {
+  const f = fixture([[{ id: "tutor-id", role: "tutor" }]]);
+  await expect(
+    f.service.applyEmailSignupChoice(f.db, { userId: "tutor-id" }),
+  ).resolves.toBeNull();
+  expect(f.results).toEqual([]);
+  expect(f.inserted).toEqual([]);
+  expect(f.wallet.getOrCreate).not.toHaveBeenCalled();
+});
+
+test("signup reports a missing account as student-only", async () => {
+  const f = fixture([[]]);
+  await expect(
+    f.service.applyEmailSignupChoice(f.db, { userId: "deleted-user" }),
+  ).rejects.toMatchObject({ code: "REFERRAL_STUDENT_ONLY" });
+  expect(f.inserted).toEqual([]);
+});
+
+test("signup preserves an existing choice without validating a replacement", async () => {
+  const existing = { id: "choice-old", userId: "student-id", kind: "none" };
+  const f = fixture([[{ id: "student-id", role: "student" }], [existing]]);
+  await expect(
+    f.service.applyEmailSignupChoice(f.db, {
+      userId: "student-id",
+      code: "INVALID!!!",
+    }),
+  ).resolves.toEqual(existing);
+  expect(f.inserted).toEqual([]);
+  expect(f.wallet.credit).not.toHaveBeenCalled();
+});
+
+test("signup rejects a choice that the database did not persist", async () => {
+  const f = fixture(
+    [[{ id: "student-id", role: "student" }], [], []],
+    false,
+  );
+  await expect(
+    f.service.applyEmailSignupChoice(f.db, { userId: "student-id" }),
+  ).rejects.toThrow("Referral choice was not saved.");
+  expect(f.inserted).toHaveLength(1);
+  expect(f.wallet.getOrCreate).not.toHaveBeenCalled();
+});

@@ -320,6 +320,35 @@ describe("createGoogleMeetingProvider", () => {
     expect(errorLog).toBeDefined();
   });
 
+  test.each([null, "not an API error", 404, 410])(
+    "a non-object API error (%s) is not treated as a missing Calendar event",
+    async (apiError) => {
+      mockCalendarEventsInsert.mockImplementationOnce(async () => {
+        throw apiError;
+      });
+      const values = mock((input: Record<string, unknown>) => ({
+        returning: mock(async () => [
+          {
+            id: "primitive-error",
+            bookingId: "primitive-error-booking",
+            provider: "google_meet",
+            status: "failed",
+            errorReason: String(apiError),
+            ...input,
+          },
+        ]),
+      }));
+      const provider = createGoogleMeetingProvider(config, {
+        insert: mock(() => ({ values })),
+      } as any);
+
+      const result = await provider.createEvent("primitive-error-booking");
+      expect(result.status).toBe("failed");
+      expect(result.errorReason).toBe(String(apiError));
+      expect(values).toHaveBeenCalledTimes(1);
+    },
+  );
+
   test("createEvent keeps the created event when the URL poll fails (R8)", async () => {
     // Insert succeeds but returns no conferenceData, so createEvent must poll
     // for the Meet URL — and the poll throws.
@@ -658,6 +687,27 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     status: "created",
     errorReason: null,
   };
+
+  test.each(["failed", "cancelled", "missing-event-id"] as const)(
+    "does not mutate a non-live persisted meeting: %s",
+    async (state) => {
+      const db = makeSelectDb({
+        ...liveRow,
+        status: state === "missing-event-id" ? "created" : state,
+        externalEventId:
+          state === "missing-event-id" ? null : liveRow.externalEventId,
+      });
+      const provider = createGoogleMeetingProvider(config, db);
+      await provider.updateEvent("b1", {
+        startAt: new Date("2040-01-01T10:00:00Z"),
+        endAt: new Date("2040-01-01T11:00:00Z"),
+      });
+      await provider.cancelEvent("b1");
+      expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
+      expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
+    },
+  );
 
   beforeEach(() => {
     mockCalendarEventsUpdate.mockClear();
