@@ -671,12 +671,13 @@ export function BookingDetailPage({
                 {booking.modality === "online" ? "Online" : "Offline"}
               </Text>
             </div>
-            <Heading level={1} size="md">
+            <Heading level={1} size="sm" className="mb-2">
               {eventTitle}
             </Heading>
             {booking.sessionTopic ? (
               <Badge
                 variant="secondary"
+                size="sm"
                 className={
                   booking.sessionTopic.parentColors
                     ? competitionPaletteClassName
