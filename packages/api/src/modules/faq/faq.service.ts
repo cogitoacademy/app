@@ -103,15 +103,12 @@ export function createFaqService(deps: { repo: FaqRepo }) {
       surface: "full" | "landing";
     }) {
       const rows = await repo.listPublic(input.surface === "landing");
-      const collator = new Intl.Collator(input.locale, { sensitivity: "base" });
-      return rows
-        .map((row) => toPublicFaqDto(row, input.locale))
-        .toSorted(
-          (left, right) =>
-            collator.compare(left.question, right.question) ||
-            left.id.localeCompare(right.id),
-        )
-        .map((entry, index) => ({ ...entry, sortOrder: index }));
+      return rows.map((row) => toPublicFaqDto(row, input.locale));
+    },
+
+    async reorder(input: { ids: string[] }) {
+      await repo.reorder(input.ids);
+      return (await repo.listAdmin()).map(toAdminFaqDto);
     },
 
     async create(input: CreateFaqInput) {

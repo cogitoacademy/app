@@ -1,6 +1,7 @@
 import { adminProcedure, publicProcedure } from "../../procedures";
 import type { FaqHandler } from "./faq.handler";
 import {
+  reorderFaqInput,
   createFaqInput,
   listAdminFaqInput,
   listPublicFaqInput,
@@ -23,6 +24,7 @@ export function createFaqRouter(handler: FaqHandler) {
       },
     },
     adminFaq: {
+      reorder: adminProcedure.input(reorderFaqInput).handler(handler.reorder),
       list: adminProcedure
         .route({
           method: "POST",

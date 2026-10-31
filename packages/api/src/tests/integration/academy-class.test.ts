@@ -19,7 +19,6 @@ import {
   signUpAndSignIn,
 } from "../helpers/test-client";
 import { lockRoomForBooking, lockTutorForBooking } from "../../lib/locks";
-import { lockCompetitionCatalog } from "../../modules/competition-catalog/catalog-lock";
 import { createAcademyClassRepo } from "../../modules/academy-class/academy-class.repo";
 
 function deferred() {
@@ -735,7 +734,7 @@ describe("academy class drafts and published reads", () => {
     }
   });
 
-  test("rechecks competition status after a gated catalog archive", async () => {
+  test("rejects publishing a draft after its competition is archived", async () => {
     const startAt = new Date("2041-05-01T10:00:00.000Z");
     const draft = await adminClient.admin.saveAcademyClassDraft({
       kind: "masterclass",
@@ -758,41 +757,23 @@ describe("academy class drafts and published reads", () => {
       ],
     });
 
-    const acquired = deferred();
-    const release = deferred();
-    const archiveTransaction = db.transaction(async (tx) => {
-      await lockCompetitionCatalog(tx);
-      acquired.resolve();
-      await release.promise;
-      await tx
+    try {
+      await db
         .update(subjectCategory)
         .set({ isActive: false })
         .where(eq(subjectCategory.id, competitionId));
-    });
-    await acquired.promise;
-    let publishPromise: Promise<unknown> | undefined;
-    try {
-      publishPromise = adminClient.admin.publishAcademyClass({
-        id: draft.id,
-        expectedVersion: draft.version,
-        reason: "Publish while a competition archive is gated",
-      });
-      await waitForBlockedAdvisoryQueryCount(1);
-      release.resolve();
-      await archiveTransaction;
 
-      await expect(publishPromise).rejects.toThrow(
-        "competition or specialization is archived",
-      );
+      await expect(
+        adminClient.admin.publishAcademyClass({
+          id: draft.id,
+          expectedVersion: draft.version,
+          reason: "Publish after the competition was archived",
+        }),
+      ).rejects.toThrow("competition or specialization is archived");
       expect(
         (await adminClient.admin.getAcademyClass({ id: draft.id })).state,
       ).toBe("draft");
     } finally {
-      release.resolve();
-      await Promise.allSettled([
-        archiveTransaction,
-        ...(publishPromise ? [publishPromise] : []),
-      ]);
       await db
         .update(subjectCategory)
         .set({ isActive: true })

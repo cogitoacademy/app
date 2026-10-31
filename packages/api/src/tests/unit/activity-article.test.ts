@@ -54,6 +54,17 @@ describe("Activity article validation", () => {
       }).success,
     ).toBe(true);
   });
+  test("rejects database row metadata in update input", () => {
+    expect(
+      saveActivityInput.safeParse({
+        ...value,
+        id: "article",
+        expectedVersion: 1,
+        version: 1,
+        updatedAt: new Date(),
+      }).success,
+    ).toBe(false);
+  });
   test("rejects unsafe rich text links and image schemes", () => {
     expect(
       saveActivityInput.safeParse({ ...value, coverUrl: "javascript:alert(1)" })

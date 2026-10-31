@@ -90,3 +90,12 @@ export type AdminFaqDto = {
   version: number;
   modifiedAt: string;
 };
+
+export const reorderFaqInput = z
+  .object({
+    ids: z
+      .array(z.string().min(1))
+      .max(1000)
+      .refine((ids) => new Set(ids).size === ids.length),
+  })
+  .strict();

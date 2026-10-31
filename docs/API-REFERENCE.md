@@ -2699,7 +2699,10 @@ HTTP(S) `coverUrl`, `location`, ISO `startAt`/`endAt`, rich `bodyEn`, nullable
 `bodyId`, and `state` (draft/published/cancelled/postponed). Updates require `id`
 and `expectedVersion`; remove requires both. Conflicts return CONFLICT without
 overwriting. End must not precede start. Rich body uses existing safe FAQ doc
-format and rejects unsafe links. There is no registrationLink input.
+format and rejects unsafe links. The Activities admin editor accepts one
+language per article and stores it in the `En` fields with Indonesian fields
+null; public reads therefore show the same saved article for either locale.
+There is no registrationLink input.
 
 Competition catalog listing and V3 economy parent reads exclude superseded
 migration 0027 seed records. RPC shapes are unchanged; catalog list results omit
@@ -2724,3 +2727,6 @@ Seed competition taxonomy: seed.ts now inserts the seven canonical parent compet
 Initial data ownership (2026-10-30): migration 0027/0028 retain schema creation only; 0029/0041/0047 retain no-op journal slots. Competition taxonomy (7 parents, 34 specializations including Law Debate), Marks packages and default economy config are inserted only by apps/server/src/seed/seed.ts. Non-test seed preserves existing config/catalog values; test seed retains its explicit economy reset. Existing databases are not retroactively changed by editing these migrations; 0078 remains the cleanup for obsolete 0027 seeds. Migration 0056/0057 palette backfills remain for existing rows; they create no records. For a fresh database, run schema migrations then the server seed. No migration or seed was executed for this change.
 
 V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive package defaults from DEFAULT_V3_ECONOMY_CONFIG (50/350000, 150/975000, 250/1500000, 500/2750000). After canonical taxonomy and review admin creation, server seed transactionally initializes and activates a new PRD-default V3 revision only when no revision is active; it preserves and validates an existing active revision and does not activate an unrelated saved draft. Review tutor seed no longer writes legacy prices/baseRatesIdr and clears those fields on its existing demo profile. New presentation bookings use an assigned active specialization, active V3 revision, V3 snapshots and quote-derived Marks holds. Existing legacy presentation bookings cause an explicit reset-required error. This supersedes earlier notes describing seedEconomyConfig and legacy seed pricing. Runtime compatibility removal is still pending. No database migrate, seed or reset was executed. Focused package-default test passed (1 test, 4 assertions); server typecheck remains blocked by the existing unused MODALITY import in tutor.service.ts; live seeding is unverified.
+
+
+FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.

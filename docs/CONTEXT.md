@@ -3652,3 +3652,6 @@ Hosted run `40671516167` on `d7f70efb` passes all three API coverage test partit
 - Tutor profile drawer pricing uses a Selia accordion per competition, retaining the tutor subject/pricing filter. The first competition opens by default; multiple competitions can remain open.
 
 - UI em-dash audit: empty values use contextual English labels; prose uses sentences or colons, status separators use center dots. Wallet Marks loading retains the icon with an accessible, inline Selia spinner.
+
+
+FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.

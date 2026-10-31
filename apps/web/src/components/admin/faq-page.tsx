@@ -2,11 +2,12 @@
 
 import { Text } from "@cogito-app/ui/components/selia/text";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconDeviceFloppy,
   IconEdit,
+  IconGripVertical,
   IconPlus,
   IconX,
 } from "@tabler/icons-react";
@@ -159,6 +160,8 @@ function formatModifiedDate(value: string) {
 
 export function FaqPage() {
   const queryClient = useQueryClient();
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [isDesktop, setIsDesktop] = useState(
     () => window.matchMedia("(min-width: 1024px)").matches,
@@ -166,6 +169,7 @@ export function FaqPage() {
   const [initialDraft, setInitialDraft] = useState("");
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const editButton = useRef<HTMLButtonElement | null>(null);
+  const previousPositions = useRef<Map<string, number> | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const update = () => setIsDesktop(media.matches);
@@ -182,6 +186,51 @@ export function FaqPage() {
     queryFn: () => client.adminFaq.list({}),
   });
   const entries = listQuery.data ?? [];
+  useLayoutEffect(() => {
+    const previous = previousPositions.current;
+    if (!previous) return;
+    previousPositions.current = null;
+    document
+      .querySelectorAll<HTMLElement>("[data-faq-order-row]")
+      .forEach((row) => {
+        const id = row.dataset.faqOrderRow;
+        const before = id ? previous.get(id) : undefined;
+        if (before === undefined) return;
+        const offset = before - row.getBoundingClientRect().top;
+        if (offset) {
+          row.animate(
+            [
+              { transform: `translateY(${offset}px)` },
+              { transform: "translateY(0)" },
+            ],
+            { duration: 180, easing: "ease-out" },
+          );
+        }
+      });
+  }, [listQuery.data]);
+  const reorderMutation = useMutation({
+    mutationFn: (ids: string[]) => client.adminFaq.reorder({ ids }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(FAQ_LIST_KEY, data);
+      void queryClient.invalidateQueries({
+        queryKey: ["publicContent", "faq"],
+      });
+    },
+    onError: (error) =>
+      toastManager.add({ title: getUserFacingError(error), type: "error" }),
+  });
+  function moveEntry(id: string, targetId: string) {
+    if (id === targetId || reorderMutation.isPending) return;
+    const ids = entries.map((entry) => entry.id);
+    ids.splice(ids.indexOf(id), 1);
+    ids.splice(ids.indexOf(targetId), 0, id);
+    previousPositions.current = new Map(
+      [...document.querySelectorAll<HTMLElement>("[data-faq-order-row]")].map(
+        (row) => [row.dataset.faqOrderRow!, row.getBoundingClientRect().top],
+      ),
+    );
+    reorderMutation.mutate(ids);
+  }
   const isEditorOpen = draft !== null;
   const isDirty = draft !== null && JSON.stringify(draft) !== initialDraft;
   const blocker = useBlocker({
@@ -528,15 +577,78 @@ export function FaqPage() {
               <Accordion className="gap-3">
                 {visibleEntries.map((entry) => (
                   <AccordionItem
+                    data-faq-order-row={entry.id}
                     key={entry.id}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDropTargetId(entry.id);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedId) moveEntry(draggedId, entry.id);
+                      setDraggedId(null);
+                      setDropTargetId(null);
+                    }}
                     value={entry.id}
                     className={`group rounded-3xl border last:border-b bg-accent data-[open]:bg-card ${editingEntry?.id === entry.id && draft ? "border-primary" : "border-transparent data-[open]:border-card-border"}`}
                   >
                     <div className="relative">
+                      {dropTargetId === entry.id && draggedId !== entry.id ? (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-x-3 -top-[6px] z-20 h-0.5 rounded-full bg-primary shadow"
+                        />
+                      ) : null}
+                      <Button
+                        className="absolute left-3 top-1/2 z-10 -translate-y-1/2 cursor-grab active:cursor-grabbing text-muted"
+                        variant="plain"
+                        size="sm-icon"
+                        draggable={!reorderMutation.isPending}
+                        disabled={reorderMutation.isPending}
+                        aria-label={`Move ${entry.questionEn}. Use arrow keys to reorder.`}
+                        onDragStart={(event) => {
+                          setDraggedId(entry.id);
+                          const card = event.currentTarget.closest<HTMLElement>(
+                            "[data-faq-order-row]",
+                          );
+                          if (card && event.dataTransfer) {
+                            const rect = card.getBoundingClientRect();
+                            event.dataTransfer.setDragImage(
+                              card,
+                              Math.min(event.clientX - rect.left, rect.width),
+                              Math.min(event.clientY - rect.top, rect.height),
+                            );
+                          }
+                        }}
+                        onDragEnd={() => {
+                          setDraggedId(null);
+                          setDropTargetId(null);
+                        }}
+                        onKeyDown={(event) => {
+                          const index = entries.findIndex(
+                            (item) => item.id === entry.id,
+                          );
+                          const target =
+                            entries[
+                              index +
+                                (event.key === "ArrowUp"
+                                  ? -1
+                                  : event.key === "ArrowDown"
+                                    ? 1
+                                    : 0)
+                            ];
+                          if (target && target.id !== entry.id) {
+                            event.preventDefault();
+                            moveEntry(entry.id, target.id);
+                          }
+                        }}
+                      >
+                        <IconGripVertical aria-hidden="true" />
+                      </Button>
                       <AccordionHeader>
                         <AccordionTrigger
                           expandableIndicator={false}
-                          className="gap-4 rounded-3xl py-2 pl-5 pr-2"
+                          className="gap-4 rounded-3xl py-2 pl-14 pr-2"
                         >
                           <span className="min-w-0 flex-1 break-words py-2 pr-10">
                             {entry.questionEn}
@@ -563,7 +675,7 @@ export function FaqPage() {
                         <IconEdit aria-hidden="true" />
                       </Button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+                    <div className="flex flex-wrap items-center gap-2 pl-14 pr-5 pb-3">
                       <Badge variant={entry.isActive ? "success" : "secondary"}>
                         {entry.isActive ? "Active" : "Inactive"}
                       </Badge>
@@ -575,7 +687,7 @@ export function FaqPage() {
                       </span>
                     </div>
                     <AccordionPanel className="transition-[height] duration-250 ease-in-out motion-reduce:transition-none">
-                      <div className="px-5 pb-3">
+                      <div className="pl-14 pr-5 pb-3">
                         <FaqAnswer blocks={entry.answerEn} />
                       </div>
                     </AccordionPanel>

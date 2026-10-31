@@ -7366,6 +7366,40 @@ describe("BookingService", () => {
           expect.objectContaining({ currentState: "no_show" }),
         );
       });
+
+      test("skips no-show forfeits for zero holds and missing wallets", async () => {
+        const expiringBooking = makeBooking({
+          currentState: "scheduled",
+          holdAmount: 42,
+          proposerId: "student1",
+        });
+        const { service, wallet } = createService({
+          repo: {
+            findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+            findBookingById: mock(async () => ({
+              ...expiringBooking,
+              currentState: "scheduled",
+              version: 1,
+            })),
+            findConfirmedParticipants: mock(async () => [
+              makeParticipant({ id: "zero", heldAmount: 0 }),
+              makeParticipant({ id: "missing-wallet", heldAmount: 42 }),
+            ]),
+            updateBookingVersioned: mock(async () => ({
+              updated: { ...expiringBooking, currentState: "no_show" },
+              newVersion: 2,
+            })),
+          },
+          wallet: { getByUserId: mock(async () => null) },
+        });
+
+        await expect(service.expireBookings()).resolves.toEqual({
+          expired: 1,
+          failed: 0,
+        });
+        expect(wallet.deduct).not.toHaveBeenCalled();
+        expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+      });
     });
 
     describe("AWAITING_ADMIN_ROOM_APPROVAL expiry → CANCELLED", () => {
@@ -9796,6 +9830,29 @@ describe("BookingService additional coverage paths", () => {
     });
   });
 
+  test.each([undefined, -1, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid immutable fee honorarium %s",
+    async (grossHonorariumIdr) => {
+      const { service } = createService({
+        repo: {
+          findTutorSessionFeesByTutor: mock(async () => [
+            {
+              eventKey: "fee:invalid",
+              grossHonorariumIdr,
+              priceSnapshot: { engine: "v3", collectedMarks: 10 },
+            },
+          ]),
+        },
+      });
+
+      await expect(
+        service.getTutorPayouts({ tutorId: "tutor1" }),
+      ).rejects.toThrow(
+        "Session fee event must contain a valid IDR honorarium",
+      );
+    },
+  );
+
   test("uses immutable fee-event honoraria after a tutor rate changes", async () => {
     const { service } = createService({
       repo: {
@@ -11010,6 +11067,36 @@ describe("Tutor payout safety guards", () => {
 });
 
 describe("Tutor payout tax configuration", () => {
+  test("finance preview includes non-BCA transfer fee and negative-net handling", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({ bankName: "Mandiri" })),
+        findTutorTaxConfig: mock(async () => null),
+        listTutorPayoutsByTutorId: mock(async () => []),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => []),
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            id: "fee-small",
+            eventKey: "fee:small",
+            scheduledStartAt: new Date("2026-10-01T10:00:00Z"),
+            earnedAt: new Date("2026-10-01T11:00:00Z"),
+            grossHonorariumIdr: 1_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 1 },
+          },
+        ]),
+      },
+    });
+
+    const result = await service.getTutorPayoutFinance("tutor1");
+
+    expect(result.pending).toMatchObject({
+      grossHonorariumIdr: 1_000,
+      transferFeeIdr: 2_500,
+      netHonorariumIdr: null,
+      taxProfileComplete: false,
+    });
+  });
+
   test("reads the configured rates and the default configuration", async () => {
     const { service, repo } = createService();
     expect(await service.getTutorTaxConfig()).toMatchObject({

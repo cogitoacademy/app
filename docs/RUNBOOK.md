@@ -4732,3 +4732,6 @@ V3 seed alignment (2026-10-30): server seed and standalone seed-packages derive 
 ### Academy tutor absence coverage
 
 The rollback-only academy absence integration suite runs in the coverage fixture partition against loopback port 6769, database cogito-test, with NODE_ENV=test and no reset overrides. It also retains the explicit development acceptance opt-in for 6767/cogito-app. The suite rolls back its own fixtures and verifies cleanup; it exercises absence reporting and repeated tutor replacement.
+
+
+FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on Move). POST `/rpc/adminFaq/reorder` accepts `{"json":{"ids":["faq-id"]}}` and returns the ordered admin list. Order is persisted in the existing sortOrder column and shared by full/landing public lists across locales. New entries append after the largest saved position; ties use creation time then ID. No database migration or environment change is required.

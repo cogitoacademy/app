@@ -18,7 +18,11 @@ export function createFaqRepo(db: DbType) {
       return db
         .select()
         .from(faqEntry)
-        .orderBy(asc(sql`lower(${faqEntry.questionEn})`), asc(faqEntry.id));
+        .orderBy(
+          asc(faqEntry.sortOrder),
+          asc(faqEntry.createdAt),
+          asc(faqEntry.id),
+        );
     },
 
     listPublic(landingOnly: boolean) {
@@ -41,7 +45,11 @@ export function createFaqRepo(db: DbType) {
             ? and(eq(faqEntry.isActive, true), eq(faqEntry.showOnLanding, true))
             : eq(faqEntry.isActive, true),
         )
-        .orderBy(asc(sql`lower(${faqEntry.questionEn})`), asc(faqEntry.id));
+        .orderBy(
+          asc(faqEntry.sortOrder),
+          asc(faqEntry.createdAt),
+          asc(faqEntry.id),
+        );
     },
 
     async create(values: typeof faqEntry.$inferInsert) {
@@ -63,7 +71,15 @@ export function createFaqRepo(db: DbType) {
           }
         }
 
-        const [row] = await tx.insert(faqEntry).values(values).returning();
+        const [last] = await tx
+          .select({
+            next: sql<number>`coalesce(max(${faqEntry.sortOrder}), -1) + 1`,
+          })
+          .from(faqEntry);
+        const [row] = await tx
+          .insert(faqEntry)
+          .values({ ...values, sortOrder: last?.next ?? 0 })
+          .returning();
         if (!row) throw new Error("FAQ insert returned no row");
         return row;
       });
@@ -114,6 +130,18 @@ export function createFaqRepo(db: DbType) {
           )
           .returning();
         return row;
+      });
+    },
+
+    async reorder(ids: string[]) {
+      return db.transaction(async (tx) => {
+        await lockFaqLandingSelection(tx);
+        for (const [sortOrder, id] of ids.entries()) {
+          await tx
+            .update(faqEntry)
+            .set({ sortOrder })
+            .where(eq(faqEntry.id, id));
+        }
       });
     },
 
