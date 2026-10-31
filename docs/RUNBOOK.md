@@ -1647,16 +1647,17 @@ Validation runs before seed setup. Global setup uses its own guarded seed path;
 this does not authorize the API test helper's broad `resetDatabase()` call.
 That helper has the stricter 6769/6770 reset policy documented above and below.
 
-GitHub Actions keeps its E2E dependencies disposable per workflow run: Postgres
-maps `6769` to `cogito-test` and `6770` to `cogito-test-payout`; Redis maps
-`6381` and `6382` to separate services. The regular browser partition uses
-`6769/6381`, API and web ports `3201/3200`, and the full
-`T05_ENROLLMENT_TEST_*` tuple. Its generated `.env.test`, migration step,
-Playwright config and global setup resolve that same target. T05 setup creates
-a fresh UUID-scoped student and skips the legacy seed-student delete path. The
-workflow opts in to the T06/T07 role states and keeps report fixture reset
-overrides absent. It runs the three tutor payout specs separately against
-`6770/cogito-test-payout` and Redis `6382`, with T05 variables unset.
+The GitHub Actions E2E Browser Workflow is temporarily disabled. If running
+Playwright manually, keep its dependencies disposable: Postgres maps `6769`
+to `cogito-test` and `6770` to `cogito-test-payout`; Redis maps `6381` and
+`6382` to separate services. The regular browser partition uses `6769/6381`,
+API and web ports `3201/3200`, and the full `T05_ENROLLMENT_TEST_*` tuple. Its
+generated `.env.test`, migration step, Playwright config and global setup
+resolve that same target. T05 setup creates a fresh UUID-scoped student and
+skips the legacy seed-student delete path. A manual E2E run opts in to the
+T06/T07 role states and keeps report fixture reset overrides absent. Run the
+three tutor payout specs separately against `6770/cogito-test-payout` and
+Redis `6382`, with T05 variables unset.
 `E2E_AUTH_RATE_LIMIT_RESET=true` is explicit consent for the helper to clear
 only auth limiter keys on those exact disposable loopback pairs before seeded
 sign-ins; it does not change the product limit. No `resetDatabase()` consent
