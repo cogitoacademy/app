@@ -298,6 +298,7 @@ jobs:
         run: bun --env-file=.env.test-payout run seed --defaults-only
         working-directory: apps/server
         env:
+          DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
           SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Test with coverage
         id: coverage

@@ -294,6 +294,8 @@ describe("U14: room availability integrated into offline booking creation (FR-22
       .from(wallet)
       .where(eq(wallet.userId, studentId));
     expect(walletAfter!.heldBalance).toBe(heldBefore - before!.holdAmount);
-    expect(walletAfter!.availableBalance).toBe(200);
+    expect(walletAfter!.availableBalance).toBe(
+      walletBefore!.availableBalance + before!.holdAmount,
+    );
   });
 });
