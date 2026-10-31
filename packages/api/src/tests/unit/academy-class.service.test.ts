@@ -51,6 +51,7 @@ function fixture(
     isActive: true,
   },
   lateCounts: unknown[] = [],
+  meetingOverrides: Record<string, unknown> = {},
 ) {
   const updates: unknown[] = [];
   const db = {
@@ -82,7 +83,10 @@ function fixture(
     delete: () => ({ where: async () => [] }),
   };
   const audit = { record: mock(async () => undefined) };
-  const meeting = { createMeeting: mock(async () => undefined) };
+  const meeting = {
+    createMeeting: mock(async () => undefined),
+    ...meetingOverrides,
+  };
   const service = createAcademyClassService({
     db,
     audit,
@@ -258,6 +262,198 @@ describe("tutor absence and replacement boundaries", () => {
 });
 
 describe("academy class service reads and meeting recovery", () => {
+  test.each([
+    "lost-claim",
+    "missing-attempt",
+    "draft-class",
+    "missing-create",
+    "missing-update",
+    "missing-cancel",
+    "manual-result",
+    "blank-link",
+    "primitive-update-error",
+  ] as const)("meeting dispatch handles %s", async (scenario) => {
+    const updating =
+      scenario === "missing-update" || scenario === "primitive-update-error";
+    const attempt = {
+      meeting: {
+        provider: "google_meet",
+        externalEventId:
+          updating || scenario === "missing-cancel" ? "event1" : null,
+        scheduleVersion: 1,
+        meetingUrl: "https://meet.example/link",
+        creationGeneration: 1,
+      },
+      session: {
+        id: "session1",
+        state: scenario === "missing-cancel" ? "cancelled" : "scheduled",
+        version: updating ? 2 : 1,
+        startAt: new Date(),
+        endAt: new Date(),
+        titleEn: "Session",
+      },
+      academyClass: {
+        state: scenario === "draft-class" ? "draft" : "published",
+        titleEn: "Class",
+      },
+      tutorName: "Tutor",
+      tutorEmail: "tutor@example.test",
+    };
+    const providers =
+      scenario === "primitive-update-error"
+        ? {
+            updateAcademyClassEvent: mock(async () => {
+              throw "provider unavailable";
+            }),
+          }
+        : scenario === "manual-result" || scenario === "blank-link"
+          ? {
+              createAcademyClassEvent: mock(async () => ({
+                provider:
+                  scenario === "manual-result" ? "manual" : "google_meet",
+                status: "created",
+                externalEventId: "event1",
+                meetingUrl:
+                  scenario === "blank-link" ? " " : "https://meet.example/link",
+                errorReason: null,
+              })),
+            }
+          : {};
+    const f = fixture(
+      [
+        [{ id: "meeting1" }],
+        [],
+        [],
+        scenario === "missing-attempt" ? [] : [attempt],
+      ],
+      [],
+      [],
+      [
+        scenario === "lost-claim"
+          ? []
+          : [{ scheduleVersion: 1, attemptCount: 1, lockedAt: new Date() }],
+        [{ status: "failed" }],
+      ],
+      undefined,
+      [],
+      providers,
+    );
+    const result = await f.service.processReadyMeetings();
+    expect(result).toEqual({
+      processed: scenario === "lost-claim" ? 0 : 1,
+      created: 0,
+      failed: scenario === "lost-claim" ? 0 : 1,
+      cancelled: 0,
+    });
+    if (scenario !== "lost-claim")
+      expect(f.updates.at(-1)).toMatchObject({
+        errorReason: expect.any(String),
+      });
+  });
+  test.each([
+    "missing-identity",
+    "missing-class",
+    "missing-session",
+    "draft",
+    "completed",
+    "version",
+    "past-start",
+    "bad-end",
+    "same-time",
+    "free-exit",
+    "minimum-check",
+    "reported",
+    "earned",
+    "started",
+    "tutor-booking",
+    "tutor-class",
+    "room-missing",
+    "room-small",
+    "room-booking",
+    "room-class",
+    "lost-update",
+  ] as const)("reschedule rejects %s", async (scenario) => {
+    const oldStart = new Date(Date.now() + 24 * 3600000);
+    const startAt = new Date(Date.now() + 48 * 3600000);
+    const endAt = new Date(startAt.getTime() + 3600000);
+    const row = {
+      id: "session1",
+      classId: "class1",
+      tutorId: "tutor1",
+      titleEn: "Session",
+      version: 1,
+      state: scenario === "completed" ? "completed" : "scheduled",
+      sequenceNumber: 1,
+      startAt: scenario === "started" ? new Date(0) : oldStart,
+      endAt: new Date(oldStart.getTime() + 3600000),
+      roomId: scenario.startsWith("room-") ? "room1" : null,
+      capacity: 4,
+    };
+    const record = {
+      id: "class1",
+      state: scenario === "draft" ? "draft" : "published",
+      kind: "cohort",
+      freeExitUntil:
+        scenario === "free-exit" ? new Date(startAt.getTime() + 3600000) : null,
+      minimumCheckAt:
+        scenario === "minimum-check"
+          ? new Date(startAt.getTime() + 3600000)
+          : null,
+    };
+    const selections = [
+      scenario === "missing-identity" ? [] : [{ classId: "class1" }],
+      scenario === "missing-class" ? [] : [record],
+      scenario === "missing-session" ? [] : [row],
+      [{ ...row, id: "session2", sequenceNumber: 2 }, row],
+      scenario === "reported" ? [{ id: "report" }] : [],
+      scenario === "earned" ? [{ id: "fee" }] : [],
+      scenario === "tutor-booking" ? [{ id: "booking" }] : [],
+      scenario === "tutor-class" ? [{ id: "class-session" }] : [],
+    ];
+    if (scenario.startsWith("room-"))
+      selections.push(
+        scenario === "room-missing"
+          ? []
+          : [{ id: "room1", capacity: scenario === "room-small" ? 1 : 4 }],
+        scenario === "room-booking" ? [{ id: "booking" }] : [],
+        scenario === "room-class" ? [{ id: "class-session" }] : [],
+      );
+    const f = fixture(selections);
+    const input = {
+      sessionId: row.id,
+      expectedVersion: scenario === "version" ? 2 : 1,
+      startAt:
+        scenario === "past-start"
+          ? new Date(0)
+          : scenario === "same-time"
+            ? row.startAt
+            : startAt,
+      endAt:
+        scenario === "bad-end"
+          ? startAt
+          : scenario === "same-time"
+            ? row.endAt
+            : endAt,
+      reason: "Schedule update",
+    };
+    const code = scenario.startsWith("missing-")
+      ? "ACADEMY_CLASS_NOT_FOUND"
+      : [
+            "draft",
+            "completed",
+            "version",
+            "reported",
+            "earned",
+            "started",
+            "lost-update",
+          ].includes(scenario)
+        ? "ACADEMY_CLASS_STATE_CONFLICT"
+        : "ACADEMY_CLASS_INVALID_OPERATION";
+    await expect(
+      f.service.rescheduleSession("admin1", input),
+    ).rejects.toMatchObject({ code });
+    expect(f.audit.record).not.toHaveBeenCalled();
+  });
   test("admin list matches absence notices to current assignment and counts late history", async () => {
     const current = { id: "current", tutorId: "tutor-a", assignmentVersion: 2 };
     const prior = { id: "prior", tutorId: "tutor-a", assignmentVersion: 1 };

@@ -403,6 +403,68 @@ function makeRoomPort(overrides: Record<string, unknown> = {}) {
 }
 
 describe("BookingService", () => {
+  test("manual tutor link rejects a deleted booking", async () => {
+    const { service, meeting } = createService();
+    await expect(
+      service.tutorSetMeetingLink(
+        "deleted",
+        "tutor1",
+        "https://meet.example/link",
+      ),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(meeting.setManualLink).not.toHaveBeenCalled();
+  });
+
+  test.each(["initial", "locked"] as const)(
+    "admin completion rejects a booking missing at %s read",
+    async (scenario) => {
+      let reads = 0;
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            reads++;
+            return scenario === "initial" || reads > 1 ? null : makeBooking();
+          }),
+        },
+      });
+      await expect(
+        service.submitAdminCompletionReport({
+          adminId: "admin1",
+          bookingId: "b1",
+          reason: "Verified delivery",
+          requestKey: crypto.randomUUID(),
+          deliveryConfirmed: true,
+          feedback: TEST_COMPLETION_FEEDBACK,
+        }),
+      ).rejects.toBeInstanceOf(BookingNotFoundError);
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    },
+  );
+
+  test("solo creation rechecks a tutor removed after the initial lookup", async () => {
+    let reads = 0;
+    const { service, wallet } = createService({
+      repo: {
+        findTutorProfile: mock(async () =>
+          ++reads === 1 ? makeTutorProfile() : null,
+        ),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+      },
+    });
+    const start = new Date(Date.now() + 48 * 3600000);
+    await expect(
+      service.createSolo("student1", {
+        tutorId: "tutor1",
+        availabilitySlotId: "slot1",
+        subjectId: "mun-speech",
+        modality: "online",
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(start.getTime() + 90 * 60000),
+        timezone: "Asia/Jakarta",
+      }),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.hold).not.toHaveBeenCalled();
+  });
   test("charges only conventional BCA no transfer fee", () => {
     expect(getTutorPayoutTransferFeeIdr("BCA")).toBe(0);
     expect(getTutorPayoutTransferFeeIdr(" bca ")).toBe(0);

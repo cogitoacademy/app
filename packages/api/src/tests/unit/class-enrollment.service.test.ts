@@ -89,6 +89,70 @@ function fixture(
 }
 
 describe("class enrollment locked request replay", () => {
+  test("due jobs count a failed report reminder without losing the scheduler result", async () => {
+    const reports = spyOn(
+      reportReminderRepoModule,
+      "createClassReportReminderRepo",
+    ).mockReturnValue({
+      findDue: mock(async () => [
+        {
+          id: "session1",
+          tutorId: "tutor1",
+          endAt: new Date(now.getTime() - 2 * 24 * 3600000),
+        },
+      ]),
+      writeIfPending: mock(async () => {
+        throw new Error("Outbox unavailable");
+      }),
+    } as any);
+    const f = fixture({
+      findExpiredCheckouts: mock(async () => []),
+      findDueInstallments: mock(async () => []),
+      findReminderCandidates: mock(async () => []),
+    });
+    try {
+      expect(await f.service.processDueJobs()).toMatchObject({
+        reportRemindersFailed: 1,
+        reportRemindersQueued: 0,
+      });
+    } finally {
+      f.restore();
+      reports.mockRestore();
+    }
+  });
+
+  test.each(["active", "checkout_pending"] as const)(
+    "enrollment replay preserves %s state when the wallet is unavailable",
+    async (state) => {
+      const existing = { ...enrollment, state };
+      const f = fixture({
+        findEnrollmentByRequestKey: mock(async () => existing),
+        findStudentClassRecords: mock(async () => ({
+          enrollments: [existing],
+          installments: [],
+          allocations: [],
+        })),
+        getWalletByUser: mock(async () => null),
+      });
+      try {
+        expect(
+          await f.service.createEnrollment("student1", {
+            classId: "class1",
+            plan: "single",
+            sessionId: session.id,
+            requestKey: crypto.randomUUID(),
+          }),
+        ).toMatchObject({
+          outcome: "already_exists",
+          availableMarks: 0,
+          shortfallMarks: state === "active" ? 0 : 25,
+        });
+        expect(f.wallet.hold).not.toHaveBeenCalled();
+      } finally {
+        f.restore();
+      }
+    },
+  );
   test("current allocation exposes schedule-change rights and supports the default clock", async () => {
     const notifiedAt = new Date();
     const allocation = {
@@ -1375,6 +1439,117 @@ describe("class enrollment locked request replay", () => {
 });
 
 describe("class enrollment checkout recovery", () => {
+  test.each(["funded", "defaulted", "cancelled"] as const)(
+    "second installment reports %s without a wallet",
+    async (state) => {
+      const second = { id: "second", ordinal: 2, state, amountMarks: 25 };
+      const f = fixture({
+        findEnrollment: mock(async () => ({ ...enrollment, state: "active" })),
+        findAllocations: mock(async () => []),
+        lockSessions: mock(async () => []),
+        findInstallment: mock(async () => second),
+        findInstallments: mock(async () => [second]),
+        getWalletByUser: mock(async () => null),
+      });
+      try {
+        expect(
+          await f.service.paySecondInstallment("student1", enrollment.id),
+        ).toMatchObject({
+          outcome: state === "cancelled" ? "expired" : state,
+          availableMarks: 0,
+        });
+        expect(f.wallet.hold).not.toHaveBeenCalled();
+      } finally {
+        f.restore();
+      }
+    },
+  );
+
+  test("already-active checkout reports zero available Marks when its wallet is missing", async () => {
+    const f = fixture({
+      findEnrollment: mock(async () => ({ ...enrollment, state: "active" })),
+      findAllocations: mock(async () => []),
+      lockSessions: mock(async () => []),
+      findInstallments: mock(async () => [{ id: "first", ordinal: 1 }]),
+      getWalletByUser: mock(async () => null),
+    });
+    try {
+      expect(
+        await f.service.completeCheckout("student1", enrollment.id),
+      ).toMatchObject({ outcome: "funded", availableMarks: 0 });
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
+
+  test.each([
+    "no-due-session",
+    "missing-due-session",
+    "missing-due-time",
+    "defaulted-without-wallet",
+    "insufficient-without-wallet",
+  ] as const)("second installment handles %s", async (scenario) => {
+    const dueSession = {
+      ...session,
+      startAt:
+        scenario === "defaulted-without-wallet"
+          ? new Date(now.getTime() - 1000)
+          : session.startAt,
+    };
+    const second = {
+      id: "second",
+      ordinal: 2,
+      state: "pending",
+      rateMarks: 25,
+      sessionCount: 1,
+      amountMarks: 25,
+      dueSessionId: scenario === "no-due-session" ? null : session.id,
+      dueAt: scenario === "missing-due-time" ? null : dueSession.startAt,
+    };
+    const f = fixture({
+      findEnrollment: mock(async () => ({ ...enrollment, state: "active" })),
+      findAllocations: mock(async () => [
+        {
+          installmentId: second.id,
+          sessionId: session.id,
+          state: "unfunded_reserved",
+          rateMarks: 25,
+        },
+      ]),
+      lockSessions: mock(async () => []),
+      findInstallment: mock(async () => second),
+      findInstallments: mock(async () => [second]),
+      getSessionDueInfo: mock(async () =>
+        scenario === "missing-due-session" ? null : dueSession,
+      ),
+      updateInstallmentDueAt: mock(async () => undefined),
+      markInstallmentDefaulted: mock(async () => true),
+      getWalletByUser: mock(async () => {
+        return scenario === "missing-due-time"
+          ? { id: "wallet1", availableBalance: 0 }
+          : null;
+      }),
+    });
+    try {
+      const result = f.service.paySecondInstallment("student1", enrollment.id);
+      if (["no-due-session", "missing-due-session"].includes(scenario))
+        await expect(result).rejects.toMatchObject({
+          code: "CLASS_ENROLLMENT_CONFLICT",
+        });
+      else
+        expect(await result).toMatchObject({
+          outcome:
+            scenario === "defaulted-without-wallet"
+              ? "defaulted"
+              : "insufficient",
+          availableMarks: 0,
+        });
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
   test("student enrollment lookup rejects a deleted class", async () => {
     const f = fixture({ getClassForEnrollment: mock(async () => null) });
     try {
@@ -1593,6 +1768,40 @@ describe("class enrollment checkout recovery", () => {
       ),
     });
   }
+
+  test("creation reserves checkout without moving Marks when no wallet exists", async () => {
+    const f = createFundingFixture();
+    let created: unknown;
+    (f.repo.getWalletByUser as any).mockResolvedValue(null);
+    (f.repo.insertEnrollment as any).mockImplementation(
+      async (_tx: unknown, values: unknown) => {
+        created = values;
+      },
+    );
+    (f.repo.findStudentClassRecords as any).mockImplementation(async () => ({
+      enrollments: created ? [created] : [],
+      installments: [],
+      allocations: [],
+    }));
+    try {
+      expect(
+        await f.service.createEnrollment("student1", {
+          classId: "class1",
+          plan: "single",
+          sessionId: session.id,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).toMatchObject({
+        outcome: "checkout_pending",
+        availableMarks: 0,
+        shortfallMarks: 25,
+      });
+      expect(f.wallet.hold).not.toHaveBeenCalled();
+      expect(f.repo.activateEnrollmentFromCheckout).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
 
   test("creation rejects an enrollment missing from the final student state", async () => {
     const f = createFundingFixture();
@@ -1890,7 +2099,10 @@ describe("class enrollment checkout recovery", () => {
     };
     const f = fixture({
       findEnrollment: mock(async () => pending),
-      findAllocations: mock(async () => [allocation]),
+      findAllocations: mock(async () => [
+        allocation,
+        { ...allocation, sessionId: "released-session", state: "released" },
+      ]),
       lockSessions: mock(async () => [session]),
       findInstallments: mock(async () => [first]),
       getWalletByUser: mock(async () => null),
@@ -2011,7 +2223,11 @@ describe("class enrollment checkout recovery", () => {
     }
   });
 
-  function createCancellationFixture(state: string, wallet: unknown = null) {
+  function createCancellationFixture(
+    state: string,
+    wallet: unknown = null,
+    options: { unfunded?: boolean; rounding?: boolean } = {},
+  ) {
     const cancellationSession = {
       ...session,
       startAt: new Date(now.getTime() + 48 * 60 * 60 * 1000),
@@ -2021,26 +2237,103 @@ describe("class enrollment checkout recovery", () => {
       enrollmentId: enrollment.id,
       installmentId: "first",
       sessionId: cancellationSession.id,
-      state: "funded",
-      rateMarks: 25,
-      fundedMarks: 25,
+      state: options.unfunded ? "unfunded_reserved" : "funded",
+      rateMarks: options.rounding ? 2 : 25,
+      fundedMarks: options.unfunded ? 0 : options.rounding ? 2 : 25,
       spentMarks: 0,
       releasedMarks: 0,
       fundingSourceReference: "allocation-source",
     };
+    const allocations = options.rounding
+      ? [
+          { ...allocation, id: "a" },
+          {
+            ...allocation,
+            id: "b",
+            sessionId: "session2",
+            rateMarks: 1,
+            fundedMarks: 1,
+          },
+        ]
+      : [allocation];
     return {
-      ...fixture({
-        findEnrollment: mock(async () => ({ ...enrollment, state })),
-        findAllocations: mock(async () => [allocation]),
-        lockSessions: mock(async () => [cancellationSession]),
-        findInstallments: mock(async () => []),
-        findCancellationReceipt: mock(async () => null),
-        getClassForEnrollment: mock(async () => classRecord),
-        getWalletByUser: mock(async () => wallet),
-      }),
+      ...fixture(
+        {
+          findEnrollment: mock(async () => ({ ...enrollment, state })),
+          findAllocations: mock(async () => allocations),
+          lockSessions: mock(async () =>
+            allocations.map((item) => ({
+              ...cancellationSession,
+              id: item.sessionId,
+            })),
+          ),
+          findInstallments: mock(async () => []),
+          findCancellationReceipt: mock(async () => null),
+          getClassForEnrollment: mock(async () => classRecord),
+          getWalletByUser: mock(async () => wallet),
+          saveCancellation: mock(async () => undefined),
+        },
+        { write: mock(async () => undefined) },
+        {},
+        {
+          hold: mock(async () => undefined),
+          deduct: mock(async () => undefined),
+          release: mock(async () => undefined),
+        },
+      ),
       cancellationSession,
     };
   }
+
+  test("unfunded whole-plan withdrawal does not require a wallet or move Marks", async () => {
+    const f = createCancellationFixture("active", null, { unfunded: true });
+    try {
+      const input = { enrollmentId: enrollment.id };
+      const quote = await f.service.quoteCancellation("student1", input);
+      expect(
+        await f.service.confirmCancellation("student1", {
+          ...input,
+          quoteVersion: quote.quoteVersion,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).toMatchObject({
+        feeMarks: 0,
+        returnMarks: 0,
+        unpaidAllocationIds: ["allocation-1"],
+      });
+      expect(f.wallet.deduct).not.toHaveBeenCalled();
+      expect(f.wallet.release).not.toHaveBeenCalled();
+    } finally {
+      f.restore();
+    }
+  });
+
+  test("cumulative fee rounding skips a zero-return allocation without creating a zero-value release", async () => {
+    const f = createCancellationFixture(
+      "active",
+      { id: "wallet1" },
+      { rounding: true },
+    );
+    try {
+      const input = { enrollmentId: enrollment.id };
+      const quote = await f.service.quoteCancellation("student1", input);
+      expect(
+        await f.service.confirmCancellation("student1", {
+          ...input,
+          quoteVersion: quote.quoteVersion,
+          requestKey: crypto.randomUUID(),
+        }),
+      ).toMatchObject({ feeMarks: 1, returnMarks: 2 });
+      expect(f.wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(f.wallet.release).toHaveBeenCalledTimes(1);
+      expect(f.wallet.release).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amount: 2 }),
+      );
+    } finally {
+      f.restore();
+    }
+  });
 
   test("refuses cancellation for a non-active enrollment", async () => {
     const f = createCancellationFixture("checkout_pending");
@@ -2185,75 +2478,81 @@ describe("class enrollment checkout recovery", () => {
     }
   });
 
-  test("top-up quotes create an attempt for the wallet shortfall and persist its quote", async () => {
-    const attempt = {
-      id: crypto.randomUUID(),
-      installmentId: "first-installment",
-      requestKey: crypto.randomUUID(),
-      requestedMarks: 15,
-      choice: null,
-      quoteId: null,
-    };
-    const quote = {
-      quoteId: "quote-1",
-      marks: 15,
-      revision: 1,
-      customAmountIdr: 15000,
-      exactPackage: null,
-      recommendedPackage: null,
-      expiresAt: new Date(now.getTime() + 60_000),
-    };
-    let requestLookups = 0;
-    const updateTopUpAttempt = mock(async () => undefined);
-    const createTopUpQuote = mock(async () => quote);
-    const f = fixture(
-      {
-        findEnrollment: mock(async () => ({
-          ...enrollment,
-          state: "checkout_pending",
-          checkoutExpiresAt: new Date(now.getTime() + 60_000),
-        })),
-        findInstallment: mock(async () => ({
-          id: attempt.installmentId,
-          state: "checkout_pending",
-          amountMarks: 25,
-        })),
-        findTopUpAttemptByRequestKey: mock(async () =>
-          ++requestLookups === 1 ? null : attempt,
-        ),
-        getWalletByUser: mock(async () => ({ availableBalance: 10 })),
-        insertTopUpAttempt: mock(async () => attempt),
-        updateTopUpAttempt,
-      },
-      {},
-      { createTopUpQuote },
-    );
-    try {
-      await expect(
-        f.service.createTopUpQuote("student1", {
-          enrollmentId: crypto.randomUUID(),
-          ordinal: 1,
-          requestKey: attempt.requestKey,
-        }),
-      ).resolves.toMatchObject({
-        attemptId: attempt.id,
-        requestedMarks: 15,
-        quoteId: quote.quoteId,
+  test.each([10, null])(
+    "top-up quote computes the shortfall with available balance %s",
+    async (balance) => {
+      const shortfall = 25 - (balance ?? 0);
+      const attempt = {
+        id: crypto.randomUUID(),
+        installmentId: "first-installment",
+        requestKey: crypto.randomUUID(),
+        requestedMarks: shortfall,
         choice: null,
-      });
-      expect(createTopUpQuote).toHaveBeenCalledWith("student1", {
-        requestKey: attempt.id,
-        marks: 15,
-      });
-      expect(updateTopUpAttempt).toHaveBeenCalledWith(
-        expect.anything(),
-        attempt.id,
-        expect.objectContaining({ quoteId: quote.quoteId }),
+        quoteId: null,
+      };
+      const quote = {
+        quoteId: "quote-1",
+        marks: shortfall,
+        revision: 1,
+        customAmountIdr: 15000,
+        exactPackage: null,
+        recommendedPackage: null,
+        expiresAt: new Date(now.getTime() + 60_000),
+      };
+      let requestLookups = 0;
+      const updateTopUpAttempt = mock(async () => undefined);
+      const createTopUpQuote = mock(async () => quote);
+      const f = fixture(
+        {
+          findEnrollment: mock(async () => ({
+            ...enrollment,
+            state: "checkout_pending",
+            checkoutExpiresAt: new Date(now.getTime() + 60_000),
+          })),
+          findInstallment: mock(async () => ({
+            id: attempt.installmentId,
+            state: "checkout_pending",
+            amountMarks: 25,
+          })),
+          findTopUpAttemptByRequestKey: mock(async () =>
+            ++requestLookups === 1 ? null : attempt,
+          ),
+          getWalletByUser: mock(async () =>
+            balance === null ? null : { availableBalance: balance },
+          ),
+          insertTopUpAttempt: mock(async () => attempt),
+          updateTopUpAttempt,
+        },
+        {},
+        { createTopUpQuote },
       );
-    } finally {
-      f.restore();
-    }
-  });
+      try {
+        await expect(
+          f.service.createTopUpQuote("student1", {
+            enrollmentId: crypto.randomUUID(),
+            ordinal: 1,
+            requestKey: attempt.requestKey,
+          }),
+        ).resolves.toMatchObject({
+          attemptId: attempt.id,
+          requestedMarks: shortfall,
+          quoteId: quote.quoteId,
+          choice: null,
+        });
+        expect(createTopUpQuote).toHaveBeenCalledWith("student1", {
+          requestKey: attempt.id,
+          marks: shortfall,
+        });
+        expect(updateTopUpAttempt).toHaveBeenCalledWith(
+          expect.anything(),
+          attempt.id,
+          expect.objectContaining({ quoteId: quote.quoteId }),
+        );
+      } finally {
+        f.restore();
+      }
+    },
+  );
 
   test.each([
     "missing-enrollment",
