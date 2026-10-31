@@ -1135,11 +1135,11 @@ stay outside this coverage run. The reset helper snapshots and restores the
 seed-owned competition taxonomy around `TRUNCATE ... CASCADE`. CI writes its
 LCOV output to the configured path because Bun does not produce the custom
 `--coverage-dir` paths here. The four raw profiles are merged before the
-existing gate. The test job has a 20-minute timeout for the serialized reset
-suite and remaining partitions. The merge rejects missing, empty, or recordless
-LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
-function identities, the merger preserves maximum summary counts and the exact
-named-function union, then writes a sidecar identifying sources whose function
+existing gate. The test job has a 30-minute timeout because the serialized reset
+suite plus the remaining partitions exceeded the previous 20-minute limit. The
+merge rejects missing, empty, or recordless LCOV profiles. For Bun profiles that
+include `FNF`/`FNH` but omit function identities, the merger preserves maximum
+summary counts and the exact named-function union, then writes a sidecar identifying sources whose function
 identity is incomplete. The PR comment labels these counts as lower bounds and
 the 100% gate fails if unidentified functions remain uncovered; configured
 thresholds are unchanged. `.github/scripts/merge-lcov.test.ts` covers overlapping
