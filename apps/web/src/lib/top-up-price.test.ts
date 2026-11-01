@@ -22,4 +22,3 @@ test("invalid and unavailable inputs have no price", () => {
     expect(previewTopUpPrice(marks, config.packages, 0)).toBeNull();
   expect(previewTopUpPrice(100, [], 0)).toBeNull();
 });
-
