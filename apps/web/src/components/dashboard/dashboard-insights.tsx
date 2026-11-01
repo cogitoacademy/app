@@ -2,17 +2,10 @@
 
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { IconArrowRight } from "@tabler/icons-react";
+import { IconArrowUpRight } from "@tabler/icons-react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 type DashboardInsightRoute =
@@ -50,52 +43,44 @@ export function DashboardInsights({
   items: DashboardInsight[];
 }) {
   return (
-    <Card>
-      <CardHeader className="py-4">
-        <div className="min-w-0">
-          <CardTitle>{title}</CardTitle>
-          <Text className="mt-1 text-sm text-muted">{description}</Text>
-        </div>
-      </CardHeader>
-      <CardBody>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-          {items.map((item) => (
-            <DashboardInsightCard key={item.key} item={item} />
-          ))}
-        </div>
-      </CardBody>
-    </Card>
+    <section aria-label={title} className="space-y-4">
+      <div>
+        <Heading size="sm">{title}</Heading>
+        <Text className="mt-1 text-sm text-muted">{description}</Text>
+      </div>
+      <div className="flex flex-col overflow-hidden rounded-xl border border-border sm:flex-row sm:divide-x sm:divide-border">
+        {items.map((item) => (
+          <DashboardInsightMetric key={item.key} item={item} />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function DashboardInsightCard({ item }: { item: DashboardInsight }) {
+function DashboardInsightMetric({ item }: { item: DashboardInsight }) {
   return (
-    <div className="min-w-0 rounded-xl border border-item-border bg-item p-4">
-      <div className="flex items-start justify-between gap-3">
-        <IconBox variant={item.tone} size="sm">
-          {item.icon}
-        </IconBox>
-        {item.to ? (
-          <Button
-            variant="plain"
-            size="icon"
-            nativeButton={false}
-            render={
-              <Link
-                to={item.to}
-                aria-label={item.actionLabel ?? `Open ${item.label}`}
-              />
-            }
-          >
-            <IconArrowRight />
-          </Button>
-        ) : null}
-      </div>
-      <Text className="mt-4 text-sm text-muted">{item.label}</Text>
-      <Heading size="sm" className="mt-1 text-2xl tabular-nums">
+    <div className="relative flex min-w-0 flex-1 flex-col border-b border-border p-4 last:border-b-0 sm:border-b-0">
+      <Text className="pr-9 text-sm text-muted">{item.label}</Text>
+      <Heading size="sm" className="mt-1 text-3xl font-medium tabular-nums">
         {item.value}
       </Heading>
-      <Text className="mt-1 text-xs text-dimmed">{item.detail}</Text>
+      <Text className="mt-2 text-xs text-dimmed">{item.detail}</Text>
+      {item.to ? (
+        <Button
+          className="absolute right-2 top-2"
+          variant="plain"
+          size="icon"
+          nativeButton={false}
+          render={
+            <Link
+              to={item.to}
+              aria-label={item.actionLabel ?? `Open ${item.label}`}
+            />
+          }
+        >
+          <IconArrowUpRight aria-hidden />
+        </Button>
+      ) : null}
     </div>
   );
 }
