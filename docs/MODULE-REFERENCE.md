@@ -4,23 +4,19 @@
 
 Academy schema migration 0085 drops the alternate class/session content columns. Draft persistence, publish snapshots and audit snapshots reference only the remaining canonical fields. There is no alternate-content response mapper. Cogito Academy Activities consumes the same class title on both localized page routes; surrounding navigation and non-class content remain localized.
 
-
 ## Compact class administration controls (1 November 2026)
 
 `ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ClassActionReason` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
 
-
 ## Academy class action presentation (1 November 2026)
 
 Admin session actions are mounted in the corresponding curriculum accordion. `ClassActionReason` collects and submits a reason after a schedule, tutor, meeting or minimum-decision action is chosen. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
-
 
 ## Class and booking detail composition (1 November 2026)
 
 `ClassDetailView` owns common class presentation. Student `ClassDetailPage` fetches the public catalog record and mounts enrollment; `AdminClassDetailPage` uses the guarded admin record and mounts administration/session details plus `ClassAdminManagement`. Management preserves existing reason validation, expected versions, cancellation quotes and idempotency keys. Academy service `withAbsenceHistory` enriches both admin list and get; public serialization stays separate. Admin actions invalidate the admin detail/list and classes query families.
 
 The canonical booking route selects the complete `AdminBookingDetailPage` for admins and `BookingDetailPage` for student/tutor viewers. Admin extensions share the booking presentation rather than a second detail layout. Operations retains its queue, wallet lookup and room operations; queue/room links target `/bookings/$bookingId`.
-
 
 ## Shared reason controls (1 November 2026)
 

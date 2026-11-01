@@ -8,14 +8,12 @@
 - [x] Update Cogito Academy Activities adapter/title rendering for one class language.
 - [x] App web typecheck, 133 focused API unit tests and the single-input editor browser case passed. Website typecheck and 5 focused adapter/locale tests passed; website main was pushed at 060a4b532ce298304a20b801fdd3ea534394fba9. A stale website empty-state test and broader API test/report type errors remain outside this change. Cogito app remains local.
 
-
 ## Compact Academy class detail follow-up (1 November 2026)
 
 - [x] Move the minimum enrollment check to Administration.
 - [x] Show compact session information with date and tutor icon actions, inputs and reason in dialogs.
 - [x] Reduce session cancellation to a button that opens the quote/confirmation dialog.
 - [x] Web typecheck and scoped lint passed; 10 focused synthetic Edge cases covered 320/390/768/1440 layout, minimum check placement, two-session selection, schedule/tutor changes and cancellation quote confirmation. Mobile and desktop captures were inspected. Live provider acceptance remains separate.
-
 
 ## Academy class accordion follow-up (1 November 2026)
 
@@ -24,7 +22,6 @@
 - [x] Preserve cancellation quote review before confirmation; keep minimum decisions scoped to the whole class.
 - [x] Focused synthetic Edge verification passed: responsive 320/390/768/1440 class details, schedule updates at 390/1440, tutor replacement, both cancellation quotes and a two-session selection. Web typecheck and scoped lint passed; live API/provider acceptance remains separate.
 
-
 ## Shared details follow-up (1 November 2026)
 
 - [x] Reuse class description/pricing/curriculum/schedule presentation for student and admin details.
@@ -32,7 +29,6 @@
 - [x] Enrich admin class get with the same absence history and late counts as list.
 - [x] Route every admin booking entry to the full shared booking detail; retain Operations as the queue/wallet/room workspace.
 - [x] Focused verification: 135 API unit tests, 23 synthetic Edge cases (16 shared details/role/navigation, 6 reschedule, 1 absence/replacement), and web typecheck passed. Reviewed 390px and 1440px admin detail captures. Scoped frontend lint has only the existing array-sort warning; live provider acceptance remains separate.
-
 
 ## Competition types redesign (26 October 2026)
 

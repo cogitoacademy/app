@@ -8,16 +8,13 @@ Local development `localhost:6767/cogito-app` was identity-checked and only 0085
 
 Validation: app web typecheck and 133 focused API unit tests passed; synthetic editor case verified one Title, one Description and no optional Indonesian field. Website typecheck and 5 focused adapter/title tests passed. Website main remote equals `060a4b532ce298304a20b801fdd3ea534394fba9`. The wider website UI suite still has a stale empty-state assertion; standalone API typecheck includes failing report-asset project configuration and unrelated test typings, so full-project green is not claimed.
 
-
 ## Compact class detail verification (1 November 2026)
 
 No migration or configuration change is required. In admin class details verify the minimum check is in Administration, session date/tutor icon buttons open their respective dialogs, and session cancellation first previews the return. A cancelled dialog must not submit an action. Synthetic Edge fixtures mock RPCs; live database and provider verification remain separate. Focused verification passed 10 synthetic Edge cases and web typecheck; scoped lint and diff checks passed. Admin detail captures were inspected at 390px and 1440px.
 
-
 ## Academy class accordion verification (1 November 2026)
 
 No migration or configuration change is required. Confirm on mobile and desktop that each expanded session exposes only its own schedule, tutor and cancellation controls. Confirm class cancellation is adjacent to the badges. Check that submitting a reason does not bypass cancellation quote review, and that confirmation uses the quote version. Browser fixtures mock the RPCs and are not live database or provider acceptance. Focused Edge verification passed 9 cases across the layout, reschedule, absence and multi-session suites. The 390px admin detail was visually inspected. Web typecheck passed; scoped lint reports an existing function-scoping warning.
-
 
 ## Shared details verification (1 November 2026)
 
@@ -26,7 +23,6 @@ No migration, environment change or data reset is required. Deploy web and API t
 Synthetic browser checks use `packages/e2e/playwright.classes-layout.config.ts`, `playwright.class-reschedule.config.ts`, and `playwright.class-absence.config.ts`; they mock session/RPC and do not verify database, payment, notification or calendar providers.
 
 Verified locally: 135 unit tests / 358 assertions across the five explicit Academy service/handler/public/absence/reschedule files; 23 focused synthetic Edge cases; web `check-types` with `GOMAXPROCS=1` and `GOMEMLIMIT=650MiB`. The first higher-memory compiler run exhausted Windows commit memory; the bounded final run passed. Scoped frontend lint has no errors and one existing `.sort()` warning. Admin detail screenshots were inspected at 390px and 1440px. No live API/database/provider acceptance was run.
-
 
 ## Reason control UI verification (1 November 2026)
 

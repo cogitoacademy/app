@@ -385,8 +385,12 @@ export function BalancePage() {
                       }
                     />
                   </Field>
-                  <Text aria-live="polite" className="text-lg font-semibold align-end sm:self-center">
-                    = {customPrice !== null && customPrice <= 2_147_483_647
+                  <Text
+                    aria-live="polite"
+                    className="text-lg font-semibold align-end sm:self-center"
+                  >
+                    ={" "}
+                    {customPrice !== null && customPrice <= 2_147_483_647
                       ? formatIdr(customPrice)
                       : "Enter a valid Marks amount"}
                   </Text>

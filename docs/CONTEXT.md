@@ -4,23 +4,19 @@
 
 Academy class title/description and session title/curriculum now each have one input. API contracts retain the canonical `titleEn`, `descriptionEn`, `curriculumEn` names; these fields can contain the authored language and have no alternate-language partner. Schema and migration 0085 remove `academy_class.title_id/description_id` and `academy_class_session.title_id/curriculum_id`. Admin and public reads use the real reduced schema, with no filtering mapper. Other modules' localized content is outside this change.
 
-
 ## Compact Academy class details (1 November 2026)
 
 The minimum enrollment check and its existing decision workflow sit in the Administration column. Each scheduled session shows compact date and tutor details with icon actions opening dialogs for date selection or tutor replacement plus the required reason. Cancellation is a single session button that opens the existing reason, return preview and final confirmation flow. Meeting retry appears in class management only when meeting work needs attention.
 
-
 ## Academy class session controls (1 November 2026)
 
 Admin class details place cancellation of the whole class beside the class badges. Each session accordion contains its own schedule update, tutor replacement, absence history, and session cancellation. The change icon beside the tutor reveals replacement selection. Schedule updates, replacement, meeting retries, and minimum decisions collect a reason after the action is chosen; cancellation dialogs collect the reason and require review of the return before final confirmation. Student details do not expose these admin controls.
-
 
 ## Shared class and booking details (1 November 2026)
 
 `/classes/$classId` now allows students and admins. Both roles use `ClassDetailView` for descriptions, prices, tutors, curriculum and schedules. Students retain enrollment; admins load `admin/getAcademyClass` and see administration, session capacity/room/meeting details and the existing reschedule, replacement, absence, meeting retry, cancellation and lifecycle controls. The admin class list links to details instead of mounting a management drawer. Detail/list/public class queries refresh after management actions.
 
 `/bookings/$bookingId` is the canonical detail for every role. Admins receive the full `AdminBookingDetailPage` wrapper, including override, room actions, financial context and state history. Operations remains the queue/wallet/room workspace and links to this route; its previous booking-detail URL redirects to the canonical route after the admin guard.
-
 
 ## Reason entry and requirement markers (1 November 2026)
 
