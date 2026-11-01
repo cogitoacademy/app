@@ -248,13 +248,10 @@ function GuideHero({
           <Badge variant="primary" className="mb-5 w-fit">
             Start here
           </Badge>
-          <Heading
-            size="lg"
-            className="max-w-3xl text-balance text-3xl leading-tight tracking-tight sm:text-5xl"
-          >
+          <Heading level={1} size="md">
             {content.title}
           </Heading>
-          <Text className="mt-4 max-w-2xl text-pretty text-muted sm:text-lg sm:leading-7">
+          <Text className="max-w-full text-muted">
             <GuideCopy text={content.description} />
           </Text>
           <div className="mt-6 flex items-center gap-2 text-sm font-medium text-foreground">

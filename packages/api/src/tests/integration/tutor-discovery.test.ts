@@ -6,7 +6,6 @@ import {
   tutorProfile,
   tutorProfileSubject,
   availabilitySlot,
-  subjectCategory,
 } from "@cogito-app/db/schema";
 
 import {
@@ -37,7 +36,6 @@ const TAXONOMY = {
   research: "40000000-0000-4000-8000-000000000001",
   writing: "40000000-0000-4000-8000-000000000002",
   speech: "40000000-0000-4000-8000-000000000003",
-  legacySubject: "20000000-0000-4000-8000-000000000001",
 };
 
 describe("Tutor discovery", () => {
@@ -104,11 +102,6 @@ describe("Tutor discovery", () => {
       tutorProfileId: profileId,
       subjectId: TAXONOMY.research,
     });
-    await db.insert(tutorProfileSubject).values({
-      tutorProfileId: profileId,
-      subjectId: TAXONOMY.legacySubject,
-    });
-
     await db.insert(availabilitySlot).values({
       tutorId,
       startDate: new Date(Date.now() + 3600_000),
@@ -207,22 +200,11 @@ describe("Tutor discovery", () => {
     const profile = await studentClient.tutors.getProfile({
       tutorId: profileId,
     });
-    const [legacyCatalogRow] = await db
-      .select({ isActive: subjectCategory.isActive })
-      .from(subjectCategory)
-      .where(eq(subjectCategory.id, TAXONOMY.legacySubject));
-
     expect(profile.displayName).toBe("Prof Discovery");
     expect(profile.user).toBeDefined();
-    expect(legacyCatalogRow).toEqual({ isActive: false });
     expect(
-      profile.subjects.find((subject) => subject.id === TAXONOMY.legacySubject),
-    ).toEqual(
-      expect.objectContaining({
-        name: "MUN Debate",
-        isSelectable: false,
-      }),
-    );
+      profile.subjects.some((subject) => subject.id === TAXONOMY.research),
+    ).toBe(true);
   });
 
   test("listPublished filters by category", async () => {

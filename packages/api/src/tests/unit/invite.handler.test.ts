@@ -27,6 +27,7 @@ function makeDb() {
       const tx = {
         ...makeDb(),
         ...makeInviteRepo(),
+        execute: mock(async () => {}),
       };
       return fn(tx);
     }),

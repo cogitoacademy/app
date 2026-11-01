@@ -61,7 +61,6 @@ import {
   IconBuildingBank,
   IconPhoto,
   IconSchool,
-  IconChalkboardTeacher,
   IconChevronUp,
   IconUser,
 } from "@tabler/icons-react";
@@ -72,6 +71,10 @@ import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
 import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
+import {
+  getTutorSubjectIdsForSave,
+  requiresActiveTutorSubjectSelection,
+} from "./onboarding-subjects";
 import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
@@ -125,8 +128,19 @@ interface OnboardingFormProps {
     achievements: TutorAchievement[] | null;
     experiences: TutorExperience[] | null;
     subjects?: TutorSubject[] | null;
+    v3FeeProjection: {
+      revision: number;
+      competitions: Array<{
+        slug: string;
+        name: string;
+        rates: Array<{
+          headcount: 1 | 2 | 3 | 4 | 5 | 6;
+          online: number;
+          offline: number;
+        }>;
+      }>;
+    } | null;
     modality: string | null;
-    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     onlineMaxClassSize: number;
     offlineMaxClassSize: number;
     bankName: string | null;
@@ -135,9 +149,11 @@ interface OnboardingFormProps {
     bankAccountOpeningCity: string | null;
     bankAccountOwnership: BankAccountOwnership | null;
     bankTransferDisclaimerAccepted: boolean | null;
+    taxLegalName: string | null;
+    nik: string | null;
+    npwp: string | null;
     termsOfServiceAcceptedAt: string | Date | null;
     termsOfServiceVersion: string | null;
-    prices: Record<string, number> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Partial<{
@@ -150,19 +166,11 @@ interface OnboardingFormProps {
       experiences: TutorExperience[];
       subjectIds: string[];
       modality: Modality;
-      baseRatesIdr: Partial<{ online: number; offline: number }>;
-      prices: Record<string, number>;
     }> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
     version: number;
   };
-}
-
-function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
-  if (left.length !== right.length) return false;
-  const rightSet = new Set(right);
-  return left.every((subjectId) => rightSet.has(subjectId));
 }
 
 function haveSameStructuredValue(left: unknown, right: unknown) {
@@ -183,9 +191,11 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
+  taxLegalName: "Legal name for payout records",
+  nik: "NIK",
+  npwp: "NPWP",
   termsOfService: "Tutor Terms of Service",
   subjects: "Specializations",
-  baseRatesIdr: "Base honorarium",
   education: "Education",
   achievementProofUrls: "Achievement proof links",
   experienceProofUrls: "Experience proof links",
@@ -207,10 +217,6 @@ function isExternalHttpUrl(value: string) {
 function mapServerFieldKey(field: string) {
   if (field === "subjectIds" || field.startsWith("subjectIds.")) {
     return "subjects";
-  }
-  if (field === "prices") return "baseRatesIdr";
-  if (field.startsWith("prices.")) {
-    return `baseRatesIdr.${field.slice("prices.".length)}`;
   }
   return field;
 }
@@ -248,11 +254,6 @@ function getTutorFieldLabel(field: string) {
       description: "Description",
     };
     return `Experience ${Number(index) + 1}: ${labels[name] ?? name}`;
-  }
-
-  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
-  if (rateField) {
-    return `${rateField[1] === "online" ? "Online" : "Offline"} base rate`;
   }
 
   const proofField = field.match(/^(achievement|experience)ProofUrls\.(\d+)$/);
@@ -308,8 +309,6 @@ function getTutorErrorFocusTarget(
     }-${experienceField[2]}`;
   }
 
-  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
-  if (rateField) return `tutor-base-rate-${rateField[1]}`;
   if (field === "subjects") return "tutor-subject-category";
   if (field === "education") return "tutor-achievements-university-0";
   if (field === "achievements") {
@@ -396,16 +395,6 @@ function readServerFieldErrors(error: unknown) {
     }
   }
 
-  if (typeof data.pricingError === "string") {
-    const normalized = data.pricingError.toLowerCase();
-    const field = normalized.includes("offline")
-      ? "baseRatesIdr.offline"
-      : normalized.includes("online")
-        ? "baseRatesIdr.online"
-        : "baseRatesIdr";
-    fieldErrors[field] = data.pricingError;
-  }
-
   if (
     typeof data.reason === "string" &&
     ["required", "too_many", "duplicate", "not_child", "inactive"].includes(
@@ -447,14 +436,14 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const navigate = useNavigate();
   const posthog = usePostHog();
   const pending = profile.pendingProfileChanges ?? {};
-  const legacySubjectIds = new Set(
+  const archivedSubjectIds = new Set(
     profile.subjects
       ?.filter((subject) => subject.isSelectable === false)
       .map((subject) => subject.id) ?? [],
   );
   const initialSubjectIds =
     pending.subjectIds?.filter(
-      (subjectId) => !legacySubjectIds.has(subjectId),
+      (subjectId) => !archivedSubjectIds.has(subjectId),
     ) ??
     profile.subjects
       ?.filter((subject) => subject.isSelectable !== false)
@@ -474,11 +463,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     experiences: pending.experiences ?? profile.experiences ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
-    baseRatesIdr: pending.baseRatesIdr ??
-      profile.baseRatesIdr ?? {
-        online: 175_000,
-        offline: 225_000,
-      },
     maxClassSize: {
       online: profile.onlineMaxClassSize ?? 6,
       offline: profile.offlineMaxClassSize ?? 6,
@@ -492,6 +476,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       | "",
     bankTransferDisclaimerAccepted:
       profile.bankTransferDisclaimerAccepted ?? false,
+    taxLegalName: profile.taxLegalName ?? "",
+    nik: profile.nik ?? "",
+    npwp: profile.npwp ?? "",
   });
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -612,7 +599,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       experiences?: TutorExperience[];
       subjectIds?: string[];
       modality?: Modality;
-      baseRatesIdr?: Partial<{ online: number; offline: number }>;
       onlineMaxClassSize?: number;
       offlineMaxClassSize?: number;
       bankName?: string;
@@ -621,7 +607,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       bankAccountOpeningCity?: string;
       bankAccountOwnership?: BankAccountOwnership;
       bankTransferDisclaimerAccepted?: boolean;
-      prices?: Record<string, number>;
+      taxLegalName?: string | null;
+      nik?: string | null;
+      npwp?: string | null;
     } = { version: profile.version };
     const displayName = name.trim();
     payload.displayName = displayName;
@@ -648,6 +636,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
+    const taxLegalName = form.taxLegalName.trim();
+    const nik = form.nik.replaceAll(/\s/g, "");
+    const npwp = form.npwp.trim();
 
     payload.shortBio = shortBio;
     payload.affiliation = affiliation;
@@ -657,12 +648,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     payload.education = education;
     payload.achievements = achievements;
     payload.experiences = experiences;
-    if (
-      form.subjectIds.length > 0 &&
-      !haveSameSubjectIds(form.subjectIds, initialSubjectIds)
-    ) {
-      payload.subjectIds = form.subjectIds;
-    }
+    const subjectIds = getTutorSubjectIdsForSave(
+      form.subjectIds,
+      initialSubjectIds,
+      [...archivedSubjectIds],
+    );
+    if (subjectIds) payload.subjectIds = subjectIds;
     if (form.modality) payload.modality = form.modality;
     if (bankName) payload.bankName = bankName;
     if (bankAccountNumber) payload.bankAccountNumber = bankAccountNumber;
@@ -674,19 +665,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       payload.bankAccountOwnership = form.bankAccountOwnership;
     payload.bankTransferDisclaimerAccepted =
       form.bankTransferDisclaimerAccepted;
+    payload.taxLegalName = taxLegalName || null;
+    payload.nik = nik || null;
+    payload.npwp = npwp || null;
     payload.onlineMaxClassSize = form.maxClassSize.online;
     payload.offlineMaxClassSize = form.maxClassSize.offline;
-    if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
-      const cleanBaseRates = Object.fromEntries(
-        Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
-      );
-      if (Object.keys(cleanBaseRates).length > 0) {
-        payload.baseRatesIdr = cleanBaseRates as Partial<{
-          online: number;
-          offline: number;
-        }>;
-      }
-    }
     return payload;
   }
 
@@ -708,6 +691,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
+    const taxLegalName = form.taxLegalName.trim();
+    const nik = form.nik.replaceAll(/\s/g, "");
+    const npwp = form.npwp.trim();
 
     if (requireComplete && !shortBio) addError("shortBio", "Required.");
     if (requireComplete && !affiliation) addError("affiliation", "Required.");
@@ -815,6 +801,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         "Please confirm the transfer-account responsibility statement.",
       );
     }
+    if (taxLegalName.length > 255) {
+      addError("taxLegalName", "Use 255 characters or fewer.");
+    }
+    if (nik && !/^\d{16}$/.test(nik)) {
+      addError("nik", "Enter all 16 digits. Leading zeros are kept.");
+    }
+    if (npwp.length > 64) {
+      addError("npwp", "Use 64 characters or fewer.");
+    }
     if (requireComplete && isTutorTermsBlockingSubmit) {
       addError(
         "termsOfService",
@@ -827,33 +822,16 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         "subjects",
         `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`,
       );
-    } else if (requireComplete && form.subjectIds.length === 0) {
+    } else if (
+      requireComplete &&
+      requiresActiveTutorSubjectSelection({
+        isPublished: profile.onboardingStatus === "published",
+        selectedSubjectIds: form.subjectIds,
+        initialSubjectIds,
+        preservedArchivedSubjectIds: [...archivedSubjectIds],
+      })
+    ) {
       addError("subjects", "Select at least one specialization.");
-    }
-
-    const ratesToCheck =
-      form.modality === "both"
-        ? (["online", "offline"] as const)
-        : form.modality === "online" || form.modality === "offline"
-          ? ([form.modality] as const)
-          : ([] as const);
-    for (const key of ratesToCheck) {
-      const value = form.baseRatesIdr[key];
-      if (typeof value !== "number") {
-        if (requireComplete) {
-          addError(
-            `baseRatesIdr.${key}`,
-            `Add a valid ${key} IDR base honorarium.`,
-          );
-        }
-        continue;
-      }
-      if (!Number.isInteger(value) || value < 50_000 || value % 5_000 !== 0) {
-        addError(
-          `baseRatesIdr.${key}`,
-          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp50,000 in Rp5,000 increments.`,
-        );
-      }
     }
 
     return validationErrors;
@@ -949,14 +927,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
   };
-  const statusIconVariant =
-    statusBadge.variant === "success"
-      ? "success-subtle"
-      : statusBadge.variant === "danger"
-        ? "danger-subtle"
-        : statusBadge.variant === "warning"
-          ? "warning-subtle"
-          : "info-subtle";
   const statusMessage = isDraft
     ? profile.onboardingStatus === "changes_requested"
       ? "Review the feedback below, update the requested fields, then submit your profile again."
@@ -967,10 +937,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         ? "Your profile has been approved and is waiting for publication by an admin."
         : profile.onboardingStatus === "published"
           ? profile.profileEditStatus === "pending_review"
-            ? "Your profile is live. You can keep updating it while the latest changes are waiting for admin review."
+            ? "Your profile is live. Your latest edits are awaiting review."
             : profile.profileEditStatus === "changes_requested"
               ? "Your profile is live, but the admin requested revisions to your proposed changes."
-              : "Your tutor profile is live. You can update it anytime. Honorarium changes apply to future bookings; other important changes are reviewed before going live."
+              : null
           : profile.onboardingStatus === "suspended"
             ? "Your tutor profile has been suspended. Please contact admin for details."
             : "Your profile status will appear here as it moves through review.";
@@ -1004,46 +974,28 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6 max-w-4xl">
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
         <div>
           <Heading level={1} size="md">
             {isDraft
               ? "Build a profile students can trust"
               : "Keep your profile ready for students"}
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Give students a clear picture of your specializations, teaching
             format, and availability.
           </Text>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
-          <Badge variant={statusBadge.variant} size="md">
-            {statusBadge.label}
-          </Badge>
-          {profile.profileEditStatus === "pending_review" ? (
-            <Badge variant="warning" size="md">
-              Changes under review
-            </Badge>
-          ) : null}
-        </div>
-      </header>
+        <Badge variant={statusBadge.variant} size="md">
+          {statusBadge.label}
+        </Badge>
 
-      <Card>
-        <CardBody className="flex items-start gap-3">
-          <IconBox variant={statusIconVariant} size="lg">
-            <IconChalkboardTeacher aria-hidden="true" />
-          </IconBox>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Heading size="sm">Profile status</Heading>
-              <Badge variant={statusBadge.variant} size="sm" pill>
-                {statusBadge.label}
-              </Badge>
-            </div>
-            <Text className="mt-1 text-muted">{statusMessage}</Text>
-          </div>
-        </CardBody>
-      </Card>
+        {statusMessage ? (
+          <Text role="status" className="text-sm text-muted">
+            {statusMessage}
+          </Text>
+        ) : null}
+      </div>
 
       {hasReviewFeedback ? (
         <Card className="ring-warning-border bg-warning/5" role="status">
@@ -1580,13 +1532,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     />
                     <TutorPricingFields
                       modality={form.modality}
-                      baseRatesIdr={form.baseRatesIdr}
-                      maxClassSize={form.maxClassSize}
-                      onChange={(baseRatesIdr) => {
-                        setForm((current) => ({ ...current, baseRatesIdr }));
-                        clearError("baseRatesIdr");
-                      }}
-                      errors={errors}
+                      v3FeeProjection={profile.v3FeeProjection}
                     />
                   </div>
                 ) : (
@@ -1894,6 +1840,123 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     </div>
                   </div>
                 </Field>
+
+                <div className="border-t border-card-separator pt-5">
+                  <Text className="font-medium">Tax identity for payouts</Text>
+                  <Text className="mt-1 max-w-2xl text-sm text-muted">
+                    Complete your legal name and 16-digit NIK before a new
+                    payout is prepared. These details are private to you and
+                    payout admins. Tax rates are configurable by Cogito; ask
+                    your tax adviser about your circumstances.
+                  </Text>
+                </div>
+
+                <TutorFormField
+                  htmlFor="tutor-taxLegalName"
+                  label="Legal name"
+                  description={
+                    <FieldDescription>
+                      Use the name associated with your identity record.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.taxLegalName ? (
+                      <FieldError id="tutor-taxLegalName-error">
+                        {errors.taxLegalName}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-taxLegalName"
+                    autoComplete="name"
+                    value={form.taxLegalName}
+                    maxLength={255}
+                    aria-invalid={Boolean(errors.taxLegalName)}
+                    aria-describedby={
+                      errors.taxLegalName
+                        ? "tutor-taxLegalName-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        taxLegalName: event.target.value,
+                      }));
+                      clearError("taxLegalName");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-nik"
+                  label="NIK"
+                  description={
+                    <FieldDescription>
+                      Enter all 16 digits. Leading zeros are preserved.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.nik ? (
+                      <FieldError id="tutor-nik-error">{errors.nik}</FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-nik"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={form.nik}
+                    maxLength={16}
+                    aria-invalid={Boolean(errors.nik)}
+                    aria-describedby={
+                      errors.nik ? "tutor-nik-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        nik: event.target.value.replaceAll(/\D/g, ""),
+                      }));
+                      clearError("nik");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-npwp"
+                  label="NPWP (optional)"
+                  description={
+                    <FieldDescription>
+                      Optional. Enter the value exactly as provided, including
+                      any leading zeros.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.npwp ? (
+                      <FieldError id="tutor-npwp-error">
+                        {errors.npwp}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-npwp"
+                    autoComplete="off"
+                    value={form.npwp}
+                    maxLength={64}
+                    aria-invalid={Boolean(errors.npwp)}
+                    aria-describedby={
+                      errors.npwp ? "tutor-npwp-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        npwp: event.target.value,
+                      }));
+                      clearError("npwp");
+                    }}
+                  />
+                </TutorFormField>
               </CardBody>
             </Card>
           </div>
@@ -1903,8 +1966,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>
-                Education, Achievements &amp; Experiences
+              <CardTitle className="leading-snug">
+                <span className="min-w-0 flex-1">
+                  Education, Achievements &amp; Experiences
+                </span>
                 <CardInfoPreview>
                   <InfoPreview
                     title="Education, Achievements & Experiences"

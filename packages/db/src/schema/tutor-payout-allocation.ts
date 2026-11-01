@@ -1,0 +1,128 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { uuidPrimaryKey, user } from "./auth";
+import { booking, bookingSession, type BookingPriceSnapshot } from "./booking";
+import { academyClassSession } from "./academy-class";
+import { tutorPayout } from "./tutor-payout";
+import { tutorSessionFee } from "./tutor-session-fee";
+
+/**
+ * Immutable per-session source allocation for a manually recorded tutor
+ * transfer, backed by an immutable tutor session fee event.
+ */
+export const tutorPayoutAllocation = pgTable(
+  "tutor_payout_allocation",
+  {
+    id: uuidPrimaryKey,
+    payoutId: text("payout_id")
+      .notNull()
+      .references(() => tutorPayout.id, { onDelete: "restrict" }),
+    sourceKey: text("source_key").notNull(),
+    sourceType: text("source_type", { enum: ["fee_event"] }).notNull(),
+    tutorSessionFeeId: text("tutor_session_fee_id")
+      .notNull()
+      .references(() => tutorSessionFee.id, { onDelete: "restrict" }),
+    bookingId: text("booking_id").references(() => booking.id, {
+      onDelete: "restrict",
+    }),
+    bookingSessionId: text("booking_session_id").references(
+      () => bookingSession.id,
+      { onDelete: "restrict" },
+    ),
+    academyClassSessionId: text("academy_class_session_id").references(
+      () => academyClassSession.id,
+      { onDelete: "restrict" },
+    ),
+    deliveryLabel: text("delivery_label"),
+    bookingType: text("booking_type").notNull(),
+    deliveryStatus: text("delivery_status").notNull(),
+    scheduledStartAt: timestamp("scheduled_start_at", {
+      withTimezone: true,
+    }).notNull(),
+    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
+    grossHonorariumIdr: integer("gross_honorarium_idr").notNull(),
+    collectedMarks: integer("collected_marks").notNull().default(0),
+    priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
+    active: boolean("active").notNull().default(true),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedBy: text("released_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    releaseReason: text("release_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "tutor_payout_allocation_source_identity_check",
+      sql`(${table.bookingId} IS NOT NULL AND ${table.academyClassSessionId} IS NULL) OR (${table.bookingId} IS NULL AND ${table.bookingSessionId} IS NULL AND ${table.academyClassSessionId} IS NOT NULL)`,
+    ),
+    check(
+      "tutor_payout_allocation_source_type_check",
+      sql`${table.sourceType} = 'fee_event'`,
+    ),
+    check(
+      "tutor_payout_allocation_booking_type_check",
+      sql`${table.bookingType} IN ('solo','group','series','cohort','masterclass')`,
+    ),
+    check(
+      "tutor_payout_allocation_delivery_status_check",
+      sql`${table.deliveryStatus} IN ('completed','no_show')`,
+    ),
+    check(
+      "tutor_payout_allocation_amount_check",
+      sql`${table.grossHonorariumIdr} >= 0`,
+    ),
+    check(
+      "tutor_payout_allocation_collected_marks_check",
+      sql`${table.collectedMarks} >= 0`,
+    ),
+    uniqueIndex("tutor_payout_allocation_source_active_uniq")
+      .on(table.sourceKey)
+      .where(sql`${table.active}`),
+    uniqueIndex("tutor_payout_allocation_fee_active_uniq")
+      .on(table.tutorSessionFeeId)
+      .where(sql`${table.tutorSessionFeeId} IS NOT NULL AND ${table.active}`),
+    index("tutor_payout_allocation_payout_start_idx").on(
+      table.payoutId,
+      table.scheduledStartAt,
+    ),
+  ],
+);
+
+export const tutorPayoutAllocationRelations = relations(
+  tutorPayoutAllocation,
+  ({ one }) => ({
+    payout: one(tutorPayout, {
+      fields: [tutorPayoutAllocation.payoutId],
+      references: [tutorPayout.id],
+    }),
+    fee: one(tutorSessionFee, {
+      fields: [tutorPayoutAllocation.tutorSessionFeeId],
+      references: [tutorSessionFee.id],
+    }),
+    booking: one(booking, {
+      fields: [tutorPayoutAllocation.bookingId],
+      references: [booking.id],
+    }),
+    session: one(bookingSession, {
+      fields: [tutorPayoutAllocation.bookingSessionId],
+      references: [bookingSession.id],
+    }),
+    academyClassSession: one(academyClassSession, {
+      fields: [tutorPayoutAllocation.academyClassSessionId],
+      references: [academyClassSession.id],
+    }),
+  }),
+);

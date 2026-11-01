@@ -1,3 +1,5 @@
+import { activityRouter } from "./modules/activity/activity.router";
+import { createContentAdminRouter } from "./modules/content-admin/content-admin.router";
 import type { RouterClient } from "@orpc/server";
 
 import { publicProcedure } from "./procedures";
@@ -6,6 +8,12 @@ import { createAdminRouter } from "./modules/admin/admin.router";
 import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
 import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
 import { createAdminKnowledgeBankRouter } from "./modules/admin-knowledge-bank/admin-knowledge-bank.router";
+import { createCompetitionCatalogRouter } from "./modules/competition-catalog/competition-catalog.router";
+import {
+  createAcademyClassPublicRouter,
+  createAcademyClassRouter,
+} from "./modules/academy-class/academy-class.router";
+import { createClassEnrollmentRouter } from "./modules/class-enrollment/class-enrollment.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -24,10 +32,17 @@ import { createSupportRouter } from "./modules/support/support.router";
 import { createUploadRouter } from "./modules/upload/upload.router";
 import { createContentRouter } from "./modules/content/content.router";
 import { createContactRouter } from "./modules/contact/contact.router";
+import { createPublicContentRouter } from "./modules/public-content/public-content.router";
+import { createFaqRouter } from "./modules/faq";
+import { createReferralRouter } from "./modules/referral/referral.router";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
-const adminRouter = createAdminRouter(handlers.admin);
+const adminRouter = {
+  ...createAdminRouter(handlers.admin),
+  ...createCompetitionCatalogRouter(handlers.competitionCatalog),
+  ...createAcademyClassRouter(handlers.academyClass),
+};
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
 const adminMarkPackageRouter = createAdminMarkPackageRouter(
   handlers.adminMarkPackage,
@@ -51,6 +66,13 @@ const supportRouter = createSupportRouter(handlers.support);
 const uploadRouter = createUploadRouter(handlers.upload);
 const contentRouter = createContentRouter(handlers.content);
 const contactRouter = createContactRouter(handlers.contact);
+const faqRouter = createFaqRouter(handlers.faq);
+const referralRouter = createReferralRouter(handlers.referral);
+const publicContentRouter = {
+  activities: { list: activityRouter.list },
+  ...createPublicContentRouter(handlers.publicContent),
+  ...faqRouter.publicContent,
+};
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -65,10 +87,18 @@ export const appRouter = {
       return "OK";
     }),
   auth: authRouter,
+  ...referralRouter,
   admin: adminRouter,
+  classes: {
+    ...createAcademyClassPublicRouter(handlers.academyClass),
+    ...createClassEnrollmentRouter(handlers.classEnrollment),
+  },
   adminTutor: adminTutorRouter,
   adminMarkPackage: adminMarkPackageRouter,
   adminKnowledgeBank: adminKnowledgeBankRouter,
+  adminContent: createContentAdminRouter(handlers.contentAdmin),
+  adminFaq: faqRouter.adminFaq,
+  adminActivities: activityRouter.admin,
   tutor: tutorRouter,
   tutors: discoveryRouter,
   invite: inviteRouter,
@@ -84,6 +114,7 @@ export const appRouter = {
   support: supportRouter,
   upload: uploadRouter,
   content: contentRouter,
+  publicContent: publicContentRouter,
   contact: contactRouter,
 };
 

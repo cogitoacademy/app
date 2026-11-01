@@ -135,7 +135,7 @@ describe("B1/U12: offline bookings do not auto-NO_SHOW at session start", () => 
     const studentCtx = await createTestContext(studentRes.cookie);
     if (!studentCtx.session?.user) throw new Error("Student session missing");
     studentId = studentCtx.session.user.id;
-    await creditWallet(studentId, 200);
+    await creditWallet(studentId, 1000);
     studentClient = createTestClient(
       await createTestContext(studentRes.cookie),
     );
@@ -242,7 +242,7 @@ describe("B1/U12: offline bookings do not auto-NO_SHOW at session start", () => 
 
     row = await getBookingRow(b.id);
     expect(row.currentState).toBe(BOOKING_STATE.SCHEDULED);
-    expect(row.holdAmount).toBe(50);
+    expect(row.holdAmount).toBe(66);
     expect(row.deadlineAt!.getTime()).toBeGreaterThan(now);
 
     const completed = await tutorClient.tutorActions.completeSession({

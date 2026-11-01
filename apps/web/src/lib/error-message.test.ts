@@ -24,7 +24,7 @@ describe("getUserFacingError", () => {
         new Error("Cannot override a booking in terminal state"),
       ),
     ).toBe(
-      "This booking is already final and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.",
+      "This booking is already final and can no longer be overridden. Final bookings are locked. Check state history or use a wallet correction if Marks need fixing.",
     );
   });
 

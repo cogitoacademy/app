@@ -155,9 +155,6 @@ function maybeCleanup(now: number) {
       lastAccess.delete(key);
     }
   }
-  for (const key of lastAccess.keys()) {
-    if (!series.has(key)) lastAccess.delete(key);
-  }
   lastCleanup = now;
 }
 
@@ -170,10 +167,7 @@ export function getMetrics(): Record<
     {};
   for (const entry of series.values()) {
     const durations = entry.durations;
-    const avg =
-      durations.length > 0
-        ? durations.reduce((a, b) => a + b, 0) / durations.length
-        : 0;
+    const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
     const existing = result[entry.path];
     if (existing) {
       const total = existing.count + entry.count;

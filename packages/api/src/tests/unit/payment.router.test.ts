@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 
+import { createPaymentRouter } from "../../modules/payment/payment.router";
 import { createPaymentHandler } from "../../modules/payment/payment.handler";
 import {
   createPurchaseInput,
@@ -348,7 +349,22 @@ describe("paymentHandler", () => {
   describe("getPurchase", () => {
     test("calls payment.getPurchase with paymentId and userId", async () => {
       const payment = {
-        getPurchase: mock(async () => ({ id: "pay1", status: "paid" })),
+        getPurchase: mock(async () => ({
+          id: "pay1",
+          status: "PAID",
+          provider: "stub",
+          providerReference: "order1",
+          amountIdr: 5_000,
+          marks: 1,
+          receiptUrl: null,
+          checkoutUrl: null,
+          failureReason: null,
+          purchaseLabel: "Top-up",
+          quoteId: null,
+          quoteChoice: null,
+          providerIntentState: null,
+          createdAt: new Date("2026-10-18T00:00:00.000Z"),
+        })),
       };
       const wallet = {} as any;
       const handler = createPaymentHandler(payment as any, wallet);
@@ -361,13 +377,36 @@ describe("paymentHandler", () => {
       });
 
       expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
-      expect(result).toEqual({ id: "pay1", status: "paid" });
+      expect(result).toMatchObject({
+        id: "pay1",
+        status: "PAID",
+        provider: "stub",
+        providerReference: "order1",
+        amountIdr: 5_000,
+        marks: 1,
+        createdAt: "2026-10-18T00:00:00.000Z",
+      });
     });
 
     test("reconciles an approved Test Mode purchase before returning it", async () => {
       const payment = {
         reconcilePurchase: mock(async () => ({ status: "PAID" })),
-        getPurchase: mock(async () => ({ id: "pay1", status: "PAID" })),
+        getPurchase: mock(async () => ({
+          id: "pay1",
+          status: "PAID",
+          provider: "stub",
+          providerReference: "order1",
+          amountIdr: 5_000,
+          marks: 1,
+          receiptUrl: null,
+          checkoutUrl: null,
+          failureReason: null,
+          purchaseLabel: "Top-up",
+          quoteId: null,
+          quoteChoice: null,
+          providerIntentState: null,
+          createdAt: new Date("2026-10-18T00:00:00.000Z"),
+        })),
       };
       const handler = createPaymentHandler(payment as any, {} as any, {
         providerMode: "test",
@@ -387,4 +426,27 @@ describe("paymentHandler", () => {
       expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
     });
   });
+});
+
+test("payment router binds every public operation to its handler and route", () => {
+  const handler = Object.fromEntries(
+    [
+      "getConfig",
+      "createPurchase",
+      "getTopUpCatalog",
+      "createTopUpQuote",
+      "createPurchaseFromQuote",
+      "simulatePurchase",
+      "getPurchase",
+    ].map((name) => [name, mock(async () => undefined)]),
+  );
+  const router = createPaymentRouter(handler as any);
+  expect(Object.keys(router)).toEqual(Object.keys(handler));
+  expect(router.createTopUpQuote["~orpc"].route.path).toBe(
+    "/payment/top-up/quote",
+  );
+  expect(router.createPurchaseFromQuote["~orpc"].route.path).toBe(
+    "/payment/top-up/purchase",
+  );
+  expect(router.getPurchase["~orpc"].route.method).toBe("POST");
 });

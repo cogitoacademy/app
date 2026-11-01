@@ -22,6 +22,9 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
     role: text("role").default("student").notNull(),
+    referralChoicePending: boolean("referral_choice_pending")
+      .default(false)
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

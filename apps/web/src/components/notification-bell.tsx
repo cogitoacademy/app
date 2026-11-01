@@ -1,10 +1,11 @@
 "use client";
 
+import Loader from "@/components/loader";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { IconArrowUpRight, IconBell } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Menu,
   MenuItem,
@@ -35,8 +36,10 @@ export function NotificationBell() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const countQuery = useQuery(
-    orpc.notification.getUnreadCount.queryOptions({}),
+  const unreadQuery = useQuery(
+    orpc.notification.list.queryOptions({
+      input: { unreadOnly: true, limit: 1 },
+    }),
   );
 
   const listQuery = useQuery(
@@ -85,12 +88,16 @@ export function NotificationBell() {
     }),
   );
 
-  const unread = countQuery.data?.count ?? 0;
+  const hasUnread = (unreadQuery.data?.items.length ?? 0) > 0;
 
   function openNotification(notification: {
     bookingId: string | null;
     category: string;
+    metadata: Record<string, unknown> | null;
   }) {
+    if (notification.metadata?.action === "class-session-report") {
+      return navigate({ to: "/class-reports" });
+    }
     if (notification.bookingId) {
       return navigate({
         to: "/bookings/$bookingId",
@@ -121,29 +128,27 @@ export function NotificationBell() {
           <Button
             variant="outline"
             size="icon"
-            aria-label="Notifications"
+            aria-label={
+              hasUnread ? "Notifications, unread updates" : "Notifications"
+            }
             data-slot="notification-trigger"
             className="relative"
           />
         }
       >
         <IconBell className="h-[1.2rem] w-[1.2rem]" />
-        {unread > 0 ? (
-          <Badge
-            variant="danger-solid"
-            size="sm"
-            pill
-            className="absolute -right-1 -top-1 min-w-5 px-1 text-center text-[10px] justify-center"
-          >
-            {unread > 99 ? "99+" : unread}
-          </Badge>
+        {hasUnread ? (
+          <span
+            aria-hidden="true"
+            className="absolute right-2.5 top-2 size-2 rounded-full bg-danger"
+          />
         ) : null}
         <span className="sr-only">Notifications</span>
       </MenuTrigger>
       <MenuPopup className="w-80 lg:w-120 max-w-[calc(100vw-2rem)] shadow-xl">
         <div className="flex items-center justify-between px-3 py-2 h-[50px]">
           <span className="font-medium text-base">Notifications</span>
-          {unread === 0 && (
+          {hasUnread && (
             <Button
               variant="underline"
               size="sm"
@@ -157,9 +162,7 @@ export function NotificationBell() {
         </div>
         <MenuSeparator />
         {listQuery.isLoading ? (
-          <div className="px-3 py-4 text-center text-sm text-muted">
-            Loading…
-          </div>
+          <Loader />
         ) : listQuery.error ? (
           <div className="px-3 py-4 text-center text-sm text-danger">
             Failed to load

@@ -46,6 +46,9 @@ export interface UpdateProfileInput {
   bankAccountOpeningCity?: string;
   bankAccountOwnership?: "self" | "trusted_person";
   bankTransferDisclaimerAccepted?: boolean;
+  taxLegalName?: string | null;
+  nik?: string | null;
+  npwp?: string | null;
   prices?: Record<string, number>;
 }
 

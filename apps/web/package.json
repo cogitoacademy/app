@@ -8,7 +8,7 @@
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit --checkers 1"
   },
   "dependencies": {
     "@cogito-app/api": "workspace:*",
@@ -26,6 +26,9 @@
     "@tanstack/react-form": "^1.33.4",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.25",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "better-auth": "catalog:",
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.14",
@@ -34,6 +37,7 @@
     "posthog-js": "^1.434.15",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-movable": "^3.4.1",
     "recharts": "^3.10.1",
     "sonner": "^2.0.7",
     "zod": "catalog:"

@@ -8,6 +8,8 @@ import {
 } from "./payment.errors";
 import type {
   createPurchaseInput,
+  createTopUpQuoteInput,
+  createPurchaseFromQuoteInput,
   getPurchaseInput,
   simulatePurchaseInput,
 } from "./payment.types";
@@ -19,6 +21,10 @@ interface PaymentHandlerWalletPort {
 }
 
 type CreatePurchaseInput = z.infer<typeof createPurchaseInput>;
+type CreateTopUpQuoteInput = z.infer<typeof createTopUpQuoteInput>;
+type CreatePurchaseFromQuoteInput = z.infer<
+  typeof createPurchaseFromQuoteInput
+>;
 type GetPurchaseInput = z.infer<typeof getPurchaseInput>;
 type SimulatePurchaseInput = z.infer<typeof simulatePurchaseInput>;
 
@@ -84,6 +90,52 @@ export function createPaymentHandler(
       }, mapPaymentError);
     },
 
+    getTopUpCatalog: async () => {
+      return withDomainMap(
+        async () => payment.getTopUpCatalog(),
+        mapPaymentError,
+      );
+    },
+
+    createTopUpQuote: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CreateTopUpQuoteInput;
+    }) => {
+      return withDomainMap(
+        async () => payment.createTopUpQuote(context.session!.user.id, input),
+        mapPaymentError,
+      );
+    },
+
+    createPurchaseFromQuote: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CreatePurchaseFromQuoteInput;
+    }) => {
+      return withDomainMap(async () => {
+        if (config.providerMode === "test" && !isApprovedTestAccount(context)) {
+          throw new PaymentTestModeRestrictedError();
+        }
+        const w = await wallet.getOrCreate(context.session!.user.id);
+        const purchase = await payment.createPurchaseFromTopUpQuote(
+          context.session!.user.id,
+          w.id,
+          input.quoteId,
+          input.choice,
+        );
+        return {
+          ...purchase,
+          canSimulate:
+            config.simulationEnabled === true && isApprovedTestAccount(context),
+        };
+      }, mapPaymentError);
+    },
+
     simulatePurchase: async ({
       context,
       input,
@@ -119,7 +171,34 @@ export function createPaymentHandler(
             context.session!.user.id,
           );
         }
-        return payment.getPurchase(input.paymentId, context.session!.user.id);
+        const record = await payment.getPurchase(
+          input.paymentId,
+          context.session!.user.id,
+        );
+        return {
+          id: record.id,
+          status: record.status,
+          provider: record.provider,
+          providerReference: record.providerReference,
+          amountIdr: record.amountIdr,
+          marks: record.marks,
+          receiptUrl: record.receiptUrl,
+          checkoutUrl: record.checkoutUrl,
+          failureReason: record.failureReason,
+          purchaseLabel: record.purchaseLabel,
+          quoteId: record.quoteId,
+          quoteChoice: record.quoteChoice as
+            | "package"
+            | "custom"
+            | "recommended"
+            | null,
+          providerIntentState: record.providerIntentState as
+            | "CREATING"
+            | "READY"
+            | "UNCERTAIN"
+            | null,
+          createdAt: record.createdAt.toISOString(),
+        };
       }, mapPaymentError);
     },
   };

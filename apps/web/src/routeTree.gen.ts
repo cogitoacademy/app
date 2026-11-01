@@ -14,31 +14,41 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ReferralChoiceRouteImport } from './routes/referral-choice'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
+import { Route as AppActivitiesRouteImport } from './routes/_app.activities'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminClassesRouteImport } from './routes/_app.admin-classes'
+import { Route as AppAdminCompetitionsRouteImport } from './routes/_app.admin-competitions'
+import { Route as AppAdminContentRouteImport } from './routes/_app.admin-content'
 import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy'
 import { Route as AppAdminKnowledgeBankRouteImport } from './routes/_app.admin-knowledge-bank'
+import { Route as AppAdminKolCommissionsRouteImport } from './routes/_app.admin-kol-commissions'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
+import { Route as AppAdminReferralsRouteImport } from './routes/_app.admin-referrals'
 import { Route as AppAdminTutorPayoutsRouteImport } from './routes/_app.admin-tutor-payouts'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
+import { Route as AppClassReportsRouteImport } from './routes/_app.class-reports'
+import { Route as AppClassesRouteImport } from './routes/_app.classes'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppFaqRouteImport } from './routes/_app.faq'
 import { Route as AppGuideRouteImport } from './routes/_app.guide'
 import { Route as AppKnowledgeBankRouteImport } from './routes/_app.knowledge-bank'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
-import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
-import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
+import { Route as AppReferralsRouteImport } from './routes/_app.referrals'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppAdminTutorsProfileIdRouteImport } from './routes/_app.admin-tutors_.$profileId'
 import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
+import { Route as AppClassesClassIdRouteImport } from './routes/_app.classes_.$classId'
 import { Route as AppAdminOperationsBookingsBookingIdRouteImport } from './routes/_app.admin-operations_.bookings.$bookingId'
 import { Route as AppTutorsTutorIdBookRouteImport } from './routes/_app.tutors_.$tutorId.book'
 
@@ -66,6 +76,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReferralChoiceRoute = ReferralChoiceRouteImport.update({
+  id: '/referral-choice',
+  path: '/referral-choice',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -81,6 +96,11 @@ const AppAchievementsRoute = AppAchievementsRouteImport.update({
   path: '/achievements',
   getParentRoute: () => AppRoute,
 } as any)
+const AppActivitiesRoute = AppActivitiesRouteImport.update({
+  id: '/activities',
+  path: '/activities',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -89,6 +109,21 @@ const AppAdminRoute = AppAdminRouteImport.update({
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminClassesRoute = AppAdminClassesRouteImport.update({
+  id: '/admin-classes',
+  path: '/admin-classes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminCompetitionsRoute = AppAdminCompetitionsRouteImport.update({
+  id: '/admin-competitions',
+  path: '/admin-competitions',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminContentRoute = AppAdminContentRouteImport.update({
+  id: '/admin-content',
+  path: '/admin-content',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminEconomyRoute = AppAdminEconomyRouteImport.update({
@@ -101,9 +136,19 @@ const AppAdminKnowledgeBankRoute = AppAdminKnowledgeBankRouteImport.update({
   path: '/admin-knowledge-bank',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminKolCommissionsRoute = AppAdminKolCommissionsRouteImport.update({
+  id: '/admin-kol-commissions',
+  path: '/admin-kol-commissions',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminOperationsRoute = AppAdminOperationsRouteImport.update({
   id: '/admin-operations',
   path: '/admin-operations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminReferralsRoute = AppAdminReferralsRouteImport.update({
+  id: '/admin-referrals',
+  path: '/admin-referrals',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminTutorPayoutsRoute = AppAdminTutorPayoutsRouteImport.update({
@@ -136,9 +181,24 @@ const AppCalendarRoute = AppCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassReportsRoute = AppClassReportsRouteImport.update({
+  id: '/class-reports',
+  path: '/class-reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppClassesRoute = AppClassesRouteImport.update({
+  id: '/classes',
+  path: '/classes',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFaqRoute = AppFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
   getParentRoute: () => AppRoute,
 } as any)
 const AppGuideRoute = AppGuideRouteImport.update({
@@ -156,19 +216,14 @@ const AppNotificationsRoute = AppNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AppRoute,
 } as any)
-const AppOnboardingRoute = AppOnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTutorBookingsRoute = AppTutorBookingsRouteImport.update({
-  id: '/tutor-bookings',
-  path: '/tutor-bookings',
+const AppReferralsRoute = AppReferralsRouteImport.update({
+  id: '/referrals',
+  path: '/referrals',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTutorsRoute = AppTutorsRouteImport.update({
@@ -191,6 +246,11 @@ const AppBookingsBookingIdRoute = AppBookingsBookingIdRouteImport.update({
   path: '/bookings/$bookingId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassesClassIdRoute = AppClassesClassIdRouteImport.update({
+  id: '/classes_/$classId',
+  path: '/classes/$classId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminOperationsBookingsBookingIdRoute =
   AppAdminOperationsBookingsBookingIdRouteImport.update({
     id: '/admin-operations_/bookings/$bookingId',
@@ -208,31 +268,41 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-classes': typeof AppAdminClassesRoute
+  '/admin-competitions': typeof AppAdminCompetitionsRoute
+  '/admin-content': typeof AppAdminContentRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
+  '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
+  '/admin-referrals': typeof AppAdminReferralsRoute
   '/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/class-reports': typeof AppClassReportsRoute
+  '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
-  '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/tutor-bookings': typeof AppTutorBookingsRoute
+  '/referrals': typeof AppReferralsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/classes/$classId': typeof AppClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -241,31 +311,41 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-classes': typeof AppAdminClassesRoute
+  '/admin-competitions': typeof AppAdminCompetitionsRoute
+  '/admin-content': typeof AppAdminContentRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
+  '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
+  '/admin-referrals': typeof AppAdminReferralsRoute
   '/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/class-reports': typeof AppClassReportsRoute
+  '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
-  '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/tutor-bookings': typeof AppTutorBookingsRoute
+  '/referrals': typeof AppReferralsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/classes/$classId': typeof AppClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -276,31 +356,41 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/activities': typeof AppActivitiesRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-classes': typeof AppAdminClassesRoute
+  '/_app/admin-competitions': typeof AppAdminCompetitionsRoute
+  '/_app/admin-content': typeof AppAdminContentRoute
   '/_app/admin-economy': typeof AppAdminEconomyRoute
   '/_app/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
+  '/_app/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
+  '/_app/admin-referrals': typeof AppAdminReferralsRoute
   '/_app/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
   '/_app/availability': typeof AppAvailabilityRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/calendar': typeof AppCalendarRoute
+  '/_app/class-reports': typeof AppClassReportsRoute
+  '/_app/classes': typeof AppClassesRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/faq': typeof AppFaqRoute
   '/_app/guide': typeof AppGuideRoute
   '/_app/knowledge-bank': typeof AppKnowledgeBankRoute
   '/_app/notifications': typeof AppNotificationsRoute
-  '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
-  '/_app/tutor-bookings': typeof AppTutorBookingsRoute
+  '/_app/referrals': typeof AppReferralsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/admin-tutors_/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/_app/bookings_/$bookingId': typeof AppBookingsBookingIdRoute
+  '/_app/classes_/$classId': typeof AppClassesClassIdRoute
   '/_app/admin-operations_/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/_app/tutors_/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -311,31 +401,41 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
+    | '/referral-choice'
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-classes'
+    | '/admin-competitions'
+    | '/admin-content'
     | '/admin-economy'
     | '/admin-knowledge-bank'
+    | '/admin-kol-commissions'
     | '/admin-operations'
+    | '/admin-referrals'
     | '/admin-tutor-payouts'
     | '/admin-tutors'
     | '/availability'
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/class-reports'
+    | '/classes'
     | '/dashboard'
+    | '/faq'
     | '/guide'
     | '/knowledge-bank'
     | '/notifications'
-    | '/onboarding'
     | '/profile'
-    | '/tutor-bookings'
+    | '/referrals'
     | '/tutors'
     | '/auth/callback'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
+    | '/classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   fileRoutesByTo: FileRoutesByTo
@@ -344,31 +444,41 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
+    | '/referral-choice'
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-classes'
+    | '/admin-competitions'
+    | '/admin-content'
     | '/admin-economy'
     | '/admin-knowledge-bank'
+    | '/admin-kol-commissions'
     | '/admin-operations'
+    | '/admin-referrals'
     | '/admin-tutor-payouts'
     | '/admin-tutors'
     | '/availability'
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/class-reports'
+    | '/classes'
     | '/dashboard'
+    | '/faq'
     | '/guide'
     | '/knowledge-bank'
     | '/notifications'
-    | '/onboarding'
     | '/profile'
-    | '/tutor-bookings'
+    | '/referrals'
     | '/tutors'
     | '/auth/callback'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
+    | '/classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   id:
@@ -378,31 +488,41 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/invite'
     | '/login'
+    | '/referral-choice'
     | '/reset-password'
     | '/verify-email'
     | '/_app/achievements'
+    | '/_app/activities'
     | '/_app/admin'
     | '/_app/admin-achievements'
+    | '/_app/admin-classes'
+    | '/_app/admin-competitions'
+    | '/_app/admin-content'
     | '/_app/admin-economy'
     | '/_app/admin-knowledge-bank'
+    | '/_app/admin-kol-commissions'
     | '/_app/admin-operations'
+    | '/_app/admin-referrals'
     | '/_app/admin-tutor-payouts'
     | '/_app/admin-tutors'
     | '/_app/availability'
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/calendar'
+    | '/_app/class-reports'
+    | '/_app/classes'
     | '/_app/dashboard'
+    | '/_app/faq'
     | '/_app/guide'
     | '/_app/knowledge-bank'
     | '/_app/notifications'
-    | '/_app/onboarding'
     | '/_app/profile'
-    | '/_app/tutor-bookings'
+    | '/_app/referrals'
     | '/_app/tutors'
     | '/auth/callback'
     | '/_app/admin-tutors_/$profileId'
     | '/_app/bookings_/$bookingId'
+    | '/_app/classes_/$classId'
     | '/_app/admin-operations_/bookings/$bookingId'
     | '/_app/tutors_/$tutorId/book'
   fileRoutesById: FileRoutesById
@@ -413,6 +533,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
+  ReferralChoiceRoute: typeof ReferralChoiceRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -455,6 +576,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/referral-choice': {
+      id: '/referral-choice'
+      path: '/referral-choice'
+      fullPath: '/referral-choice'
+      preLoaderRoute: typeof ReferralChoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -476,6 +604,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/activities': {
+      id: '/_app/activities'
+      path: '/activities'
+      fullPath: '/activities'
+      preLoaderRoute: typeof AppActivitiesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin': {
       id: '/_app/admin'
       path: '/admin'
@@ -488,6 +623,27 @@ declare module '@tanstack/react-router' {
       path: '/admin-achievements'
       fullPath: '/admin-achievements'
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-classes': {
+      id: '/_app/admin-classes'
+      path: '/admin-classes'
+      fullPath: '/admin-classes'
+      preLoaderRoute: typeof AppAdminClassesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-competitions': {
+      id: '/_app/admin-competitions'
+      path: '/admin-competitions'
+      fullPath: '/admin-competitions'
+      preLoaderRoute: typeof AppAdminCompetitionsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-content': {
+      id: '/_app/admin-content'
+      path: '/admin-content'
+      fullPath: '/admin-content'
+      preLoaderRoute: typeof AppAdminContentRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-economy': {
@@ -504,11 +660,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminKnowledgeBankRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin-kol-commissions': {
+      id: '/_app/admin-kol-commissions'
+      path: '/admin-kol-commissions'
+      fullPath: '/admin-kol-commissions'
+      preLoaderRoute: typeof AppAdminKolCommissionsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-operations': {
       id: '/_app/admin-operations'
       path: '/admin-operations'
       fullPath: '/admin-operations'
       preLoaderRoute: typeof AppAdminOperationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-referrals': {
+      id: '/_app/admin-referrals'
+      path: '/admin-referrals'
+      fullPath: '/admin-referrals'
+      preLoaderRoute: typeof AppAdminReferralsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-tutor-payouts': {
@@ -553,11 +723,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/class-reports': {
+      id: '/_app/class-reports'
+      path: '/class-reports'
+      fullPath: '/class-reports'
+      preLoaderRoute: typeof AppClassReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/classes': {
+      id: '/_app/classes'
+      path: '/classes'
+      fullPath: '/classes'
+      preLoaderRoute: typeof AppClassesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/faq': {
+      id: '/_app/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof AppFaqRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/guide': {
@@ -581,13 +772,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotificationsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/onboarding': {
-      id: '/_app/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof AppOnboardingRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/profile': {
       id: '/_app/profile'
       path: '/profile'
@@ -595,11 +779,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/tutor-bookings': {
-      id: '/_app/tutor-bookings'
-      path: '/tutor-bookings'
-      fullPath: '/tutor-bookings'
-      preLoaderRoute: typeof AppTutorBookingsRouteImport
+    '/_app/referrals': {
+      id: '/_app/referrals'
+      path: '/referrals'
+      fullPath: '/referrals'
+      preLoaderRoute: typeof AppReferralsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/tutors': {
@@ -630,6 +814,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBookingsBookingIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/classes_/$classId': {
+      id: '/_app/classes_/$classId'
+      path: '/classes/$classId'
+      fullPath: '/classes/$classId'
+      preLoaderRoute: typeof AppClassesClassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-operations_/bookings/$bookingId': {
       id: '/_app/admin-operations_/bookings/$bookingId'
       path: '/admin-operations/bookings/$bookingId'
@@ -649,54 +840,72 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppActivitiesRoute: typeof AppActivitiesRoute
   AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminClassesRoute: typeof AppAdminClassesRoute
+  AppAdminCompetitionsRoute: typeof AppAdminCompetitionsRoute
+  AppAdminContentRoute: typeof AppAdminContentRoute
   AppAdminEconomyRoute: typeof AppAdminEconomyRoute
   AppAdminKnowledgeBankRoute: typeof AppAdminKnowledgeBankRoute
+  AppAdminKolCommissionsRoute: typeof AppAdminKolCommissionsRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
+  AppAdminReferralsRoute: typeof AppAdminReferralsRoute
   AppAdminTutorPayoutsRoute: typeof AppAdminTutorPayoutsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
   AppAvailabilityRoute: typeof AppAvailabilityRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppCalendarRoute: typeof AppCalendarRoute
+  AppClassReportsRoute: typeof AppClassReportsRoute
+  AppClassesRoute: typeof AppClassesRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppFaqRoute: typeof AppFaqRoute
   AppGuideRoute: typeof AppGuideRoute
   AppKnowledgeBankRoute: typeof AppKnowledgeBankRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
-  AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppTutorBookingsRoute: typeof AppTutorBookingsRoute
+  AppReferralsRoute: typeof AppReferralsRoute
   AppTutorsRoute: typeof AppTutorsRoute
   AppAdminTutorsProfileIdRoute: typeof AppAdminTutorsProfileIdRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
+  AppClassesClassIdRoute: typeof AppClassesClassIdRoute
   AppAdminOperationsBookingsBookingIdRoute: typeof AppAdminOperationsBookingsBookingIdRoute
   AppTutorsTutorIdBookRoute: typeof AppTutorsTutorIdBookRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppActivitiesRoute: AppActivitiesRoute,
   AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminClassesRoute: AppAdminClassesRoute,
+  AppAdminCompetitionsRoute: AppAdminCompetitionsRoute,
+  AppAdminContentRoute: AppAdminContentRoute,
   AppAdminEconomyRoute: AppAdminEconomyRoute,
   AppAdminKnowledgeBankRoute: AppAdminKnowledgeBankRoute,
+  AppAdminKolCommissionsRoute: AppAdminKolCommissionsRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,
+  AppAdminReferralsRoute: AppAdminReferralsRoute,
   AppAdminTutorPayoutsRoute: AppAdminTutorPayoutsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppAvailabilityRoute: AppAvailabilityRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppCalendarRoute: AppCalendarRoute,
+  AppClassReportsRoute: AppClassReportsRoute,
+  AppClassesRoute: AppClassesRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppFaqRoute: AppFaqRoute,
   AppGuideRoute: AppGuideRoute,
   AppKnowledgeBankRoute: AppKnowledgeBankRoute,
   AppNotificationsRoute: AppNotificationsRoute,
-  AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
-  AppTutorBookingsRoute: AppTutorBookingsRoute,
+  AppReferralsRoute: AppReferralsRoute,
   AppTutorsRoute: AppTutorsRoute,
   AppAdminTutorsProfileIdRoute: AppAdminTutorsProfileIdRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,
+  AppClassesClassIdRoute: AppClassesClassIdRoute,
   AppAdminOperationsBookingsBookingIdRoute:
     AppAdminOperationsBookingsBookingIdRoute,
   AppTutorsTutorIdBookRoute: AppTutorsTutorIdBookRoute,
@@ -710,6 +919,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
+  ReferralChoiceRoute: ReferralChoiceRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthCallbackRoute: AuthCallbackRoute,

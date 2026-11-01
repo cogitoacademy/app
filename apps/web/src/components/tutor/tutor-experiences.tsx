@@ -4,11 +4,8 @@ import { useState } from "react";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-} from "@cogito-app/ui/components/selia/field";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
+import { Field, FieldError } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
@@ -322,7 +319,7 @@ export function TutorExperiencesEditor({
                           }
                         />
                       </TutorFormField>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid items-start gap-3 sm:grid-cols-2">
                         <TutorFormField
                           className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-start-year-${index}`}
@@ -370,6 +367,7 @@ export function TutorExperiencesEditor({
                           <NumberField
                             id={`${idPrefix}-end-year-${index}`}
                             value={entry.endYear}
+                            disabled={entry.endYear === null}
                             min={1900}
                             max={2100}
                             step={1}
@@ -388,11 +386,25 @@ export function TutorExperiencesEditor({
                                 : undefined,
                             }}
                           />
-                          <FieldDescription>
-                            Leave blank if this experience is ongoing.
-                          </FieldDescription>
                         </TutorFormField>
                       </div>
+                      <label
+                        htmlFor={`${idPrefix}-ongoing-${index}`}
+                        className="flex w-fit cursor-pointer items-center gap-2 text-sm"
+                      >
+                        <Checkbox
+                          id={`${idPrefix}-ongoing-${index}`}
+                          checked={entry.endYear === null}
+                          onCheckedChange={(checked) =>
+                            updateExperience(index, {
+                              endYear: checked
+                                ? null
+                                : Math.max(CURRENT_YEAR, entry.startYear),
+                            })
+                          }
+                        />
+                        I currently work in this role
+                      </label>
                       <TutorFormField
                         className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                         htmlFor={`${idPrefix}-description-${index}`}

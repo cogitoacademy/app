@@ -105,6 +105,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
   let adminClient: TestClient;
   let studentClient: TestClient;
   let tutorClient: TestClient;
+  let tutorId: string;
   let slotId: string;
   let bookedId: string;
 
@@ -133,6 +134,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
     }
 
     const tutor = await createPublishedTutor(`tutor.u1.${ts}@cogito.test`, ts);
+    tutorId = tutor.tutorId;
     slotId = tutor.slotId;
     tutorClient = createTestClient(
       await createTestContext(
@@ -146,7 +148,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
     const b = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "online",
       scheduledStartAt: start,
@@ -246,7 +248,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
     const start = new Date(Date.now() + 96 * 3600_000).toISOString();
     const end = new Date(Date.now() + 97 * 3600_000).toISOString();
     const b = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "offline",
       scheduledStartAt: start,
@@ -266,7 +268,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
     const start = new Date(Date.now() + 72 * 3600_000).toISOString();
     const end = new Date(Date.now() + 73 * 3600_000).toISOString();
     const b = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "online",
       scheduledStartAt: start,

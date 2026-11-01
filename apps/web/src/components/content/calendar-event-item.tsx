@@ -13,6 +13,7 @@ import {
   getCategoryEventClass,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
+import { getCompetitionPaletteStyle } from "@/lib/competition-colors";
 
 type CalendarEventView = "month" | "agenda";
 
@@ -31,9 +32,10 @@ export function CalendarEventItem({
   isContinuation?: boolean;
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const isEventInPast = isPast(new Date(event.end));
-  const category = event.categories[0]?.coreCategory;
+  const isEventInPast = isPast(new Date(event.endInstant ?? event.end));
+  const category = event.categories[0];
   const eventClass = getCategoryEventClass(category);
+  const eventStyle = getCompetitionPaletteStyle(category?.parentColors);
 
   if (view === "month") {
     return (
@@ -47,6 +49,7 @@ export function CalendarEventItem({
           isFirstDay && "border-l-4",
           isEventInPast && "opacity-100",
         )}
+        style={eventStyle}
         onClick={onClick}
       >
         {isContinuation ? (
@@ -67,6 +70,7 @@ export function CalendarEventItem({
         eventClass,
         isEventInPast && "opacity-70",
       )}
+      style={eventStyle}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-3">

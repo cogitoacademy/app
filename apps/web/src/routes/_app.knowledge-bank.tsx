@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import type { CogitoUser } from "@cogito-app/auth";
 
+import { ContentPage } from "@/components/admin/content-page";
 import { KnowledgeBankPage } from "@/components/content/knowledge-bank-page";
 
 export const Route = createFileRoute("/_app/knowledge-bank")({
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_app/knowledge-bank")({
       },
     ],
   }),
-  component: KnowledgeBankPage,
+  component: RouteComponent,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
     if (
@@ -24,3 +25,16 @@ export const Route = createFileRoute("/_app/knowledge-bank")({
     }
   },
 });
+
+function RouteComponent() {
+  const { session } = Route.useRouteContext();
+  const user = session.data?.user as CogitoUser | undefined;
+  return user?.role === "admin" ? (
+    <ContentPage
+      kind="resource"
+      preview={(onManage) => <KnowledgeBankPage onManage={onManage} />}
+    />
+  ) : (
+    <KnowledgeBankPage />
+  );
+}

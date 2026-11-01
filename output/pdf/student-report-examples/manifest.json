@@ -1,0 +1,6 @@
+[
+  { "file": "01-short.pdf", "pages": 1 },
+  { "file": "02-filled.pdf", "pages": 1 },
+  { "file": "03-long-pagination.pdf", "pages": 6 },
+  { "file": "04-mixed-current-legacy.pdf", "pages": 2 }
+]

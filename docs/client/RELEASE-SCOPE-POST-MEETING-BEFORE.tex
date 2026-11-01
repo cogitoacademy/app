@@ -1,0 +1,167 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=20mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[scaled]{helvet}
+\renewcommand\familydefault{\sfdefault}
+\usepackage{enumitem,parskip,titlesec,longtable,array,xcolor,hyperref,fancyhdr}
+\hypersetup{hidelinks,pdftitle={Cogito - Scope Pasca-Meeting},pdfauthor={Cogito}}
+\definecolor{ink}{HTML}{21364A}
+\titleformat{\section}{\large\bfseries\color{ink}}{}{0em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{}{0em}{}
+\setlist{leftmargin=*,topsep=3pt,itemsep=3pt,parsep=0pt}
+\setlength{\parskip}{5pt}
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small Cogito | Scope Pasca-Meeting}
+\fancyhead[R]{\small Draft untuk konfirmasi}
+\fancyfoot[R]{\small\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\emergencystretch}{3em}
+\begin{document}
+
+\begin{center}{\LARGE\bfseries Cogito Academy}\\[5pt]
+{\Large Ringkasan Scope Pasca-Meeting}\\[6pt]
+{\small 11 Oktober 2026 | Draft untuk konfirmasi client}
+\end{center}
+
+
+
+Dokumen ini menjelaskan kondisi aplikasi saat ini dan perubahan yang direncanakan. Notulen meeting menjadi acuan perubahan terbaru; angka atau aturan dari PRD awal yang tidak ditegaskan kembali tetap berupa usulan, bukan keputusan final. Kondisi aplikasi diperiksa dari source lokal cogito-app commit 14dc4486; website utama diperiksa dari checkout lokal cogito-acad. Ini bukan verifikasi langsung database atau tampilan produksi.
+
+\section*{1. Kondisi sekarang  menjadi  perubahan yang direncanakan}
+
+{\small
+\begin{longtable}{L{30.70mm}L{56.55mm}L{74.32mm}}
+\hline
+\textbf{Area} & \textbf{Kondisi sekarang} & \textbf{Scope setelah meeting} \\ \hline
+\endfirsthead
+\hline
+\textbf{Area} & \textbf{Kondisi sekarang} & \textbf{Scope setelah meeting} \\ \hline
+\endhead
+Harga dan honor tutor & Profil tutor menyimpan harga Marks dan honor dasar; admin mengatur beberapa nilai ekonomi global. & Admin menentukan honor tutor. Usulan PRD awal: harga dan honor terpusat per kompetisi, tambahan honor per siswa, dan harga grup. Nilai akhirnya perlu dikonfirmasi. Tutor melihat honor, tidak mengaturnya sendiri. \\ \hline
+Payout dan pajak & Admin dapat membayar tutor, melihat riwayat dan mengekspor CSV. Ada biaya transfer Rp2.500 sekali per payout non-BCA; belum ada potongan pajak. & Tambah toggle mode pajak, identitas pajak, rincian bruto/\allowbreak{}potongan/\allowbreak{}neto dan notifikasi tutor. Follow-up meeting menyebut 2,5\% dengan identitas yang memenuhi syarat dan 3\% bila tidak; arti "tidak punya" dan mode pajak harus dipastikan sebelum dipakai. \\ \hline
+Marks & Wallet, ledger dan pembelian paket sudah ada; exact top-up belum ada. & Kalibrasi ulang paket/\allowbreak{}konversi karena asumsi PPN diserap Cogito. Exact top-up masih tahap riset. Harga yang ditampilkan ke pengguna tetap jelas dan total pembayaran tidak mengejutkan. \\ \hline
+Cohort /\allowbreak{} regular class & Ada booking privat/\allowbreak{}grup dan seri 2-4 sesi; belum ada cohort publik berbasis kursi. & Admin membuat kelas, kurikulum, jadwal, kapasitas dan penugasan tutor. Siswa reserve/\allowbreak{}daftar; dapat membeli full dengan harga lebih rendah atau memilih skema termin yang dikonfigurasi admin. Target mulai yang disebut meeting: 1 November 2026, perlu konfirmasi kesiapan. \\ \hline
+Pembayaran cohort & Belum ada enrollment atau termin kelas. & Jumlah termin, jumlah pertemuan per termin, nominal dan jatuh tempo fleksibel; tidak otomatis dibagi setengah. Contoh 12 sesi dengan pembayaran lanjutan sebelum sesi 7 bukan aturan universal. Harga termin berikutnya ditetapkan eksplisit, bukan selalu harga full dikurangi pembayaran pertama. \\ \hline
+Tutor dan laporan kelas & Availability, Meet, laporan penyelesaian sesi dan honor berbasis sesi selesai sudah tersedia. & Tutor ditunjuk admin setelah koordinasi di luar platform; bisa berbeda per sesi atau diganti pada hari H. Usulan laporan cohort: satu laporan kelas dengan absensi, materi, catatan bersama dan catatan siswa opsional. \\ \hline
+Referral teman & Belum ditemukan sistem kode/\allowbreak{}reward referral. & Kode dimasukkan saat pendaftaran; ada riwayat penggunaan dan reward. Usulan meeting: penerima 25 Marks, pemberi 15 Marks; jumlah dapat diatur admin. Syarat pemberian dan kedaluwarsa belum final. \\ \hline
+KOL /\allowbreak{} influencer & Belum ada pengelolaan kampanye kode. & Admin membuat kode untuk influencer yang tidak wajib memiliki akun. Ada atribusi, batas harian dan tanggal akhir. Pembayaran KOL serta definisi konversi harus disepakati; tidak otomatis mengikuti reward teman. \\ \hline
+CMS dan website & App masih membaca kalender kompetisi dan Knowledge Bank dari Sanity. Website utama punya agenda harian dan tombol Start Learning. & Pindahkan pengelolaan konten ke Cogito App, dengan cakupan migrasi disepakati dahulu. Rapikan Activities menjadi satu, hapus Start Learning, dan investigasi duplikasi agenda. Penghapusan Activities di landing masih usulan. Andrew Elnathan diminta diturunkan dari CMS; identitas record dan dampaknya perlu dicek. \\ \hline
+Google sign-in & Integrasi Google tersedia. & Investigasi pesan/\allowbreak{}status "unverified" yang dilaporkan. Bedakan peringatan consent Google dari status email akun; belum ada diagnosis terkonfirmasi. \\ \hline
+\end{longtable}
+}
+
+\section*{2. Edge cases dan aturan yang perlu dikunci}
+
+Berikut usulan pengamanan produk untuk disetujui, bukan tambahan keputusan meeting.
+
+\begin{itemize}
+\item \textbf{Harga berubah:} transaksi yang sudah dikonfirmasi tetap memakai snapshot harga/\allowbreak{}honor lama. Definisikan apakah reservasi belum dibayar ikut mengunci harga dan sampai kapan.
+\item \textbf{Pajak:} setiap payout menyimpan mode, tarif, alasan override dan potongannya. Perubahan konfigurasi tidak menulis ulang payout lama. Data identitas dibatasi untuk tutor terkait dan petugas berwenang. Aturan tarif dan PPN perlu validasi finance/\allowbreak{}konsultan.
+\item \textbf{Kursi terakhir:} reservasi memiliki batas waktu dan alokasi kursi atomik. Pembayaran terlambat atau webhook ganda tidak boleh menggandakan kursi, kredit Marks atau tagihan; tentukan penanganan jika pembayaran sukses setelah reservasi habis.
+\item \textbf{Termin belum dibayar:} tampilkan pengingat, status tunggakan dan batas akses sesi. Tentukan masa tenggang, kapan kursi dilepas dan cara siswa kembali. Tidak ada tagihan otomatis yang belum diinformasikan saat checkout.
+\item \textbf{Kelas batal /\allowbreak{} siswa mundur:} bedakan pembatalan oleh Cogito, withdrawal siswa, absen dan no-show tutor. Usulan awal: pengembalian melalui Marks; formula per skema pembayaran dan kebijakan cash refund perlu disepakati.
+\item \textbf{Pergantian tutor hari H:} cek bentrok, informasikan siswa dan tutor, perbarui akses/\allowbreak{}jadwal. Honor sesi terdahulu tetap pada tutor lama; honor pengganti disepakati sebelum tercatat. Jika pengganti tidak tersedia, tetapkan reschedule atau pembatalan.
+\item \textbf{Referral:} tentukan apakah reward penerima diberikan saat daftar atau setelah sesi pertama selesai. Notulen juga menyebut "book purchase" sebagai trigger; booking berbayar dan sesi selesai adalah dua kejadian berbeda. Cegah self-referral, kode ganda dan reward berulang; tetapkan dampak cancel/\allowbreak{}refund serta prioritas kode teman vs KOL.
+\item \textbf{Kode KOL:} definisikan batas harian untuk redemption atau konversi, zona waktu, tanggal akhir, nominal imbalan dan laporan settlement. Jangan samakan atribusi pembelian dengan payout KOL otomatis.
+\item \textbf{Migrasi konten:} inventarisasi konten, file, bahasa, URL dan relasi; tentukan role editor, preview/\allowbreak{}publish, backup dan rollback. Matikan ketergantungan Sanity setelah hasil migrasi diverifikasi. Agenda multi-hari yang muncul setiap hari belum tentu duplikasi record.
+\item \textbf{Google sign-in:} uji akun baru/\allowbreak{}lama, consent screen, callback dan status email. Perbaikan mengikuti penyebab yang terbukti.
+\end{itemize}
+
+\section*{3. Perubahan harga, honor dan reward}
+
+\textbf{Status angka:} "sekarang" di bawah adalah seed/\allowbreak{}default source, bukan harga produksi yang sudah diverifikasi. "Usulan baru" berasal dari PRD awal kecuali disebut dari meeting. Meeting meminta kalibrasi ulang terkait PPN, tetapi belum menetapkan harga penggantinya; angka usulan ini perlu persetujuan sebelum diterapkan. PPN diserap dalam harga, bukan otomatis ditambahkan sebagai biaya checkout.
+
+\subsection*{Paket Marks: sekarang  menjadi  usulan baru}
+
+{\small
+\begin{longtable}{L{25.40mm}L{44.45mm}L{44.45mm}L{44.45mm}}
+\hline
+\textbf{Paket} & \textbf{Sekarang (seed repo)} & \textbf{Usulan baru (PRD awal)} & \textbf{Perubahan harga paket} \\ \hline
+\endfirsthead
+\hline
+\textbf{Paket} & \textbf{Sekarang (seed repo)} & \textbf{Usulan baru (PRD awal)} & \textbf{Perubahan harga paket} \\ \hline
+\endhead
+Starter & 50 Marks · Rp312.500 & 50 Marks · Rp337.500 & +Rp25.000; jumlah Marks sama \\ \hline
+Learner & 120 Marks · Rp690.000 & 150 Marks · Rp937.500 & +Rp247.500; +30 Marks \\ \hline
+Explorer & 200 Marks · Rp1.070.000 & 250 Marks · Rp1.462.500 & +Rp392.500; +50 Marks \\ \hline
+Pioneer & 400 Marks · Rp2.000.000 & 500 Marks · Rp2.750.000 & +Rp750.000; +100 Marks \\ \hline
+\end{longtable}
+}
+
+Biaya per Mark pada paket tersebut berubah dari Rp6.250/\allowbreak{}Rp5.750/\allowbreak{}Rp5.350/\allowbreak{}Rp5.000 menjadi Rp6.750/\allowbreak{}Rp6.250/\allowbreak{}Rp5.850/\allowbreak{}Rp5.500. Kenaikan harga paket besar juga mencakup kenaikan jumlah Marks, bukan perbandingan kuantitas yang sama. Saldo Marks yang sudah dimiliki tidak otomatis dikurangi saat harga paket berubah.
+
+
+\newpage
+\subsection*{Booking dan honor tutor: usulan rate card}
+
+Sekarang tarif mengikuti profil tutor dan konfigurasi global; tidak ada satu harga lama per kompetisi untuk dibandingkan. Default tambahan honor per siswa saat ini Rp30.000 online/\allowbreak{}Rp40.000 offline; default nilai internal Marks Rp5.000 bukan harga beli seluruh paket.
+
+Usulan baru untuk sesi online 90 menit:
+
+{\small
+\begin{longtable}{L{25.40mm}L{44.45mm}L{44.45mm}L{44.45mm}}
+\hline
+\textbf{Kompetisi} & \textbf{Harga solo} & \textbf{Honor tutor, 1 siswa} & \textbf{Tambahan honor per siswa} \\ \hline
+\endfirsthead
+\hline
+\textbf{Kompetisi} & \textbf{Harga solo} & \textbf{Honor tutor, 1 siswa} & \textbf{Tambahan honor per siswa} \\ \hline
+\endhead
+Model UN /\allowbreak{} World Scholar's Cup & 50 Marks & Rp200.000 & Rp25.000 \\ \hline
+Debate /\allowbreak{} Olympiad & 44 Marks & Rp175.000 & Rp25.000 \\ \hline
+Essay \& Writing /\allowbreak{} Business /\allowbreak{} Public Speaking & 38 Marks & Rp150.000 & Rp20.000 \\ \hline
+\end{longtable}
+}
+
+Harga per siswa untuk grup 1-6 orang = harga solo  x  1,00/\allowbreak{}0,80/\allowbreak{}0,64/\allowbreak{}0,52/\allowbreak{}0,46/\allowbreak{}0,42, dibulatkan ke Mark terdekat. Contoh MUN: 50/\allowbreak{}40/\allowbreak{}32/\allowbreak{}26/\allowbreak{}23/\allowbreak{}21 Marks per siswa. Offline menambah 20 Marks per siswa; uplift honor tutor offline belum diputuskan. Honor mengikuti jumlah siswa saat konfirmasi, bukan jumlah yang hadir. Seluruh nilai ditentukan admin; tambahan honor Rp20.000/\allowbreak{}Rp25.000/\allowbreak{}Rp30.000 masih pilihan yang perlu dikunci.
+
+\subsection*{Exact top-up: usulan yang masih diriset}
+
+Top-up membeli kekurangan saldo saja. Kurva PRD awal: di bawah 50 Marks Rp7.000/\allowbreak{}Mark dengan total maksimum Rp337.500; 50-149 memakai Rp6.750 dikurangi Rp5 untuk setiap Mark di atas 50; 150-249 memakai Rp6.250 dikurangi Rp4 untuk setiap Mark di atas 150; 250-499 memakai Rp5.850 dikurangi Rp1,40 untuk setiap Mark di atas 250; mulai 500 memakai Rp5.500/\allowbreak{}Mark. Total = jumlah Marks  x  tarif, dibulatkan ke rupiah terdekat. Contoh: 25 Marks Rp175.000, 49 Marks Rp337.500. Belum menjadi fitur yang dipastikan setelah meeting.
+
+\subsection*{Cohort, payout dan bonus}
+
+{\small
+\begin{longtable}{L{30.70mm}L{56.55mm}L{74.32mm}}
+\hline
+\textbf{Item} & \textbf{Usulan angka /\allowbreak{} perubahan} & \textbf{Status} \\ \hline
+\endfirsthead
+\hline
+\textbf{Item} & \textbf{Usulan angka /\allowbreak{} perubahan} & \textbf{Status} \\ \hline
+\endhead
+Cohort satu pertemuan & 25 Marks; Rp175.000 jika top-up dari saldo kosong & PRD awal; perlu konfirmasi \\ \hline
+Cohort full 12 pertemuan & 240 Marks; Rp1.413.600 jika top-up dari saldo kosong & PRD awal; lebih murah per sesi \\ \hline
+Cohort dua termin & 132 + 132 Marks; Rp836.880 per termin jika masing-masing top-up dari saldo kosong & Referensi awal; meeting meminta termin fleksibel \\ \hline
+Honor cohort & Rp400.000 per sesi, tetap terlepas jumlah siswa & PRD awal; perlu konfirmasi \\ \hline
+Masterclass & 5 Marks; honor tutor Rp300.000 & Angka sementara PRD awal \\ \hline
+Payout pajak aktif & Potongan 2,5\% atau 3\% dari bruto, lalu biaya transfer & Follow-up meeting; syarat tarif/\allowbreak{}mode belum final \\ \hline
+Contoh payout Rp400.000 bruto, non-BCA & Tanpa potongan pajak: Rp397.500; tarif 2,5\%: Rp387.500; tarif 3\%: Rp385.500 & Ilustrasi perhitungan, bukan persetujuan mode bebas pajak \\ \hline
+Referral teman & Penerima 25 Marks; pemberi 15 Marks (PRD awal menyebut 10 untuk pemberi) & Usulan meeting terbaru; nominal dan trigger perlu dikunci \\ \hline
+Welcome Marks terpisah & 25 Marks, berlaku 30 hari & PRD awal; pastikan apakah ditumpuk dengan referral \\ \hline
+Imbalan KOL & Belum ada nominal & Disepakati per kampanye \\ \hline
+\end{longtable}
+}
+
+Default cohort awal: 12  x  90 menit, kapasitas 12, minimum 4. Contoh 100/\allowbreak{}50/\allowbreak{}65 dalam notulen bukan daftar harga final; admin perlu menentukan harga full dan setiap termin secara terpisah. Nilai rupiah cohort bergantung pada saldo dan cara membeli Marks.
+
+Masterclass, welcome Marks terpisah, recap PDF, waitlist dan cohort privat ada di PRD awal tetapi tidak diputuskan kembali di meeting. Masukkan sebagai scope lanjutan setelah dikonfirmasi; jangan otomatis menganggapnya bagian target 1 November.
+
+
+\newpage
+\section*{4. Usulan urutan delivery dan tanda selesai}
+
+\begin{enumerate}
+\item \textbf{Kunci keputusan:} harga/\allowbreak{}honor/\allowbreak{}paket, mode pajak, termin/\allowbreak{}refund cohort, trigger referral, scope CMS dan prioritas target November.
+\item \textbf{Fondasi ekonomi dan payout:} admin menentukan honor; transaksi lama tetap konsisten; payout menunjukkan potongan dan riwayat yang dapat diaudit.
+\item \textbf{Cohort:} admin publish kurikulum/\allowbreak{}jadwal/\allowbreak{}tutor; siswa membeli kursi tanpa overselling; pembayaran, akses, perubahan tutor, laporan dan refund sesuai aturan yang disepakati.
+\item \textbf{Referral/\allowbreak{}KOL dan CMS:} reward sekali per kejadian yang valid, limit kampanye bekerja, konten dapat dikelola dari app tanpa kehilangan file/\allowbreak{}tautan.
+\end{enumerate}
+
+Perbaikan website dan investigasi Google dapat berjalan terpisah. Detail teknis pelaksanaan: perluasan schema/\allowbreak{}API/\allowbreak{}UI, ledger kelas, snapshot finansial, scheduler termin/\allowbreak{}notifikasi, idempotensi pembayaran/\allowbreak{}reward, kontrol akses dan audit log. Wallet, gateway, Meet dan notifikasi yang ada dipakai ulang. Estimasi jadwal menyusul setelah keputusan scope dikunci.
+
+\section*{Acuan dan batas pemeriksaan}
+Notulen Cogito Academy Meeting Notes dan PRD Central Economy and Cohort Classes; source aplikasi commit 14dc4486 serta checkout lokal website utama. Harga produksi dan status integrasi belum diuji langsung. Dokumen ini tidak mengubah perilaku aplikasi.
+\end{document}

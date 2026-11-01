@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   getBookingPriceSummary,
   getTotalHonorariumIdr,
+  getPerSessionHonorariumIdr,
+  getSeriesSessionCount,
 } from "./booking-pricing";
 
 describe("getBookingPriceSummary", () => {
@@ -42,80 +44,65 @@ describe("getBookingPriceSummary", () => {
   });
 });
 
-describe("getTotalHonorariumIdr", () => {
-  test("returns the per-session honorarium for a single booking", () => {
+const snapshot = {
+  engine: "v3" as const,
+  perStudentMarks: 45,
+  tutorHonorariumIdr: 175_000,
+};
+
+describe("V3 honorarium summaries", () => {
+  test("reads the pinned IDR fee, never a Marks conversion", () => {
     expect(
       getTotalHonorariumIdr({
         type: "solo",
         originalMarks: 45,
-        priceSnapshot: {
-          perStudent: 45,
-          tutorShare: 36,
-          tutorHonorariumIdr: 175_000,
-        },
+        priceSnapshot: snapshot,
       }),
     ).toBe(175_000);
   });
-
-  test("sums session snapshots for a series booking", () => {
+  test("sums the actual snapshots of all loaded sessions", () => {
     expect(
       getTotalHonorariumIdr(
-        {
-          type: "series",
-          originalMarks: 180,
-          priceSnapshot: {
-            perStudent: 45,
-            tutorShare: 36,
-            tutorHonorariumIdr: 175_000,
-          },
-        },
+        { type: "series", originalMarks: 180, priceSnapshot: snapshot },
         [
-          { priceSnapshot: { tutorHonorariumIdr: 175_000, tutorShare: 36 } },
-          { priceSnapshot: { tutorHonorariumIdr: 175_000, tutorShare: 36 } },
-          { priceSnapshot: { tutorHonorariumIdr: 175_000, tutorShare: 36 } },
-          { priceSnapshot: { tutorHonorariumIdr: 175_000, tutorShare: 36 } },
+          { priceSnapshot: snapshot },
+          { priceSnapshot: { ...snapshot, tutorHonorariumIdr: 200_000 } },
         ],
       ),
-    ).toBe(700_000);
+    ).toBe(375_000);
   });
-
-  test("falls back to tutorShare * 7000 for legacy session snapshots", () => {
+  test("does not guess a series total or count from original Marks after repricing", () => {
+    const booking = {
+      type: "series",
+      originalMarks: 180,
+      priceSnapshot: { ...snapshot, perStudentMarks: 25 },
+    };
+    expect(getTotalHonorariumIdr(booking)).toBeNull();
+    expect(getSeriesSessionCount(booking)).toBeNull();
+    expect(
+      getSeriesSessionCount(booking, [
+        { priceSnapshot: snapshot },
+        { priceSnapshot: snapshot },
+      ]),
+    ).toBe(2);
+  });
+  test("missing, old and invalid snapshots are unavailable, not Rp0", () => {
+    for (const value of [
+      null,
+      { tutorHonorariumIdr: 175_000 },
+      { ...snapshot, tutorHonorariumIdr: -1 },
+      { ...snapshot, tutorHonorariumIdr: 1.5 },
+    ]) {
+      expect(getPerSessionHonorariumIdr(value)).toBeNull();
+    }
+    expect(
+      getPerSessionHonorariumIdr({ ...snapshot, tutorHonorariumIdr: 0 }),
+    ).toBe(0);
     expect(
       getTotalHonorariumIdr(
-        {
-          type: "series",
-          originalMarks: 90,
-          priceSnapshot: { perStudent: 45, tutorShare: 36 },
-        },
-        [
-          { priceSnapshot: { tutorShare: 36 } },
-          { priceSnapshot: { tutorShare: 36 } },
-        ],
+        { type: "series", originalMarks: 90, priceSnapshot: snapshot },
+        [{ priceSnapshot: snapshot }, { priceSnapshot: null }],
       ),
-    ).toBe(36 * 7_000 * 2);
-  });
-
-  test("falls back to booking snapshot times derived session count when sessions are unavailable", () => {
-    expect(
-      getTotalHonorariumIdr({
-        type: "series",
-        originalMarks: 180,
-        priceSnapshot: {
-          perStudent: 45,
-          tutorShare: 36,
-          tutorHonorariumIdr: 175_000,
-        },
-      }),
-    ).toBe(175_000 * 4);
-  });
-
-  test("falls back to legacy booking snapshot times derived session count", () => {
-    expect(
-      getTotalHonorariumIdr({
-        type: "series",
-        originalMarks: 135,
-        priceSnapshot: { perStudent: 45, tutorShare: 30 },
-      }),
-    ).toBe(30 * 7_000 * 3);
+    ).toBeNull();
   });
 });

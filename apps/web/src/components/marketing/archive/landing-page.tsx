@@ -333,7 +333,7 @@ export function LandingPage() {
               Achievements become part of the story.
             </Heading>
             <Text className="mt-4 text-muted">
-              Approved student outcomes are showcased here — competition wins,
+              Approved student outcomes are showcased here: competition wins,
               certificates, and leadership milestones that went through Cogito's
               review process.
             </Text>

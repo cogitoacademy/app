@@ -1,5 +1,13 @@
 "use client";
 
+import Loader from "@/components/loader";
+
+import { percentToBasisPoints } from "./tax-rate-input";
+
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -8,7 +16,6 @@ import {
   Card,
   CardBody,
   CardHeader,
-  CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -21,8 +28,15 @@ import {
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import {
   Select,
   SelectItem,
@@ -31,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
-import { Text } from "@cogito-app/ui/components/selia/text";
+import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   Table,
@@ -49,39 +63,50 @@ import {
   IconRefresh,
   IconX,
 } from "@tabler/icons-react";
-
-import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
+import {
+  formatPayoutCoverageLabel,
+  formatTaxRateSnapshot,
+} from "@/lib/tutor-payout-presentation";
 import { client, orpc } from "@/utils/orpc";
+import { buildTutorPayoutCsv } from "./tutor-payout-csv";
 
-const NON_BCA_TRANSFER_FEE_IDR = 2_500;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const QUICK_RANGE_DAYS = [7, 30, 90] as const;
-
 type PayoutReportRow = Awaited<
   ReturnType<typeof client.admin.getTutorPayoutReport>
 >[number];
-type StatusFilter = "pending" | "paid" | "all";
-type SortOption = "needs_payment" | "amount_desc" | "name" | "latest";
+type PayoutSessionItem = Awaited<
+  ReturnType<typeof client.admin.getPendingTutorPayouts>
+>["items"][number];
+type PayoutPreview = Awaited<
+  ReturnType<typeof client.admin.previewTutorPayout>
+>;
+type StatusFilter = "pending" | "prepared" | "paid" | "void" | "all";
+type SortOption = "priority" | "amount" | "name" | "latest";
 const EMPTY_PAYOUT_ROWS: PayoutReportRow[] = [];
 
-function formatIdr(value: number) {
-  return "Rp" + value.toLocaleString("id-ID");
+function formatIdr(value: number | null) {
+  return value === null
+    ? "Not available"
+    : `Rp${value.toLocaleString("id-ID")}`;
 }
 
-function formatDate(value: Date | string | null) {
-  if (!value) return "—";
+function asDate(value: Date | string | null) {
+  if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateTime(value: Date | string | null) {
+  const date = asDate(value);
+  if (!date) return "Not recorded";
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
+    timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(date);
-}
-
-function formatDateKey(value: string) {
-  return formatDate(new Date(value + "T00:00:00+07:00"));
 }
 
 function toWibDateKey(value: Date) {
@@ -94,120 +119,99 @@ function toWibDateKey(value: Date) {
 }
 
 function shiftDateKey(value: string, days: number) {
-  const date = new Date(value + "T00:00:00Z");
+  const date = new Date(`${value}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
 function toWibStartIso(value: string) {
-  return new Date(value + "T00:00:00+07:00").toISOString();
+  return new Date(`${value}T00:00:00+07:00`).toISOString();
 }
 
 function toWibEndIso(value: string) {
-  return new Date(value + "T23:59:59.999+07:00").toISOString();
+  return new Date(`${value}T23:59:59.999+07:00`).toISOString();
 }
 
 function getDefaultRange() {
   const to = toWibDateKey(new Date());
-  return { from: shiftDateKey(to, -29), to };
+  return { from: `${to.slice(0, 7)}-01`, to };
 }
 
-function getTransferFee(profileBankName: string | null, gross: number) {
-  const bankName = profileBankName?.trim();
-  return gross > 0 && bankName?.toUpperCase() !== "BCA"
-    ? NON_BCA_TRANSFER_FEE_IDR
-    : 0;
+function getWibDateTimeInput() {
+  return new Date(Date.now() + WIB_OFFSET_MS).toISOString().slice(0, 16);
 }
 
-function statusLabel(row: PayoutReportRow) {
-  return row.status === "paid" ? "Transferred" : "Not transferred";
+function toWibTimestamp(value: string) {
+  return new Date(`${value}:00+07:00`).toISOString();
 }
 
-function statusVariant(row: PayoutReportRow) {
-  return row.status === "paid" ? "success" : "warning";
+function statusLabel(status: PayoutReportRow["status"]) {
+  switch (status) {
+    case "paid":
+      return "Recorded transfer";
+    case "prepared":
+      return "Prepared";
+    case "void":
+      return "Void / reconcile";
+    default:
+      return "Unpaid sessions";
+  }
+}
+
+function statusVariant(status: PayoutReportRow["status"]) {
+  switch (status) {
+    case "paid":
+      return "success" as const;
+    case "prepared":
+      return "info" as const;
+    case "void":
+      return "danger" as const;
+    default:
+      return "warning" as const;
+  }
 }
 
 function payoutDateSortValue(value: Date | string | null) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const timestamp = new Date(value).getTime();
-  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+  const date = asDate(value);
+  return date ? date.getTime() : Number.NEGATIVE_INFINITY;
 }
 
-function payoutPaymentPriority(row: PayoutReportRow) {
-  return row.status === "pending" ? (row.payoutAccountComplete ? 0 : 1) : 2;
+function payoutPriority(row: PayoutReportRow) {
+  if (row.status === "pending") {
+    if (!row.payoutAccountComplete || !row.taxProfileComplete) return 0;
+    return 1;
+  }
+  if (row.status === "prepared") return 2;
+  if (row.status === "void" && row.reconciliationStatus === "required") {
+    return 3;
+  }
+  return 4;
 }
 
-function csvCell(value: string | number | null) {
-  const text = value === null ? "" : String(value);
-  return '"' + text.replaceAll('"', '""') + '"';
+function formatRate(rateBps: number | null) {
+  return formatTaxRateSnapshot(rateBps);
 }
 
-function buildPayoutCsv(rows: PayoutReportRow[]) {
-  const headers = [
-    "Tutor name",
-    "Bank",
-    "Account number",
-    "Account holder",
-    "Gross honorarium",
-    "Deduction",
-    "Transfer amount",
-    "Transfer status",
-    "Transfer date",
-  ];
-  const body = rows.map((row) => [
-    row.tutorName,
-    row.bankName,
-    row.bankAccountNumber,
-    row.bankAccountHolderName,
-    row.grossHonorariumIdr,
-    row.transferFeeIdr,
-    row.netHonorariumIdr,
-    statusLabel(row),
-    row.paidAt ? formatDate(row.paidAt) : null,
-  ]);
-  return (
-    "\uFEFF" +
-    [headers, ...body].map((row) => row.map(csvCell).join(",")).join("\r\n")
-  );
-}
-
-function downloadPayoutCsv(rows: PayoutReportRow[], from: string, to: string) {
-  const blob = new Blob([buildPayoutCsv(rows)], {
-    type: "text/csv;charset=utf-8;",
-  });
+function csvDownload(rows: PayoutReportRow[], from: string, to: string) {
+  const csv = buildTutorPayoutCsv(rows, from, to);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "tutor-payouts-" + from + "-to-" + to + ".csv";
+  link.download = `tutor-payouts-${from}-to-${to}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function PayoutDetail({
-  label,
-  value,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
+function PayoutDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <Text className="text-xs uppercase tracking-wide text-dimmed">
         {label}
       </Text>
-      <Text
-        className={
-          valueClassName
-            ? "mt-1 break-words font-medium " + valueClassName
-            : "mt-1 break-words font-medium"
-        }
-      >
-        {value}
-      </Text>
+      <Text className="mt-1 break-words font-medium">{value}</Text>
     </div>
   );
 }
@@ -219,96 +223,246 @@ export function AdminTutorPayoutsPage() {
   const [draftTo, setDraftTo] = useState(defaultRange.to);
   const [appliedRange, setAppliedRange] = useState(defaultRange);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
-  const [sortOption, setSortOption] = useState<SortOption>("needs_payment");
+  const [sortOption, setSortOption] = useState<SortOption>("priority");
   const [selectedRow, setSelectedRow] = useState<PayoutReportRow | null>(null);
-  const [confirmPaymentOpen, setConfirmPaymentOpen] = useState(false);
+  const [selectedSourceKeys, setSelectedSourceKeys] = useState<string[]>([]);
+  const [paidAt, setPaidAt] = useState(getWibDateTimeInput);
+  const [actualAmount, setActualAmount] = useState("");
+  const [reference, setReference] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
+  const [voidReason, setVoidReason] = useState("");
+  const [reconciliationReason, setReconciliationReason] = useState("");
+  const [overrideRateBps, setOverrideRateBps] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [taxConfigReason, setTaxConfigReason] = useState("");
+  const [taxRateDraftDirty, setTaxRateDraftDirty] = useState(false);
+  const [taxRateDraft, setTaxRateDraft] = useState({
+    nikNpwpRateBps: "250",
+    nikOnlyRateBps: "300",
+    missingRateBps: "300",
+  });
 
-  const reportQuery = useQuery({
-    ...orpc.admin.getTutorPayoutReport.queryOptions({
+  const reportQuery = useQuery(
+    orpc.admin.getTutorPayoutReport.queryOptions({
       input: {
         dateFrom: toWibStartIso(appliedRange.from),
         dateTo: toWibEndIso(appliedRange.to),
       },
     }),
-  });
+  );
+  const taxConfigQuery = useQuery(orpc.admin.getTutorTaxConfig.queryOptions());
+  const taxRateDraftValues =
+    taxRateDraftDirty || !taxConfigQuery.data
+      ? taxRateDraft
+      : {
+          nikNpwpRateBps: String(taxConfigQuery.data.nikNpwpRateBps),
+          nikOnlyRateBps: String(taxConfigQuery.data.nikOnlyRateBps),
+          missingRateBps: String(taxConfigQuery.data.missingRateBps),
+        };
   const reportRows = reportQuery.data ?? EMPTY_PAYOUT_ROWS;
   const visibleRows = useMemo(() => {
     const filtered = reportRows.filter(
       (row) => statusFilter === "all" || row.status === statusFilter,
     );
     return filtered.toSorted((a, b) => {
-      if (sortOption === "needs_payment") {
-        const priorityDifference =
-          payoutPaymentPriority(a) - payoutPaymentPriority(b);
-        if (priorityDifference !== 0) return priorityDifference;
-        return b.netHonorariumIdr - a.netHonorariumIdr;
+      if (sortOption === "priority") {
+        const difference = payoutPriority(a) - payoutPriority(b);
+        if (difference !== 0) return difference;
+        return (b.netHonorariumIdr ?? -1) - (a.netHonorariumIdr ?? -1);
       }
-      if (sortOption === "amount_desc") {
-        return b.netHonorariumIdr - a.netHonorariumIdr;
+      if (sortOption === "amount") {
+        return (b.netHonorariumIdr ?? -1) - (a.netHonorariumIdr ?? -1);
       }
-      if (sortOption === "name") {
+      if (sortOption === "name")
         return a.tutorName.localeCompare(b.tutorName, "id");
-      }
-      return payoutDateSortValue(b.paidAt) - payoutDateSortValue(a.paidAt);
+      return (
+        payoutDateSortValue(b.paidAt ?? b.voidedAt) -
+        payoutDateSortValue(a.paidAt ?? a.voidedAt)
+      );
     });
   }, [reportRows, sortOption, statusFilter]);
 
-  const selectedPendingQuery = useQuery({
+  const pendingQuery = useQuery({
     ...orpc.admin.getPendingTutorPayouts.queryOptions({
       input: { tutorId: selectedRow?.tutorId ?? "" },
     }),
     enabled: selectedRow?.status === "pending" && Boolean(selectedRow.tutorId),
   });
+  const allocationQuery = useQuery({
+    ...orpc.admin.getTutorPayoutAllocations.queryOptions({
+      input: { payoutId: selectedRow?.id ?? "" },
+    }),
+    enabled: Boolean(selectedRow && selectedRow.status !== "pending"),
+  });
+  const previewQuery = useQuery({
+    ...orpc.admin.previewTutorPayout.queryOptions({
+      input: {
+        tutorId: selectedRow?.tutorId ?? "",
+        sourceKeys: selectedSourceKeys,
+      },
+    }),
+    enabled: selectedRow?.status === "pending" && selectedSourceKeys.length > 0,
+  });
+  const selectedItems: PayoutSessionItem[] =
+    selectedRow?.status === "pending"
+      ? (pendingQuery.data?.items ?? [])
+      : ((allocationQuery.data?.items ?? []) as PayoutSessionItem[]);
 
-  const markPayoutMutation = useMutation(
-    orpc.admin.markTutorPayoutPaid.mutationOptions({
+  function invalidatePayouts() {
+    void queryClient.invalidateQueries({
+      queryKey: orpc.admin.getTutorPayoutReport.key(),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.admin.getPendingTutorPayouts.key(),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.admin.getTutorPayoutAllocations.key(),
+    });
+  }
+
+  const previewMutation = useMutation(
+    orpc.admin.prepareTutorPayout.mutationOptions({
       onSuccess: () => {
-        setConfirmPaymentOpen(false);
         setSelectedRow(null);
-        void queryClient.invalidateQueries({
-          queryKey: orpc.admin.getTutorPayoutReport.key(),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: orpc.admin.getPendingTutorPayouts.key(),
-        });
+        setSelectedSourceKeys([]);
+        invalidatePayouts();
         toastManager.add({
-          title: "Tutor payout marked as paid",
-          description: "The payout report has been refreshed.",
+          title: "Payout prepared",
+          description:
+            "Perform the transfer through your bank, then record its exact amount and date.",
           type: "success",
         });
       },
-      onError: (error: unknown) => {
+      onError: (error: unknown) =>
         toastManager.add({
-          title: "Tutor payout could not be marked paid",
+          title: "Payout could not be prepared",
           description: getUserFacingError(error),
           type: "error",
+        }),
+    }),
+  );
+  const recordMutation = useMutation(
+    orpc.admin.recordTutorPayoutTransfer.mutationOptions({
+      onSuccess: () => {
+        setSelectedRow(null);
+        setActualAmount("");
+        setReference("");
+        setProofUrl("");
+        invalidatePayouts();
+        toastManager.add({
+          title: "External transfer recorded",
+          description:
+            "The tutor has been notified and the payout history is saved.",
+          type: "success",
         });
       },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Transfer could not be recorded",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const voidMutation = useMutation(
+    orpc.admin.voidTutorPayout.mutationOptions({
+      onSuccess: () => {
+        setSelectedRow(null);
+        setVoidReason("");
+        invalidatePayouts();
+        toastManager.add({
+          title: "Payout voided",
+          description:
+            "The history and transfer evidence remain. Any external transfer must be reconciled before repayment.",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Payout could not be voided",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const reconciliationMutation = useMutation(
+    orpc.admin.resolveTutorPayoutReconciliation.mutationOptions({
+      onSuccess: () => {
+        setSelectedRow(null);
+        setReconciliationReason("");
+        invalidatePayouts();
+        toastManager.add({
+          title: "Reconciliation recorded",
+          description: "The audit history now records the resolution.",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Reconciliation could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const taxConfigMutation = useMutation(
+    orpc.admin.updateTutorTaxConfig.mutationOptions({
+      onSuccess: (result) => {
+        queryClient.setQueryData(orpc.admin.getTutorTaxConfig.key(), result);
+        void queryClient.invalidateQueries({
+          queryKey: orpc.admin.getTutorTaxConfig.key(),
+        });
+        setTaxRateDraft({
+          nikNpwpRateBps: String(result.nikNpwpRateBps),
+          nikOnlyRateBps: String(result.nikOnlyRateBps),
+          missingRateBps: String(result.missingRateBps),
+        });
+        setTaxRateDraftDirty(false);
+        setTaxConfigReason("");
+        toastManager.add({
+          title: "Default payout rates updated",
+          description: "The change is audited and affects future previews.",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Default rates could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const overrideMutation = useMutation(
+    orpc.admin.setTutorTaxRateOverride.mutationOptions({
+      onSuccess: () => {
+        setSelectedRow(null);
+        setOverrideReason("");
+        setOverrideRateBps("");
+        invalidatePayouts();
+        toastManager.add({
+          title: "Tutor rate override saved",
+          description:
+            "The override is audited and future previews will use it.",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Tutor rate override could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
     }),
   );
 
-  const selectedCurrentGross =
-    selectedRow?.status === "pending" && selectedPendingQuery.data
-      ? selectedPendingQuery.data.tutorPayoutIdr
-      : (selectedRow?.grossHonorariumIdr ?? 0);
-  const selectedTransferFee = selectedRow
-    ? selectedRow.status === "paid"
-      ? selectedRow.transferFeeIdr
-      : getTransferFee(selectedRow.bankName, selectedCurrentGross)
-    : 0;
-  const selectedNetHonorarium = Math.max(
-    0,
-    selectedCurrentGross - selectedTransferFee,
-  );
-  const canMarkSelectedPayout = Boolean(
-    selectedRow?.status === "pending" &&
-    !selectedPendingQuery.isPending &&
-    !selectedPendingQuery.isError &&
-    selectedPendingQuery.data &&
-    selectedCurrentGross > 0 &&
-    selectedRow.payoutAccountComplete,
-  );
-
+  const isSaving =
+    previewMutation.isPending ||
+    recordMutation.isPending ||
+    voidMutation.isPending ||
+    reconciliationMutation.isPending ||
+    overrideMutation.isPending ||
+    taxConfigMutation.isPending;
   const dateRangeError =
     !draftFrom || !draftTo
       ? "Select both a start and end date."
@@ -316,304 +470,448 @@ export function AdminTutorPayoutsPage() {
         ? "The start date cannot be after the end date."
         : null;
 
-  function applyDateRange() {
-    if (dateRangeError) return;
-    setAppliedRange({ from: draftFrom, to: draftTo });
+  function openRow(row: PayoutReportRow) {
+    setSelectedRow(row);
+    setSelectedSourceKeys([]);
+    setPaidAt(getWibDateTimeInput());
+    setActualAmount(
+      row.status === "prepared" ? String(row.netHonorariumIdr ?? "") : "",
+    );
+    setReference(row.actualReference ?? "");
+    setProofUrl("");
+    setVoidReason("");
+    setReconciliationReason("");
+    setOverrideRateBps("");
+  }
+
+  function closeDetails() {
+    if (isSaving) return;
     setSelectedRow(null);
-  }
-
-  function setQuickRange(days: number) {
-    const to = toWibDateKey(new Date());
-    const from = shiftDateKey(to, -(days - 1));
-    setDraftFrom(from);
-    setDraftTo(to);
-    setAppliedRange({ from, to });
-    setSelectedRow(null);
-  }
-
-  function refreshPayouts() {
-    void reportQuery.refetch();
-  }
-
-  function closePayoutDetails() {
-    if (confirmPaymentOpen || markPayoutMutation.isPending) return;
-    setSelectedRow(null);
-  }
-
-  function markSelectedPayoutPaid() {
-    if (!selectedRow || !canMarkSelectedPayout) return;
-    markPayoutMutation.mutate({ tutorId: selectedRow.tutorId });
   }
 
   function handleDownload() {
-    if (visibleRows.length === 0) return;
-    downloadPayoutCsv(visibleRows, appliedRange.from, appliedRange.to);
+    csvDownload(reportRows, appliedRange.from, appliedRange.to);
     toastManager.add({
-      title: "Payout sheet downloaded",
+      title: "Monthly payout CSV downloaded",
       description:
-        visibleRows.length + " row(s) exported based on the active filters.",
+        "Paid transfers use their actual Asia/Jakarta transfer date. Void and reconciliation rows are kept in a separate section.",
       type: "success",
     });
   }
+
+  function prepareSelectedPayout(preview: PayoutPreview) {
+    if (!selectedRow || selectedRow.status !== "pending") return;
+    previewMutation.mutate({
+      tutorId: selectedRow.tutorId,
+      sourceKeys: preview.sourceKeys,
+      previewVersion: preview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+  }
+
+  function recordPreparedTransfer() {
+    if (
+      !selectedRow ||
+      selectedRow.status !== "prepared" ||
+      !selectedRow.previewVersion ||
+      !paidAt ||
+      !actualAmount
+    ) {
+      return;
+    }
+    const enteredAmount = Number(actualAmount);
+    if (
+      !/^\d+$/.test(actualAmount) ||
+      !Number.isSafeInteger(enteredAmount) ||
+      enteredAmount !== selectedRow.netHonorariumIdr
+    ) {
+      toastManager.add({
+        title: "Transfer amount does not match",
+        description: `Enter the exact saved net amount of ${formatIdr(selectedRow.netHonorariumIdr)}.`,
+        type: "error",
+      });
+      return;
+    }
+    recordMutation.mutate({
+      payoutId: selectedRow.id,
+      previewVersion: selectedRow.previewVersion,
+      actualAmountIdr: enteredAmount,
+      paidAt: toWibTimestamp(paidAt),
+      reference: reference.trim() || undefined,
+      proofUrl: proofUrl.trim() || undefined,
+    });
+  }
+
+  const selectedPreview = previewQuery.data;
+  const canPrepare = Boolean(
+    selectedPreview &&
+    selectedSourceKeys.length > 0 &&
+    selectedRow?.payoutAccountComplete &&
+    selectedPreview.legalName &&
+    selectedPreview.nik &&
+    selectedPreview.netHonorariumIdr >= 0,
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Heading level={1} size="md">
-            Tutor Payouts
+            Tutor payouts
           </Heading>
-          <Text className="mt-1 max-w-3xl text-muted">
-            Track outstanding honorarium, transfer history, and tutor bank
-            details in one place.
+          <Text className="max-w-full text-muted">
+            Select unpaid sessions, prepare a fixed preview, perform the bank
+            transfer separately, then record its actual amount and evidence.
           </Text>
         </div>
         <Button
           size="sm"
           variant="secondary"
           progress={reportQuery.isFetching}
-          onClick={refreshPayouts}
+          onClick={() => void reportQuery.refetch()}
         >
           <IconRefresh />
           Refresh
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div>
-            <CardTitle>Payout filters</CardTitle>
-            <Text className="mt-1 text-sm text-muted">
-              Refine the history period, transfer status, and sort order.
-            </Text>
-          </div>
-        </CardHeader>
-        <CardBody className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Field>
-              <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
-              <DatePicker
-                id="payout-report-from"
-                value={draftFrom}
-                onChange={setDraftFrom}
-                maxDate={draftTo}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
-              <DatePicker
-                id="payout-report-to"
-                value={draftTo}
-                onChange={setDraftTo}
-                minDate={draftFrom}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Transfer status</FieldLabel>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as StatusFilter)
+      <div className="xl:grid-cols-[1.4fr_2fr] xl:grid xl:gap-4">
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Default tax rates</CardTitle>
+              <Text className="mt-1 text-sm text-muted">
+                Choose the percentage deducted from tutor fees. Changes apply to
+                new payout calculations.
+              </Text>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(
+                [
+                  ["nikNpwpRateBps", "NIK + NPWP"],
+                  ["nikOnlyRateBps", "NIK only"],
+                  ["missingRateBps", "Missing identity"],
+                ] as const
+              ).map(([key, label]) => (
+                <Field key={key}>
+                  <FieldLabel htmlFor={`tax-rate-${key}`}>
+                    {label} (%)
+                  </FieldLabel>
+                  <SeliaNumberField
+                    id={`tax-rate-${key}`}
+                    allowOutOfRange
+                    format={{ useGrouping: false, maximumFractionDigits: 2 }}
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    smallStep={0.01}
+                    value={
+                      taxRateDraftValues[key] === ""
+                        ? null
+                        : Number(taxRateDraftValues[key]) / 100
+                    }
+                    onValueChange={(nextValue) => {
+                      const value =
+                        nextValue === null
+                          ? ""
+                          : String(percentToBasisPoints(nextValue));
+                      setTaxRateDraft((current) => ({
+                        ...(taxRateDraftDirty ? current : taxRateDraftValues),
+                        [key]: value,
+                      }));
+                      setTaxRateDraftDirty(true);
+                    }}
+                  />
+                  <FieldDescription>
+                    {taxRateDraftValues[key] === ""
+                      ? "Enter a percentage from 0% to 100%."
+                      : `Tax on ${formatIdr(400_000)} in tutor fees: ${formatIdr((400_000 * Number(taxRateDraftValues[key])) / 10_000)}.`}
+                  </FieldDescription>
+                </Field>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <Field className="min-w-64 flex-1">
+                <FieldLabel htmlFor="tax-config-reason">
+                  Change reason
+                </FieldLabel>
+                <Input
+                  id="tax-config-reason"
+                  maxLength={2000}
+                  value={taxConfigReason}
+                  onChange={(event) => setTaxConfigReason(event.target.value)}
+                  placeholder="Why are these defaults changing?"
+                />
+              </Field>
+              <Button
+                disabled={
+                  taxConfigMutation.isPending ||
+                  !taxConfigReason.trim() ||
+                  !taxConfigQuery.data ||
+                  Object.values(taxRateDraftValues).some(
+                    (value) => !/^\d+$/.test(value) || Number(value) > 10000,
+                  )
                 }
+                progress={taxConfigMutation.isPending}
+                onClick={() => {
+                  const config = taxConfigQuery.data;
+                  if (!config) return;
+                  taxConfigMutation.mutate({
+                    expectedVersion: config.version,
+                    nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
+                    nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
+                    missingRateBps: Number(taxRateDraftValues.missingRateBps),
+                    reason: taxConfigReason.trim(),
+                  });
+                }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="pending">Not transferred</SelectItem>
-                    <SelectItem value="paid">Transferred</SelectItem>
-                    <SelectItem value="all">All statuses</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel>Sort by</FieldLabel>
-              <Select
-                value={sortOption}
-                onValueChange={(value) => setSortOption(value as SortOption)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select sort order" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="needs_payment">
-                      Payment priority
-                    </SelectItem>
-                    <SelectItem value="amount_desc">Highest amount</SelectItem>
-                    <SelectItem value="name">Tutor name</SelectItem>
-                    <SelectItem value="latest">Latest transfer</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-          </div>
+                Save default rates
+              </Button>
+            </div>
+            {taxConfigQuery.isError ? (
+              <FieldError>Tax defaults could not be loaded.</FieldError>
+            ) : null}
+          </CardBody>
+        </Card>
 
-          <div className="border-t border-card-separator pt-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-2">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                  Quick ranges
-                </Text>
-                <div className="flex flex-wrap gap-2">
-                  {QUICK_RANGE_DAYS.map((days) => (
-                    <Button
-                      key={days}
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setQuickRange(days)}
-                    >
-                      {days} days
-                    </Button>
-                  ))}
-                </div>
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Payout filters</CardTitle>
+              <Text className="mt-1 text-sm text-muted">
+                Paid and void history follows the selected dates in
+                Asia/Jakarta. Current unpaid sessions remain visible.
+              </Text>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Field>
+                <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
+                <DatePicker
+                  id="payout-report-from"
+                  value={draftFrom}
+                  onChange={setDraftFrom}
+                  maxDate={draftTo}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
+                <DatePicker
+                  id="payout-report-to"
+                  value={draftTo}
+                  onChange={setDraftTo}
+                  minDate={draftFrom}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Status</FieldLabel>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) =>
+                    setStatusFilter(value as StatusFilter)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="pending">Unpaid sessions</SelectItem>
+                      <SelectItem value="prepared">Prepared</SelectItem>
+                      <SelectItem value="paid">Recorded transfer</SelectItem>
+                      <SelectItem value="void">Void / reconcile</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Sort by</FieldLabel>
+                <Select
+                  value={sortOption}
+                  onValueChange={(value) => setSortOption(value as SortOption)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sort order" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="priority">Action priority</SelectItem>
+                      <SelectItem value="amount">Highest net amount</SelectItem>
+                      <SelectItem value="name">Tutor name</SelectItem>
+                      <SelectItem value="latest">Latest transfer</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+            </div>
+            <div className="flex flex-wrap items-end justify-between gap-4 border-t border-card-separator pt-5">
+              <div className="flex flex-wrap gap-2">
+                {QUICK_RANGE_DAYS.map((days) => (
+                  <Button
+                    key={days}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const to = toWibDateKey(new Date());
+                      const from = shiftDateKey(to, -(days - 1));
+                      setDraftFrom(from);
+                      setDraftTo(to);
+                      setAppliedRange({ from, to });
+                    }}
+                  >
+                    {days} days
+                  </Button>
+                ))}
+                <Button
+                  disabled={Boolean(dateRangeError)}
+                  size="sm"
+                  onClick={() =>
+                    setAppliedRange({ from: draftFrom, to: draftTo })
+                  }
+                >
+                  Apply date range
+                </Button>
               </div>
               <Button
-                className="w-full shrink-0 sm:w-auto"
-                disabled={Boolean(dateRangeError)}
-                onClick={applyDateRange}
+                size="sm"
+                variant="tertiary"
+                onClick={handleDownload}
+                disabled={reportQuery.isPending || reportQuery.isError}
               >
-                Apply date range
+                <IconDownload />
+                Download monthly CSV
               </Button>
             </div>
             {dateRangeError ? (
-              <Text className="mt-4 text-sm text-danger">{dateRangeError}</Text>
-            ) : (
-              <Text className="mt-4 rounded-lg bg-item px-3 py-2 text-sm text-muted">
-                The date range filters completed transfers. Outstanding balances
-                are always shown.
-              </Text>
-            )}
-          </div>
-        </CardBody>
-      </Card>
+              <Text className="text-sm text-danger">{dateRangeError}</Text>
+            ) : null}
+          </CardBody>
+        </Card>
+      </div>
 
       <Card id="admin-tutor-payouts" className="scroll-mt-4">
         <CardHeader>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Tutor payout list</CardTitle>
-              <Badge variant="secondary">{visibleRows.length} records</Badge>
+              <CardTitle>Tutor payout records</CardTitle>
+              <Badge variant="secondary">{visibleRows.length} rows</Badge>
             </div>
             <Text className="mt-1 text-sm text-muted">
-              Period: {formatDateKey(appliedRange.from)} to{" "}
-              {formatDateKey(appliedRange.to)}
+              {appliedRange.from} to {appliedRange.to} · paid export uses actual
+              transfer date
             </Text>
           </div>
-          <CardHeaderAction>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={visibleRows.length === 0}
-              onClick={handleDownload}
-            >
-              <IconDownload />
-              Download CSV
-            </Button>
-          </CardHeaderAction>
         </CardHeader>
-        <CardBody aria-busy={reportQuery.isFetching} className="p-0!">
+        <CardBody aria-busy={reportQuery.isFetching}>
           {reportQuery.isError ? (
-            <div className="p-6">
+            <div>
               <Text className="text-sm text-danger">
                 The payout report could not be loaded. Refresh and try again.
               </Text>
             </div>
           ) : reportQuery.isPending ? (
-            <div className="p-6">
-              <Text className="text-sm text-muted">Loading payout report…</Text>
+            <div>
+              <Loader />
             </div>
           ) : visibleRows.length === 0 ? (
-            <div className="p-6">
+            <div>
               <EmptyState
                 icon={<IconInbox />}
                 title="No payout records"
-                description="No transfers or outstanding honorarium match the current filters."
+                description="No records match this status and date range."
                 tone="secondary"
                 className="rounded-lg"
               />
             </div>
           ) : (
-            <div className="overflow-hidden rounded-b-xl">
-              <TableContainer>
-                <Table className="min-w-[1280px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tutor</TableHead>
-                      <TableHead>Bank</TableHead>
-                      <TableHead>Account number</TableHead>
-                      <TableHead>Account holder</TableHead>
-                      <TableHead className="text-right">
-                        Gross honorarium
-                      </TableHead>
-                      <TableHead className="text-right">Deduction</TableHead>
-                      <TableHead className="text-right">
-                        Transfer amount
-                      </TableHead>
-                      <TableHead>Transfer status</TableHead>
-                      <TableHead>Transfer date</TableHead>
-                      <TableHead className="w-24 text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleRows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <Text className="whitespace-nowrap font-medium">
-                            {row.tutorName}
+            <TableContainer>
+              <Table className="min-w-[1500px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tutor</TableHead>
+                    <TableHead>Bank</TableHead>
+                    <TableHead>Account number</TableHead>
+                    <TableHead>Sessions</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
+                    <TableHead>Tax rate</TableHead>
+                    <TableHead className="text-right">Tax</TableHead>
+                    <TableHead className="text-right">Transfer fee</TableHead>
+                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Paid at</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <Text className="whitespace-nowrap font-medium">
+                          {row.tutorName}
+                        </Text>
+                      </TableCell>
+                      <TableCell>{row.bankName || "Not provided"}</TableCell>
+                      <TableCell className="font-mono">
+                        {row.bankAccountNumber || "Not provided"}
+                      </TableCell>
+                      <TableCell>
+                        {formatPayoutCoverageLabel(
+                          row.coveredSessionCount,
+                          row.status === "pending" ||
+                            row.status === "prepared" ||
+                            row.coveredSessionCount > 0,
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatIdr(row.grossHonorariumIdr)}
+                      </TableCell>
+                      <TableCell>
+                        {formatRate(row.taxRateBps)}
+                        {row.taxRateSource ? (
+                          <Text className="text-xs text-dimmed">
+                            {row.taxRateSource}
                           </Text>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {row.bankName || "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap font-mono text-sm">
-                          {row.bankAccountNumber || "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {row.bankAccountHolderName || "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right tabular-nums">
-                          {formatIdr(row.grossHonorariumIdr)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right tabular-nums">
-                          {row.transferFeeIdr > 0
-                            ? "−" + formatIdr(row.transferFeeIdr)
-                            : formatIdr(0)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
-                          {formatIdr(row.netHonorariumIdr)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge variant={statusVariant(row)}>
-                            {statusLabel(row)}
-                          </Badge>
-                          {row.status === "pending" &&
-                          !row.payoutAccountComplete ? (
-                            <Text className="mt-1 text-xs text-warning">
-                              Account details incomplete
-                            </Text>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {formatDate(row.paidAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setSelectedRow(row)}
-                          >
-                            Details
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatIdr(row.taxHonorariumIdr)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatIdr(row.transferFeeIdr)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {formatIdr(row.netHonorariumIdr)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariant(row.status)}>
+                          {statusLabel(row.status)}
+                        </Badge>
+                        {row.status === "void" &&
+                        row.reconciliationStatus === "required" ? (
+                          <Text className="mt-1 text-xs text-warning">
+                            External transfer must be reconciled
+                          </Text>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{formatDateTime(row.paidAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openRow(row)}
+                        >
+                          Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </CardBody>
       </Card>
@@ -621,17 +919,18 @@ export function AdminTutorPayoutsPage() {
       <Drawer
         open={selectedRow !== null}
         onOpenChange={(open) => {
-          if (!open) closePayoutDetails();
+          if (!open) closeDetails();
         }}
       >
-        <DrawerPopup direction="right" className="w-full max-w-2xl">
+        <DrawerPopup direction="right" className="w-full max-w-3xl">
           <DrawerHeader className="justify-between border-b border-drawer-border pb-4.5">
             <div className="min-w-0">
               <DrawerTitle className="truncate">
                 {selectedRow?.tutorName ?? "Tutor payout"}
               </DrawerTitle>
               <Text className="mt-1 text-sm text-muted">
-                Review account details and transfer status.
+                {selectedRow ? statusLabel(selectedRow.status) : ""} · all
+                transfer actions are recorded after the external bank transfer
               </Text>
             </div>
             <DrawerClose
@@ -646,77 +945,20 @@ export function AdminTutorPayoutsPage() {
               <IconX />
             </DrawerClose>
           </DrawerHeader>
-          <DrawerBody className="min-h-0 p-0!">
+          <DrawerBody className="min-h-0 space-y-4 p-5">
             {selectedRow ? (
-              <div className="space-y-4 p-6">
-                {selectedRow.status === "pending" &&
-                selectedPendingQuery.isPending ? (
-                  <Text className="text-sm text-muted">
-                    Loading current payout details…
-                  </Text>
-                ) : selectedRow.status === "pending" &&
-                  selectedPendingQuery.isError ? (
-                  <Text className="text-sm text-danger">
-                    Payout details could not be loaded. Refresh and try again.
-                  </Text>
-                ) : null}
-
+              <>
                 <section className="rounded-lg border border-item-border bg-item p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <IconCoins className="size-4 text-muted" />
-                      <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                        Payment summary
-                      </Text>
-                    </div>
-                    <Badge variant={statusVariant(selectedRow)}>
-                      {statusLabel(selectedRow)}
+                  <div className="flex items-center gap-2">
+                    <IconCoins className="size-4 text-muted" />
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                      Saved payout snapshot
+                    </Text>
+                    <Badge variant={statusVariant(selectedRow.status)}>
+                      {statusLabel(selectedRow.status)}
                     </Badge>
                   </div>
-                  <Text className="mt-2 text-sm text-muted">
-                    {selectedRow.status === "paid"
-                      ? "Transferred on " + formatDate(selectedRow.paidAt)
-                      : selectedPendingQuery.data
-                        ? selectedPendingQuery.data.completedSessions +
-                          " completed session(s) since " +
-                          (selectedPendingQuery.data.lastPaidAt
-                            ? formatDate(selectedPendingQuery.data.lastPaidAt)
-                            : "the first payout")
-                        : "Current unpaid balance"}
-                  </Text>
-                  <div className="mt-4 grid gap-2 text-sm">
-                    <div className="flex items-center justify-between gap-6">
-                      <Text className="text-muted">Gross honorarium</Text>
-                      <Text className="font-semibold">
-                        {formatIdr(selectedCurrentGross)}
-                      </Text>
-                    </div>
-                    <div className="flex items-center justify-between gap-6">
-                      <Text className="text-muted">Transfer fee</Text>
-                      <Text className="font-medium">
-                        {selectedTransferFee > 0
-                          ? "−" + formatIdr(selectedTransferFee)
-                          : formatIdr(0)}
-                      </Text>
-                    </div>
-                    <div className="flex items-center justify-between gap-6 border-t border-item-border pt-2">
-                      <Text className="font-medium">Net to transfer</Text>
-                      <Text className="font-semibold">
-                        {formatIdr(
-                          selectedRow.status === "paid"
-                            ? selectedRow.netHonorariumIdr
-                            : selectedNetHonorarium,
-                        )}
-                      </Text>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-lg border border-item-border p-4">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                    Destination account
-                  </Text>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
                     <PayoutDetail
                       label="Bank"
                       value={selectedRow.bankName || "Not provided"}
@@ -724,7 +966,6 @@ export function AdminTutorPayoutsPage() {
                     <PayoutDetail
                       label="Account number"
                       value={selectedRow.bankAccountNumber || "Not provided"}
-                      valueClassName="font-mono"
                     />
                     <PayoutDetail
                       label="Account holder"
@@ -733,91 +974,584 @@ export function AdminTutorPayoutsPage() {
                       }
                     />
                     <PayoutDetail
-                      label="Opened in"
+                      label="Account opening city"
                       value={
                         selectedRow.bankAccountOpeningCity || "Not provided"
                       }
                     />
                     <PayoutDetail
-                      label="Ownership"
+                      label="Account ownership"
+                      value={selectedRow.bankAccountOwnership || "Not provided"}
+                    />
+                    <PayoutDetail
+                      label="Gross"
+                      value={formatIdr(selectedRow.grossHonorariumIdr)}
+                    />
+                    <PayoutDetail
+                      label="Tax legal name"
+                      value={selectedRow.taxLegalName || "Not provided"}
+                    />
+                    <PayoutDetail
+                      label="Tax status"
+                      value={selectedRow.taxStatus ?? "Not recorded"}
+                    />
+                    <PayoutDetail
+                      label="Tax rate"
+                      value={formatRate(selectedRow.taxRateBps)}
+                    />
+                    <PayoutDetail
+                      label="NIK ending"
+                      value={selectedRow.taxNik?.slice(-4) || "Not provided"}
+                    />
+                    <PayoutDetail
+                      label="NPWP ending"
+                      value={selectedRow.taxNpwp?.slice(-4) || "Not provided"}
+                    />
+                    <PayoutDetail
+                      label="Tax withheld"
                       value={
-                        selectedRow.bankAccountOwnership === "self"
-                          ? "Tutor's own account"
-                          : selectedRow.bankAccountOwnership ===
-                              "trusted_person"
-                            ? "Trusted person's account"
-                            : "Not provided"
+                        selectedRow.taxHonorariumIdr === null
+                          ? "Tax snapshot unavailable"
+                          : formatIdr(selectedRow.taxHonorariumIdr)
                       }
                     />
+                    <PayoutDetail
+                      label="Transfer fee"
+                      value={formatIdr(selectedRow.transferFeeIdr)}
+                    />
+                    <PayoutDetail
+                      label="Calculated net"
+                      value={formatIdr(selectedRow.netHonorariumIdr)}
+                    />
+                    <PayoutDetail
+                      label="Actual transfer"
+                      value={formatIdr(selectedRow.actualAmountIdr)}
+                    />
+                    <PayoutDetail
+                      label="Actual paid at"
+                      value={formatDateTime(selectedRow.paidAt)}
+                    />
+                    <PayoutDetail
+                      label="Transfer recorded at"
+                      value={formatDateTime(selectedRow.transferRecordedAt)}
+                    />
+                    <PayoutDetail
+                      label="Recorded by"
+                      value={selectedRow.transferRecordedBy ?? "Not provided"}
+                    />
+                    <PayoutDetail
+                      label="Reference"
+                      value={selectedRow.actualReference || "Not provided"}
+                    />
                   </div>
-                  <Text className="mt-4 text-sm text-muted">
-                    Only conventional BCA (the exact bank name BCA) has no
-                    transfer deduction. BCA Syariah, blu (BCA Digital), and
-                    other banks deduct Rp2.500 once per payout.
-                  </Text>
-                  {selectedRow.status === "pending" &&
-                  !selectedRow.payoutAccountComplete ? (
+                  {selectedRow.actualProofUrl ? (
+                    <Text className="mt-3 text-sm">
+                      <TextLink
+                        href={selectedRow.actualProofUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View transfer proof
+                      </TextLink>
+                    </Text>
+                  ) : null}
+                  {selectedRow.status === "void" ? (
+                    <Text className="mt-3 text-sm text-muted">
+                      Void reason: {selectedRow.voidReason || "Not provided"}.
+                      Reconciliation: {selectedRow.reconciliationStatus}
+                      {selectedRow.reconciliationReason
+                        ? ` · ${selectedRow.reconciliationReason}`
+                        : ""}
+                    </Text>
+                  ) : null}
+                  {selectedRow.status === "prepared" ? (
                     <Text className="mt-3 text-sm text-warning">
-                      The tutor must complete and confirm all payout account
-                      details before a transfer can be recorded.
+                      Use this saved destination and net amount to perform the
+                      transfer externally. Recording below does not send money.
                     </Text>
                   ) : null}
                 </section>
-              </div>
+
+                {selectedRow.status === "pending" ? (
+                  <section className="space-y-4 rounded-lg border border-item-border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <Text className="font-semibold">
+                          Select unpaid sessions
+                        </Text>
+                        <Text className="mt-1 text-sm text-muted">
+                          A prepared payout reserves these exact source rows.
+                        </Text>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!pendingQuery.data?.items.length}
+                        onClick={() =>
+                          setSelectedSourceKeys(
+                            pendingQuery.data?.items.map(
+                              (item) => item.sourceKey,
+                            ) ?? [],
+                          )
+                        }
+                      >
+                        Select all
+                      </Button>
+                    </div>
+                    {pendingQuery.isPending ? (
+                      <Loader />
+                    ) : pendingQuery.isError ? (
+                      <FieldError>
+                        Unpaid sessions could not be loaded.
+                      </FieldError>
+                    ) : selectedItems.length === 0 ? (
+                      <Text className="text-sm text-muted">
+                        No unpaid sessions remain.
+                      </Text>
+                    ) : (
+                      <div className="divide-y divide-item-border">
+                        {selectedItems.map((item) => {
+                          const checked = selectedSourceKeys.includes(
+                            item.sourceKey,
+                          );
+                          return (
+                            <label
+                              key={item.sourceKey}
+                              className="flex cursor-pointer items-start gap-3 py-3"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(value) =>
+                                  setSelectedSourceKeys((current) =>
+                                    value === true
+                                      ? [...current, item.sourceKey]
+                                      : current.filter(
+                                          (key) => key !== item.sourceKey,
+                                        ),
+                                  )
+                                }
+                                aria-label={`Select session ${item.deliveryLabel ?? (item.bookingNumber === null ? `Class session ${item.classSessionId ?? ""}` : `Booking #${item.bookingNumber}`)}`}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <Text className="font-medium">
+                                  {item.deliveryLabel ??
+                                    (item.bookingNumber === null
+                                      ? `Class session ${item.classSessionId ?? ""}`
+                                      : `${item.bookingType} · #${item.bookingNumber}`)}
+                                  {item.bookingSessionId
+                                    ? " · series session"
+                                    : ""}
+                                </Text>
+                                <Text className="text-sm text-muted">
+                                  {formatDateTime(item.scheduledStartAt)} ·{" "}
+                                  {item.deliveryStatus}
+                                </Text>
+                                <Text className="text-xs text-dimmed">
+                                  {item.sourceType} · earned{" "}
+                                  {formatDateTime(item.earnedAt)}
+                                </Text>
+                              </span>
+                              <Text className="shrink-0 font-semibold">
+                                {formatIdr(item.grossHonorariumIdr)}
+                              </Text>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedSourceKeys.length > 0 && previewQuery.isPending ? (
+                      <Text className="text-sm text-muted">
+                        Building current preview…
+                      </Text>
+                    ) : null}
+                    {previewQuery.isError ? (
+                      <FieldError>
+                        {getUserFacingError(previewQuery.error)}
+                      </FieldError>
+                    ) : null}
+                    {selectedPreview ? (
+                      <div className="rounded-lg bg-accent p-4">
+                        <Text className="font-semibold">
+                          Versioned payout preview
+                        </Text>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                          <PayoutDetail
+                            label="Gross"
+                            value={formatIdr(
+                              selectedPreview.grossHonorariumIdr,
+                            )}
+                          />
+                          <PayoutDetail
+                            label="Tax status / rate"
+                            value={`${selectedPreview.taxStatus} · ${formatRate(selectedPreview.taxRateBps)}`}
+                          />
+                          <PayoutDetail
+                            label="Withholding"
+                            value={formatIdr(selectedPreview.taxHonorariumIdr)}
+                          />
+                          <PayoutDetail
+                            label="Transfer fee"
+                            value={formatIdr(selectedPreview.transferFeeIdr)}
+                          />
+                          <PayoutDetail
+                            label="Net to transfer"
+                            value={formatIdr(selectedPreview.netHonorariumIdr)}
+                          />
+                          <PayoutDetail
+                            label="Sessions"
+                            value={String(selectedPreview.items.length)}
+                          />
+                          <PayoutDetail
+                            label="Bank"
+                            value={selectedPreview.bankName || "Not provided"}
+                          />
+                          <PayoutDetail
+                            label="Account number"
+                            value={
+                              selectedPreview.bankAccountNumber ||
+                              "Not provided"
+                            }
+                          />
+                          <PayoutDetail
+                            label="Account holder"
+                            value={
+                              selectedPreview.bankAccountHolderName ||
+                              "Not provided"
+                            }
+                          />
+                        </div>
+                        <Text className="mt-3 text-sm text-muted">
+                          Identity: {selectedPreview.legalName || "Incomplete"}{" "}
+                          · NIK ending{" "}
+                          {selectedPreview.nik?.slice(-4) || "Not provided"} ·
+                          NPWP ending{" "}
+                          {selectedPreview.npwp?.slice(-4) || "Not provided"}
+                        </Text>
+                        {!selectedRow.payoutAccountComplete ? (
+                          <FieldError className="mt-2 block">
+                            Bank details must be complete before preparing this
+                            batch.
+                          </FieldError>
+                        ) : null}
+                        {!selectedPreview.legalName || !selectedPreview.nik ? (
+                          <FieldError className="mt-2 block">
+                            Legal name and a valid 16-digit NIK are required
+                            before preparing a new payout.
+                          </FieldError>
+                        ) : null}
+                        <Button
+                          className="mt-4"
+                          disabled={!canPrepare || previewMutation.isPending}
+                          progress={previewMutation.isPending}
+                          onClick={() => prepareSelectedPayout(selectedPreview)}
+                        >
+                          Prepare selected batch
+                        </Button>
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {selectedRow.status !== "pending" ? (
+                  <section className="space-y-3 rounded-lg border border-item-border p-4">
+                    <Text className="font-semibold">
+                      {formatPayoutCoverageLabel(
+                        selectedItems.length,
+                        selectedRow.status === "prepared" ||
+                          selectedRow.coveredSessionCount > 0,
+                      )}
+                    </Text>
+                    {allocationQuery.isPending ? (
+                      <Loader />
+                    ) : selectedItems.length === 0 ? (
+                      <Text className="text-sm text-muted">
+                        No session-level allocation was stored for this
+                        historical row.
+                      </Text>
+                    ) : (
+                      <div className="divide-y divide-item-border">
+                        {selectedItems.map((item) => (
+                          <div
+                            key={item.sourceKey}
+                            className="flex items-start justify-between gap-4 py-3"
+                          >
+                            <div>
+                              <Text className="font-medium">
+                                {item.deliveryLabel ??
+                                  (item.bookingNumber === null
+                                    ? `Class session ${item.classSessionId ?? ""}`
+                                    : `${item.bookingType} · #${item.bookingNumber}`)}
+                                {item.bookingSessionId
+                                  ? " · series session"
+                                  : ""}
+                              </Text>
+                              <Text className="text-sm text-muted">
+                                {formatDateTime(item.scheduledStartAt)} ·{" "}
+                                {item.deliveryStatus}
+                              </Text>
+                              <Text className="text-xs text-dimmed">
+                                {item.sourceType} · earned{" "}
+                                {formatDateTime(item.earnedAt)}
+                              </Text>
+                            </div>
+                            <Text className="font-semibold">
+                              {formatIdr(item.grossHonorariumIdr)}
+                            </Text>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ) : null}
+
+                {selectedRow.status === "prepared" ? (
+                  <section className="space-y-4 rounded-lg border border-item-border p-4">
+                    <Text className="font-semibold">
+                      Record external transfer
+                    </Text>
+                    <Text className="text-sm text-muted">
+                      Record this only after the bank transfer has actually been
+                      performed. The amount must exactly match the saved net.
+                    </Text>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="payout-actual-amount">
+                          Actual amount (IDR)
+                        </FieldLabel>
+                        <SeliaNumberField
+                          id="payout-actual-amount"
+                          allowOutOfRange
+                          format={{ useGrouping: false }}
+                          min={0}
+                          step={1}
+                          value={
+                            actualAmount === "" ? null : Number(actualAmount)
+                          }
+                          onValueChange={(nextValue) =>
+                            setActualAmount(
+                              nextValue === null ? "" : String(nextValue),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="payout-actual-paid-at">
+                          Actual paid date and time (Asia/Jakarta)
+                        </FieldLabel>
+                        <CrossBrowserDateTimeInput
+                          id="payout-actual-paid-at"
+                          value={paidAt}
+                          onChange={(value) => setPaidAt(value)}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="payout-reference">
+                          Transfer reference (optional)
+                        </FieldLabel>
+                        <Input
+                          id="payout-reference"
+                          maxLength={255}
+                          value={reference}
+                          onChange={(event) => setReference(event.target.value)}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="payout-proof-url">
+                          Proof URL (optional)
+                        </FieldLabel>
+                        <Input
+                          id="payout-proof-url"
+                          type="url"
+                          maxLength={2000}
+                          value={proofUrl}
+                          onChange={(event) => setProofUrl(event.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    <Button
+                      disabled={
+                        !actualAmount || !paidAt || recordMutation.isPending
+                      }
+                      progress={recordMutation.isPending}
+                      onClick={recordPreparedTransfer}
+                    >
+                      Record transfer as paid
+                    </Button>
+                  </section>
+                ) : null}
+
+                {selectedRow.status === "void" &&
+                selectedRow.reconciliationStatus === "required" ? (
+                  <section className="space-y-3 rounded-lg border border-warning-border bg-warning-subtle p-4">
+                    <Text className="font-semibold">
+                      External transfer reconciliation required
+                    </Text>
+                    <Text className="text-sm text-muted">
+                      These sessions remain blocked from repayment until an
+                      admin records how the external transfer was reconciled.
+                    </Text>
+                    <Field>
+                      <FieldLabel htmlFor="payout-reconciliation-reason">
+                        Resolution details
+                      </FieldLabel>
+                      <Input
+                        id="payout-reconciliation-reason"
+                        maxLength={2000}
+                        value={reconciliationReason}
+                        onChange={(event) =>
+                          setReconciliationReason(event.target.value)
+                        }
+                      />
+                    </Field>
+                    <Button
+                      disabled={
+                        !reconciliationReason.trim() ||
+                        reconciliationMutation.isPending
+                      }
+                      progress={reconciliationMutation.isPending}
+                      onClick={() =>
+                        reconciliationMutation.mutate({
+                          payoutId: selectedRow.id,
+                          reason: reconciliationReason.trim(),
+                        })
+                      }
+                    >
+                      Resolve reconciliation
+                    </Button>
+                  </section>
+                ) : null}
+
+                {selectedRow.status === "prepared" ||
+                selectedRow.status === "paid" ? (
+                  <section className="space-y-3 rounded-lg border border-item-border p-4">
+                    <Text className="font-semibold">Void this payout</Text>
+                    <Text className="text-sm text-muted">
+                      The record and transfer evidence stay in history. If a
+                      transfer was performed, repayment stays blocked until
+                      reconciliation is resolved.
+                    </Text>
+                    <Field>
+                      <FieldLabel htmlFor="payout-void-reason">
+                        Void reason
+                      </FieldLabel>
+                      <Input
+                        id="payout-void-reason"
+                        maxLength={2000}
+                        value={voidReason}
+                        onChange={(event) => setVoidReason(event.target.value)}
+                      />
+                    </Field>
+                    <Button
+                      variant="secondary"
+                      disabled={!voidReason.trim() || voidMutation.isPending}
+                      progress={voidMutation.isPending}
+                      onClick={() =>
+                        voidMutation.mutate({
+                          payoutId: selectedRow.id,
+                          reason: voidReason.trim(),
+                        })
+                      }
+                    >
+                      Void with audit record
+                    </Button>
+                  </section>
+                ) : null}
+
+                {selectedRow.status !== "void" ? (
+                  <section className="space-y-3 rounded-lg border border-item-border p-4">
+                    <Text className="font-semibold">Custom tutor tax rate</Text>
+                    <Text className="text-sm text-muted">
+                      Leave blank to clear the override and use the current
+                      configured default. This affects future previews only.
+                    </Text>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <Field className="min-w-48 flex-1">
+                        <FieldLabel htmlFor="tutor-rate-override">
+                          Tax rate (%)
+                        </FieldLabel>
+                        <SeliaNumberField
+                          id="tutor-rate-override"
+                          allowOutOfRange
+                          format={{
+                            useGrouping: false,
+                            maximumFractionDigits: 2,
+                          }}
+                          min={0}
+                          max={100}
+                          step={0.01}
+                          smallStep={0.01}
+                          value={
+                            overrideRateBps === ""
+                              ? null
+                              : Number(overrideRateBps) / 100
+                          }
+                          onValueChange={(nextValue) =>
+                            setOverrideRateBps(
+                              nextValue === null
+                                ? ""
+                                : String(percentToBasisPoints(nextValue)),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field className="min-w-64 flex-1">
+                        <FieldLabel htmlFor="tutor-rate-override-reason">
+                          Reason
+                        </FieldLabel>
+                        <Input
+                          id="tutor-rate-override-reason"
+                          maxLength={2000}
+                          value={overrideReason}
+                          onChange={(event) =>
+                            setOverrideReason(event.target.value)
+                          }
+                        />
+                      </Field>
+                      <Button
+                        variant="secondary"
+                        disabled={
+                          overrideMutation.isPending ||
+                          !overrideReason.trim() ||
+                          (overrideRateBps !== "" &&
+                            (!/^\d+$/.test(overrideRateBps) ||
+                              Number(overrideRateBps) > 10000))
+                        }
+                        progress={overrideMutation.isPending}
+                        onClick={() =>
+                          overrideMutation.mutate({
+                            tutorId: selectedRow.tutorId,
+                            rateBps:
+                              overrideRateBps === ""
+                                ? null
+                                : Number(overrideRateBps),
+                            reason: overrideReason.trim(),
+                          })
+                        }
+                      >
+                        Save override
+                      </Button>
+                    </div>
+                  </section>
+                ) : null}
+              </>
             ) : null}
           </DrawerBody>
-          <DrawerFooter className="flex-wrap gap-2">
+          <DrawerFooter>
             <DrawerClose
               render={
                 <Button
                   variant="secondary"
-                  disabled={markPayoutMutation.isPending}
                   aria-label="Close payout details"
+                  disabled={isSaving}
                 />
               }
             >
               Close
             </DrawerClose>
-            {selectedRow?.status === "pending" ? (
-              <Button
-                variant="primary"
-                progress={markPayoutMutation.isPending}
-                disabled={!canMarkSelectedPayout}
-                onClick={() => setConfirmPaymentOpen(true)}
-              >
-                Mark as paid
-              </Button>
-            ) : null}
           </DrawerFooter>
         </DrawerPopup>
       </Drawer>
-
-      <ConfirmationDialog
-        open={confirmPaymentOpen}
-        onOpenChange={setConfirmPaymentOpen}
-        title="Confirm tutor payout"
-        description={
-          "This records the current unpaid honorarium for " +
-          (selectedRow?.tutorName ?? "this tutor") +
-          " as paid. Confirm that the net amount has already been transferred to the account shown."
-        }
-        confirmLabel="Mark as paid"
-        pending={markPayoutMutation.isPending}
-        onConfirm={markSelectedPayoutPaid}
-      >
-        <div className="rounded-lg border border-item-border bg-item p-3">
-          <div className="flex items-center justify-between gap-4">
-            <Text className="text-sm text-muted">Net to transfer</Text>
-            <Text className="font-semibold">
-              {formatIdr(selectedNetHonorarium)}
-            </Text>
-          </div>
-          <Text className="mt-2 text-xs text-muted">
-            This action advances the tutor&apos;s paid cutoff and cannot be
-            undone from the payout workspace.
-          </Text>
-        </div>
-      </ConfirmationDialog>
     </div>
   );
 }

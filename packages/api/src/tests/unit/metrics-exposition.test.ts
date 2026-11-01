@@ -156,6 +156,15 @@ describe("metrics exposition", () => {
     expect(
       renderExposition({ provider: "midtrans", providerMode: "live" }),
     ).toContain('provider="midtrans",provider_mode="live"');
+    expect(
+      renderExposition({ provider: "midtrans", providerMode: "none" }),
+    ).toContain('provider="midtrans",provider_mode="none"');
+    expect(
+      renderExposition({
+        provider: "midtrans",
+        providerMode: "staging" as "test",
+      }),
+    ).toContain('provider="midtrans",provider_mode="none"');
     expect(renderExposition({ provider: "stub" })).toContain(
       'provider="stub",provider_mode="none"',
     );

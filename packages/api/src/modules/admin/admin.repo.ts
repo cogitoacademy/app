@@ -1,3 +1,4 @@
+import { getOperationsAnalytics } from "./admin-operations-analytics";
 import {
   asc,
   and,
@@ -74,6 +75,7 @@ export async function searchUsers(
   conn: DbOrTx,
   query: string,
   limit: number,
+  role?: UserRole,
 ): Promise<AdminUserSearchRow[]> {
   const normalizedQuery = query.trim();
   const searchPattern = `%${escapeLikePattern(normalizedQuery)}%`;
@@ -94,10 +96,13 @@ export async function searchUsers(
     })
     .from(user)
     .where(
-      or(
-        ilike(user.name, searchPattern),
-        ilike(user.email, searchPattern),
-        ilike(user.id, searchPattern),
+      and(
+        or(
+          ilike(user.name, searchPattern),
+          ilike(user.email, searchPattern),
+          ilike(user.id, searchPattern),
+        ),
+        role ? eq(user.role, role) : undefined,
       ),
     )
     .orderBy(asc(exactMatchRank), asc(user.name), desc(user.createdAt))
@@ -140,21 +145,9 @@ export async function getDashboardAnalytics(
   const bookingCount = sql<number>`count(*)::int`;
   const completedCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} = 'completed')::int`;
   const exceptionCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} IN ('declined', 'cancelled', 'late_cancelled', 'no_show', 'expired'))::int`;
-  const grossMarks = sql<number>`coalesce(sum(${booking.originalMarks}), 0)::int`;
-  const platformTakeMarks = sql<number>`coalesce(sum(coalesce(nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric, 0)), 0)::int`;
-  const grossIdr = sql<number>`coalesce(sum(coalesce(
-    nullif(${booking.priceSnapshot}->>'totalIdr', '')::numeric,
-    ${booking.originalMarks} * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
-    0
-  )), 0)::bigint`;
-  const platformTakeIdr = sql<number>`coalesce(sum(coalesce(
-    nullif(${booking.priceSnapshot}->>'cogitoTakeIdr', '')::numeric,
-    nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
-    0
-  )), 0)::bigint`;
   const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
   const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
-  const successfulPayment = sql`${paymentRecord.status} in ('PAID', 'SETTLED')`;
+  const successfulPayment = sql`${paymentRecord.providerSuccessAt} IS NOT NULL AND ${paymentRecord.status} in ('PAID', 'SETTLED', 'REFUNDED')`;
 
   const [
     bookingSummaryRows,
@@ -168,6 +161,7 @@ export async function getDashboardAnalytics(
     marksSummaryRows,
     paymentSummaryRows,
     refundSummaryRows,
+    operationsSummary,
   ] = await Promise.all([
     conn
       .select({
@@ -175,10 +169,6 @@ export async function getDashboardAnalytics(
         completed: completedCount,
         exceptions: exceptionCount,
         activeLearners: sql<number>`count(distinct ${booking.proposerId})::int`,
-        grossMarks,
-        platformTakeMarks,
-        grossIdr,
-        platformTakeIdr,
       })
       .from(booking)
       .where(periodFilter),
@@ -194,8 +184,6 @@ export async function getDashboardAnalytics(
         date: bookingDay,
         bookings: bookingCount,
         completed: completedCount,
-        grossMarks,
-        platformTakeMarks,
       })
       .from(booking)
       .where(periodFilter)
@@ -288,10 +276,10 @@ export async function getDashboardAnalytics(
     conn
       .select({
         payingStudents: sql<number>`count(distinct ${paymentRecord.userId}) FILTER (WHERE ${successfulPayment})::int`,
-        grossRevenueIdr: sql<number>`coalesce(sum(${paymentRecord.amountIdr}) FILTER (
+        grossReceiptsIdr: sql<number>`coalesce(sum(${paymentRecord.amountIdr}) FILTER (
           WHERE ${successfulPayment}
-            AND ${gte(paymentRecord.updatedAt, query.periodStart)}
-            AND ${lte(paymentRecord.updatedAt, query.periodEnd)}
+            AND ${gte(paymentRecord.providerSuccessAt, query.periodStart)}
+            AND ${lte(paymentRecord.providerSuccessAt, query.periodEnd)}
         ), 0)::bigint`,
       })
       .from(paymentRecord),
@@ -303,18 +291,16 @@ export async function getDashboardAnalytics(
         ), 0)::bigint`,
       })
       .from(refundRecord),
+    getOperationsAnalytics(conn, query),
   ]);
 
   return {
+    operationsSummary,
     bookingSummary: bookingSummaryRows[0] ?? {
       bookings: 0,
       completed: 0,
       exceptions: 0,
       activeLearners: 0,
-      grossMarks: 0,
-      platformTakeMarks: 0,
-      grossIdr: 0,
-      platformTakeIdr: 0,
     },
     userSummary: userSummaryRows[0] ?? { newStudents: 0, newTutors: 0 },
     bookingTrend,
@@ -338,7 +324,7 @@ export async function getDashboardAnalytics(
     },
     paymentSummary: paymentSummaryRows[0] ?? {
       payingStudents: 0,
-      grossRevenueIdr: 0,
+      grossReceiptsIdr: 0,
     },
     refundSummary: refundSummaryRows[0] ?? { refundedIdr: 0 },
   };

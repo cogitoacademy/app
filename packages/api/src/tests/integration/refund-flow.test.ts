@@ -18,6 +18,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { createV3PackagePurchase } from "../helpers/v3-payment";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -151,10 +152,10 @@ describe("Refund flow", () => {
 
   test("admin refunds a paid payment → payment REFUNDED + wallet credit + refundRecord", async () => {
     const { services } = await import("@cogito-app/api/services");
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       payerUserId,
       payerWalletId,
-      "starter",
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -240,10 +241,11 @@ describe("Refund flow", () => {
 
   test("B2: a REFUNDED webhook holding a stale PAID snapshot must not reverse marks after an admin refund", async () => {
     const { services } = await import("@cogito-app/api/services");
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       payerUserId,
       payerWalletId,
-      "learner",
+      150,
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -252,7 +254,7 @@ describe("Refund flow", () => {
       status: "PAID",
     });
 
-    // Admin refund wins the race: payment → REFUNDED, wallet credited (+50).
+    // Admin refund wins the race: payment → REFUNDED, wallet credited (+150).
     await adminClient.adminBooking.adminRefund({
       paymentId: intent.paymentId,
       reason: "B2 race",
@@ -262,7 +264,7 @@ describe("Refund flow", () => {
       .select()
       .from(wallet)
       .where(eq(wallet.id, payerWalletId));
-    expect(before!.totalBalance).toBe(340);
+    expect(before!.totalBalance).toBe(400);
 
     // Replay the webhook as it would run after reading the row while it was
     // still PAID (stale snapshot): the repo read returns PAID, but the real
@@ -311,8 +313,8 @@ describe("Refund flow", () => {
       .select()
       .from(wallet)
       .where(eq(wallet.id, payerWalletId));
-    expect(after!.totalBalance).toBe(340);
-    expect(after!.availableBalance).toBe(340);
+    expect(after!.totalBalance).toBe(before!.totalBalance);
+    expect(after!.availableBalance).toBe(before!.availableBalance);
 
     const reversals = await db
       .select()
@@ -338,10 +340,11 @@ describe("Refund flow", () => {
     const user = { id: userCtx.session.user.id };
     const w = await creditWallet(user.id, 0);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       w.id,
-      "learner",
+      150,
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -350,7 +353,7 @@ describe("Refund flow", () => {
       status: "PAID",
     });
 
-    // The payer spent 40 of the 120 credited Marks.
+    // The payer spent 70 of the 150 credited Marks.
     await db
       .update(wallet)
       .set({ totalBalance: 80, availableBalance: 80 })
@@ -393,10 +396,10 @@ describe("Refund flow", () => {
     const user = { id: userCtx.session.user.id };
     const w = await creditWallet(user.id, 0);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       w.id,
-      "starter",
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -490,10 +493,11 @@ describe("Refund flow", () => {
     const user = { id: userCtx.session.user.id };
     const w = await creditWallet(user.id, 0);
 
-    const intent = await services.payment.createIntent(
+    const intent = await createV3PackagePurchase(
+      services.payment,
       user.id,
       w.id,
-      "learner",
+      150,
     );
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -546,14 +550,19 @@ describe("Refund flow", () => {
 
     // Two purchases of the same package are sequential rows; use two
     // different packages to get two distinct PAID payments.
-    const p1 = await services.payment.createIntent(user.id, w.id, "starter");
+    const p1 = await createV3PackagePurchase(services.payment, user.id, w.id);
     await services.payment.confirmFromWebhook({
       provider: "stub",
       providerReference: p1.providerReference,
       providerEventId: `evt_f11_p1_paid_${ts}`,
       status: "PAID",
     });
-    const p2 = await services.payment.createIntent(user.id, w.id, "learner");
+    const p2 = await createV3PackagePurchase(
+      services.payment,
+      user.id,
+      w.id,
+      150,
+    );
     await services.payment.confirmFromWebhook({
       provider: "stub",
       providerReference: p2.providerReference,
@@ -561,7 +570,7 @@ describe("Refund flow", () => {
       status: "PAID",
     });
 
-    // 120 Marks spent (all of P1's 50 + 70 of P2's 120): the wallet holds 100
+    // 100 Marks spent (all of P1's 50 + 50 of P2's 150): the wallet holds 100
     // (P2's remainder). FIFO attributes the spend to P1 first.
     await db
       .update(wallet)

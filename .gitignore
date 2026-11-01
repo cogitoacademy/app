@@ -98,3 +98,6 @@ docs/*.synctex.gz
 .superpowers/
 docs/superpowers/
 *.docx
+
+# Protected local Knowledge Bank files (never publish or commit)
+private-kb/

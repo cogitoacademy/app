@@ -1,5 +1,7 @@
 import { DomainError } from "../../lib/domain-errors";
+import type { TxClient } from "../../lib/tx";
 import type { subjectCategory } from "@cogito-app/db/schema";
+import { isSelectableCompetitionRef } from "../competition-catalog/catalog-lock";
 
 export const MIN_TUTOR_SUBJECTS = 1;
 export const MAX_TUTOR_SUBJECTS = 7;
@@ -23,20 +25,52 @@ export interface NormalizedTutorSubject {
     id: string;
     slug: string;
     name: string;
+    parentColors: CompetitionPalette | null;
   };
 }
+
+export type CompetitionPalette = {
+  lightTextColor: string;
+  lightBackgroundColor: string;
+  darkTextColor: string;
+  darkBackgroundColor: string;
+};
 
 export interface SubjectCategoryGroup {
   id: string;
   slug: string;
   name: string;
   description: string | null;
+  parentColors: CompetitionPalette | null;
   children: Array<{
     id: string;
     slug: string;
     name: string;
     description: string | null;
   }>;
+}
+
+function getParentPalette(row: SubjectCategoryRow): CompetitionPalette | null {
+  const {
+    lightTextColor,
+    lightBackgroundColor,
+    darkTextColor,
+    darkBackgroundColor,
+  } = row;
+  if (
+    typeof lightTextColor !== "string" ||
+    typeof lightBackgroundColor !== "string" ||
+    typeof darkTextColor !== "string" ||
+    typeof darkBackgroundColor !== "string"
+  ) {
+    return null;
+  }
+  return {
+    lightTextColor,
+    lightBackgroundColor,
+    darkTextColor,
+    darkBackgroundColor,
+  };
 }
 
 export class InvalidTutorSubjectSelectionError extends DomainError {
@@ -65,11 +99,15 @@ export function toNormalizedTutorSubject(
     slug: subject.slug,
     name: subject.name,
     description: subject.description,
-    isSelectable: subject.isActive,
+    isSelectable:
+      subject.isActive &&
+      subject.parent.isActive &&
+      subject.parent.parentId === null,
     parent: {
       id: subject.parent.id,
       slug: subject.parent.slug,
       name: subject.parent.name,
+      parentColors: getParentPalette(subject.parent),
     },
   };
 }
@@ -92,6 +130,7 @@ export function toSubjectCategoryGroup(
     slug: category.slug,
     name: category.name,
     description: category.description,
+    parentColors: getParentPalette(category),
     children: (category.children ?? []).map((child) => ({
       id: child.id,
       slug: child.slug,
@@ -104,6 +143,7 @@ export function toSubjectCategoryGroup(
 export function validateTutorSubjectIds(
   subjectIds: readonly string[] | undefined,
   activeChildSubjects: readonly Pick<SubjectCategoryRow, "id">[],
+  preservedSubjectIds: readonly string[] = [],
 ): void {
   if (subjectIds === undefined) return;
   if (subjectIds.length < MIN_TUTOR_SUBJECTS) {
@@ -122,13 +162,40 @@ export function validateTutorSubjectIds(
   }
 
   const activeIds = new Set(activeChildSubjects.map((subject) => subject.id));
-  const invalidSubjectIds = subjectIds.filter((id) => !activeIds.has(id));
+  const allowedIds = new Set([...activeIds, ...preservedSubjectIds]);
+  const invalidSubjectIds = subjectIds.filter((id) => !allowedIds.has(id));
   if (invalidSubjectIds.length > 0) {
     throw new InvalidTutorSubjectSelectionError({
       reason: activeChildSubjects.length === 0 ? "inactive" : "not_child",
       subjectIds: invalidSubjectIds,
     });
   }
+}
+
+/**
+ * Validates new selections against both levels of the catalog. Existing
+ * assignments may remain selected after archive, but cannot be newly added.
+ */
+export async function validateTutorSubjectIdsInCatalog(
+  tx: TxClient,
+  subjectIds: readonly string[] | undefined,
+  activeChildSubjects: readonly Pick<SubjectCategoryRow, "id" | "parentId">[],
+  preservedSubjectIds: readonly string[] = [],
+): Promise<void> {
+  const selectableSubjects = await Promise.all(
+    activeChildSubjects.map(async (subject) =>
+      subject.parentId &&
+      (await isSelectableCompetitionRef(tx, subject.parentId, subject.id))
+        ? subject
+        : null,
+    ),
+  );
+
+  validateTutorSubjectIds(
+    subjectIds,
+    selectableSubjects.filter((subject) => subject !== null),
+    preservedSubjectIds,
+  );
 }
 
 export function haveSameSubjectIds(

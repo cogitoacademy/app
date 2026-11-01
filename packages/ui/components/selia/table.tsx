@@ -17,7 +17,10 @@ export function TableContainer({ ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="table-container"
       {...props}
-      className={cn("overflow-x-auto w-full", props.className)}
+      className={cn(
+        "min-w-0 overflow-x-auto w-full overscroll-x-contain",
+        props.className,
+      )}
     />
   );
 }
@@ -71,7 +74,7 @@ export function TableCell({ ...props }: React.ComponentProps<"td">) {
       {...props}
       className={cn(
         "px-3 py-4 sm:px-6",
-        "has-[a]:p-0 *:[a]:px-3 *:[a]:py-4 *:[a]:inline-flex *:[a]:w-full sm:has-[a]:p-0 sm:*:[a]:px-6",
+        "has-[>a:only-child]:p-0 [&>a:only-child]:px-3 [&>a:only-child]:py-4 [&>a:only-child]:inline-flex [&>a:only-child]:w-full sm:[&>a:only-child]:px-6",
         props.className,
       )}
     />

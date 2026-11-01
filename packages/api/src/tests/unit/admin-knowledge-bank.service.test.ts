@@ -117,6 +117,18 @@ describe("admin Knowledge Bank access service", () => {
     ]);
   });
 
+  test("uses the default list status when no filter is supplied", async () => {
+    const { db, repo, service } = makeService();
+
+    await service.list();
+
+    expect(repo.listAll).toHaveBeenCalledWith(
+      db,
+      { status: "all" },
+      expect.any(Date),
+    );
+  });
+
   test("returns active access for eligibility checks", async () => {
     const { db, repo, service } = makeService();
     const now = new Date("2026-01-01T00:00:00.000Z");
@@ -151,6 +163,19 @@ describe("admin Knowledge Bank access service", () => {
       }),
     );
     expect(result).toEqual(expect.objectContaining({ status: "active" }));
+  });
+
+  test("reports a grant missing from the refreshed list after create", async () => {
+    const missingView = makeService({
+      getListItemById: mock(async () => null),
+    });
+
+    await expect(
+      missingView.service.create("admin-1", {
+        email: "ada@example.com",
+        expiresAt: FUTURE_EXPIRY,
+      }),
+    ).rejects.toBeInstanceOf(KnowledgeBankAccessGrantNotFoundError);
   });
 
   test("rejects a missing or non-student target", async () => {
@@ -247,6 +272,19 @@ describe("admin Knowledge Bank access service", () => {
       }),
     );
     expect(result.status).toBe("active");
+  });
+
+  test("reports a grant missing from the refreshed list after update", async () => {
+    const missingView = makeService({
+      getListItemById: mock(async () => null),
+    });
+
+    await expect(
+      missingView.service.update("admin-1", {
+        id: "grant-1",
+        expiresAt: FUTURE_EXPIRY,
+      }),
+    ).rejects.toBeInstanceOf(KnowledgeBankAccessGrantNotFoundError);
   });
 
   test("rejects updates for missing or concurrently removed grants", async () => {

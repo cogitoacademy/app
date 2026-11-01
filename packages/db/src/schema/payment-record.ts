@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   index,
+  jsonb,
   check,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -13,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { uuidPrimaryKey, user } from "./auth";
 import { wallet } from "./wallet";
 import { markPackage } from "./mark-package";
+import { economyV3TopUpQuote } from "./economy-v3-activation";
 
 export const paymentRecord = pgTable(
   "payment_record",
@@ -27,11 +29,27 @@ export const paymentRecord = pgTable(
     packageId: text("package_id").references(() => markPackage.id, {
       onDelete: "set null",
     }),
+    quoteId: text("quote_id").references(() => economyV3TopUpQuote.id, {
+      onDelete: "restrict",
+    }),
+    quoteChoice: text("quote_choice"),
+    purchaseLabel: text("purchase_label"),
+    pricingSnapshot: jsonb("pricing_snapshot"),
+    providerIntentState: text("provider_intent_state"),
     provider: text("provider").notNull(),
     providerReference: text("provider_reference").notNull(),
     providerEventId: text("provider_event_id"),
     // Provider-side request/order id used for authoritative status lookup.
     providerRequestId: text("provider_request_id"),
+    // Verified provider time of successful payment, distinct from webhook receipt time.
+    providerSuccessAt: timestamp("provider_success_at", { withTimezone: true }),
+    // Provider refund facts are kept separate from the locally persisted payment status.
+    providerRefundKind: text("provider_refund_kind").$type<
+      "partial" | "full"
+    >(),
+    providerRefundAmountIdr: integer("provider_refund_amount_idr"),
+    // Bounded SHA-256 fingerprint of authenticated provider refund identity/history.
+    providerRefundIdentity: text("provider_refund_identity"),
     // H4: the provider checkout URL, persisted so a PENDING re-purchase can
     // return the stored URL instead of re-calling the provider.
     checkoutUrl: text("checkout_url"),
@@ -57,12 +75,35 @@ export const paymentRecord = pgTable(
     ),
     check("payment_amount_positive", sql`${table.amountIdr} > 0`),
     check("payment_marks_positive", sql`${table.marks} > 0`),
+    check(
+      "payment_provider_intent_state_check",
+      sql`${table.providerIntentState} IS NULL OR ${table.providerIntentState} IN ('CREATING','READY','UNCERTAIN')`,
+    ),
+    check(
+      "payment_quote_choice_check",
+      sql`${table.quoteChoice} IS NULL OR ${table.quoteChoice} IN ('package','custom','recommended')`,
+    ),
+    check(
+      "payment_provider_refund_kind_check",
+      sql`${table.providerRefundKind} IS NULL OR ${table.providerRefundKind} IN ('partial','full')`,
+    ),
+    check(
+      "payment_provider_refund_amount_check",
+      sql`${table.providerRefundAmountIdr} IS NULL OR ${table.providerRefundAmountIdr} >= 0`,
+    ),
+    check(
+      "payment_provider_refund_identity_check",
+      sql`${table.providerRefundIdentity} IS NULL OR ${table.providerRefundIdentity} ~ '^[a-f0-9]{64}$'`,
+    ),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),
     // B6: the provider reference is the idempotency key — a unique index
     // (not just an index) prevents concurrent check-then-insert races from
     // creating zombie PENDING rows.
     uniqueIndex("payment_provider_reference_idx").on(table.providerReference),
+    uniqueIndex("payment_quote_id_idx")
+      .on(table.quoteId)
+      .where(sql`${table.quoteId} IS NOT NULL`),
     index("payment_status_idx").on(table.status),
     index("payment_userId_status_idx").on(table.userId, table.status),
     index("payment_reconciliation_idx")

@@ -65,6 +65,14 @@ Contextual styling has high specificity. Two override paths:
 
 Before creating a new component, compose existing Selia components. Example: comment layout = `Item` (media object pattern) with `Avatar`, `Text`, timestamps.
 
+### 6. Layout Before Containers
+
+Start page layouts with semantic sections, headings, spacing, and grid or Stack. Group related content through alignment and proximity; use Separator when a visible division helps scanning.
+
+Use Card only for a self-contained unit that benefits from a distinct surface or boundary, such as a selectable offering or an independent summary. Page sections, forms, filters, tables, and individual metrics can sit directly on the page. Choose their container based on the content and task.
+
+Keep related fields in a single form with fieldsets and labels. Present repeated records as Table or Item rows. Before adding a Card, identify the boundary it communicates; if spacing and a heading communicate the same grouping, use those. Apply the same check to nested Cards and avoid recreating card surfaces with rounded borders, backgrounds, and shadows on generic wrappers.
+
 ## Design Tokens
 
 OKLCH color space via CSS variables. All mapped as Tailwind v4 `@theme` tokens.
@@ -176,7 +184,7 @@ apps/web/
 
 ### Dashboard Page
 
-Uses Card grid, stat-cards with IconBox+Bade, Stack layout, Table for orders, Item for best-sellers list, Select for period filter.
+Existing implementation uses a Card grid, stat-cards with IconBox+Badge, Stack layout, Table for orders, Item for best-sellers list, and Select for period filter. This is a reference for component APIs, not a requirement to repeat its containers on other pages.
 
 ### Dashboard Sidebar
 
@@ -193,10 +201,14 @@ Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 3. Follow CVA variant pattern for new component variants
 4. Use `data-slot` attributes for contextual styling
 5. Use OKLCH CSS variables / Tailwind theme colors — never hardcode colors
-6. Prefer Card + Stack + Item composition for layout
+6. Follow "Layout Before Containers" when choosing page structure; compose Selia controls within that structure
 7. Use `plain` variant when nesting components that shouldn't have their own background/border
 8. Use `!` important modifier only for one-off overrides (rare)
 9. Use `use client` directive on all component files
 10. Reference selia.earth docs for component API details
 11. **Docs follow code — always.** Every PR that changes behavior must update the affected docs in the same PR: `docs/CONTEXT.md` (architecture, modules, known bugs, plans table), `docs/API-REFERENCE.md` (endpoints, inputs, outputs), `docs/MODULE-REFERENCE.md` (services, event keys, business rules), `docs/RUNBOOK.md` (ops/env), and the relevant plan in `docs/plans/active/` (keep statuses accurate; completed one-shot plans are deleted on merge — the PR + CONTEXT are the record). A PR whose docs are stale is not done.
 12. **RPC facts to remember:** HTTP paths are the oRPC procedure keys with slashes (`/rpc/auth/getProfile`), NOT dotted names; request bodies must be wrapped in the `{"json": <input>}` envelope; responses come back as `{"json": <data>, "meta": [...]}`.
+
+## Pre-release scope
+
+This app has not launched and has no existing user data to preserve. Implement the V3 product directly; substantial changes and removal of superseded pre-V3 behavior are acceptable. Do not retain legacy compatibility paths solely for hypothetical users or data. Preserve unrelated workspace changes and verify the exact target before destructive database operations.

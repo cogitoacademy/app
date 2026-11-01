@@ -1,0 +1,1644 @@
+import {
+  academyClass,
+  academyClassEnrollmentAllocation,
+  academyClassEnrollmentInstallment,
+  academyClassMeeting,
+  academyClassSession,
+  academyClassSessionReport,
+  academyClassTutorAbsence,
+  tutorSessionFee,
+  user,
+} from "@cogito-app/db/schema";
+import { and, count, eq, inArray } from "drizzle-orm";
+import type { DbType } from "../../lib/db";
+import type { DbOrTx, TxClient } from "../../lib/tx";
+import { lockRoomForBooking, lockTutorForBooking } from "../../lib/locks";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
+import { log } from "../../lib/logger";
+import {
+  BOOKING_STATES,
+  TERMINAL_STATES,
+} from "../booking/booking-state.types";
+import type { AuditPort } from "../audit/audit.service";
+import type { InAppNotificationPort } from "../notification/notification.service";
+import type { MeetingPort } from "../meeting/meeting.types";
+import {
+  AcademyClassInvalidOperationError,
+  AcademyClassNotFoundError,
+  AcademyClassStateConflictError,
+  AcademyClassVersionConflictError,
+} from "./academy-class.errors";
+import { createAcademyClassRepo } from "./academy-class.repo";
+import { settlementTransaction } from "../../lib/settlement-transaction";
+import { toPublicAcademyClass } from "./academy-class.public";
+import {
+  publishAcademyClassInput,
+  retryAcademyClassMeetingsInput,
+  reportTutorAbsenceInput,
+  replaceAbsentClassTutorInput,
+  rescheduleAcademyClassSessionInput,
+  listAcademyClassesInput,
+  saveAcademyClassDraftInput,
+} from "./academy-class.types";
+import type { z } from "zod";
+
+export type AcademyClassService = ReturnType<typeof createAcademyClassService>;
+type SaveDraftInput = z.infer<typeof saveAcademyClassDraftInput>;
+type SessionDraftInput = SaveDraftInput["sessions"][number];
+type PublishInput = z.infer<typeof publishAcademyClassInput>;
+type RetryMeetingsInput = z.infer<typeof retryAcademyClassMeetingsInput>;
+type ReportTutorAbsenceInput = z.infer<typeof reportTutorAbsenceInput>;
+type ReplaceAbsentClassTutorInput = z.infer<
+  typeof replaceAbsentClassTutorInput
+>;
+type RescheduleAcademyClassSessionInput = z.infer<
+  typeof rescheduleAcademyClassSessionInput
+>;
+
+const ACTIVE_BOOKING_STATES = BOOKING_STATES.filter(
+  (state) => !TERMINAL_STATES.includes(state),
+);
+const MEETING_LEASE_MS = 5 * 60 * 1000;
+const MAX_MEETING_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
+
+export function isLateTutorAbsenceNotice(
+  reportedAt: Date,
+  scheduledStartAt: Date,
+) {
+  return (
+    reportedAt.getTime() > scheduledStartAt.getTime() - 24 * 60 * 60 * 1000
+  );
+}
+
+export function scheduleChangeExitDeadline(notifiedAt: Date, startAt: Date) {
+  return new Date(
+    Math.min(startAt.getTime(), notifiedAt.getTime() + 24 * 60 * 60 * 1000),
+  );
+}
+
+export function isScheduleChangeExitOpen(now: Date, exitUntil: Date) {
+  return now.getTime() < exitUntil.getTime();
+}
+
+function isMissingClassCalendarEvent(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as {
+    code?: number | string;
+    response?: { status?: number };
+  };
+  const status = Number(value.response?.status ?? value.code);
+  return status === 404 || status === 410;
+}
+
+export function createAcademyClassService(deps: {
+  db: DbType;
+  audit: AuditPort;
+  meeting: MeetingPort;
+  notification: Pick<InAppNotificationPort, "write">;
+  clock?: () => Date;
+}) {
+  const repo = createAcademyClassRepo();
+  const currentTime = () => deps.clock?.() ?? new Date();
+
+  async function reportTutorAbsence(
+    tutorId: string,
+    input: ReportTutorAbsenceInput,
+  ) {
+    return settlementTransaction(deps.db, async (tx) => {
+      const [identity] = await tx
+        .select({ classId: academyClassSession.classId })
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId));
+      if (!identity) throw new AcademyClassNotFoundError(input.sessionId);
+      const [classRecord] = await tx
+        .select()
+        .from(academyClass)
+        .where(eq(academyClass.id, identity.classId))
+        .for("update");
+      const [session] = await tx
+        .select()
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId))
+        .for("update");
+      if (!session || session.tutorId !== tutorId)
+        throw new AcademyClassNotFoundError(input.sessionId);
+      if (
+        !classRecord ||
+        !["published", "postponed"].includes(classRecord.state) ||
+        session.state !== "scheduled"
+      )
+        throw new AcademyClassInvalidOperationError(
+          "Only scheduled sessions in a published class can receive an absence notice",
+        );
+      const now = currentTime();
+      const [priorRequest] = await tx
+        .select()
+        .from(academyClassTutorAbsence)
+        .where(
+          and(
+            eq(academyClassTutorAbsence.tutorId, tutorId),
+            eq(academyClassTutorAbsence.requestKey, input.requestKey),
+          ),
+        )
+        .for("update");
+      if (priorRequest) {
+        if (
+          priorRequest.sessionId === session.id &&
+          priorRequest.assignmentVersion === session.version &&
+          priorRequest.reason === input.reason
+        )
+          return priorRequest;
+        throw new AcademyClassStateConflictError(
+          "This absence request key was already used with different content",
+        );
+      }
+      const [existing] = await tx
+        .select()
+        .from(academyClassTutorAbsence)
+        .where(
+          and(
+            eq(academyClassTutorAbsence.sessionId, session.id),
+            eq(academyClassTutorAbsence.tutorId, tutorId),
+            eq(academyClassTutorAbsence.assignmentVersion, session.version),
+          ),
+        )
+        .for("update");
+      if (existing) {
+        if (
+          existing.tutorId === tutorId &&
+          existing.requestKey === input.requestKey &&
+          existing.reason === input.reason
+        )
+          return existing;
+        throw new AcademyClassStateConflictError(
+          "An absence notice already exists for this session",
+        );
+      }
+      const late = isLateTutorAbsenceNotice(now, session.startAt);
+      const [notice] = await tx
+        .insert(academyClassTutorAbsence)
+        .values({
+          sessionId: session.id,
+          tutorId,
+          assignmentVersion: session.version,
+          requestKey: input.requestKey,
+          reason: input.reason,
+          reportedAt: now,
+          scheduledStartAt: session.startAt,
+          late,
+        })
+        .returning();
+      await deps.audit.record({
+        db: tx,
+        actorId: tutorId,
+        actorType: "tutor",
+        action: "academy_class.tutor_absence_reported",
+        targetId: session.id,
+        targetType: "academy_class_session",
+        details: {
+          classId: classRecord.id,
+          requestKey: input.requestKey,
+          reportedAt: now.toISOString(),
+          scheduledStartAt: session.startAt.toISOString(),
+          late,
+        },
+      });
+      const admins = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.role, "admin"));
+      for (const admin of admins)
+        await deps.notification.write({
+          db: tx,
+          userId: admin.id,
+          category: "schedule",
+          title: "Tutor absence reported",
+          body: `${classRecord.titleEn}: ${session.titleEn} absence notice${late ? " was submitted late" : " was submitted"}.`,
+          eventKey: `academy-class-absence:${session.id}:v${session.version}:${admin.id}`,
+          metadata: {
+            classId: classRecord.id,
+            sessionId: session.id,
+            tutorId,
+            late,
+            reportedAt: now.toISOString(),
+          },
+        });
+      return notice!;
+    });
+  }
+
+  async function replaceAbsentTutor(
+    actorId: string,
+    input: ReplaceAbsentClassTutorInput,
+  ) {
+    const classId = await settlementTransaction(deps.db, async (tx) => {
+      const [identity] = await tx
+        .select({ classId: academyClassSession.classId })
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId));
+      if (!identity) throw new AcademyClassNotFoundError(input.sessionId);
+      const [record] = await tx
+        .select()
+        .from(academyClass)
+        .where(eq(academyClass.id, identity.classId))
+        .for("update");
+      const [session] = await tx
+        .select()
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId))
+        .for("update");
+      if (!session) throw new AcademyClassNotFoundError(input.sessionId);
+      if (!record) throw new AcademyClassNotFoundError(identity.classId);
+      if (
+        !["published", "postponed"].includes(record.state) ||
+        session.state !== "scheduled" ||
+        session.version !== input.expectedVersion
+      )
+        throw new AcademyClassStateConflictError(
+          "This session is no longer available for tutor replacement; reload the class",
+        );
+      const [absence] = await tx
+        .select()
+        .from(academyClassTutorAbsence)
+        .where(
+          and(
+            eq(academyClassTutorAbsence.sessionId, session.id),
+            eq(academyClassTutorAbsence.tutorId, session.tutorId),
+            eq(academyClassTutorAbsence.assignmentVersion, session.version),
+          ),
+        )
+        .for("update");
+      if (input.replacementTutorId === session.tutorId)
+        throw new AcademyClassInvalidOperationError(
+          "Choose a different replacement tutor",
+        );
+      const [report] = await tx
+        .select({ id: academyClassSessionReport.id })
+        .from(academyClassSessionReport)
+        .where(eq(academyClassSessionReport.sessionId, session.id))
+        .limit(1);
+      const [fee] = await tx
+        .select({ id: tutorSessionFee.id })
+        .from(tutorSessionFee)
+        .where(eq(tutorSessionFee.academyClassSessionId, session.id))
+        .limit(1);
+      if (report || fee)
+        throw new AcademyClassStateConflictError(
+          "A session with a report or earned tutor fee cannot be reassigned",
+        );
+      for (const tutorId of [
+        session.tutorId,
+        input.replacementTutorId,
+      ].toSorted())
+        await lockTutorForBooking(tx, tutorId);
+      const [profile] = await repo.getTutorProfiles(
+        tx,
+        [input.replacementTutorId],
+        true,
+      );
+      if (
+        !profile ||
+        profile.role !== "tutor" ||
+        profile.onboardingStatus !== "published"
+      )
+        throw new AcademyClassInvalidOperationError(
+          "Choose a published tutor profile",
+        );
+      const supportsMode =
+        profile.modality === "both" ||
+        (session.mode === "online" && profile.modality === "online") ||
+        (session.mode === "in_person" && profile.modality === "offline");
+      const maxClassSize =
+        session.mode === "online"
+          ? profile.onlineMaxClassSize
+          : profile.offlineMaxClassSize;
+      if (
+        !supportsMode ||
+        (maxClassSize !== null && maxClassSize < session.capacity)
+      )
+        throw new AcademyClassInvalidOperationError(
+          "The replacement tutor does not support this session mode or capacity",
+        );
+      if (
+        (await repo.findTutorBookingOverlap(
+          tx,
+          input.replacementTutorId,
+          session.startAt,
+          session.endAt,
+          ACTIVE_BOOKING_STATES,
+        )) ||
+        (await repo.findTutorClassOverlap(
+          tx,
+          record.id,
+          input.replacementTutorId,
+          session.startAt,
+          session.endAt,
+        ))
+      )
+        throw new AcademyClassInvalidOperationError(
+          "The replacement tutor has a schedule conflict",
+        );
+      const now = currentTime();
+      const [updated] = await tx
+        .update(academyClassSession)
+        .set({
+          tutorId: input.replacementTutorId,
+          version: session.version + 1,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(academyClassSession.id, session.id),
+            eq(academyClassSession.version, session.version),
+          ),
+        )
+        .returning();
+      if (!updated)
+        throw new AcademyClassStateConflictError(
+          "This session changed during replacement; reload the class",
+        );
+      await tx
+        .update(academyClassMeeting)
+        .set({
+          status: "pending",
+          nextRetryAt: now,
+          lockedAt: null,
+          errorReason: null,
+        })
+        .where(eq(academyClassMeeting.sessionId, session.id));
+      const allocations = await tx
+        .select({ studentId: academyClassEnrollmentAllocation.studentId })
+        .from(academyClassEnrollmentAllocation)
+        .where(
+          and(
+            eq(academyClassEnrollmentAllocation.sessionId, session.id),
+            inArray(academyClassEnrollmentAllocation.state, [
+              "funded",
+              "unfunded_reserved",
+            ] as const),
+          ),
+        );
+      await deps.audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action: "academy_class.session_tutor_replaced",
+        targetId: session.id,
+        targetType: "academy_class_session",
+        beforeState: {
+          tutorId: session.tutorId,
+          startAt: session.startAt.toISOString(),
+          endAt: session.endAt.toISOString(),
+        },
+        afterState: {
+          tutorId: input.replacementTutorId,
+          startAt: session.startAt.toISOString(),
+          endAt: session.endAt.toISOString(),
+          version: updated.version,
+        },
+        details: {
+          reason: input.reason,
+          absenceReportedAt: absence?.reportedAt.toISOString() ?? null,
+          tutorFeeIdr: session.tutorFeeIdr,
+          sameSchedule: true,
+        },
+      });
+      for (const userId of new Set([
+        session.tutorId,
+        input.replacementTutorId,
+        ...allocations.map((item) => item.studentId),
+      ])) {
+        await deps.notification.write({
+          db: tx,
+          userId,
+          category: "schedule",
+          title: "Class tutor updated",
+          body: `${record.titleEn}: the tutor for ${session.titleEn} has changed. The session time is unchanged.`,
+          eventKey: `academy-class-tutor-replaced:${session.id}:v${updated.version}:${userId}`,
+          metadata: {
+            classId: record.id,
+            sessionId: session.id,
+            previousTutorId: session.tutorId,
+            tutorId: input.replacementTutorId,
+            startAt: session.startAt.toISOString(),
+            endAt: session.endAt.toISOString(),
+          },
+        });
+      }
+      return record.id;
+    });
+    await processReadyMeetings(classId);
+    const record = await repo.get(deps.db, classId);
+    if (!record) throw new AcademyClassNotFoundError(classId);
+    return record;
+  }
+
+  async function rescheduleSession(
+    actorId: string,
+    input: RescheduleAcademyClassSessionInput,
+  ) {
+    const classId = await settlementTransaction(deps.db, async (tx) => {
+      const [identity] = await tx
+        .select({ classId: academyClassSession.classId })
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId));
+      if (!identity) throw new AcademyClassNotFoundError(input.sessionId);
+      const [record] = await tx
+        .select()
+        .from(academyClass)
+        .where(eq(academyClass.id, identity.classId))
+        .for("update");
+      const [session] = await tx
+        .select()
+        .from(academyClassSession)
+        .where(eq(academyClassSession.id, input.sessionId))
+        .for("update");
+      if (!session) throw new AcademyClassNotFoundError(input.sessionId);
+      if (!record) throw new AcademyClassNotFoundError(identity.classId);
+      if (
+        !["published", "postponed"].includes(record.state) ||
+        session.state !== "scheduled" ||
+        session.version !== input.expectedVersion
+      )
+        throw new AcademyClassStateConflictError(
+          "This session is no longer available to reschedule; reload the class",
+        );
+      const now = currentTime();
+      if (input.startAt <= now || input.endAt <= input.startAt)
+        throw new AcademyClassInvalidOperationError(
+          "Choose a future session time with an end after its start",
+        );
+      if (
+        input.startAt.getTime() === session.startAt.getTime() &&
+        input.endAt.getTime() === session.endAt.getTime()
+      )
+        throw new AcademyClassInvalidOperationError(
+          "Choose a different session time",
+        );
+      if (record.freeExitUntil && input.startAt < record.freeExitUntil)
+        throw new AcademyClassInvalidOperationError(
+          "The replacement session cannot start before the existing 72-hour minimum-enrollment exit window ends",
+        );
+      const classSessions = await repo.listSessionsForClass(tx, record.id);
+      const firstSession = classSessions.toSorted(
+        (a, b) => a.sequenceNumber - b.sequenceNumber,
+      )[0];
+      if (
+        record.kind === "cohort" &&
+        firstSession?.id === session.id &&
+        record.minimumCheckAt &&
+        input.startAt <= record.minimumCheckAt
+      )
+        throw new AcademyClassInvalidOperationError(
+          "The first cohort session must remain after its minimum-enrollment check",
+        );
+      const [report] = await tx
+        .select({ id: academyClassSessionReport.id })
+        .from(academyClassSessionReport)
+        .where(eq(academyClassSessionReport.sessionId, session.id))
+        .limit(1);
+      const [fee] = await tx
+        .select({ id: tutorSessionFee.id })
+        .from(tutorSessionFee)
+        .where(eq(tutorSessionFee.academyClassSessionId, session.id))
+        .limit(1);
+      if (report || fee || session.startAt <= now)
+        throw new AcademyClassStateConflictError(
+          "A delivered, earned, or started session cannot be rescheduled",
+        );
+
+      await lockTutorForBooking(tx, session.tutorId);
+      if (session.roomId) await lockRoomForBooking(tx, session.roomId);
+      if (
+        (await repo.findTutorBookingOverlap(
+          tx,
+          session.tutorId,
+          input.startAt,
+          input.endAt,
+          ACTIVE_BOOKING_STATES,
+        )) ||
+        (await repo.findTutorClassSessionOverlap(
+          tx,
+          session.id,
+          session.tutorId,
+          input.startAt,
+          input.endAt,
+        ))
+      )
+        throw new AcademyClassInvalidOperationError(
+          "The assigned tutor has a schedule conflict",
+        );
+      if (session.roomId) {
+        const [assignedRoom] = await repo.getRooms(tx, [session.roomId], true);
+        if (!assignedRoom || assignedRoom.capacity < session.capacity)
+          throw new AcademyClassInvalidOperationError(
+            "The assigned room is inactive or too small for this session",
+          );
+        if (
+          (await repo.findRoomBookingOverlap(
+            tx,
+            session.roomId,
+            input.startAt,
+            input.endAt,
+          )) ||
+          (await repo.findRoomClassSessionOverlap(
+            tx,
+            session.id,
+            session.roomId,
+            input.startAt,
+            input.endAt,
+          ))
+        )
+          throw new AcademyClassInvalidOperationError(
+            "The assigned room has a schedule conflict",
+          );
+      }
+      const exitUntil = scheduleChangeExitDeadline(now, input.startAt);
+      const [updated] = await tx
+        .update(academyClassSession)
+        .set({
+          startAt: input.startAt,
+          endAt: input.endAt,
+          version: session.version + 1,
+          scheduleChangeVersion: session.version + 1,
+          scheduleChangeNotifiedAt: now,
+          scheduleChangeExitUntil: exitUntil,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(academyClassSession.id, session.id),
+            eq(academyClassSession.version, input.expectedVersion),
+            eq(academyClassSession.state, "scheduled"),
+          ),
+        )
+        .returning();
+      if (!updated)
+        throw new AcademyClassStateConflictError(
+          "This session changed during rescheduling; reload the class",
+        );
+      await tx
+        .update(academyClassEnrollmentInstallment)
+        .set({ dueAt: input.startAt, updatedAt: now })
+        .where(
+          and(
+            eq(academyClassEnrollmentInstallment.dueSessionId, session.id),
+            eq(academyClassEnrollmentInstallment.state, "pending"),
+          ),
+        );
+      await tx
+        .update(academyClassMeeting)
+        .set({
+          status: "pending",
+          nextRetryAt: now,
+          lockedAt: null,
+          errorReason: null,
+        })
+        .where(eq(academyClassMeeting.sessionId, session.id));
+      const affected = await tx
+        .update(academyClassEnrollmentAllocation)
+        .set({ scheduleChangeVersion: updated.scheduleChangeVersion })
+        .where(
+          and(
+            eq(academyClassEnrollmentAllocation.sessionId, session.id),
+            inArray(academyClassEnrollmentAllocation.state, [
+              "unfunded_reserved",
+              "funded",
+            ] as const),
+          ),
+        )
+        .returning({ studentId: academyClassEnrollmentAllocation.studentId });
+      await deps.audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action: "academy_class.session_rescheduled",
+        targetId: session.id,
+        targetType: "academy_class_session",
+        beforeState: {
+          startAt: session.startAt.toISOString(),
+          endAt: session.endAt.toISOString(),
+          version: session.version,
+        },
+        afterState: {
+          startAt: input.startAt.toISOString(),
+          endAt: input.endAt.toISOString(),
+          version: updated.version,
+        },
+        details: {
+          classId: record.id,
+          reason: input.reason,
+          notifiedAt: now.toISOString(),
+          exitUntil: exitUntil.toISOString(),
+          tutorId: session.tutorId,
+          roomId: session.roomId,
+          tutorFeeIdr: session.tutorFeeIdr,
+        },
+      });
+      for (const userId of new Set([
+        session.tutorId,
+        ...affected.map((item) => item.studentId),
+      ]))
+        await deps.notification.write({
+          db: tx,
+          userId,
+          category: "schedule",
+          title: "Class session rescheduled",
+          body: `${record.titleEn}: ${session.titleEn} has a new time. Affected students may cancel this session without a fee before ${exitUntil.toLocaleString("en-US", { timeZone: "Asia/Jakarta" })} WIB.`,
+          eventKey: `academy-class-rescheduled:${session.id}:v${updated.version}:${userId}`,
+          metadata: {
+            classId: record.id,
+            sessionId: session.id,
+            scheduleChangeVersion: updated.version,
+            notifiedAt: now.toISOString(),
+            exitUntil: exitUntil.toISOString(),
+            startAt: input.startAt.toISOString(),
+            endAt: input.endAt.toISOString(),
+          },
+        });
+      return record.id;
+    });
+    await processReadyMeetings(classId);
+    const record = await repo.get(deps.db, classId);
+    if (!record) throw new AcademyClassNotFoundError(classId);
+    return record;
+  }
+
+  async function list(input: z.infer<typeof listAcademyClassesInput>) {
+    const [classes, lateCounts] = await Promise.all([
+      repo.list(deps.db, input),
+      deps.db
+        .select({ tutorId: academyClassTutorAbsence.tutorId, count: count() })
+        .from(academyClassTutorAbsence)
+        .where(eq(academyClassTutorAbsence.late, true))
+        .groupBy(academyClassTutorAbsence.tutorId),
+    ]);
+    const countByTutor = new Map(
+      lateCounts.map((row) => [row.tutorId, row.count]),
+    );
+    return classes.map((record) => ({
+      ...record,
+      sessions: record.sessions.map((session) => ({
+        ...session,
+        tutorAbsence: session.tutorAbsences.find(
+          (notice) =>
+            notice.tutorId === session.tutorId &&
+            notice.assignmentVersion === session.version,
+        )
+          ? {
+              ...session.tutorAbsences.find(
+                (notice) =>
+                  notice.tutorId === session.tutorId &&
+                  notice.assignmentVersion === session.version,
+              )!,
+              tutorLateNoticeCount: countByTutor.get(session.tutorId) ?? 0,
+            }
+          : null,
+        tutorAbsences: session.tutorAbsences.map((notice) => ({
+          ...notice,
+          tutorLateNoticeCount: countByTutor.get(notice.tutorId) ?? 0,
+        })),
+      })),
+    }));
+  }
+
+  async function get(id: string) {
+    const record = await repo.get(deps.db, id);
+    if (!record) throw new AcademyClassNotFoundError(id);
+    return record;
+  }
+
+  async function listPublished() {
+    const [published, postponed] = await Promise.all([
+      repo.list(deps.db, { state: "published" }),
+      repo.list(deps.db, { state: "postponed" }),
+    ]);
+    return [...published, ...postponed]
+      .toSorted(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      )
+      .map(toPublicAcademyClass);
+  }
+
+  async function getPublished(id: string) {
+    const record = await repo.get(deps.db, id);
+    if (!record || !["published", "postponed"].includes(record.state)) {
+      throw new AcademyClassNotFoundError(id);
+    }
+    return toPublicAcademyClass(record);
+  }
+
+  async function validatePublishReferences(
+    tx: TxClient,
+    record: NonNullable<Awaited<ReturnType<typeof repo.get>>>,
+  ) {
+    if (
+      !Number.isSafeInteger(record.tutorFeeIdr) ||
+      record.tutorFeeIdr < 1 ||
+      record.tutorFeeIdr > 2_000_000_000
+    ) {
+      throw new AcademyClassInvalidOperationError(
+        "Tutor fee must be a positive whole IDR amount up to Rp2,000,000,000",
+      );
+    }
+    if (record.sessions.length === 0) {
+      throw new AcademyClassInvalidOperationError(
+        "A class needs at least one session before it can be published",
+      );
+    }
+    if (record.kind === "masterclass" && record.sessions.length !== 1) {
+      throw new AcademyClassInvalidOperationError(
+        "Masterclasses must contain exactly one session",
+      );
+    }
+    if (
+      record.kind === "cohort" &&
+      record.sessions.some((s) => !s.curriculumEn?.trim())
+    ) {
+      throw new AcademyClassInvalidOperationError(
+        "Cohort sessions require an English curriculum description",
+      );
+    }
+    if (record.kind === "cohort") {
+      const firstStart = Math.min(
+        ...record.sessions.map((session) => session.startAt.getTime()),
+      );
+      if (
+        !record.minimumCheckAt ||
+        record.minimumCheckAt.getTime() >= firstStart
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "The minimum-enrollment check must be before the first session",
+        );
+      }
+      if (
+        !record.minimumEnrollment ||
+        record.minimumEnrollment >
+          Math.min(...record.sessions.map((s) => s.capacity))
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "Minimum enrollment cannot exceed any session capacity",
+        );
+      }
+    }
+
+    const tutorIds = [
+      ...new Set(record.sessions.map((session) => session.tutorId)),
+    ];
+    const roomIds = [
+      ...new Set(
+        record.sessions.flatMap((session) =>
+          session.mode === "in_person" && session.roomId
+            ? [session.roomId]
+            : [],
+        ),
+      ),
+    ];
+
+    // Keep mutable reference reads after the same locks used by the catalog,
+    // booking, and room writers. The sorted per-resource lock order prevents
+    // overlapping multi-session classes from acquiring tutors/rooms in
+    // opposite orders.
+    await lockCompetitionCatalog(tx);
+    for (const tutorId of [...tutorIds].toSorted()) {
+      await lockTutorForBooking(tx, tutorId);
+    }
+    for (const roomId of [...roomIds].toSorted()) {
+      await lockRoomForBooking(tx, roomId);
+    }
+
+    const competition = await repo.getCompetitionForPublish(
+      tx,
+      record.competitionId,
+    );
+    if (
+      !competition ||
+      !competition.isActive ||
+      (competition.parentId !== null && competition.parent?.isActive !== true)
+    ) {
+      throw new AcademyClassInvalidOperationError(
+        "The assigned competition or specialization is archived",
+        { competitionId: record.competitionId },
+      );
+    }
+
+    const profiles = await repo.getTutorProfiles(tx, tutorIds, true);
+    const profileById = new Map(
+      profiles.map((profile) => [profile.userId, profile]),
+    );
+    const rooms = await repo.getRooms(tx, roomIds, true);
+    const roomById = new Map(
+      rooms.map((availableRoom) => [availableRoom.id, availableRoom]),
+    );
+    const ordered = record.sessions.toSorted(
+      (left, right) => left.startAt.getTime() - right.startAt.getTime(),
+    );
+    for (let index = 1; index < ordered.length; index += 1) {
+      if (ordered[index]!.startAt < ordered[index - 1]!.endAt) {
+        throw new AcademyClassInvalidOperationError(
+          "Sessions in one class cannot overlap",
+        );
+      }
+    }
+
+    const now = new Date();
+    for (const [index, session] of record.sessions.entries()) {
+      const profile = profileById.get(session.tutorId);
+      if (
+        !profile ||
+        profile.role !== "tutor" ||
+        profile.onboardingStatus !== "published"
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "Assign a published tutor profile to every session before publishing",
+          { session: index + 1, tutorId: session.tutorId },
+        );
+      }
+      const supportsMode =
+        profile.modality === "both" ||
+        (session.mode === "online" && profile.modality === "online") ||
+        (session.mode === "in_person" && profile.modality === "offline");
+      if (!supportsMode) {
+        throw new AcademyClassInvalidOperationError(
+          "The assigned tutor no longer supports this session mode",
+          { session: index + 1, tutorId: session.tutorId },
+        );
+      }
+      if (
+        session.tutorFeeIdr < 1 ||
+        session.tutorFeeIdr !== record.tutorFeeIdr
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "Every session must use the class's approved flat tutor fee",
+          { session: index + 1 },
+        );
+      }
+      if (session.startAt <= now) {
+        throw new AcademyClassInvalidOperationError(
+          "Sessions must start in the future when the class is published",
+          { session: index + 1 },
+        );
+      }
+
+      if (session.mode === "online") {
+        if (session.roomId !== null) {
+          throw new AcademyClassInvalidOperationError(
+            "Online sessions cannot be assigned an in-person room",
+            { session: index + 1 },
+          );
+        }
+      } else {
+        const selectedRoom = session.roomId
+          ? roomById.get(session.roomId)
+          : undefined;
+        if (!selectedRoom) {
+          throw new AcademyClassInvalidOperationError(
+            "Select an active managed room for every in-person session",
+            { session: index + 1, roomId: session.roomId },
+          );
+        }
+        if (session.capacity > selectedRoom.capacity) {
+          throw new AcademyClassInvalidOperationError(
+            "Session capacity exceeds the selected room's capacity",
+            { session: index + 1, maximum: selectedRoom.capacity },
+          );
+        }
+        const roomBookingOverlap = await repo.findRoomBookingOverlap(
+          tx,
+          selectedRoom.id,
+          session.startAt,
+          session.endAt,
+        );
+        const roomClassOverlap = await repo.findRoomClassOverlap(
+          tx,
+          record.id,
+          selectedRoom.id,
+          session.startAt,
+          session.endAt,
+        );
+        if (roomBookingOverlap || roomClassOverlap) {
+          throw new AcademyClassInvalidOperationError(
+            "The selected managed room is already booked for this session",
+            { session: index + 1, roomId: selectedRoom.id },
+          );
+        }
+      }
+
+      const tutorBookingOverlap = await repo.findTutorBookingOverlap(
+        tx,
+        session.tutorId,
+        session.startAt,
+        session.endAt,
+        ACTIVE_BOOKING_STATES,
+      );
+      const tutorClassOverlap = await repo.findTutorClassOverlap(
+        tx,
+        record.id,
+        session.tutorId,
+        session.startAt,
+        session.endAt,
+      );
+      if (tutorBookingOverlap || tutorClassOverlap) {
+        throw new AcademyClassInvalidOperationError(
+          "The assigned tutor is already scheduled during this session",
+          { session: index + 1, tutorId: session.tutorId },
+        );
+      }
+    }
+  }
+
+  function classValues(input: SaveDraftInput, actorId: string) {
+    return {
+      kind: input.kind,
+      competitionId: input.competitionId,
+      titleEn: input.titleEn,
+      titleId: input.titleId ?? null,
+      descriptionEn: input.descriptionEn,
+      descriptionId: input.descriptionId ?? null,
+      coverKey: input.coverKey ?? null,
+      minimumEnrollment:
+        input.kind === "cohort" ? input.minimumEnrollment : null,
+      minimumCheckAt: input.kind === "cohort" ? input.minimumCheckAt : null,
+      cohortFullRateMarks: input.kind === "cohort" ? input.fullRateMarks : null,
+      cohortHalfRateMarks: input.kind === "cohort" ? input.halfRateMarks : null,
+      cohortSingleRateMarks:
+        input.kind === "cohort" ? input.singleRateMarks : null,
+      masterclassRateMarks:
+        input.kind === "masterclass" ? input.masterclassRateMarks : null,
+      tutorFeeIdr: input.tutorFeeIdr,
+      updatedBy: actorId,
+    };
+  }
+
+  function sessionValues(
+    input: SaveDraftInput,
+    session: SessionDraftInput,
+    classId: string,
+    index: number,
+  ): typeof academyClassSession.$inferInsert {
+    return {
+      ...(session.id ? { id: session.id } : {}),
+      classId,
+      sequenceNumber: index + 1,
+      capacity: session.capacity,
+      titleEn: session.titleEn,
+      titleId: session.titleId ?? null,
+      curriculumEn: session.curriculumEn ?? null,
+      curriculumId: session.curriculumId ?? null,
+      startAt: session.startAt,
+      endAt: session.endAt,
+      mode: session.mode,
+      roomId: session.roomId ?? null,
+      tutorId: session.tutorId,
+      tutorFeeIdr: input.tutorFeeIdr,
+      state: "draft",
+    };
+  }
+
+  async function validateReferences(tx: DbOrTx, input: SaveDraftInput) {
+    const competition = await repo.getCompetition(tx, input.competitionId);
+    if (
+      !competition ||
+      !competition.isActive ||
+      (competition.parentId !== null && competition.parent?.isActive !== true)
+    ) {
+      throw new AcademyClassInvalidOperationError(
+        "Select an active competition or specialization",
+        { competitionId: input.competitionId },
+      );
+    }
+
+    if (input.kind === "cohort") {
+      const firstStart = Math.min(
+        ...input.sessions.map((session) => session.startAt.getTime()),
+      );
+      if (input.minimumCheckAt.getTime() >= firstStart) {
+        throw new AcademyClassInvalidOperationError(
+          "The minimum-enrollment check must be before the first session",
+        );
+      }
+      if (
+        input.minimumEnrollment >
+        Math.min(...input.sessions.map((s) => s.capacity))
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "Minimum enrollment cannot exceed any session capacity",
+        );
+      }
+      for (const [index, session] of input.sessions.entries()) {
+        if (!session.curriculumEn?.trim()) {
+          throw new AcademyClassInvalidOperationError(
+            "Cohort sessions require an English curriculum description",
+            { session: index + 1 },
+          );
+        }
+      }
+    }
+
+    const ordered = input.sessions.toSorted(
+      (left, right) => left.startAt.getTime() - right.startAt.getTime(),
+    );
+    for (let index = 1; index < ordered.length; index += 1) {
+      if (ordered[index]!.startAt < ordered[index - 1]!.endAt) {
+        throw new AcademyClassInvalidOperationError(
+          "Sessions in one class cannot overlap",
+        );
+      }
+    }
+
+    const tutorIds = [
+      ...new Set(input.sessions.map((session) => session.tutorId)),
+    ];
+    const profiles = await repo.getTutorProfiles(tx, tutorIds);
+    const profileById = new Map(
+      profiles.map((profile) => [profile.userId, profile]),
+    );
+    for (const [index, session] of input.sessions.entries()) {
+      const profile = profileById.get(session.tutorId);
+      if (
+        !profile ||
+        profile.role !== "tutor" ||
+        profile.onboardingStatus !== "published"
+      ) {
+        throw new AcademyClassInvalidOperationError(
+          "Assign a published tutor profile to every session",
+          { session: index + 1, tutorId: session.tutorId },
+        );
+      }
+      const supportsMode =
+        profile.modality === "both" ||
+        (session.mode === "online" && profile.modality === "online") ||
+        (session.mode === "in_person" && profile.modality === "offline");
+      if (!supportsMode) {
+        throw new AcademyClassInvalidOperationError(
+          "The assigned tutor does not support this session mode",
+          { session: index + 1, tutorId: session.tutorId },
+        );
+      }
+    }
+
+    const roomIds = [
+      ...new Set(
+        input.sessions.flatMap((session) =>
+          session.mode === "in_person" && session.roomId
+            ? [session.roomId]
+            : [],
+        ),
+      ),
+    ];
+    const rooms = await repo.getRooms(tx, roomIds);
+    const roomById = new Map(
+      rooms.map((availableRoom) => [availableRoom.id, availableRoom]),
+    );
+    for (const [index, session] of input.sessions.entries()) {
+      if (session.mode !== "in_person") continue;
+      const selectedRoom = session.roomId
+        ? roomById.get(session.roomId)
+        : undefined;
+      if (!selectedRoom) {
+        throw new AcademyClassInvalidOperationError(
+          "Select an active room for every in-person session",
+          { session: index + 1, roomId: session.roomId },
+        );
+      }
+      if (session.capacity > selectedRoom.capacity) {
+        throw new AcademyClassInvalidOperationError(
+          "Session capacity exceeds the selected room's capacity",
+          { session: index + 1, maximum: selectedRoom.capacity },
+        );
+      }
+    }
+  }
+
+  function auditSnapshot(
+    record: NonNullable<Awaited<ReturnType<typeof repo.get>>>,
+  ) {
+    return {
+      id: record.id,
+      kind: record.kind,
+      competitionId: record.competitionId,
+      titleEn: record.titleEn,
+      titleId: record.titleId,
+      descriptionEn: record.descriptionEn,
+      descriptionId: record.descriptionId,
+      coverKey: record.coverKey,
+      minimumEnrollment: record.minimumEnrollment,
+      minimumCheckAt: record.minimumCheckAt,
+      cohortFullRateMarks: record.cohortFullRateMarks,
+      cohortHalfRateMarks: record.cohortHalfRateMarks,
+      cohortSingleRateMarks: record.cohortSingleRateMarks,
+      masterclassRateMarks: record.masterclassRateMarks,
+      tutorFeeIdr: record.tutorFeeIdr,
+      state: record.state,
+      version: record.version,
+      sessions: record.sessions.map((session) => ({
+        id: session.id,
+        sequenceNumber: session.sequenceNumber,
+        capacity: session.capacity,
+        titleEn: session.titleEn,
+        titleId: session.titleId,
+        curriculumEn: session.curriculumEn,
+        curriculumId: session.curriculumId,
+        startAt: session.startAt,
+        endAt: session.endAt,
+        mode: session.mode,
+        roomId: session.roomId,
+        tutorId: session.tutorId,
+        tutorFeeIdr: session.tutorFeeIdr,
+        state: session.state,
+      })),
+    };
+  }
+
+  async function saveDraft(actorId: string, input: SaveDraftInput) {
+    return deps.db.transaction(async (tx) => {
+      await validateReferences(tx, input);
+      const now = new Date();
+
+      if (!input.id) {
+        if (input.sessions.some((session) => session.id)) {
+          throw new AcademyClassInvalidOperationError(
+            "New class sessions cannot include existing session IDs",
+          );
+        }
+        const created = await repo.insertClass(tx, {
+          ...classValues(input, actorId),
+          state: "draft",
+          postponementCount: 0,
+          version: 1,
+          createdBy: actorId,
+        });
+        await repo.insertSessions(
+          tx,
+          input.sessions.map((session, index) =>
+            sessionValues(input, session, created.id, index),
+          ),
+        );
+        const result = await repo.get(tx, created.id);
+        if (!result) throw new AcademyClassNotFoundError(created.id);
+        await deps.audit.record({
+          db: tx,
+          actorId,
+          actorType: "admin",
+          action: "academy_class.draft_created",
+          targetId: result.id,
+          targetType: "academy_class",
+          afterState: auditSnapshot(result),
+          details: { reason: input.reason },
+        });
+        return result;
+      }
+
+      const before = await repo.get(tx, input.id);
+      if (!before) throw new AcademyClassNotFoundError(input.id);
+      if (before.state !== "draft") {
+        throw new AcademyClassStateConflictError(
+          "Only draft classes can be edited",
+          { id: input.id, state: before.state },
+        );
+      }
+      if (before.version !== input.expectedVersion) {
+        throw new AcademyClassVersionConflictError(
+          before.id,
+          input.expectedVersion!,
+          before.version,
+        );
+      }
+
+      const existingSessions = await repo.listSessionsForClass(tx, before.id);
+      const existingById = new Map(
+        existingSessions.map((session) => [session.id, session]),
+      );
+      const suppliedIds = input.sessions.flatMap((session) =>
+        session.id ? [session.id] : [],
+      );
+      if (new Set(suppliedIds).size !== suppliedIds.length) {
+        throw new AcademyClassInvalidOperationError(
+          "A session cannot appear more than once in the draft",
+        );
+      }
+      for (const sessionId of suppliedIds) {
+        if (!existingById.has(sessionId)) {
+          throw new AcademyClassInvalidOperationError(
+            "Session does not belong to this draft class",
+            { sessionId, classId: before.id },
+          );
+        }
+      }
+
+      const updated = await repo.updateClassVersioned(
+        tx,
+        before.id,
+        input.expectedVersion!,
+        {
+          ...classValues(input, actorId),
+          version: before.version + 1,
+          updatedAt: now,
+        },
+      );
+      if (!updated) {
+        const current = await repo.get(tx, before.id);
+        if (!current) throw new AcademyClassNotFoundError(before.id);
+        throw new AcademyClassVersionConflictError(
+          before.id,
+          input.expectedVersion!,
+          current.version,
+        );
+      }
+
+      await repo.deleteSessionsExcept(tx, before.id, suppliedIds);
+      await repo.shiftSessionSequences(tx, before.id, suppliedIds);
+      const newSessions: (typeof academyClassSession.$inferInsert)[] = [];
+      for (const [index, session] of input.sessions.entries()) {
+        const values = sessionValues(input, session, before.id, index);
+        if (session.id) {
+          const saved = await repo.updateSession(
+            tx,
+            session.id,
+            before.id,
+            values,
+          );
+          if (!saved) {
+            throw new AcademyClassStateConflictError(
+              "A draft session changed while the class was being saved",
+              { sessionId: session.id },
+            );
+          }
+        } else {
+          newSessions.push(values);
+        }
+      }
+      await repo.insertSessions(tx, newSessions);
+
+      const result = await repo.get(tx, before.id);
+      if (!result) throw new AcademyClassNotFoundError(before.id);
+      await deps.audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action: "academy_class.draft_updated",
+        targetId: result.id,
+        targetType: "academy_class",
+        beforeState: auditSnapshot(before),
+        afterState: auditSnapshot(result),
+        details: { reason: input.reason },
+      });
+      return result;
+    });
+  }
+
+  async function runMeetingAttempt(meetingId: string) {
+    const now = new Date();
+    const claimed = await deps.db.transaction((tx) =>
+      repo.claimMeeting(
+        tx,
+        meetingId,
+        now,
+        new Date(now.getTime() - MEETING_LEASE_MS),
+      ),
+    );
+    if (!claimed) return null;
+
+    const attempt = await repo.findMeetingAttemptDetails(deps.db, meetingId);
+    let result: {
+      provider: string;
+      status: "created" | "failed" | "cancelled";
+      externalEventId: string | null;
+      meetingUrl: string | null;
+      errorReason: string | null;
+      missingEvent?: true;
+    };
+    let operation: "create" | "update" | "cancel" = "create";
+    let processedScheduleVersion = claimed.scheduleVersion;
+    let clearMissingEventId = false;
+    let advanceCreationGeneration = false;
+    try {
+      if (attempt?.session.state === "cancelled") {
+        operation = "cancel";
+        if (attempt.meeting.externalEventId || claimed.attemptCount > 1) {
+          if (!deps.meeting.cancelAcademyClassEvent)
+            throw new Error(
+              "Class meeting cancellation provider is not configured",
+            );
+          await deps.meeting.cancelAcademyClassEvent(
+            attempt.meeting.externalEventId,
+            attempt.session.id,
+            attempt.meeting.creationGeneration,
+          );
+        }
+        result = {
+          provider: attempt.meeting.provider,
+          status: "cancelled",
+          externalEventId: attempt.meeting.externalEventId,
+          meetingUrl: null,
+          errorReason: null,
+        };
+      } else {
+        if (
+          !attempt ||
+          !["published", "postponed"].includes(attempt.academyClass.state)
+        ) {
+          throw new Error(
+            "Published or postponed class meeting work no longer has a class session",
+          );
+        }
+        if (
+          attempt.meeting.externalEventId &&
+          attempt.meeting.scheduleVersion < attempt.session.version
+        ) {
+          operation = "update";
+          if (!deps.meeting.updateAcademyClassEvent)
+            throw new Error("Class meeting update provider is not configured");
+          await deps.meeting.updateAcademyClassEvent(
+            attempt.meeting.externalEventId,
+            attempt.session.id,
+            attempt.session.startAt,
+            attempt.session.endAt,
+            { email: attempt.tutorEmail, name: attempt.tutorName },
+          );
+          processedScheduleVersion = attempt.session.version;
+          result = {
+            provider: attempt.meeting.provider,
+            status: "created",
+            externalEventId: attempt.meeting.externalEventId,
+            meetingUrl: attempt.meeting.meetingUrl,
+            errorReason: null,
+          };
+        } else {
+          const createEvent = deps.meeting.createAcademyClassEvent;
+          if (!createEvent) {
+            throw new Error("Class meeting provider is not configured");
+          }
+          result = await createEvent(
+            attempt.session.id,
+            attempt.session.startAt,
+            attempt.session.endAt,
+            { email: attempt.tutorEmail, name: attempt.tutorName },
+            {
+              title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
+              externalEventId: attempt.meeting.externalEventId ?? undefined,
+              creationGeneration: attempt.meeting.creationGeneration,
+            },
+          );
+          processedScheduleVersion = attempt.session.version;
+        }
+      }
+    } catch (error) {
+      clearMissingEventId =
+        operation === "update" && isMissingClassCalendarEvent(error);
+      advanceCreationGeneration = clearMissingEventId;
+      result = {
+        provider: attempt?.meeting.provider ?? "manual",
+        status: "failed",
+        externalEventId: null,
+        meetingUrl:
+          operation === "update" && !clearMissingEventId
+            ? (attempt?.meeting.meetingUrl ?? null)
+            : null,
+        errorReason: String(error),
+      };
+    }
+
+    if (result.missingEvent) {
+      clearMissingEventId = true;
+      advanceCreationGeneration = true;
+      result = { ...result, externalEventId: null, meetingUrl: null };
+    }
+
+    if (
+      result.status === "created" &&
+      (result.provider !== "google_meet" || !result.meetingUrl?.trim())
+    ) {
+      result = {
+        ...result,
+        status: "failed",
+        errorReason:
+          result.errorReason ??
+          (result.provider !== "google_meet"
+            ? "A Google Meet link is required before a class session is ready"
+            : "The Google Meet link is still pending"),
+      };
+    }
+
+    const retryDelay =
+      operation === "cancel"
+        ? 30_000
+        : Math.min(
+            MAX_MEETING_RETRY_DELAY_MS,
+            30_000 * 2 ** Math.min(10, Math.max(0, claimed.attemptCount - 1)),
+          );
+    const saved = await repo.finishMeetingAttempt(
+      deps.db,
+      meetingId,
+      {
+        provider: result.provider,
+        status: result.status,
+        externalEventId: clearMissingEventId
+          ? null
+          : (result.externalEventId ??
+            attempt?.meeting.externalEventId ??
+            null),
+        clearExternalEventId: clearMissingEventId,
+        advanceCreationGeneration,
+        meetingUrl: result.meetingUrl,
+        errorReason: result.errorReason,
+        nextRetryAt:
+          result.status === "created"
+            ? now
+            : new Date(now.getTime() + retryDelay),
+        scheduleVersion: processedScheduleVersion,
+      },
+      {
+        lockedAt: claimed.lockedAt!,
+        attemptCount: claimed.attemptCount,
+        operation,
+      },
+    );
+    return saved?.status ?? null;
+  }
+
+  async function processReadyMeetings(classId?: string) {
+    const now = new Date();
+    const ready = await repo.listReadyMeetingIds(
+      deps.db,
+      now,
+      new Date(now.getTime() - MEETING_LEASE_MS),
+      100,
+      classId,
+    );
+    let created = 0;
+    let failed = 0;
+    let cancelled = 0;
+    let processed = 0;
+    for (let index = 0; index < ready.length; index += 4) {
+      const outcomes = await Promise.all(
+        ready.slice(index, index + 4).map(({ id }) => runMeetingAttempt(id)),
+      );
+      processed += outcomes.filter((outcome) => outcome !== null).length;
+      created += outcomes.filter((outcome) => outcome === "created").length;
+      failed += outcomes.filter((outcome) => outcome === "failed").length;
+      cancelled += outcomes.filter((outcome) => outcome === "cancelled").length;
+    }
+    return {
+      processed: created + failed + cancelled,
+      created,
+      failed,
+      cancelled,
+    };
+  }
+
+  async function publish(actorId: string, input: PublishInput) {
+    const published = await deps.db.transaction(async (tx) => {
+      const locked = await repo.lockClassForPublish(tx, input.id);
+      if (!locked) throw new AcademyClassNotFoundError(input.id);
+      const before = await repo.get(tx, input.id);
+      if (!before) throw new AcademyClassNotFoundError(input.id);
+      if (before.version !== input.expectedVersion) {
+        throw new AcademyClassVersionConflictError(
+          before.id,
+          input.expectedVersion,
+          before.version,
+        );
+      }
+      if (before.state !== "draft") {
+        throw new AcademyClassStateConflictError(
+          "Only a class draft can be published",
+          { id: input.id, state: before.state },
+        );
+      }
+
+      await validatePublishReferences(tx, before);
+      const now = new Date();
+      const updated = await repo.publishClassVersioned(
+        tx,
+        before.id,
+        input.expectedVersion,
+        actorId,
+        now,
+      );
+      if (!updated) {
+        const current = await repo.get(tx, before.id);
+        if (!current) throw new AcademyClassNotFoundError(before.id);
+        throw new AcademyClassVersionConflictError(
+          before.id,
+          input.expectedVersion,
+          current.version,
+        );
+      }
+      const sessions = await repo.publishSessions(tx, before.id);
+      const onlineSessionIds = sessions
+        .filter((session) => session.mode === "online")
+        .map((session) => session.id);
+      await repo.insertMeetingJobs(tx, onlineSessionIds);
+
+      const after = await repo.get(tx, before.id);
+      if (!after) throw new AcademyClassNotFoundError(before.id);
+      await deps.audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action: "academy_class.published",
+        targetId: after.id,
+        targetType: "academy_class",
+        beforeState: auditSnapshot(before),
+        afterState: auditSnapshot(after),
+        details: {
+          reason: input.reason,
+          onlineMeetingCount: onlineSessionIds.length,
+        },
+      });
+
+      const tutorIds = [...new Set(sessions.map((session) => session.tutorId))];
+      for (const tutorId of tutorIds) {
+        await deps.notification.write({
+          db: tx,
+          userId: tutorId,
+          category: "schedule",
+          severity: "action",
+          title: "A class you teach was published",
+          body: `${after.titleEn} is published with ${sessions.filter((session) => session.tutorId === tutorId).length} assigned session(s).`,
+          eventKey: `academy_class_published:${after.id}:tutor:${tutorId}`,
+          metadata: {
+            classId: after.id,
+            classTitle: after.titleEn,
+          },
+        });
+      }
+      return after;
+    });
+
+    try {
+      await processReadyMeetings(input.id);
+    } catch (error) {
+      log({
+        level: "error",
+        action: "academy_class_meeting_dispatch_failed",
+        classId: input.id,
+        error: { message: String(error) },
+      });
+    }
+    return (await repo.get(deps.db, input.id)) ?? published;
+  }
+
+  async function retryMeetings(actorId: string, input: RetryMeetingsInput) {
+    await deps.db.transaction(async (tx) => {
+      const locked = await repo.lockClassForPublish(tx, input.id);
+      if (!locked) throw new AcademyClassNotFoundError(input.id);
+      const record = await repo.get(tx, input.id);
+      if (!record) throw new AcademyClassNotFoundError(input.id);
+      if (!["published", "postponed"].includes(record.state)) {
+        throw new AcademyClassStateConflictError(
+          "Only published or postponed class meetings can be retried",
+          { id: input.id, state: record.state },
+        );
+      }
+      const queued = await repo.queueFailedClassMeetings(
+        tx,
+        input.id,
+        new Date(),
+      );
+      if (queued.length === 0) {
+        throw new AcademyClassStateConflictError(
+          "This class has no failed meeting setup to retry",
+          { id: input.id },
+        );
+      }
+      await deps.audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action: "academy_class.meetings_retry_requested",
+        targetId: record.id,
+        targetType: "academy_class",
+        details: { reason: input.reason, meetingCount: queued.length },
+      });
+    });
+    await processReadyMeetings(input.id);
+    const record = await repo.get(deps.db, input.id);
+    if (!record) throw new AcademyClassNotFoundError(input.id);
+    return record;
+  }
+
+  async function retryFailedMeetings() {
+    const result = await processReadyMeetings();
+    return {
+      succeeded: result.created + result.cancelled,
+      failed: result.failed,
+    };
+  }
+
+  return {
+    list,
+    get,
+    listPublished,
+    getPublished,
+    saveDraft,
+    publish,
+    retryMeetings,
+    reportTutorAbsence,
+    replaceAbsentTutor,
+    rescheduleSession,
+    retryFailedMeetings,
+    processReadyMeetings,
+  };
+}

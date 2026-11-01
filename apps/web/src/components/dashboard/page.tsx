@@ -62,8 +62,10 @@ export function DashboardPage() {
             <Badge variant="info" size="lg" pill>
               Student workspace
             </Badge>
-            <Heading className="mt-4 text-3xl">Plan the next session</Heading>
-            <Text className="mt-2 max-w-2xl text-muted">
+            <Heading level={1} size="md">
+              Plan the next session
+            </Heading>
+            <Text className="max-w-full text-muted">
               Find tutors, prepare Marks, follow Cogito competition updates, and
               keep learning progress visible in one place.
             </Text>

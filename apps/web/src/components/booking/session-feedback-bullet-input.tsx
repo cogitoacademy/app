@@ -3,25 +3,18 @@
 import { useRef, type KeyboardEvent } from "react";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
+import {
+  countFeedbackCharacters,
+  parseFeedbackLines,
+  MAX_FEEDBACK_CHARACTERS,
+} from "@cogito-app/api/modules/booking/feedback-rules";
 
-const MAX_BULLETS = 30;
-const MAX_BULLET_LENGTH = 1000;
 const BULLET_PREFIX = "• ";
-const MAX_TEXT_LENGTH =
-  MAX_BULLETS * (MAX_BULLET_LENGTH + BULLET_PREFIX.length) + (MAX_BULLETS - 1);
 
 function toTextareaValue(bullets: string[]) {
   return (bullets.length > 0 ? bullets : [""])
     .map((bullet) => `${BULLET_PREFIX}${bullet}`)
     .join("\n");
-}
-
-function parseBullets(text: string) {
-  return text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .slice(0, MAX_BULLETS)
-    .map((line) => line.replace(/^\s*•\s?/, "").slice(0, MAX_BULLET_LENGTH));
 }
 
 export function SessionFeedbackBulletInput({
@@ -43,7 +36,7 @@ export function SessionFeedbackBulletInput({
   const helpId = inputId ? `${inputId}-help` : undefined;
 
   function handleChange(text: string) {
-    onChange(parseBullets(text));
+    onChange(parseFeedbackLines(text));
   }
 
   function placeCaretAfterBullet(textarea: HTMLTextAreaElement) {
@@ -63,11 +56,6 @@ export function SessionFeedbackBulletInput({
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter") {
-      return;
-    }
-
-    if (value.length >= MAX_BULLETS) {
-      event.preventDefault();
       return;
     }
 
@@ -106,7 +94,8 @@ export function SessionFeedbackBulletInput({
     });
   }
 
-  const filledCount = value.filter((bullet) => bullet.trim()).length;
+  const characterCount = countFeedbackCharacters(value);
+  const tooLong = characterCount > MAX_FEEDBACK_CHARACTERS;
 
   return (
     <div className="space-y-2.5">
@@ -114,11 +103,11 @@ export function SessionFeedbackBulletInput({
         ref={textareaRef}
         id={inputId}
         value={toTextareaValue(value)}
-        maxLength={MAX_TEXT_LENGTH}
         rows={4}
         disabled={disabled}
         aria-label={ariaLabel}
         aria-describedby={helpId}
+        aria-invalid={tooLong}
         placeholder={placeholder}
         onChange={(event) => handleChange(event.target.value)}
         onFocus={(event) => placeCaretAfterBullet(event.currentTarget)}
@@ -128,10 +117,13 @@ export function SessionFeedbackBulletInput({
       />
       <div className="flex items-center justify-between gap-3">
         <Text id={helpId} className="text-xs text-dimmed">
-          Press Enter to add another bullet
+          Press Enter for another bullet. Line breaks count toward the limit.
         </Text>
-        <Text className="shrink-0 text-xs text-dimmed">
-          {filledCount}/{MAX_BULLETS} bullets
+        <Text
+          className={`shrink-0 text-xs ${tooLong ? "text-danger" : "text-dimmed"}`}
+          aria-live="polite"
+        >
+          {characterCount}/{MAX_FEEDBACK_CHARACTERS} characters
         </Text>
       </div>
     </div>

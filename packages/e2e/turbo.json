@@ -1,0 +1,42 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "env": [
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
+        "CI",
+        "CORS_ORIGIN",
+        "DATABASE_URL",
+        "E2E_STUDENT_EMAIL",
+        "ENV_FILE",
+        "NODE_ENV",
+        "PAYMENT_PROVIDER",
+        "PAYMENT_WEBHOOK_SECRET",
+        "PORT",
+        "REDIS_URL",
+        "SANITY_PROJECT_ID",
+        "SEED_ADMIN_PASSWORD",
+        "SEED_REVIEW_STUDENT_EMAIL",
+        "SEED_STUDENT_PASSWORD",
+        "SEED_TUTOR_PASSWORD",
+        "SERVER_URL",
+        "T05_CLASS_ENROLLMENT_STUDENT_EMAIL",
+        "T05_ENROLLMENT_TEST_DB_PORT",
+        "T05_ENROLLMENT_TEST_REDIS_PORT",
+        "T05_ENROLLMENT_TEST_SERVER_PORT",
+        "T05_ENROLLMENT_TEST_WEB_PORT",
+        "T06_CLASS_LIFECYCLE_E2E",
+        "T07_CLASS_REPORTS_E2E",
+        "T07_CLASS_REPORTS_STUDENT_EMAIL",
+        "T07_ON_DEMAND_BOOKING_REPORTS_E2E",
+        "E2E_AUTH_RATE_LIMIT_RESET",
+        "TEST_DATABASE_ALLOW_RESET",
+        "TEST_DATABASE_RESET_TARGET",
+        "VITE_SERVER_URL",
+        "WEB_PORT",
+        "WEB_URL"
+      ]
+    }
+  }
+}

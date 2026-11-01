@@ -1,9 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { DomainError } from "../../lib/domain-errors";
+import { InvalidTutorSubjectSelectionError } from "../../modules/tutor-subjects/subject-selection";
 import {
   InviteNotFoundError,
   TutorProfileNotFoundError,
   InvalidInviteActionError,
+  DuplicateInviteError,
   TutorProfileOptimisticLockError,
   mapAdminTutorError,
 } from "../../modules/admin-tutor/admin-tutor.errors";
@@ -75,6 +77,18 @@ describe("admin-tutor.errors", () => {
         new InvalidInviteActionError("inv_1", "resend"),
       );
       expect(result.status).toBe(409);
+    });
+    it("should map duplicate invites to CONFLICT", () => {
+      expect(
+        mapAdminTutorError(new DuplicateInviteError("a@example.com")).status,
+      ).toBe(409);
+    });
+    it("should map invalid tutor subject selections to BAD_REQUEST", () => {
+      expect(
+        mapAdminTutorError(
+          new InvalidTutorSubjectSelectionError({ reason: "inactive" }),
+        ).status,
+      ).toBe(400);
     });
     it("should map TutorProfileOptimisticLockError to CONFLICT", () => {
       const result = mapAdminTutorError(

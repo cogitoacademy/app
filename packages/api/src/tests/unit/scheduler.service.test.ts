@@ -213,6 +213,31 @@ describe("createSchedulerService", () => {
     expect(result).toEqual({ succeeded: 2, failed: 1 });
   });
 
+  test("logs info level when meeting retries succeed", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+      onRetryFailedMeetings: mock(async () => ({ succeeded: 2, failed: 0 })),
+    });
+
+    await capturedJobHandler!({
+      id: "retry-success",
+      name: "retry-failed-meetings",
+      data: {},
+    });
+
+    expect(
+      logCaptures.some(
+        (entry) =>
+          entry.level === "info" &&
+          entry.entry?.action === "retry_failed_meetings_complete",
+      ),
+    ).toBe(true);
+  });
+
   test("handles check-tutor-lateness job", async () => {
     const onCheckTutorLateness = mock(async () => ({
       flagged: 2,
@@ -364,6 +389,70 @@ describe("createSchedulerService", () => {
     ).resolves.toEqual({ checked: 0, reconciled: 0, pending: 0, failed: 0 });
   });
 
+  test("handles class-enrollment-check jobs with report reminder counts", async () => {
+    const onClassEnrollmentDueJobs = mock(async () => ({
+      expiredCheckouts: 1,
+      defaultedInstallments: 2,
+      remindersQueued: 3,
+      bookingReportRemindersQueued: 4,
+      bookingReportRemindersFailed: 1,
+    }));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+      onClassEnrollmentDueJobs,
+    });
+
+    await expect(
+      capturedJobHandler!({
+        id: "class-check-1",
+        name: "class-enrollment-check",
+        data: null,
+      }),
+    ).resolves.toEqual({
+      expiredCheckouts: 1,
+      defaultedInstallments: 2,
+      remindersQueued: 3,
+      bookingReportRemindersQueued: 4,
+      bookingReportRemindersFailed: 1,
+    });
+    expect(onClassEnrollmentDueJobs).toHaveBeenCalledTimes(1);
+    expect(
+      logCaptures.some(
+        (entry) =>
+          entry.entry?.action === "class_enrollment_check_complete" &&
+          entry.entry.message.includes(
+            "4 legacy booking report reminders (1 failures)",
+          ),
+      ),
+    ).toBe(true);
+  });
+
+  test("defaults class-enrollment-check counts when its handler is absent", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    await expect(
+      capturedJobHandler!({
+        id: "class-check-2",
+        name: "class-enrollment-check",
+        data: {},
+      }),
+    ).resolves.toEqual({
+      expiredCheckouts: 0,
+      defaultedInstallments: 0,
+      remindersQueued: 0,
+    });
+  });
+
   test("logs warning for unknown job", async () => {
     createSchedulerService("redis://localhost:6379", {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
@@ -483,6 +572,25 @@ describe("createSchedulerService", () => {
     expect(mockDlqQueueAdd).not.toHaveBeenCalled();
   });
 
+  test("failed handler tolerates a missing job", () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    capturedFailedHandler!(undefined, new Error("missing job"));
+
+    expect(mockDlqQueueAdd).not.toHaveBeenCalled();
+    expect(
+      logCaptures.some(
+        (entry) => entry.entry?.message === "Job unknown failed",
+      ),
+    ).toBe(true);
+  });
+
   test("M4: DLQ worker logs the job and keeps a bounded Redis list", async () => {
     createSchedulerService("redis://localhost:6379", {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
@@ -519,6 +627,27 @@ describe("createSchedulerService", () => {
     expect(entry).toMatchObject({
       originalJobId: "job-1",
       failedReason: "boom",
+    });
+  });
+
+  test("DLQ worker accepts a job with no payload", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    await capturedDlqJobHandler!({
+      id: "dlq-empty",
+      name: "missing-payload",
+      data: null,
+    });
+
+    expect(mockRunCommand).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(mockRunCommand.mock.calls[0]![1][1] as string)).toEqual({
+      failedAt: expect.any(Number),
     });
   });
 

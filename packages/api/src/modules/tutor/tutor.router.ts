@@ -142,5 +142,17 @@ export function createTutorRouter(handler: TutorHandler) {
       })
       .input(getMyPayoutsInput)
       .handler(handler.getMyPayouts),
+
+    getMyPayoutFinance: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/payouts/finance",
+        tags: ["Tutor"],
+        summary: "Get my payout tax and transfer history",
+        description:
+          "Returns only the authenticated tutor's estimated tax, payout, and covered-session details",
+      })
+      .input(z.void())
+      .handler(handler.getMyPayoutFinance),
   };
 }

@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { createPaymentModule } from "../../modules/payment";
 
 const MIDTRANS_SERVER_KEY = "SB-Mid-server-test";
@@ -15,6 +15,26 @@ function midtransSignature(
 }
 
 describe("createPaymentModule provider selection (C4)", () => {
+  let statusFetch: ReturnType<typeof spyOn>;
+  beforeEach(() => {
+    statusFetch = spyOn(globalThis, "fetch").mockImplementation(
+      async (input) => {
+        const url = String(input);
+        expect(url).toBe(
+          "https://api.sandbox.midtrans.com/v2/550e8400-e29b-41d4-a716-446655440000/status",
+        );
+        return Response.json({
+          order_id: "550e8400-e29b-41d4-a716-446655440000",
+          transaction_id: "status-transaction",
+          transaction_status: "settlement",
+          fraud_status: "accept",
+          gross_amount: "430000.00",
+          currency: "IDR",
+        });
+      },
+    );
+  });
+  afterEach(() => statusFetch.mockRestore());
   const base = {
     db: {} as any,
     wallet: { getOrCreate: async () => ({}), credit: async () => ({}) } as any,

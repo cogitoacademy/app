@@ -29,10 +29,17 @@ function CalendarSelect(props: React.ComponentProps<"select">) {
     ...rest
   } = props;
   const selectedValue = value === undefined ? null : String(value);
+  const items = React.Children.toArray(children)
+    .filter(React.isValidElement)
+    .map((child) => {
+      const option = child.props as React.ComponentProps<"option">;
+      return { value: String(option.value ?? ""), label: option.children };
+    });
 
   return (
     <Select
       value={selectedValue}
+      items={items}
       disabled={disabled}
       onValueChange={(nextValue) => {
         const next = getSelectItemValue(nextValue);

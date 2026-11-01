@@ -108,7 +108,7 @@ describe("Series session completion (G18)", () => {
   let slotId: string;
   let bookingId: string;
   let sessionIds: string[] = [];
-  const perSession = 50;
+  const perSession = 44;
 
   beforeAll(async () => {
     const studentRes = await signUpAndSignIn(
@@ -129,7 +129,7 @@ describe("Series session completion (G18)", () => {
     slotId = tutorData.slotId;
   });
 
-  test("create 3-session series and accept → scheduled with 150 held", async () => {
+  test("create 3-session series and accept → scheduled with 132 held", async () => {
     const sessions = [
       {
         scheduledStartAt: new Date(Date.now() + 48 * 3600_000).toISOString(),

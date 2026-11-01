@@ -4,7 +4,6 @@ import { USER_ROLE } from "@cogito-app/api/shared/constants";
 import { db } from "@cogito-app/db";
 import { user } from "@cogito-app/db/schema";
 import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
-import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
 
 export type AdminBootstrapResult = {
@@ -14,19 +13,21 @@ export type AdminBootstrapResult = {
 };
 
 /**
- * Promotes configured operator accounts without demoting existing admins.
+ * Promotes configured operator accounts outside test mode without demoting
+ * existing admins.
  *
  * This is intentionally a reconciliation step rather than a user-creation
  * step: production seed creates the initial account when required, while boot
  * handles an account that already exists as a student and the auth hook
- * handles a first-time signup after boot.
+ * handles a first-time signup after boot. Development uses the same explicit
+ * ADMIN_EMAILS allowlist so local operator accounts can access admin tools.
  */
 export async function ensureConfiguredProductionAdmins(options?: {
   nodeEnv?: string;
   configuredEmails?: string;
 }): Promise<AdminBootstrapResult> {
   const nodeEnv = options?.nodeEnv ?? env.NODE_ENV;
-  if (!isProductionLike(nodeEnv)) {
+  if (nodeEnv === "test") {
     return { skipped: true, matched: 0, promoted: 0 };
   }
 

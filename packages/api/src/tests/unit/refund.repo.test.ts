@@ -3,10 +3,10 @@ import { createRefundRepo } from "../../modules/refund/refund.repo";
 
 function makeInsertConn(returned: any[] = [{}]) {
   const returning = mock(async () => returned);
-  const onConflictDoNothing = mock(() => ({ returning }));
-  const values = mock(() => ({ onConflictDoNothing }));
+  const onConflictDoUpdate = mock(() => ({ returning }));
+  const values = mock(() => ({ onConflictDoUpdate }));
   const insert = mock(() => ({ values }));
-  return { insert, values, onConflictDoNothing, returning };
+  return { insert, values, onConflictDoUpdate, returning };
 }
 
 function makeUpdateConn(returned: any[] = [{}]) {
@@ -43,7 +43,7 @@ describe("insertRefundRecord", () => {
     expect(result).toEqual(inserted);
     expect(conn.insert).toHaveBeenCalledTimes(1);
     expect(conn.values).toHaveBeenCalledTimes(1);
-    expect(conn.onConflictDoNothing).toHaveBeenCalledTimes(1);
+    expect(conn.onConflictDoUpdate).toHaveBeenCalledTimes(1);
     expect(conn.returning).toHaveBeenCalledTimes(1);
   });
 
@@ -63,10 +63,11 @@ describe("insertRefundRecord", () => {
     expect(result).toEqual(inserted);
   });
 
-  test("defaults paymentId and actorId to null", async () => {
+  test("keeps nullable paymentId and defaults omitted actorId", async () => {
     const conn = { ...makeInsertConn([{ id: "r3" }]) } as any;
 
     await repo.insertRefundRecord(conn, {
+      paymentId: null,
       walletId: "w2",
       amountIdr: 200,
       marks: 2,

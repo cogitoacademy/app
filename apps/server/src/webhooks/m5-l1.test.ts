@@ -26,22 +26,62 @@ const requestFor = (payload: Record<string, unknown>) =>
   });
 
 describe("webhook M5/L1 failure handling", () => {
-  test("uses lifecycle status and fallback reference in idempotency keys", () => {
-    expect(paymentWebhookIdempotencyKey("stub", basePayload)).toBe(
-      "stub:evt_m5:PAID",
-    );
+  test("hashes only bounded decision evidence into webhook idempotency keys", () => {
+    const original = paymentWebhookIdempotencyKey("stub", basePayload);
+    expect(original).toMatch(/^payment-webhook:[a-f0-9]{64}$/);
+    expect(paymentWebhookIdempotencyKey("stub", basePayload)).toBe(original);
     expect(
       paymentWebhookIdempotencyKey("stub", {
         ...basePayload,
         status: "PENDING",
       }),
-    ).toBe("stub:evt_m5:PENDING");
+    ).not.toBe(original);
     expect(
-      paymentWebhookIdempotencyKey("stub", {
+      paymentWebhookIdempotencyKey("midtrans", {
         ...basePayload,
-        providerEventId: null,
+        providerEventId: "txn_1",
+        status: "REFUNDED",
+        refundKind: "partial",
+        refundAmountIdr: 20_000,
+        amountIdr: 50_000,
+        currency: "IDR",
+        providerRefundIdentity: "a".repeat(64),
       }),
-    ).toBe("stub:stub:user1:pkg1:PAID");
+    ).not.toBe(
+      paymentWebhookIdempotencyKey("midtrans", {
+        ...basePayload,
+        providerEventId: "txn_1",
+        status: "REFUNDED",
+        refundKind: "full",
+        refundAmountIdr: 50_000,
+        amountIdr: 50_000,
+        currency: "IDR",
+        providerRefundIdentity: "b".repeat(64),
+      }),
+    );
+    expect(
+      paymentWebhookIdempotencyKey("midtrans", {
+        ...basePayload,
+        providerEventId: "txn_1",
+        status: "REFUNDED",
+        refundKind: "full",
+        amountIdr: 50_000,
+        currency: "IDR",
+        providerSuccessAt: "2026-10-23T01:00:00.000Z",
+        providerSuccessTimeStatus: "verified",
+      }),
+    ).not.toBe(
+      paymentWebhookIdempotencyKey("midtrans", {
+        ...basePayload,
+        providerEventId: "txn_1",
+        status: "REFUNDED",
+        refundKind: "full",
+        amountIdr: 50_000,
+        currency: "IDR",
+        providerSuccessAt: "2026-10-23T01:00:01.000Z",
+        providerSuccessTimeStatus: "verified",
+      }),
+    );
   });
 
   test("L1: event with no event id AND no reference → 400", async () => {

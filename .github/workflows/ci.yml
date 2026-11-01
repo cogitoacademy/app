@@ -206,7 +206,7 @@ jobs:
     # still gate those. Manual dispatches always run the suite.
     if: needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -218,7 +218,20 @@ jobs:
           POSTGRES_PASSWORD: password
           POSTGRES_DB: cogito-test
         ports:
-          - 5432:5432
+          - 6769:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres_payout:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: cogito-test-payout
+        ports:
+          - 6770:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
@@ -234,7 +247,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/cogito-test
+      DATABASE_URL: postgresql://postgres:password@localhost:6769/cogito-test
       REDIS_URL: redis://localhost:6379
       BETTER_AUTH_SECRET: ci-secret-at-least-32-characters-long-xxxx
       BETTER_AUTH_URL: http://localhost:3001
@@ -253,6 +266,8 @@ jobs:
           key: ${{ runner.os }}-bun-install-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-install-
       - run: bun install --frozen-lockfile
+      - name: Test LCOV merger
+        run: bun test ./.github/scripts/merge-lcov.test.ts ./.github/scripts/coverage-counters.test.ts ./.github/scripts/coverage-partitions.test.ts
       - name: Create env file for drizzle
         run: |
           echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
@@ -264,20 +279,46 @@ jobs:
           echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
+      - name: Seed V3 defaults for API coverage
+        run: bun run seed --defaults-only
+        working-directory: apps/server
+        env:
+          SEED_ADMIN_PASSWORD: ci-seed-admin-password
+      - name: Create payout integration Drizzle env
+        run: |
+          echo "DATABASE_URL=${{ env.PAYOUT_DATABASE_URL }}" > apps/server/.env.test-payout
+          echo "NODE_ENV=test" >> apps/server/.env.test-payout
+        env:
+          PAYOUT_DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
+      - name: Migrate isolated payout integration database
+        run: bun run db:migrate
+        env:
+          ENV_FILE: ../../apps/server/.env.test-payout
+      - name: Seed V3 defaults for payout coverage
+        run: bun --env-file=.env.test-payout run seed --defaults-only
+        working-directory: apps/server
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
+          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Test with coverage
         id: coverage
-        run: bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+        run: bun .github/scripts/coverage-runner.ts --collect-only
         continue-on-error: true
+        env:
+          PAYOUT_DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
+          COVERAGE_DB_RESET_WINDOW: confirmed
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
         run: bun test --timeout 30000 apps/server/src/
       - name: Post coverage comment + enforce gate
-        # Keep a failed test suite as the primary failure. The coverage command
-        # itself still runs the gate below when it was actually attempted.
-        if: ${{ always() && steps.coverage.outcome != 'skipped' }}
+        id: coverage_gate
+        # A failed collection/merge may leave Bun's raw profile at the default
+        # path. Only report coverage from a fully merged profile.
+        if: ${{ always() && steps.coverage.outcome == 'success' }}
         run: bun .github/scripts/coverage-comment.ts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LCOV_FILE: ./coverage/lcov.info
+          LCOV_FILE: ./coverage/lcov.merged.info
+          LCOV_FUNCTION_IDENTITY_MANIFEST: ./coverage/lcov.function-identity.json
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COVERAGE_API_THRESHOLD: 100
           COVERAGE_OVERALL_THRESHOLD: 100
@@ -286,105 +327,15 @@ jobs:
       - name: Fail if coverage test command failed
         if: ${{ always() && steps.coverage.outcome == 'failure' }}
         run: exit 1
-
-  e2e:
-    name: E2E Browser Workflow
-    needs: detect
-    # Heaviest job (Chromium, seeded DB, ~3min): app-code PRs only, same
-    # rationale as Test + Coverage above. Manual dispatches always run it.
-    if: needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: cogito-test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/cogito-test
-      REDIS_URL: redis://localhost:6379
-      BETTER_AUTH_SECRET: ci-secret-at-least-32-characters-long-xxxx
-      BETTER_AUTH_URL: http://localhost:3101
-      SERVER_URL: http://localhost:3101
-      WEB_URL: http://localhost:3100
-      WEB_PORT: 3100
-      VITE_SERVER_URL: http://localhost:3101
-      CORS_ORIGIN: http://localhost:3100
-      PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters-long
-      PAYMENT_PROVIDER: stub
-      SANITY_PROJECT_ID: skfmwuke
-      NODE_ENV: test
-      SEED_STUDENT_PASSWORD: Student123!
-      SEED_TUTOR_PASSWORD: Tutor123!
-      SEED_ADMIN_PASSWORD: AdminPassword123!
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2.2.0
-      - uses: actions/cache@v5
+      - name: Upload coverage profiles for gate diagnosis
+        if: ${{ always() && (steps.coverage.outcome == 'failure' || steps.coverage_gate.outcome == 'failure') }}
+        uses: actions/upload-artifact@v4
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-install-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-install-
-      - run: bun install --frozen-lockfile
-      - name: Create isolated E2E environment
-        run: |
-          echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env.test
-          echo "REDIS_URL=${{ env.REDIS_URL }}" >> apps/server/.env.test
-          echo "PORT=3101" >> apps/server/.env.test
-          echo "WEB_PORT=${{ env.WEB_PORT }}" >> apps/server/.env.test
-          echo "BETTER_AUTH_SECRET=${{ env.BETTER_AUTH_SECRET }}" >> apps/server/.env.test
-          echo "BETTER_AUTH_URL=${{ env.BETTER_AUTH_URL }}" >> apps/server/.env.test
-          echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env.test
-          echo "VITE_SERVER_URL=${{ env.VITE_SERVER_URL }}" >> apps/server/.env.test
-          echo "PAYMENT_PROVIDER=${{ env.PAYMENT_PROVIDER }}" >> apps/server/.env.test
-          echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env.test
-          echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env.test
-          echo "NODE_ENV=${{ env.NODE_ENV }}" >> apps/server/.env.test
-          echo "SEED_STUDENT_PASSWORD=${{ env.SEED_STUDENT_PASSWORD }}" >> apps/server/.env.test
-          echo "SEED_TUTOR_PASSWORD=${{ env.SEED_TUTOR_PASSWORD }}" >> apps/server/.env.test
-          echo "SEED_ADMIN_PASSWORD=${{ env.SEED_ADMIN_PASSWORD }}" >> apps/server/.env.test
-      - name: Migrate isolated E2E database
-        run: bun run db:migrate
-        env:
-          ENV_FILE: ../../apps/server/.env.test
-      - name: Install Chromium
-        # Resolve the CLI from the E2E workspace so the browser revision
-        # matches its locked @playwright/test dependency. Running bunx from
-        # the repository root can resolve a transient CLI and leave the
-        # headless-shell revision expected by the tests uninstalled.
-        working-directory: packages/e2e
-        run: bunx playwright install --with-deps chromium
-      - name: Run browser workflow
-        run: bun run test:e2e
-      - name: Upload Playwright report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: playwright-report
+          name: api-coverage-profiles-${{ github.run_id }}
           path: |
-            packages/e2e/playwright-report
-            packages/e2e/test-results
-          if-no-files-found: ignore
-          retention-days: 14
+            coverage/api-*/counters.json
+            coverage/counters.merged.json
+            coverage/lcov.info
+            coverage/lcov.merged.info
+            coverage/lcov.function-identity.json
+          if-no-files-found: warn

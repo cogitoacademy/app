@@ -207,7 +207,9 @@ export class IdempotencyStore {
         oldest = key;
       }
     }
-    if (oldest) this.store.delete(oldest);
+    // When this method reaches the eviction pass, the first key is the oldest.
+    // Map.delete with null is a no-op for the degenerate maxEntries=0 case.
+    this.store.delete(oldest!);
   }
 }
 

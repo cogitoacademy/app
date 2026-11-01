@@ -24,7 +24,8 @@ import type { Elysia } from "elysia";
  */
 export type EvlogApp = ReturnType<typeof evlog>;
 
-export const MAX_BODY_BYTES = 1024 * 1024;
+import { requestBodyBudget } from "./body-limits";
+export { MAX_BODY_BYTES } from "./body-limits";
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -46,8 +47,7 @@ export function bodyLimitResponse(): Response {
  * request is within bounds.
  */
 export function requestBodyLimit(request: Request): Response | null {
-  const isWebhook = request.url.includes("/webhooks/");
-  const limit = isWebhook ? MAX_WEBHOOK_BODY_BYTES : MAX_BODY_BYTES;
+  const limit = requestBodyBudget(request);
   const contentLength = request.headers.get("content-length");
   if (contentLength && parseInt(contentLength, 10) > limit) {
     return bodyLimitResponse();

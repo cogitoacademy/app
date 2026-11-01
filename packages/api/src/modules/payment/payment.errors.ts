@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
 import {
   notFound,
+  badRequest,
   forbidden,
   conflict,
   serviceUnavailable,
@@ -12,6 +13,74 @@ export class PackageNotFoundError extends DomainError {
   readonly domain = "payment";
   constructor(code: string) {
     super("PACKAGE_NOT_FOUND", "Package not found", { code });
+  }
+}
+
+export class V3TopUpUnavailableError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super("V3_TOP_UP_UNAVAILABLE", "V3 top-ups are not active");
+  }
+}
+
+export class TopUpAmountOutOfRangeError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super("TOP_UP_AMOUNT_OUT_OF_RANGE", "Choose a smaller top-up amount");
+  }
+}
+
+export class V3PackagePurchaseDisabledError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "V3_TOP_UP_REQUIRED",
+      "New top-ups must use the active quoted pricing flow",
+    );
+  }
+}
+
+export class TopUpQuoteNotFoundError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super("TOP_UP_QUOTE_NOT_FOUND", "Top-up quote not found");
+  }
+}
+
+export class TopUpQuoteExpiredError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super("TOP_UP_QUOTE_EXPIRED", "This top-up quote has expired");
+  }
+}
+
+export class TopUpQuoteRequestConflictError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "TOP_UP_QUOTE_REQUEST_CONFLICT",
+      "This request key was already used for different top-up terms",
+    );
+  }
+}
+
+export class TopUpQuoteChoiceConflictError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "TOP_UP_QUOTE_CHOICE_CONFLICT",
+      "This quote already has a payment for a different top-up choice",
+    );
+  }
+}
+
+export class V3TopUpChoiceUnavailableError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "V3_TOP_UP_CHOICE_UNAVAILABLE",
+      "That top-up choice is not available for this quote",
+    );
   }
 }
 
@@ -128,9 +197,21 @@ export class PaymentWebhookMismatchError extends DomainError {
 export function mapPaymentError(
   err: DomainError,
 ): ORPCError<string, undefined> {
+  if (err instanceof TopUpAmountOutOfRangeError)
+    return badRequest(err.message, err);
   if (err instanceof PackageNotFoundError) return notFound(err.message, err);
+  if (err instanceof TopUpQuoteNotFoundError) return notFound(err.message, err);
   if (err instanceof PaymentNotFoundError) return notFound(err.message, err);
   if (err instanceof PackageAlreadyPurchasedError)
+    return conflict(err.message, err);
+  if (
+    err instanceof V3TopUpUnavailableError ||
+    err instanceof V3PackagePurchaseDisabledError ||
+    err instanceof TopUpQuoteExpiredError ||
+    err instanceof TopUpQuoteRequestConflictError ||
+    err instanceof TopUpQuoteChoiceConflictError ||
+    err instanceof V3TopUpChoiceUnavailableError
+  )
     return conflict(err.message, err);
   if (err instanceof PaymentTestModeRestrictedError)
     return forbidden(err.message, err);

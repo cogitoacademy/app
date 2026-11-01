@@ -23,6 +23,7 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     insertRoom: mock(async (_conn: any, _values: any) => ({})),
     findRoomById: mock(async (_conn: any, _roomId: string) => null),
     findRoomRecordById: mock(async (_conn: any, _roomId: string) => null),
+    lockRoomRecordById: mock(async (_conn: any, _roomId: string) => null),
     updateRoom: mock(async (_conn: any, _roomId: string, _values: any) => null),
     deactivateRoom: mock(async (_conn: any, _roomId: string) => null),
     findRoomBookings: mock(async (_conn: any) => []),
@@ -89,6 +90,18 @@ describe("createRoomService", () => {
   });
 
   describe("listPendingApprovals", () => {
+    test("lists pending approvals with repository defaults", async () => {
+      const approvals = [{ bookingId: "default-page" }];
+      const findPendingRoomApprovals = mock(async (_conn) => approvals);
+      const service = createRoomService(
+        makeRepo({ findPendingRoomApprovals }),
+        makeDb(),
+      );
+
+      await expect(service.listPendingApprovals()).resolves.toEqual(approvals);
+      expect(findPendingRoomApprovals).toHaveBeenCalledWith(expect.anything());
+    });
+
     test("returns pending room approvals from repo", async () => {
       const approvals = [
         {
@@ -149,7 +162,7 @@ describe("createRoomService", () => {
         capacity: 12,
       });
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => makeRoom()),
+        lockRoomRecordById: mock(async () => makeRoom()),
         updateRoom: mock(async (_conn, roomId, values) => {
           expect(roomId).toBe("room1");
           expect(values).toEqual({
@@ -174,7 +187,7 @@ describe("createRoomService", () => {
 
     test("throws when the room does not exist", async () => {
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => null),
+        lockRoomRecordById: mock(async () => null),
       });
       const service = createRoomService(repo, makeDb());
 
@@ -188,13 +201,30 @@ describe("createRoomService", () => {
       ).rejects.toThrow("Room not found");
       expect(repo.updateRoom).not.toHaveBeenCalled();
     });
+
+    test("throws when the room changes before the update is saved", async () => {
+      const repo = makeRepo({
+        lockRoomRecordById: mock(async () => makeRoom()),
+        updateRoom: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(
+        service.updateRoom({
+          id: "room1",
+          name: "Room B",
+          location: "Building 2",
+          capacity: 12,
+        }),
+      ).rejects.toThrow("Room not found");
+    });
   });
 
   describe("deactivateRoom", () => {
     test("soft-deactivates an active room", async () => {
       const updated = makeRoom({ isActive: false });
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => makeRoom()),
+        lockRoomRecordById: mock(async () => makeRoom()),
         deactivateRoom: mock(async (_conn, roomId) => {
           expect(roomId).toBe("room1");
           return updated;
@@ -209,7 +239,7 @@ describe("createRoomService", () => {
       const inactive = makeRoom({ isActive: false });
       const deactivate = mock(async () => null);
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => inactive),
+        lockRoomRecordById: mock(async () => inactive),
         deactivateRoom: deactivate,
       });
       const service = createRoomService(repo, makeDb());
@@ -220,11 +250,23 @@ describe("createRoomService", () => {
 
     test("throws when the room does not exist", async () => {
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => null),
+        lockRoomRecordById: mock(async () => null),
       });
       const service = createRoomService(repo, makeDb());
 
       await expect(service.deactivateRoom("missing")).rejects.toThrow(
+        "Room not found",
+      );
+    });
+
+    test("throws when the room changes before deactivation is saved", async () => {
+      const repo = makeRepo({
+        lockRoomRecordById: mock(async () => makeRoom()),
+        deactivateRoom: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(service.deactivateRoom("room1")).rejects.toThrow(
         "Room not found",
       );
     });
@@ -258,6 +300,25 @@ describe("createRoomService", () => {
     });
   });
 
+  describe("requestRoomForBooking", () => {
+    test("returns unavailable when the requested room no longer exists", async () => {
+      const repo = makeRepo({ findRoomById: mock(async () => null) });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(
+        service.requestRoomForBooking(
+          {},
+          {
+            bookingId: "b1",
+            roomId: "missing",
+            startAt: new Date("2024-01-01T10:00:00Z"),
+            endAt: new Date("2024-01-01T11:00:00Z"),
+          },
+        ),
+      ).resolves.toEqual({ available: false, reason: "room_not_found" });
+    });
+  });
+
   describe("assignRoom", () => {
     test("throws notFound when room not found", async () => {
       const repo = makeRepo({ findRoomById: mock(async () => null) });
@@ -288,6 +349,23 @@ describe("createRoomService", () => {
           new Date("2024-01-01T11:00:00Z"),
         ),
       ).rejects.toThrow("Room is already booked");
+    });
+
+    test("rejects assigning a room when the booking state is unknown", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findBookingStateById: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(
+        service.assignRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("Room assignment requires the booking");
     });
 
     test("assigns room when available", async () => {
@@ -419,6 +497,28 @@ describe("createRoomService", () => {
           new Date("2024-01-01T11:00:00Z"),
         ),
       ).rejects.toThrow("no active room assignment");
+    });
+
+    test("rejects relocation when the booking state is unknown", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb_old",
+          roomId: "room_old",
+          status: "confirmed",
+        })),
+        findBookingStateById: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(
+        service.relocateRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("Room assignment requires the booking");
     });
 
     test("throws conflict when new room is occupied", async () => {
@@ -850,6 +950,30 @@ describe("room service notifications (P1-3)", () => {
     };
     return { notificationPort, bookingPort };
   }
+
+  test("does not notify when booking recipients are unavailable", async () => {
+    const repo = makeRepo({
+      findRoomById: mock(async () => makeRoom()),
+      findRoomBookingsForUpdate: mock(async () => []),
+      insertRoomBooking: mock(async () => roomBookingRow),
+    });
+    const notificationPort = { writeBestEffort: mock(async () => {}) };
+    const service = createRoomService(
+      repo,
+      makeDb(),
+      undefined,
+      notificationPort,
+    );
+
+    await service.assignRoom(
+      "b1",
+      "room1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+    );
+
+    expect(notificationPort.writeBestEffort).not.toHaveBeenCalled();
+  });
 
   test("assignRoom notifies tutor and each confirmed student (emailRequired)", async () => {
     const repo = makeRepo({

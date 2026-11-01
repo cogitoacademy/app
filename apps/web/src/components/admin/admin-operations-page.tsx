@@ -265,7 +265,7 @@ export function AdminOperationsPage() {
         <Heading level={1} size="md">
           Keep every booking moving
         </Heading>
-        <Text className="text-muted">
+        <Text className="max-w-full text-muted">
           Resolve booking issues, inspect wallets, and coordinate offline rooms
           from one workspace.
         </Text>
@@ -570,7 +570,7 @@ function BookingQueue({
               </>
             ) : (
               <>
-                <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
+                <TableContainer className="min-w-0 max-w-none">
                   <Table className="min-w-[76rem] text-sm">
                     <TableHeader>
                       <TableRow>
@@ -778,7 +778,10 @@ export function AdminBookingDetailPage({
       ...orpc.admin.getWallet.queryOptions({
         input: { userId: participant.userId },
       }),
-      enabled: booking !== null && bookingQuery.isSuccess,
+      enabled:
+        booking !== null &&
+        bookingQuery.isSuccess &&
+        participant.role !== "tutor",
     })),
   });
   const ledgerQueries = useQueries({
@@ -790,7 +793,10 @@ export function AdminBookingDetailPage({
           limit: 8,
         },
       }),
-      enabled: booking !== null && bookingQuery.isSuccess,
+      enabled:
+        booking !== null &&
+        bookingQuery.isSuccess &&
+        participant.role !== "tutor",
     })),
   });
   const metadata = getOverrideMetadata(booking?.overrideMeta);
@@ -862,15 +868,57 @@ export function AdminBookingDetailPage({
   const participantFinancials = new Map(
     participants.map((participant, index) => [
       participant.id,
-      <AdminParticipantFinancialDetails
-        key={participant.id}
-        affected={affectedParticipants.includes(participant.userId)}
-        wallet={walletQueries[index]?.data}
-        walletLoading={walletQueries[index]?.isPending ?? false}
-        ledger={ledgerQueries[index]?.data?.items ?? []}
-        ledgerLoading={ledgerQueries[index]?.isPending ?? false}
-        timezone={booking.timezone}
-      />,
+      participant.role === "tutor" ? (
+        <div key={participant.id} className="border-t border-border p-3">
+          <Text className="text-xs font-medium text-muted">
+            Booking honorarium (gross)
+          </Text>
+          {bookingQuery.isError ? (
+            <Text className="mt-1 text-xs">
+              Honorarium could not be loaded.
+            </Text>
+          ) : bookingQuery.data?.tutorFees?.length ? (
+            <div className="mt-1 divide-y divide-border">
+              {bookingQuery.data.tutorFees.map((fee) => (
+                <div
+                  key={fee.id}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2"
+                >
+                  <Text className="text-xs text-muted">
+                    {formatBookingDate(fee.scheduledStartAt, booking.timezone)}
+                  </Text>
+                  <div className="flex items-center gap-2">
+                    <Text className="text-xs font-medium">
+                      Rp{fee.grossHonorariumIdr.toLocaleString("id-ID")}
+                    </Text>
+                    <Badge
+                      variant={
+                        fee.payoutStatus === "paid" ? "success" : "tertiary"
+                      }
+                    >
+                      {fee.payoutStatus === "paid"
+                        ? "Paid"
+                        : "Awaiting payment"}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Text className="mt-1 text-xs">Honorarium not yet recorded.</Text>
+          )}
+        </div>
+      ) : (
+        <AdminParticipantFinancialDetails
+          key={participant.id}
+          affected={affectedParticipants.includes(participant.userId)}
+          wallet={walletQueries[index]?.data}
+          walletLoading={walletQueries[index]?.isPending ?? false}
+          ledger={ledgerQueries[index]?.data?.items ?? []}
+          ledgerLoading={ledgerQueries[index]?.isPending ?? false}
+          timezone={booking.timezone}
+        />
+      ),
     ]),
   );
   const adminSidebarContent = (
@@ -1115,7 +1163,7 @@ function AdminStateHistoryCard({
       </CardHeader>
       <CardBody className="px-6 py-2">
         {loading ? (
-          <Text className="py-4 text-muted">Loading state history…</Text>
+          <Loader />
         ) : error ? (
           <div className="py-4">
             <Text>{errorMessage ?? "State history could not be loaded."}</Text>
@@ -1184,7 +1232,7 @@ function AdminParticipantFinancialDetails({
           {affected ? <Badge variant="warning">Affected</Badge> : null}
         </div>
         {walletLoading ? (
-          <Text className="text-xs text-muted">Loading wallet…</Text>
+          <Loader />
         ) : wallet ? (
           <div className="grid grid-cols-3 gap-3 text-right">
             <WalletMetric label="Total" value={wallet.totalBalance} />
@@ -1200,7 +1248,7 @@ function AdminParticipantFinancialDetails({
       <div className="mt-3 border-t border-border pt-3">
         <Text className="text-xs font-medium text-muted">Booking ledger</Text>
         {ledgerLoading ? (
-          <Text className="mt-1 text-xs text-muted">Loading entries…</Text>
+          <Loader />
         ) : ledger.length > 0 ? (
           <div className="mt-1 divide-y divide-border">
             {ledger.slice(0, 4).map((entry) => (
@@ -1324,8 +1372,8 @@ function OverrideDialog({
   const previewHint = preview
     ? null
     : !reason.trim()
-      ? "Reason required — fill it to unlock Preview."
-      : "Run Preview first — Apply unlocks after a successful preview.";
+      ? "Reason required. Fill it to unlock Preview."
+      : "Run Preview first. Apply unlocks after a successful preview.";
 
   return (
     <Drawer
@@ -1446,9 +1494,7 @@ function OverrideDialog({
             </div>
             <div className="overflow-hidden rounded-lg border border-item-border bg-item">
               {participantQuery.isPending ? (
-                <Text className="p-3.5 text-sm text-muted">
-                  Loading participants…
-                </Text>
+                <Loader />
               ) : participantQuery.isError ? (
                 <div className="flex items-center justify-between gap-3 p-3.5">
                   <Text className="text-sm text-danger">
@@ -2018,7 +2064,9 @@ function WalletLookup() {
                           <TableCell>
                             <CogitoMarks value={entry.amount} size="3" />
                           </TableCell>
-                          <TableCell>{entry.bookingId ?? "—"}</TableCell>
+                          <TableCell>
+                            {entry.bookingId ?? "Not linked"}
+                          </TableCell>
                           <TableCell>
                             {formatBookingDate(entry.createdAt)}
                           </TableCell>
@@ -2353,7 +2401,7 @@ function RoomCatalog({
           </>
         ) : (
           <>
-            <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+            <TableContainer className="min-w-0">
               <Table className="min-w-[40rem]">
                 <TableHeader>
                   <TableRow>
@@ -2794,7 +2842,7 @@ function PendingRoomApprovals({
             size="compact"
           />
         ) : (
-          <TableContainer className="w-[calc(100%+3rem)]!">
+          <TableContainer>
             <Table>
               <TableHeader>
                 <TableRow>

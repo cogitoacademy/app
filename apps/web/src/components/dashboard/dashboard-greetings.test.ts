@@ -18,13 +18,13 @@ describe("dashboard greetings", () => {
 
   test("uses role-specific copy and the first name", () => {
     expect(createDashboardGreeting("student", "Alya Putri", 8, 0).title).toBe(
-      "Good morning, Alya — ready to learn?",
+      "Good morning, Alya. ready to learn?",
     );
     expect(createDashboardGreeting("tutor", "Bima", 8, 0).title).toContain(
       "inspire",
     );
     expect(createDashboardGreeting("admin", "Citra", 8, 0).title).toBe(
-      "Good morning, Admin — let's keep Cogito moving",
+      "Good morning, Admin. let's keep Cogito moving",
     );
   });
 

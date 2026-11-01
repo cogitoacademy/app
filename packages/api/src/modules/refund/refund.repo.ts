@@ -1,15 +1,16 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { paymentRecord, refundRecord } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export type RefundRepo = ReturnType<typeof createRefundRepo>;
 
 /**
- * Inserts a refund record.
+ * Inserts a refund record or advances a provider transaction's cumulative
+ * reconciliation row without allowing older status snapshots to reduce it.
  *
  * @param conn - the database connection or active transaction
  * @param record - the refund fields
- * @returns the inserted refund row
+ * @returns the inserted or updated refund row
  */
 async function insertRefundRecord(
   conn: DbOrTx,
@@ -34,7 +35,16 @@ async function insertRefundRecord(
       actorId: record.actorId ?? null,
       providerEventId: record.providerEventId ?? null,
     })
-    .onConflictDoNothing({ target: refundRecord.providerEventId })
+    .onConflictDoUpdate({
+      target: refundRecord.providerEventId,
+      set: {
+        paymentId: record.paymentId ?? null,
+        walletId: record.walletId,
+        amountIdr: sql`greatest(${refundRecord.amountIdr}, excluded.amount_idr)`,
+        marks: sql`greatest(${refundRecord.marks}, excluded.marks)`,
+        reason: record.reason,
+      },
+    })
     .returning();
   return inserted;
 }

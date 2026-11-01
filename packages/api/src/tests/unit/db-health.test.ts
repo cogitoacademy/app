@@ -21,6 +21,18 @@ function makeDb(behavior: { ok?: boolean; ms?: number } = {}) {
 }
 
 describe("healthCheck", () => {
+  test("reports degraded when Redis is slow but reachable", async () => {
+    const redis = new InMemoryRedis();
+    redis.ping = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+      return "PONG";
+    };
+    const result = await healthCheck(redis, makeDb({ ms: 0 }));
+    expect(result.checks.redis).toBe("degraded");
+    expect(result.checks.scheduler).toBe("ok");
+    expect(result.status).toBe("degraded");
+  });
+
   test("returns ok when database responds quickly", async () => {
     const result = await healthCheck(undefined, makeDb({ ms: 5 }));
     expect(result.checks.database).toBe("ok");
@@ -188,16 +200,72 @@ describe("checkDlqHealth", () => {
     await expect(checkDlqHealth(redis as any)).resolves.toBe(0);
   });
 
+  test("ignores malformed and non-object Lua payloads and counts only timestamps after the cutoff", async () => {
+    const redis = {
+      ping: async () => "PONG",
+      eval: async (
+        _script: string,
+        _keys: string[],
+        args: (string | number)[],
+      ) => {
+        const cutoff = Number(args[0]);
+        const rawEntries = [
+          "not-json",
+          JSON.stringify("string"),
+          JSON.stringify(42),
+          JSON.stringify(null),
+          JSON.stringify([]),
+          JSON.stringify({ failedAt: cutoff }), // inclusive stale edge
+          JSON.stringify({ failedAt: cutoff + 1 }), // future of cutoff
+        ];
+        return rawEntries.reduce((depth, raw) => {
+          let entry: unknown;
+          try {
+            entry = JSON.parse(raw);
+          } catch {
+            return depth;
+          }
+          if (
+            typeof entry === "object" &&
+            entry !== null &&
+            !Array.isArray(entry) &&
+            "failedAt" in entry &&
+            typeof entry.failedAt === "number" &&
+            entry.failedAt > cutoff
+          ) {
+            return depth + 1;
+          }
+          return depth;
+        }, 0);
+      },
+    };
+    await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+  });
+
+  test("returns the Lua null result unchanged", async () => {
+    const redis = {
+      ping: async () => "PONG",
+      eval: async () => null,
+    };
+    await expect(checkDlqHealth(redis as any)).resolves.toBeNull();
+  });
+
   test("boundary: an entry exactly at the 24h edge counts as STALE (strict >)", async () => {
     const now = Date.now();
-    const redis = makeEvalRedis([
-      { failedAt: now - DLQ_FRESH_WINDOW_MS }, // exactly at the edge
-      { failedAt: now - DLQ_FRESH_WINDOW_MS + 1 }, // 1ms fresher
-      { failedAt: now - DLQ_FRESH_WINDOW_MS - 1 }, // 1ms staler
-    ]);
-    // Documented boundary: failedAt == cutoff (exactly 24h old) is stale;
-    // only entries strictly inside the window are fresh.
-    await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+    const originalNow = Date.now;
+    Date.now = () => now;
+    try {
+      const redis = makeEvalRedis([
+        { failedAt: now - DLQ_FRESH_WINDOW_MS }, // exactly at the edge
+        { failedAt: now - DLQ_FRESH_WINDOW_MS + 1 }, // 1ms fresher
+        { failedAt: now - DLQ_FRESH_WINDOW_MS - 1 }, // 1ms staler
+      ]);
+      // Documented boundary: failedAt == cutoff (exactly 24h old) is stale;
+      // only entries strictly inside the window are fresh.
+      await expect(checkDlqHealth(redis as any)).resolves.toBe(1);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 
   test("env override DLQ_FRESH_WINDOW_HOURS widens the window", async () => {
@@ -368,6 +436,13 @@ describe("checkDlqHealth", () => {
 });
 
 describe("checkCircuitBreakers", () => {
+  test("defaults missing breaker states to closed and ignores unknown states", async () => {
+    const redis = new InMemoryRedis();
+    await redis.hset("cogito:cb:missing", ["failureCount", "1"]);
+    await redis.hset("cogito:cb:invalid", ["state", "corrupt"]);
+    expect(await checkCircuitBreakers(redis)).toEqual({ missing: "closed" });
+  });
+
   test("reports closed when no breaker keys exist", async () => {
     const redis = new InMemoryRedis();
     const result = await checkCircuitBreakers(redis);
@@ -425,4 +500,18 @@ describe("checkCircuitBreakers", () => {
     // fail-fast signal, not a readiness failure (mirrors `dlq`).
     expect(result.status).toBe("ok");
   });
+});
+
+test("healthCheck uses the default database when no override is supplied", async () => {
+  const { db } = await import("@cogito-app/db");
+  const original = db.execute;
+  const failure = new Error("default connection unavailable");
+  db.execute = (() => Promise.reject(failure)) as typeof db.execute;
+  try {
+    const result = await healthCheck();
+    expect(result.status).toBe("error");
+    expect(result.checks.database).toBe("error");
+  } finally {
+    db.execute = original;
+  }
 });

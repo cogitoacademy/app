@@ -12,6 +12,7 @@ import { registerAuthRoutes } from "./auth-routes";
 import { registerRpcRoutes } from "./rpc-routes";
 import { registerUploadRoutes } from "./upload-routes";
 import { registerContentRoutes } from "./content-routes";
+import { registerReportExportRoutes } from "./report-export-routes";
 import { registerOpenApiRoutes } from "./openapi-routes";
 import { registerHealthMetricsRoutes } from "./health-metrics";
 
@@ -36,6 +37,7 @@ export function createServer() {
     .use(registerRpcRoutes)
     .use(registerUploadRoutes)
     .use(registerContentRoutes)
+    .use(registerReportExportRoutes)
     .use(registerOpenApiRoutes)
     .use(registerHealthMetricsRoutes)
     .use(paymentsWebhook);

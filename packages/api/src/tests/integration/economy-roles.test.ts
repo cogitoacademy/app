@@ -1,15 +1,17 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   auditLog,
-  availabilitySlot,
-  notification,
-  tutorInvite,
-  tutorProfile,
+  economyV3Revision,
+  economyV3Activation,
+  subjectCategory,
 } from "@cogito-app/db/schema";
 
 import { db } from "@cogito-app/db";
 import { services } from "../../services";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+import { createAdminService } from "../../modules/admin/admin.service";
+import { createEconomyService } from "../../modules/economy/economy.service";
 import {
   createTestClient,
   createTestContext,
@@ -23,8 +25,6 @@ describe("Economy settings role safety", () => {
   let tutorClient: ReturnType<typeof createTestClient>;
   let studentClient: ReturnType<typeof createTestClient>;
   let adminId: string;
-  let tutorId: string;
-  let studentId: string;
 
   beforeAll(async () => {
     await resetDatabase();
@@ -46,7 +46,6 @@ describe("Economy settings role safety", () => {
     );
     const tutorContext = await createTestContext(tutor.cookie);
     await setUserRole(tutorContext.session!.user.id, "tutor");
-    tutorId = tutorContext.session!.user.id;
     tutorClient = createTestClient(await createTestContext(tutor.cookie));
 
     const student = await signUpAndSignIn(
@@ -54,199 +53,124 @@ describe("Economy settings role safety", () => {
       "Test1234!",
       "Economy Student",
     );
-    studentId = (await createTestContext(student.cookie)).session!.user.id;
     studentClient = createTestClient(await createTestContext(student.cookie));
+    for (const slug of Object.keys(
+      DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+    )) {
+      const existing = await db.query.subjectCategory.findFirst({
+        where: eq(subjectCategory.slug, slug),
+      });
+      if (existing) continue;
+      await services.competitionCatalog.createParent(adminId, {
+        slug,
+        name: slug,
+        reason: "V3 economy role fixtures",
+        lightTextColor: "oklch(1 0 0)",
+        lightBackgroundColor: "oklch(0.5 0.1 250)",
+        darkTextColor: "oklch(1 0 0)",
+        darkBackgroundColor: "oklch(0.5 0.1 250)",
+      });
+    }
   });
 
-  test("admin reads and updates the active take schedule", async () => {
-    const current = await adminClient.admin.getEconomySettings();
-    expect(current).toMatchObject({
-      markValueIdr: 5_000,
-      onlineCogitoBaseIdr: 50_000,
-      onlineCogitoIncrementIdr: 20_000,
-      offlineCogitoBaseIdr: 90_000,
-      offlineCogitoIncrementIdr: 40_000,
-      version: 1,
-    });
-
-    const updated = await adminClient.admin.updateEconomySettings({
-      expectedVersion: current.version,
-      onlineCogitoBaseIdr: 55_000,
-      onlineCogitoIncrementIdr: 25_000,
-      offlineCogitoBaseIdr: 95_000,
-      offlineCogitoIncrementIdr: 45_000,
-    });
-
-    expect(updated).toMatchObject({
-      onlineCogitoBaseIdr: 55_000,
-      onlineCogitoIncrementIdr: 25_000,
-      offlineCogitoBaseIdr: 95_000,
-      offlineCogitoIncrementIdr: 45_000,
-      version: 2,
-    });
-
-    const audit = await db
-      .select({ action: auditLog.action, targetType: auditLog.targetType })
-      .from(auditLog)
-      .where(
-        and(
-          eq(auditLog.action, "economy_config_updated"),
-          eq(auditLog.targetType, "economy_config"),
-        ),
-      );
-    expect(audit).toHaveLength(1);
-
-    const tutorNotifications = await db
-      .select({
-        userId: notification.userId,
-        category: notification.category,
-        title: notification.title,
-        body: notification.body,
-        eventKey: notification.eventKey,
-        metadata: notification.metadata,
-      })
-      .from(notification)
-      .where(eq(notification.userId, tutorId));
-    expect(tutorNotifications).toHaveLength(0);
-
-    const studentNotifications = await db
-      .select({ id: notification.id })
-      .from(notification)
-      .where(eq(notification.userId, studentId));
-    expect(studentNotifications).toHaveLength(0);
-  });
-
-  test("unchanged admin writes are no-ops", async () => {
-    const current = await adminClient.admin.getEconomySettings();
-    const unchanged = await adminClient.admin.updateEconomySettings({
-      expectedVersion: current.version,
-      onlineCogitoBaseIdr: current.onlineCogitoBaseIdr,
-      onlineCogitoIncrementIdr: current.onlineCogitoIncrementIdr,
-      offlineCogitoBaseIdr: current.offlineCogitoBaseIdr,
-      offlineCogitoIncrementIdr: current.offlineCogitoIncrementIdr,
-    });
-
-    expect(unchanged.version).toBe(current.version);
-
-    const audit = await db
-      .select({ id: auditLog.id })
-      .from(auditLog)
-      .where(eq(auditLog.action, "economy_config_updated"));
-    expect(audit).toHaveLength(1);
-
-    const tutorNotifications = await db
-      .select({ id: notification.id })
-      .from(notification)
-      .where(eq(notification.userId, tutorId));
-    expect(tutorNotifications).toHaveLength(0);
-  });
-
-  test("new bookings use the active Cogito take and snapshot it", async () => {
-    const inviteId = crypto.randomUUID();
-    const token = crypto.randomUUID();
-    await db.insert(tutorInvite).values({
-      id: inviteId,
-      email: "economy.tutor@cogito.test",
-      displayName: "Economy Tutor",
-      token,
-      status: "accepted",
-      invitedBy: adminId,
-      acceptedBy: tutorId,
-      acceptedAt: new Date(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
-
-    await db.insert(tutorProfile).values({
-      id: crypto.randomUUID(),
-      userId: tutorId,
-      inviteId,
-      shortBio: "Economy test tutor",
-      modality: "online",
-      baseRatesIdr: { online: 175_000 },
-      onboardingStatus: "published",
-      publishedAt: new Date(),
-    });
-
-    const scheduledStartAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-    scheduledStartAt.setSeconds(0, 0);
-    const scheduledEndAt = new Date(
-      scheduledStartAt.getTime() + 90 * 60 * 1000,
-    );
-    const [slot] = await db
-      .insert(availabilitySlot)
-      .values({
-        id: crypto.randomUUID(),
-        tutorId,
-        startDate: scheduledStartAt,
-        endDate: scheduledEndAt,
-        modality: "online",
-      })
-      .returning();
-
-    const wallet = await services.wallet.getOrCreate(studentId);
-    await services.wallet.credit(db, {
-      walletId: wallet.id,
-      amount: 100,
-      eventKey: "economy.test.booking.credit",
-      sourceReference: "economy-roles-test",
-      actorType: "system",
-      reason: "Economy role booking test balance",
-    });
-
-    const booking = await studentClient.booking.createSolo({
-      tutorId,
-      availabilitySlotId: slot!.id,
-      modality: "online",
-      scheduledStartAt,
-      learningGoal: "Verify active economy snapshot",
-      timezone: "Asia/Jakarta",
-    });
-
-    expect(booking.priceSnapshot).toMatchObject({
-      economyVersion: 2,
-      tutorBaseRateIdr: 175_000,
-      tutorHonorariumIdr: 175_000,
-      cogitoBaseTakeIdr: 55_000,
-      cogitoTakeIdr: 55_000,
-      totalIdr: 230_000,
-      totalMarks: 46,
-      perStudent: 46,
-      actualMarksPooled: 46,
-    });
-  });
-
-  test("stale admin writes are rejected", async () => {
-    await expect(
-      adminClient.admin.updateEconomySettings({
+  test("V3 concurrent saves create one immutable revision and audit", async () => {
+    const [activeBefore] = await db.select().from(economyV3Activation);
+    const initial = await adminClient.admin.getV3EconomySettings();
+    expect(initial.version).toBe(1);
+    const first = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+    const second = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+    second.competitionRates["competition-debate"].soloMarks = 46;
+    const outcomes = await Promise.allSettled([
+      adminClient.admin.saveV3EconomySettings({
         expectedVersion: 1,
-        onlineCogitoBaseIdr: 50_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
+        reason: "First admin rates",
+        values: first,
+      }),
+      adminClient.admin.saveV3EconomySettings({
+        expectedVersion: 1,
+        reason: "Concurrent admin rates",
+        values: second,
+      }),
+    ]);
+    expect(
+      outcomes.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    const [revisionOne] = await db
+      .select()
+      .from(economyV3Revision)
+      .where(eq(economyV3Revision.version, 2));
+    expect(revisionOne).toBeDefined();
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "economy_v3_revision_created"));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.actorId).toBe(adminId);
+    await adminClient.admin.saveV3EconomySettings({
+      expectedVersion: 2,
+      reason: "Second revision",
+      values: first,
+    });
+    const [preserved] = await db
+      .select()
+      .from(economyV3Revision)
+      .where(eq(economyV3Revision.version, 2));
+    expect(preserved).toEqual(revisionOne);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(3);
+    const [activeAfter] = await db.select().from(economyV3Activation);
+    expect(activeAfter).toEqual(activeBefore);
+  });
+
+  test("V3 audit failure rolls back the new revision in Postgres", async () => {
+    const service = createAdminService({
+      db,
+      economy: createEconomyService({ db }),
+      competitionCatalog: services.competitionCatalog,
+      auditPort: {
+        record: async () => {
+          throw new Error("forced audit failure");
+        },
+      },
+    } as Parameters<typeof createAdminService>[0]);
+    await expect(
+      service.saveV3EconomySettings(adminId, {
+        expectedVersion: 3,
+        reason: "Must roll back",
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+      }),
+    ).rejects.toThrow("forced audit failure");
+    expect(
+      await db
+        .select()
+        .from(economyV3Revision)
+        .where(eq(economyV3Revision.version, 4)),
+    ).toHaveLength(0);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(3);
+  });
+
+  test("stale V3 saves are rejected", async () => {
+    await expect(
+      adminClient.admin.saveV3EconomySettings({
+        expectedVersion: 0,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+        reason: "Stale save",
       }),
     ).rejects.toThrow();
   });
 
-  test("student and tutor cannot read or mutate admin economy settings", async () => {
-    await expect(studentClient.admin.getEconomySettings()).rejects.toThrow();
-    await expect(tutorClient.admin.getEconomySettings()).rejects.toThrow();
-    await expect(
-      studentClient.admin.updateEconomySettings({
-        expectedVersion: 2,
-        onlineCogitoBaseIdr: 50_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
-      }),
-    ).rejects.toThrow();
-    await expect(
-      tutorClient.admin.updateEconomySettings({
-        expectedVersion: 2,
-        onlineCogitoBaseIdr: 50_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
-      }),
-    ).rejects.toThrow();
+  test("student and tutor cannot read or mutate V3 admin settings", async () => {
+    for (const client of [studentClient, tutorClient]) {
+      await expect(client.admin.getV3EconomySettings()).rejects.toThrow();
+      await expect(
+        client.admin.saveV3EconomySettings({
+          expectedVersion: 3,
+          values: DEFAULT_V3_ECONOMY_CONFIG,
+          reason: "Unauthorized save",
+        }),
+      ).rejects.toThrow();
+    }
   });
 });

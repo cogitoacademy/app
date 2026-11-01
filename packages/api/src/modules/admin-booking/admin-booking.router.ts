@@ -5,6 +5,7 @@ import {
   getBookingStateHistoryInput,
   adminRefundInput,
   setMeetingLinkInput,
+  retryMeetingInput,
   cancelSeriesSessionInput,
 } from "./admin-booking.types";
 import type { AdminBookingHandler } from "./admin-booking.handler";
@@ -79,6 +80,16 @@ export function createAdminBookingRouter(handler: AdminBookingHandler) {
       })
       .input(setMeetingLinkInput)
       .handler(handler.setMeetingLink),
+
+    retryMeeting: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/booking/retryMeeting",
+        tags: ["Admin Booking"],
+        summary: "Retry failed Google Meet creation for a booking",
+      })
+      .input(retryMeetingInput)
+      .handler(handler.retryMeeting),
 
     cancelSeriesSession: adminProcedure
       .route({

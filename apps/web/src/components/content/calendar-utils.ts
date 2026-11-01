@@ -10,7 +10,10 @@ import {
 } from "date-fns";
 
 import type { CalendarCompetition } from "./calendar-types";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  competitionPaletteSubtleClassName,
+} from "@/lib/competition-colors";
 
 export const EVENT_HEIGHT = 24;
 export const EVENT_GAP = 4;
@@ -41,12 +44,18 @@ export function getEducationLevelLabel(level: string) {
   return educationLevelLabels[level] ?? level;
 }
 
-export function getCategoryEventClass(coreCategory?: string) {
-  return getCompetitionFieldClass(coreCategory, "soft");
+export function getCategoryEventClass(
+  category?: CalendarCompetition["categories"][number],
+) {
+  if (category?.parentColors) return competitionPaletteSubtleClassName;
+  return "bg-accent/30 text-foreground border-border";
 }
 
-export function getCategoryBadgeClass(coreCategory?: string) {
-  return getCompetitionFieldClass(coreCategory, "solid");
+export function getCategoryBadgeClass(
+  category?: CalendarCompetition["categories"][number],
+) {
+  if (category?.parentColors) return competitionPaletteClassName;
+  return "bg-accent/30 text-foreground border-border";
 }
 
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
@@ -149,21 +158,48 @@ export function formatCompetitionDates(event: CalendarCompetition) {
   return `${format(event.start, "d MMM yyyy")} – ${format(event.end, "d MMM yyyy")}`;
 }
 
-export const competitionTypeOptions = [
-  "mun",
-  "olimpiade",
-  "wsc",
-  "kti",
-  "debat",
-  "business",
-  "pidato",
-] as const;
+export type CompetitionTypeOption = {
+  value: string;
+  label: string;
+};
+
+export function getCompetitionTypeOptions(
+  events: CalendarCompetition[],
+): CompetitionTypeOption[] {
+  const labels = new Map<string, string>();
+
+  for (const event of events) {
+    for (const category of event.categories) {
+      if (!category.coreCategory) continue;
+      if (!labels.has(category.coreCategory)) {
+        labels.set(
+          category.coreCategory,
+          category.name.trim() || getCategoryLabel(category.coreCategory),
+        );
+      }
+    }
+  }
+
+  return [...labels].map(([value, label]) => ({ value, label }));
+}
+
+export function getSelectedCompetitionTypes(
+  options: CompetitionTypeOption[],
+  excludedTypes: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(
+    options
+      .map(({ value }) => value)
+      .filter((value) => !excludedTypes.has(value)),
+  );
+}
 
 export function filterEventsByCompetitionType(
   events: CalendarCompetition[],
   selected: ReadonlySet<string>,
 ): CalendarCompetition[] {
-  if (selected.size >= competitionTypeOptions.length) return events;
+  const options = getCompetitionTypeOptions(events);
+  if (options.every(({ value }) => selected.has(value))) return events;
   return events.filter((event) =>
     event.categories.some((category) => selected.has(category.coreCategory)),
   );
@@ -221,4 +257,49 @@ export function getWeekEventLanes(
   }
 
   return lanes;
+}
+
+/** A display-only wall-clock Date, never persist or compare it as an instant. */
+export function wibCalendarDate(value: string | Date) {
+  const instant = new Date(value);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return new Date(
+    n("year"),
+    n("month") - 1,
+    n("day"),
+    n("hour"),
+    n("minute"),
+    n("second"),
+  );
+}
+export function getAgendaOccurrences(
+  events: CalendarCompetition[],
+  currentDate: Date,
+  days = AGENDA_DAYS_TO_SHOW,
+) {
+  const occurrences: Array<{
+    event: CalendarCompetition;
+    day: Date;
+    key: string;
+  }> = [];
+  for (let offset = 0; offset < days; offset++) {
+    const day = addDays(startOfDay(currentDate), offset);
+    const seen = new Set<string>();
+    for (const event of getAllEventsForDay(events, day)) {
+      const key = `${event.id}:${format(day, "yyyy-MM-dd")}`;
+      if (!seen.has(key)) occurrences.push({ event, day, key });
+      seen.add(key);
+    }
+  }
+  return occurrences;
 }

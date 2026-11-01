@@ -1,4 +1,16 @@
 import { env } from "@cogito-app/env/server";
+import { createHash } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import {
+  tutorPayout,
+  tutorPayoutAllocation,
+  tutorProfile,
+  tutorTaxConfig,
+} from "@cogito-app/db/schema";
+import type {
+  BookingPriceSnapshot,
+  V3BookingPriceSnapshot,
+} from "@cogito-app/db/schema";
 import {
   BOOKING_TYPE,
   MODALITY,
@@ -14,15 +26,14 @@ import {
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
   MAX_SERIES_SESSIONS,
-  DEFAULT_SOLO_PRICE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
-  TUTOR_PAYOUT_RATE_IDR,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
+import { settlementTransaction } from "../../lib/settlement-transaction";
+import type { DbOrTx, TxClient } from "../../lib/tx";
 import {
   BookingNotFoundError,
   BookingNotOwnedError,
@@ -48,16 +59,42 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingCompletionFeedbackTooLongError,
+  BookingCompletionReportConflictError,
   BookingTutorCapacityError,
+  BookingV3CompetitionRequiredError,
+  BookingV3CompetitionUnavailableError,
+  BookingV3PricingRevisionUnavailableError,
+  TutorPayoutAmountMismatchError,
+  TutorPayoutCalculationDomainError,
+  TutorPayoutNotFoundError,
+  TutorPayoutPreviewStaleError,
+  TutorPayoutProfileIncompleteError,
+  TutorPayoutReconciliationRequiredError,
+  TutorPayoutStateError,
+  TutorPayoutTaxConfigConflictError,
+  TutorPayoutTaxProfileIncompleteError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
+import { completionFeedbackInput } from "./booking.types";
+import { listPrivateReportSessions } from "./private-report-sessions";
+import { FEEDBACK_LENGTH_ERROR } from "./feedback-rules";
 import {
+  lockCompletionReportRequest,
   lockBookingReschedule,
   lockTutorForBooking,
   lockTutorForPayout,
+  lockTutorTaxConfig,
 } from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
+import { applyBookingTopicPalettes } from "./booking-topic-palette";
+import { buildTutorSessionFeeRecord } from "./tutor-session-fee";
+import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
+import {
+  isSelectableCompetitionRef,
+  lockCompetitionCatalog,
+} from "../competition-catalog/catalog-lock";
 import {
   BOOKING_STATE,
   TERMINAL_STATES,
@@ -78,12 +115,24 @@ import type {
   BookingNotificationPort,
   BookingMeetingPort,
   BookingRoomPort,
+  BookingReferralPort,
   TutorPayoutReportRow,
+  TutorPayoutMutationResult,
+  TutorPayoutPreview,
+  TutorTaxConfigView,
 } from "./index";
 import {
   formatBookingEventTitle,
   formatCalendarCompetitionLabel,
 } from "./booking-event-title";
+import {
+  calculateTutorPayoutAmounts,
+  calculateTutorTaxIdr,
+  DEFAULT_TUTOR_TAX_RATES_BPS,
+  sumSafeIdr,
+  tutorTaxStatus,
+  type TutorTaxRateSource,
+} from "./tutor-payout-calculation";
 
 /**
  * Terminal target per expiry-eligible state. Shared by `expireBookings` and
@@ -92,11 +141,7 @@ import {
  * in `expireBookings` (targets the pre-proposal state) and is deliberately
  * absent here.
  */
-import {
-  getTutorPayoutTransferFeeIdr,
-  EXPIRY_TARGET,
-  computeMeetingInfo,
-} from "./booking.helpers";
+import { EXPIRY_TARGET, computeMeetingInfo } from "./booking.helpers";
 
 function assertTutorCapacity(
   profile: {
@@ -119,6 +164,89 @@ function assertTutorCapacity(
       maxClassSize,
     );
   }
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(object[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function toTutorPayoutMutationResult(
+  row: typeof tutorPayout.$inferSelect,
+): TutorPayoutMutationResult {
+  return {
+    id: row.id,
+    tutorId: row.tutorId,
+    status: row.status as "prepared" | "paid" | "void",
+    sourceKeys: row.sourceKeys ?? [],
+    grossHonorariumIdr: row.grossHonorariumIdr,
+    taxStatus: row.taxStatus,
+    taxRateBps: row.taxRateBps,
+    taxRateSource: row.taxRateSource,
+    taxHonorariumIdr: row.taxHonorariumIdr,
+    transferFeeIdr: row.transferFeeIdr,
+    netHonorariumIdr: row.netHonorariumIdr,
+    actualAmountIdr: row.actualAmountIdr,
+    actualReference: row.actualReference,
+    actualProofUrl: row.actualProofUrl,
+    transferRecordedAt: row.transferRecordedAt,
+    transferRecordedBy: row.paidBy,
+    paidAt: row.paidAt,
+    preparedAt: row.preparedAt,
+    voidedAt: row.voidedAt,
+    voidReason: row.voidReason,
+    reconciliationStatus: row.reconciliationStatus,
+    reconciliationReason: row.reconciliationReason,
+  };
+}
+
+function getPerStudentMarks(
+  snapshot: BookingPriceSnapshot | null | undefined,
+): number | null {
+  if (!snapshot) return null;
+  if (snapshot.engine !== "v3")
+    throw new BookingV3PricingRevisionUnavailableError(0);
+  return snapshot.perStudentMarks;
+}
+
+function seriesNoShowEventKey(
+  bookingId: string,
+  participantUserId: string,
+  sessionId: string,
+) {
+  return `booking.${bookingId}.no_show.${participantUserId}.${sessionId}`;
+}
+
+function buildV3Snapshot(
+  version: number,
+  quote: {
+    competition: string;
+    modality: "online" | "offline";
+    headcount: number;
+    perStudentMarks: number;
+    collectedMarks: number;
+    tutorFeeIdr: number;
+  },
+): V3BookingPriceSnapshot {
+  return {
+    engine: "v3",
+    v3Revision: version,
+    competition: quote.competition,
+    modality: quote.modality,
+    headcount: quote.headcount,
+    perStudentMarks: quote.perStudentMarks,
+    collectedMarks: quote.collectedMarks,
+    tutorHonorariumIdr: quote.tutorFeeIdr,
+  };
 }
 
 export {
@@ -193,6 +321,36 @@ export interface TutorPayoutResult {
   tutorPayoutIdr: number;
 }
 
+export type TutorPayoutAllocationSourceType = "fee_event";
+
+export interface TutorPayoutSourceItem {
+  sourceKey: string;
+  sourceType: TutorPayoutAllocationSourceType;
+  tutorSessionFeeId: string;
+  bookingId: string | null;
+  bookingNumber: number | null;
+  bookingSessionId: string | null;
+  classSessionId: string | null;
+  deliveryLabel: string | null;
+  bookingType: "solo" | "group" | "series" | "cohort" | "masterclass";
+  deliveryStatus: "completed" | "no_show";
+  scheduledStartAt: Date;
+  earnedAt: Date;
+  grossHonorariumIdr: number;
+  collectedMarks: number;
+  priceSnapshot: BookingPriceSnapshot | null;
+}
+
+export interface TutorPayoutAggregate extends TutorPayoutResult {
+  items: TutorPayoutSourceItem[];
+}
+
+export interface TutorPayoutAllocationDetail extends TutorPayoutSourceItem {
+  id: string;
+  payoutId: string;
+  createdAt: Date;
+}
+
 export interface BookingTransition {
   bookingId: string;
   fromState: BookingState | null;
@@ -211,9 +369,134 @@ export type CompletionFeedback = {
   improvements: string[];
 };
 
+type CompletionReportAudit = {
+  actorId: string;
+  actorRole: "admin" | "tutor";
+  reason: string | null;
+  deliveryConfirmed: true;
+  requestKey?: string;
+  requestPayload?: Record<string, unknown>;
+};
+
+type AdminCompletionReportInput = {
+  bookingId: string;
+  adminId: string;
+  sessionId?: string;
+  feedback: CompletionFeedback;
+  deliveryConfirmed: boolean;
+  reason: string;
+  expectedVersion?: number;
+  requestKey: string;
+};
+
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
+
+export function normalizeCompletionFeedback(
+  bookingId: string,
+  feedback: CompletionFeedback | undefined,
+): CompletionFeedback {
+  const parsed = completionFeedbackInput.safeParse(feedback);
+  if (!parsed.success) {
+    if (
+      parsed.error.issues.some(
+        (issue) => issue.message === FEEDBACK_LENGTH_ERROR,
+      )
+    ) {
+      throw new BookingCompletionFeedbackTooLongError(bookingId);
+    }
+    throw new BookingCompletionFeedbackRequiredError(bookingId);
+  }
+  return {
+    discussion: parsed.data.discussion,
+    strengths: parsed.data.strengths,
+    improvements: parsed.data.improvements,
+  };
+}
+
+function completionReportPayloadKey(value: unknown): string {
+  if (value === undefined || value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map(completionReportPayloadKey).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${completionReportPayloadKey(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function makeCompletionReportRequestPayload(
+  feedback: CompletionFeedback,
+  reason: string | null,
+  expectedVersion: number | null,
+) {
+  return {
+    feedback,
+    deliveryConfirmed: true,
+    reason,
+    expectedVersion,
+  } satisfies Record<string, unknown>;
+}
+
+export function completionFeedbackEntitlementEventKeys(input: {
+  bookingId: string;
+  bookingType: "solo" | "group" | "series";
+  userId: string;
+  sessionId?: string | null;
+  seriesTargetGroupSize?: number;
+}) {
+  const {
+    bookingId,
+    bookingType,
+    userId,
+    sessionId,
+    seriesTargetGroupSize = 1,
+  } = input;
+  if (bookingType === BOOKING_TYPE.SERIES && sessionId) {
+    return [
+      seriesTargetGroupSize > 1
+        ? `booking.${bookingId}.session.${sessionId}.deduct.${userId}`
+        : `booking.${bookingId}.session.${sessionId}.deduct`,
+      `booking.${bookingId}.no_show.${userId}.${sessionId}`,
+    ];
+  }
+  if (bookingType === BOOKING_TYPE.GROUP) {
+    return [
+      `booking.${bookingId}.complete.${userId}`,
+      `booking.${bookingId}.no_show.${userId}.solo`,
+    ];
+  }
+  return [
+    `booking.${bookingId}.deduct`,
+    `booking.${bookingId}.no_show.${userId}.solo`,
+    `booking.${bookingId}.no_show.${userId}`,
+  ];
+}
+
+function completionReportHistoryMatches(
+  history: {
+    bookingId: string;
+    sessionId: string | null;
+    requestPayload: unknown;
+  },
+  bookingId: string,
+  sessionId: string | undefined,
+  requestPayload: Record<string, unknown>,
+) {
+  return (
+    history.bookingId === bookingId &&
+    history.sessionId === (sessionId ?? null) &&
+    completionReportPayloadKey(history.requestPayload) ===
+      completionReportPayloadKey(requestPayload)
+  );
+}
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -229,10 +512,22 @@ export function createBookingService(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
+  referralPort?: BookingReferralPort;
 }) {
-  const { db, repo, wallet, pricing, audit, notification, meeting, roomPort } =
-    deps;
+  const {
+    db,
+    repo,
+    wallet,
+    pricing,
+    audit,
+    notification,
+    meeting,
+    competitionPalette,
+    roomPort,
+    referralPort,
+  } = deps;
 
   // ── Internal helpers (access, transitions, pricing) ──────────────────────
   // Shared by the public methods below; keep them above their consumers.
@@ -286,13 +581,20 @@ export function createBookingService(deps: {
       actorId: string;
       actorType: "student" | "tutor" | "admin" | "system";
       metadata?: Record<string, unknown>;
+      confirmedSoloNoShowDelivery?: boolean;
     },
   ) {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     const fromState = b.currentState as BookingState;
 
-    if (!canTransition(fromState, toState)) {
+    const confirmedSoloNoShowDelivery =
+      params.confirmedSoloNoShowDelivery === true &&
+      params.actorType === ACTOR_TYPE.ADMIN &&
+      b.type === BOOKING_TYPE.SOLO &&
+      fromState === BOOKING_STATE.NO_SHOW &&
+      toState === BOOKING_STATE.COMPLETED;
+    if (!canTransition(fromState, toState) && !confirmedSoloNoShowDelivery) {
       throw new BookingStateTransitionError(fromState, "transition", toState);
     }
 
@@ -382,38 +684,138 @@ export function createBookingService(deps: {
       id: string;
       type: string;
       tutorId: string;
+      targetGroupSize: number;
       holdAmount: number;
 
       modality: string;
-      priceSnapshot: { perStudent: number } | null;
+      priceSnapshot: BookingPriceSnapshot | null;
     },
     remaining: { id: string; userId: string; heldAmount: number }[],
     actorType: "student" | "tutor" | "system",
   ): Promise<void> {
-    if (b.type !== BOOKING_TYPE.GROUP) return;
+    const isV3GroupSeries =
+      b.type === BOOKING_TYPE.SERIES &&
+      b.targetGroupSize > 1 &&
+      b.priceSnapshot?.engine === "v3";
+    if (b.type !== BOOKING_TYPE.GROUP && !isV3GroupSeries) return;
     if (remaining.length < MIN_GROUP_HEADCOUNT) return;
-
-    const profile = await repo.findTutorProfile(tx, b.tutorId);
-    if (!profile) {
-      log({
-        level: "warn",
-        action: "group_reprice_skipped",
-        bookingId: b.id,
-        message: "Tutor profile missing; group repricing skipped",
-      });
-      return;
-    }
 
     const newSize = remaining.length;
     const newSnapshot = await computePriceSnapshot(
       tx,
-      profile,
-      b.modality as Modality,
       newSize as GroupSize,
       b.priceSnapshot,
     );
-    const newPerStudent = newSnapshot.perStudent;
-    const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
+    const newPerStudent = getPerStudentMarks(newSnapshot)!;
+    const oldPerStudent = getPerStudentMarks(b.priceSnapshot) ?? newPerStudent;
+
+    if (isV3GroupSeries) {
+      const sessions = await repo.listSessionsBySeriesId(tx, b.id);
+      const scheduledSessions = sessions.filter(
+        (session) => session.currentState === BOOKING_STATE.SCHEDULED,
+      );
+      const participantHold = newPerStudent * scheduledSessions.length;
+      const adjustments: {
+        participant: (typeof remaining)[number];
+        walletId: string;
+        amount: number;
+        direction: "increase" | "release";
+      }[] = [];
+
+      // Check every increase before moving any wallet balance. This keeps the
+      // deadline-expiry fallback from observing a partially repriced series
+      // when one participant cannot fund the new package.
+      for (const participant of remaining) {
+        if (participant.heldAmount === participantHold) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const participantWallet = await wallet.getByUserId(
+          tx,
+          participant.userId,
+        );
+        if (!participantWallet)
+          throw new BookingNotFoundError(participant.userId);
+
+        if (participantHold > participant.heldAmount) {
+          const amount = participantHold - participant.heldAmount;
+          if (participantWallet.availableBalance < amount) {
+            throw new InsufficientMarksError(
+              participantHold,
+              participantWallet.availableBalance + participant.heldAmount,
+            );
+          }
+          adjustments.push({
+            participant,
+            walletId: participantWallet.id,
+            amount,
+            direction: "increase",
+          });
+        } else {
+          adjustments.push({
+            participant,
+            walletId: participantWallet.id,
+            amount: participant.heldAmount - participantHold,
+            direction: "release",
+          });
+        }
+      }
+
+      for (const adjustment of adjustments) {
+        if (adjustment.direction === "increase") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.hold(tx, {
+            walletId: adjustment.walletId,
+            amount: adjustment.amount,
+            eventKey: `booking.${b.id}.reprice.increase.${adjustment.participant.userId}.${participantHold}`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType,
+            reason: "Group-series repricing: increased remaining session hold",
+          });
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: adjustment.walletId,
+            amount: adjustment.amount,
+            eventKey: `booking.${b.id}.reprice.release.${adjustment.participant.userId}.${participantHold}`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType,
+            reason: "Group-series repricing: released excess remaining hold",
+          });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantState(tx, adjustment.participant.id, {
+          heldAmount: participantHold,
+        });
+      }
+
+      await repo.updateBookingPriceSnapshot(tx, b.id, {
+        priceSnapshot: newSnapshot,
+        holdAmount: participantHold * remaining.length,
+      });
+      await repo.updateScheduledSeriesPriceSnapshot(tx, b.id, {
+        priceSnapshot: newSnapshot,
+        holdAmount: newPerStudent,
+      });
+
+      if (newPerStudent !== oldPerStudent) {
+        for (const participant of remaining) {
+          // eslint-disable-next-line no-await-in-loop
+          await notification.writeBestEffort({
+            db: tx,
+            userId: participant.userId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Group price updated",
+            body: `Your group's per-student price per session changed to ${newPerStudent} Marks because the confirmed headcount changed.`,
+            eventKey: `booking.${b.id}.reprice.${participant.userId}.${newPerStudent}`,
+            emailRequired: true,
+          });
+        }
+      }
+      return;
+    }
 
     if (newPerStudent === oldPerStudent) {
       // N1: with flat legacy price maps (or rounding coincidences) the
@@ -458,7 +860,7 @@ export function createBookingService(deps: {
           actorType,
           reason: "Group repricing: increased hold for new headcount",
         });
-      } else if (newPerStudent < p.heldAmount) {
+      } else {
         // eslint-disable-next-line no-await-in-loop
         await wallet.release(tx, {
           walletId: w.id,
@@ -618,10 +1020,25 @@ export function createBookingService(deps: {
     return `${origin}/bookings/${bookingId}`;
   }
 
-  async function resolveSessionTopic(tutorId: string, subjectId?: string) {
-    const topic = await repo.findTutorSubjectTopic(db, tutorId, subjectId);
-    if (subjectId && !topic) {
+  async function resolveSessionTopic(
+    conn: TxClient,
+    tutorId: string,
+    subjectId?: string,
+  ) {
+    if (!subjectId) throw new BookingV3CompetitionRequiredError();
+    const topic = await repo.findTutorSubjectTopic(conn, tutorId, subjectId);
+    if (!topic) {
       throw new BookingNotEditableError(subjectId);
+    }
+    if (
+      topic &&
+      !(await isSelectableCompetitionRef(
+        conn,
+        topic.categoryId,
+        topic.subcategoryId,
+      ))
+    ) {
+      throw new BookingNotEditableError(topic.subcategoryId);
     }
     return topic;
   }
@@ -677,87 +1094,101 @@ export function createBookingService(deps: {
     return { title, description: descriptionLines.join("\n") };
   }
 
-  type EconomicSnapshot = {
-    perStudent: number;
-    markValueIdr?: number;
-    economyVersion?: number;
-    tutorBaseRateIdr?: number;
-    tutorIncrementIdr?: number;
-    cogitoBaseTakeIdr?: number;
-    cogitoIncrementIdr?: number;
-  };
+  async function computeInitialPriceSnapshot(
+    conn: DbOrTx,
+    modality: Modality,
+    headcount: GroupSize,
+    topic: Awaited<ReturnType<typeof resolveSessionTopic>>,
+  ): Promise<V3BookingPriceSnapshot> {
+    const active = await pricing.getActiveV3Config?.(conn);
+    if (!active) throw new BookingV3PricingRevisionUnavailableError(0);
+    const competition = topic.categorySlug;
+    if (!Object.hasOwn(active.values.competitionRates, competition)) {
+      throw new BookingV3CompetitionUnavailableError(competition);
+    }
+    if (modality === "both" || !pricing.calculateV3SessionPrice)
+      throw new BookingV3CompetitionRequiredError();
+    return buildV3Snapshot(
+      active.version,
+      pricing.calculateV3SessionPrice(
+        { competition, modality, headcount },
+        active.values,
+      ),
+    );
+  }
 
-  /**
-   * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
-   * Marks map until they are migrated to IDR, so existing bookings and
-   * migrations remain readable while the new economy rolls out.
-   */
+  async function resolveNewBookingTerms(
+    tx: TxClient,
+    input: {
+      tutorId: string;
+      modality: Modality;
+      subjectId?: string;
+    },
+    headcount: GroupSize,
+  ) {
+    await lockCompetitionCatalog(tx);
+    const profile = await repo.findTutorProfile(tx, input.tutorId, {
+      publishedOnly: true,
+    });
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
+
+    const sessionTopic = await resolveSessionTopic(
+      tx,
+      input.tutorId,
+      input.subjectId,
+    );
+    const priceSnapshot = await computeInitialPriceSnapshot(
+      tx,
+      input.modality,
+      headcount,
+      sessionTopic,
+    );
+
+    return { profile, sessionTopic, priceSnapshot };
+  }
+
   async function computePriceSnapshot(
     conn: DbOrTx,
-    profile: {
-      prices?: Record<string, number> | null;
-      baseRatesIdr?: { online?: number; offline?: number } | null;
-    },
-    modality: Modality,
     groupSize: GroupSize,
-    previousSnapshot?: EconomicSnapshot | null,
-  ) {
-    const baseRates = profile.baseRatesIdr;
-    const baseRateIdr =
-      previousSnapshot?.tutorBaseRateIdr ??
-      (modality === MODALITY.OFFLINE ? baseRates?.offline : baseRates?.online);
-    if (typeof baseRateIdr !== "number") {
-      return pricing.computeSplit(
-        modality,
-        (profile.prices?.[String(groupSize)] ?? DEFAULT_SOLO_PRICE) as number,
-        groupSize,
+    previousSnapshot: BookingPriceSnapshot | null,
+  ): Promise<V3BookingPriceSnapshot> {
+    if (previousSnapshot?.engine !== "v3") {
+      throw new BookingV3PricingRevisionUnavailableError(0);
+    }
+    const revision = await pricing.getV3ConfigByVersion?.(
+      previousSnapshot.v3Revision,
+      conn,
+    );
+    if (
+      !revision ||
+      revision.version !== previousSnapshot.v3Revision ||
+      !pricing.calculateV3SessionPrice
+    ) {
+      throw new BookingV3PricingRevisionUnavailableError(
+        previousSnapshot.v3Revision,
       );
     }
-
-    if (!pricing.getEconomyConfig || !pricing.computeEconomics) {
-      throw new Error("IDR pricing is not configured");
+    if (
+      !Object.hasOwn(
+        revision.values.competitionRates,
+        previousSnapshot.competition,
+      )
+    ) {
+      throw new BookingV3CompetitionUnavailableError(
+        previousSnapshot.competition,
+      );
     }
-    const current = await pricing.getEconomyConfig(conn);
-    const config =
-      previousSnapshot?.markValueIdr !== undefined
-        ? {
-            ...current,
-            version: previousSnapshot.economyVersion ?? current.version,
-            markValueIdr: previousSnapshot.markValueIdr,
-            onlineTutorIncrementIdr:
-              modality === MODALITY.ONLINE &&
-              previousSnapshot.tutorIncrementIdr !== undefined
-                ? previousSnapshot.tutorIncrementIdr
-                : current.onlineTutorIncrementIdr,
-            offlineTutorIncrementIdr:
-              modality === MODALITY.OFFLINE &&
-              previousSnapshot.tutorIncrementIdr !== undefined
-                ? previousSnapshot.tutorIncrementIdr
-                : current.offlineTutorIncrementIdr,
-            onlineCogitoBaseIdr:
-              modality === MODALITY.ONLINE &&
-              previousSnapshot.cogitoBaseTakeIdr !== undefined
-                ? previousSnapshot.cogitoBaseTakeIdr
-                : current.onlineCogitoBaseIdr,
-            offlineCogitoBaseIdr:
-              modality === MODALITY.OFFLINE &&
-              previousSnapshot.cogitoBaseTakeIdr !== undefined
-                ? previousSnapshot.cogitoBaseTakeIdr
-                : current.offlineCogitoBaseIdr,
-            onlineCogitoIncrementIdr:
-              modality === MODALITY.ONLINE &&
-              previousSnapshot.cogitoIncrementIdr !== undefined
-                ? previousSnapshot.cogitoIncrementIdr
-                : current.onlineCogitoIncrementIdr,
-            offlineCogitoIncrementIdr:
-              modality === MODALITY.OFFLINE &&
-              previousSnapshot.cogitoIncrementIdr !== undefined
-                ? previousSnapshot.cogitoIncrementIdr
-                : current.offlineCogitoIncrementIdr,
-          }
-        : current;
-
-    return pricing.computeEconomics(modality, baseRateIdr, groupSize, config);
+    return buildV3Snapshot(
+      revision.version,
+      pricing.calculateV3SessionPrice(
+        {
+          competition: previousSnapshot.competition,
+          modality: previousSnapshot.modality,
+          headcount: groupSize,
+        },
+        revision.values,
+      ),
+    );
   }
 
   /**
@@ -785,8 +1216,15 @@ export function createBookingService(deps: {
     if (userRole !== "admin") {
       await assertBookingAccess(b, userId, db, bookingId);
     }
+    const [bookingWithPalette] = await applyBookingTopicPalettes(
+      [b],
+      competitionPalette?.resolveCompetitionPalettes,
+    );
     return {
-      ...b,
+      ...bookingWithPalette,
+      ...(userRole === "admin"
+        ? { tutorFees: await repo.findBookingTutorFees(bookingId, b.tutorId) }
+        : {}),
       disclaimer: computeDisclaimer(b),
       ...computeMeetingInfo(b),
     };
@@ -822,7 +1260,13 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+    };
   }
 
   async function listForTutor(
@@ -843,7 +1287,13 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+    };
   }
 
   /**
@@ -884,7 +1334,14 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor, counts };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+      counts,
+    };
   }
 
   /**
@@ -904,10 +1361,6 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -928,19 +1381,21 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const priceSnapshot = await computePriceSnapshot(db, profile, modality, 1);
-    const totalMarks = priceSnapshot.perStudent * 1;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
-
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, 1);
+      if (
+        (modality === MODALITY.OFFLINE &&
+          profile.modality === MODALITY.ONLINE) ||
+        (modality === MODALITY.ONLINE && profile.modality === MODALITY.OFFLINE)
+      ) {
+        throw new BookingNotEditableError(input.tutorId);
+      }
+      const totalMarks = getPerStudentMarks(priceSnapshot)!;
+
       await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
@@ -955,6 +1410,12 @@ export function createBookingService(deps: {
           session.scheduledStartAt.toISOString(),
           session.scheduledEndAt.toISOString(),
         );
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -1420,33 +1881,53 @@ export function createBookingService(deps: {
     });
   }
 
-  function normalizeFeedbackBullets(value: unknown): string[] {
-    const items = Array.isArray(value) ? value : [];
-    return items
-      .map((s) => (typeof s === "string" ? s.trim() : ""))
-      .filter(Boolean)
-      .slice(0, 30);
-  }
-
-  function assertCompletionFeedback(
-    bookingId: string,
-    feedback: CompletionFeedback | undefined,
-  ): asserts feedback is CompletionFeedback {
-    const discussion = normalizeFeedbackBullets(feedback?.discussion);
-    const strengths = normalizeFeedbackBullets(feedback?.strengths);
-    const improvements = normalizeFeedbackBullets(feedback?.improvements);
-    if (
-      discussion.length === 0 ||
-      strengths.length === 0 ||
-      improvements.length === 0
-    ) {
-      throw new BookingCompletionFeedbackRequiredError(bookingId);
+  async function insertCompletionFeedbackWithAudit(
+    tx: DbOrTx,
+    values: {
+      bookingId: string;
+      sessionId: string | null;
+      tutorId: string;
+      feedback: CompletionFeedback;
+      audit: CompletionReportAudit;
+    },
+  ) {
+    const report = await repo.insertCompletionFeedback(tx, {
+      bookingId: values.bookingId,
+      sessionId: values.sessionId,
+      authorId: values.tutorId,
+      discussion: values.feedback.discussion,
+      strengths: values.feedback.strengths,
+      improvements: values.feedback.improvements,
+    });
+    await repo.insertCompletionFeedbackHistory(tx, {
+      feedbackId: report.id,
+      bookingId: values.bookingId,
+      sessionId: values.sessionId,
+      version: report.version,
+      status: "submitted",
+      actorId: values.audit.actorId,
+      actorRole: values.audit.actorRole,
+      reason: values.audit.reason,
+      deliveryConfirmed: values.audit.deliveryConfirmed,
+      discussion: report.discussion,
+      strengths: report.strengths,
+      improvements: report.improvements,
+      requestKey: values.audit.requestKey ?? null,
+      requestPayload: values.audit.requestPayload ?? null,
+    });
+    if (values.audit.actorRole === ACTOR_TYPE.ADMIN) {
+      await notification.write({
+        db: tx,
+        userId: values.tutorId,
+        bookingId: values.bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Session report recorded by admin",
+        body: "An admin recorded the session report on your behalf.",
+        eventKey: `booking.${values.bookingId}.session.${values.sessionId ?? "solo"}.report.${report.version}.admin`,
+      });
     }
-    feedback!.discussion = discussion.map((s) => escapeHtml(s).slice(0, 1000));
-    feedback!.strengths = strengths.map((s) => escapeHtml(s).slice(0, 1000));
-    feedback!.improvements = improvements.map((s) =>
-      escapeHtml(s).slice(0, 1000),
-    );
+    return report;
   }
 
   async function completeSession(
@@ -1454,9 +1935,18 @@ export function createBookingService(deps: {
     tutorId: string,
     sessionId?: string,
     feedback?: CompletionFeedback,
+    requestKey?: string,
   ) {
-    return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+    const normalizedFeedback = normalizeCompletionFeedback(bookingId, feedback);
+    if (requestKey && !UUID_PATTERN.test(requestKey)) {
+      throw new BookingNotEditableError(
+        bookingId,
+        "A valid request key is required",
+      );
+    }
+    return settlementTransaction(db, async (tx) => {
+      if (requestKey) await lockCompletionReportRequest(tx, requestKey);
+      let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
@@ -1464,19 +1954,325 @@ export function createBookingService(deps: {
       // completed while a payout is being marked must land wholly before or
       // after that cutoff, never disappear between the two reads.
       await lockTutorForPayout(tx, b.tutorId);
+      const lockedBooking = await repo.findBookingById(tx, bookingId, {
+        forUpdate: true,
+      });
+      if (!lockedBooking) throw new BookingNotFoundError(bookingId);
+      if (lockedBooking.tutorId !== tutorId) {
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      }
+      b = lockedBooking;
 
-      if (b.type !== BOOKING_TYPE.SERIES) {
-        return completeSingleSession(tx, b, bookingId, tutorId, feedback);
+      const requestPayload = makeCompletionReportRequestPayload(
+        normalizedFeedback,
+        null,
+        null,
+      );
+      if (requestKey) {
+        const prior = await repo.findCompletionFeedbackHistoryByRequestKey(
+          tx,
+          requestKey,
+        );
+        if (prior) {
+          if (
+            !completionReportHistoryMatches(
+              prior,
+              bookingId,
+              sessionId,
+              requestPayload,
+            )
+          ) {
+            throw new BookingCompletionReportConflictError(
+              "This request key was already used for a different report submission",
+            );
+          }
+          return b;
+        }
       }
 
+      const reportAudit: CompletionReportAudit = {
+        actorId: tutorId,
+        actorRole: ACTOR_TYPE.TUTOR,
+        reason: null,
+        deliveryConfirmed: true,
+        requestKey,
+        requestPayload: requestKey ? requestPayload : undefined,
+      };
+
+      if (b.type !== BOOKING_TYPE.SERIES) {
+        return completeSingleSession(
+          tx,
+          b,
+          bookingId,
+          tutorId,
+          normalizedFeedback,
+          reportAudit,
+        );
+      }
+
+      // No-show and completion take the parent booking lock before session and
+      // participant locks. Refresh after waiting so hold math includes any
+      // no-show allocation committed while we waited.
       return completeSeriesSession(
         tx,
         b,
         bookingId,
         tutorId,
         sessionId,
-        feedback,
+        normalizedFeedback,
+        reportAudit,
       );
+    });
+  }
+
+  async function submitAdminCompletionReport(
+    input: AdminCompletionReportInput,
+  ) {
+    const feedback = normalizeCompletionFeedback(
+      input.bookingId,
+      input.feedback,
+    );
+    const reason = input.reason.trim();
+    if (input.deliveryConfirmed !== true) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "Confirm that the session was delivered before submitting its report",
+      );
+    }
+    if (!reason || Array.from(reason).length > 600) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "An audit reason of at most 600 characters is required",
+      );
+    }
+    if (!UUID_PATTERN.test(input.requestKey)) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "A valid request key is required",
+      );
+    }
+    if (
+      input.expectedVersion !== undefined &&
+      (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1)
+    ) {
+      throw new BookingCompletionReportConflictError(
+        "The expected report version is invalid",
+      );
+    }
+
+    const requestPayload = makeCompletionReportRequestPayload(
+      feedback,
+      reason,
+      input.expectedVersion ?? null,
+    );
+    const reportAudit: CompletionReportAudit = {
+      actorId: input.adminId,
+      actorRole: ACTOR_TYPE.ADMIN,
+      reason,
+      deliveryConfirmed: true,
+      requestKey: input.requestKey,
+      requestPayload,
+    };
+
+    return settlementTransaction(db, async (tx) => {
+      await lockCompletionReportRequest(tx, input.requestKey);
+      let b = await repo.findBookingById(tx, input.bookingId);
+      if (!b) throw new BookingNotFoundError(input.bookingId);
+      await lockTutorForPayout(tx, b.tutorId);
+      const lockedBooking = await repo.findBookingById(tx, input.bookingId, {
+        forUpdate: true,
+      });
+      if (!lockedBooking) throw new BookingNotFoundError(input.bookingId);
+      b = lockedBooking;
+
+      let session: Awaited<ReturnType<BookingRepo["findSessionById"]>> | null =
+        null;
+      if (b.type === BOOKING_TYPE.SERIES) {
+        if (!input.sessionId) throw new BookingSessionRequiredError(b.id);
+        session = await repo.findSessionById(tx, input.sessionId, {
+          forUpdate: true,
+        });
+        if (!session || session.seriesBookingId !== b.id) {
+          throw new BookingSessionNotFoundError(input.sessionId);
+        }
+      } else if (input.sessionId) {
+        throw new BookingNotEditableError(
+          b.id,
+          "A session ID is only valid for a series booking",
+        );
+      }
+
+      const prior = await repo.findCompletionFeedbackHistoryByRequestKey(
+        tx,
+        input.requestKey,
+      );
+      if (prior) {
+        if (
+          !completionReportHistoryMatches(
+            prior,
+            input.bookingId,
+            input.sessionId,
+            requestPayload,
+          )
+        ) {
+          throw new BookingCompletionReportConflictError(
+            "This request key was already used for a different report submission",
+          );
+        }
+        return prior;
+      }
+
+      const report = await repo.findCompletionFeedback(
+        tx,
+        input.bookingId,
+        input.sessionId ?? null,
+        { forUpdate: true },
+      );
+      const delivered =
+        b.type === BOOKING_TYPE.SERIES
+          ? session?.currentState === BOOKING_STATE.COMPLETED
+          : b.currentState === BOOKING_STATE.COMPLETED;
+
+      if (report) {
+        if (input.expectedVersion === undefined) {
+          throw new BookingCompletionReportConflictError(
+            "The report already exists; reload it before correcting",
+          );
+        }
+        if (report.version !== input.expectedVersion) {
+          throw new BookingCompletionReportConflictError();
+        }
+        if (!delivered) {
+          throw new BookingNotEditableError(
+            b.id,
+            "A report can only be corrected for a delivered session",
+          );
+        }
+
+        const history = await repo.listCompletionFeedbackHistoryByFeedback(
+          tx,
+          report.id,
+        );
+        if (!history.some((entry) => entry.version === report.version)) {
+          throw new BookingCompletionReportConflictError(
+            "Report history is incomplete; cannot correct this report",
+          );
+        }
+        const updated = await repo.updateCompletionFeedback(tx, {
+          id: report.id,
+          expectedVersion: input.expectedVersion,
+          version: input.expectedVersion + 1,
+          discussion: feedback.discussion,
+          strengths: feedback.strengths,
+          improvements: feedback.improvements,
+        });
+        if (!updated) throw new BookingCompletionReportConflictError();
+        const event = await repo.insertCompletionFeedbackHistory(tx, {
+          feedbackId: updated.id,
+          bookingId: updated.bookingId,
+          sessionId: updated.sessionId,
+          version: updated.version,
+          status: "corrected",
+          actorId: reportAudit.actorId,
+          actorRole: reportAudit.actorRole,
+          reason: reportAudit.reason,
+          deliveryConfirmed: reportAudit.deliveryConfirmed,
+          discussion: updated.discussion,
+          strengths: updated.strengths,
+          improvements: updated.improvements,
+          requestKey: reportAudit.requestKey,
+          requestPayload: reportAudit.requestPayload,
+        });
+        await notification.write({
+          db: tx,
+          userId: b.tutorId,
+          bookingId: b.id,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.INFO,
+          title: "Session report corrected by admin",
+          body: "An admin corrected the session report on your behalf.",
+          eventKey: `booking.${b.id}.session.${updated.sessionId ?? "solo"}.report.${updated.version}.admin`,
+        });
+        return event;
+      }
+
+      if (input.expectedVersion !== undefined) {
+        throw new BookingCompletionReportConflictError(
+          "The report no longer exists; reload before retrying",
+        );
+      }
+
+      const sessionEndAt = session?.scheduledEndAt ?? b.scheduledEndAt;
+      const ended = sessionEndAt.getTime() <= Date.now();
+      if (!delivered && !ended) {
+        throw new BookingNotEditableError(
+          b.id,
+          "A report can only be submitted after the session has ended",
+        );
+      }
+
+      if (b.type === BOOKING_TYPE.SERIES && session) {
+        if (
+          b.currentState === BOOKING_STATE.SCHEDULED &&
+          session.currentState === BOOKING_STATE.SCHEDULED
+        ) {
+          await completeSeriesSession(
+            tx,
+            b,
+            b.id,
+            b.tutorId,
+            session.id,
+            feedback,
+            reportAudit,
+          );
+        } else if (session.currentState === BOOKING_STATE.COMPLETED) {
+          await insertCompletionFeedbackWithAudit(tx, {
+            bookingId: b.id,
+            sessionId: session.id,
+            tutorId: b.tutorId,
+            feedback,
+            audit: reportAudit,
+          });
+        } else {
+          throw new BookingNotEditableError(
+            b.id,
+            "A report can only be submitted for a delivered or scheduled session",
+          );
+        }
+      } else if (
+        b.currentState === BOOKING_STATE.SCHEDULED ||
+        (b.type === BOOKING_TYPE.SOLO &&
+          b.currentState === BOOKING_STATE.NO_SHOW)
+      ) {
+        await completeSingleSession(
+          tx,
+          b,
+          b.id,
+          b.tutorId,
+          feedback,
+          reportAudit,
+        );
+      } else if (b.currentState === BOOKING_STATE.COMPLETED) {
+        await insertCompletionFeedbackWithAudit(tx, {
+          bookingId: b.id,
+          sessionId: null,
+          tutorId: b.tutorId,
+          feedback,
+          audit: reportAudit,
+        });
+      } else {
+        throw new BookingNotEditableError(
+          b.id,
+          "A report can only be submitted for a delivered or scheduled session",
+        );
+      }
+
+      const event = await repo.findCompletionFeedbackHistoryByRequestKey(
+        tx,
+        input.requestKey,
+      );
+      if (!event) throw new BookingNotFoundError(b.id);
+      return event;
     });
   }
 
@@ -1485,28 +2281,78 @@ export function createBookingService(deps: {
     b: BookingRow,
     bookingId: string,
     tutorId: string,
-    feedback?: CompletionFeedback,
+    feedback: CompletionFeedback,
+    reportAudit: CompletionReportAudit,
   ) {
-    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+    const confirmedSoloNoShowDelivery =
+      b.type === BOOKING_TYPE.SOLO &&
+      b.currentState === BOOKING_STATE.NO_SHOW &&
+      reportAudit.actorRole === ACTOR_TYPE.ADMIN &&
+      reportAudit.deliveryConfirmed === true;
+    if (
+      b.currentState !== BOOKING_STATE.SCHEDULED &&
+      !confirmedSoloNoShowDelivery
+    ) {
       throw new BookingStateTransitionError(
         b.currentState,
         "complete",
         BOOKING_STATE.COMPLETED,
       );
     }
-
-    assertCompletionFeedback(bookingId, feedback);
+    const existingReport = await repo.findCompletionFeedback(
+      tx,
+      bookingId,
+      null,
+    );
+    if (existingReport) {
+      throw new BookingNotEditableError(
+        "A session report has already been submitted",
+      );
+    }
 
     if (b.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(bookingId);
     }
 
+    const feeRecord = buildTutorSessionFeeRecord({
+      bookingId,
+      bookingSessionId: null,
+      tutorId,
+      scheduledStartAt: b.scheduledStartAt,
+      earnedAt: new Date(),
+      priceSnapshot: b.priceSnapshot,
+    });
+
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
       // so deduct from each confirmed participant individually.
       const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, "solo"),
+        ),
+      );
       for (const p of participants) {
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, "solo"),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          // A delivered group report makes this prior no-show chargeable under
+          // Q06. Do not charge the same participant a second time.
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
+          continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -1521,7 +2367,32 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Session completed",
         });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: p.heldAmount,
+        });
       }
+    } else if (confirmedSoloNoShowDelivery) {
+      const priorChargeKeys = [
+        `booking.${bookingId}.no_show.${b.proposerId}.solo`,
+        `booking.${bookingId}.no_show.${b.proposerId}`,
+      ];
+      const priorCharges = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        priorChargeKeys,
+      );
+      const chargedMarks = priorChargeKeys.reduce(
+        (sum, key) => sum + (priorCharges.get(key) ?? 0),
+        0,
+      );
+      if (chargedMarks <= 0) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "A chargeable student no-show is required before confirming delivery",
+        );
+      }
+      referralCandidates.push({ studentId: b.proposerId, chargedMarks });
     } else {
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
       if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
@@ -1534,23 +2405,48 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.TUTOR,
         reason: "Session completed",
       });
+      if (b.holdAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: b.holdAmount,
+        });
+      }
     }
 
     const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-      actorId: tutorId,
-      actorType: ACTOR_TYPE.TUTOR,
+      actorId: reportAudit.actorId,
+      actorType: reportAudit.actorRole,
+      reason: reportAudit.reason ?? undefined,
+      confirmedSoloNoShowDelivery,
+      ...(confirmedSoloNoShowDelivery
+        ? { metadata: { deliveryConfirmed: true, reusedNoShowCharge: true } }
+        : {}),
     });
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-    await repo.insertCompletionFeedback(tx, {
+    await insertCompletionFeedbackWithAudit(tx, {
       bookingId,
       sessionId: null,
-      authorId: tutorId,
-      discussion: feedback!.discussion,
-      strengths: feedback!.strengths,
-      improvements: feedback!.improvements,
+      tutorId,
+      feedback,
+      audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: b.type === BOOKING_TYPE.GROUP ? "group" : "solo",
+          completionId: bookingId,
+          completedAt: updated.completedAt ?? new Date(),
+        });
+      }
+    }
+
+    feeRecord.earnedAt = updated.completedAt ?? new Date();
+    await repo.insertTutorSessionFee(tx, feeRecord);
 
     await notification.writeBestEffort({
       db: tx,
@@ -1571,8 +2467,9 @@ export function createBookingService(deps: {
     b: BookingRow,
     bookingId: string,
     tutorId: string,
-    sessionId?: string,
-    feedback?: CompletionFeedback,
+    sessionId: string | undefined,
+    feedback: CompletionFeedback,
+    reportAudit: CompletionReportAudit,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -1582,9 +2479,10 @@ export function createBookingService(deps: {
       );
     }
     if (!sessionId) throw new BookingSessionRequiredError(bookingId);
-    assertCompletionFeedback(bookingId, feedback);
 
-    const session = await repo.findSessionById(tx, sessionId);
+    const session = await repo.findSessionById(tx, sessionId, {
+      forUpdate: true,
+    });
     if (!session || session.seriesBookingId !== bookingId) {
       throw new BookingSessionNotFoundError(sessionId);
     }
@@ -1598,9 +2496,34 @@ export function createBookingService(deps: {
     if (session.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(sessionId);
     }
+    const existingReport = await repo.findCompletionFeedback(
+      tx,
+      bookingId,
+      session.id,
+    );
+    if (existingReport) {
+      throw new BookingNotEditableError(
+        "A session report has already been submitted",
+      );
+    }
+
+    // Validate the persisted fee snapshot before any wallet or hold writes.
+    // Explicit V3 zero honoraria remain valid; missing/malformed values fail.
+    const feeRecord = buildTutorSessionFeeRecord({
+      bookingId,
+      bookingSessionId: session.id,
+      tutorId,
+      scheduledStartAt: session.scheduledStartAt,
+      earnedAt: new Date(),
+      priceSnapshot: session.priceSnapshot ?? b.priceSnapshot,
+    });
 
     const isGroupSeries = b.targetGroupSize > 1;
     let deductedHoldAmount = 0;
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     let residualHeld = 0;
     let proposerWallet: Awaited<ReturnType<BookingWalletPort["getByUserId"]>> =
       null;
@@ -1611,8 +2534,34 @@ export function createBookingService(deps: {
     if (isGroupSeries) {
       // P1-8: group-series holds live on each confirmed participant's wallet,
       // so a completed session deducts each participant's per-session share.
-      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const participants = await repo.findConfirmedParticipants(
+        tx,
+        bookingId,
+        undefined,
+        { forUpdate: true },
+      );
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, session.id),
+        ),
+      );
       for (const p of participants) {
+        // A delivered child report makes this prior no-show chargeable under
+        // Q06. The keyed charge also keeps one child's attendance from being
+        // inferred for any other series session.
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, session.id),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
+          continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -1632,6 +2581,10 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Group series session completed",
         });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: deductAmount,
+        });
         // eslint-disable-next-line no-await-in-loop
         await repo.updateParticipantState(tx, p.id, {
           heldAmount: Math.max(0, p.heldAmount - deductAmount),
@@ -1645,35 +2598,57 @@ export function createBookingService(deps: {
         tx,
         bookingId,
         b.proposerId,
+        { forUpdate: true },
       );
-      // L1: after an admin cancelSeriesSession(..., release) the remaining
-      // held amount may be below the per-session amount — never deduct more
-      // than the participant actually holds (InsufficientBalanceError → a
-      // delivered-but-unpaid session).
-      const deductAmount = Math.min(
-        session.holdAmount,
-        proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
-      );
-      await wallet.deduct(tx, {
-        walletId: proposerWallet.id,
-        amount: deductAmount,
-        eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
-        sourceReference: bookingId,
+      const noShowKey = seriesNoShowEventKey(
         bookingId,
-        actorType: ACTOR_TYPE.TUTOR,
-        reason: "Series session completed",
-      });
-
-      if (proposerParticipant) {
-        residualHeld = Math.max(
-          0,
-          proposerParticipant.heldAmount - deductAmount,
-        );
-        await repo.updateParticipantState(tx, proposerParticipant.id, {
-          heldAmount: residualHeld,
+        b.proposerId,
+        session.id,
+      );
+      const noShowAmounts = await repo.findLedgerEventAmounts(tx, bookingId, [
+        noShowKey,
+      ]);
+      const noShowAmount = noShowAmounts.get(noShowKey) ?? 0;
+      if (noShowAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: noShowAmount,
         });
+      } else {
+        // L1: after an admin cancelSeriesSession(..., release) the remaining
+        // held amount may be below the per-session amount — never deduct more
+        // than the participant actually holds.
+        const deductAmount = Math.min(
+          session.holdAmount,
+          proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
+        );
+        await wallet.deduct(tx, {
+          walletId: proposerWallet.id,
+          amount: deductAmount,
+          eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Series session completed",
+        });
+        if (deductAmount > 0) {
+          referralCandidates.push({
+            studentId: b.proposerId,
+            chargedMarks: deductAmount,
+          });
+        }
+
+        if (proposerParticipant) {
+          residualHeld = Math.max(
+            0,
+            proposerParticipant.heldAmount - deductAmount,
+          );
+          await repo.updateParticipantState(tx, proposerParticipant.id, {
+            heldAmount: residualHeld,
+          });
+        }
+        deductedHoldAmount = deductAmount;
       }
-      deductedHoldAmount = deductAmount;
     }
     await repo.updateBookingHoldAmount(
       tx,
@@ -1681,16 +2656,30 @@ export function createBookingService(deps: {
       Math.max(0, b.holdAmount - deductedHoldAmount),
     );
 
-    await repo.completeSession(tx, session.id);
+    const sessionCompletedAt = new Date();
+    await repo.completeSession(tx, session.id, sessionCompletedAt);
+    feeRecord.earnedAt = sessionCompletedAt;
+    await repo.insertTutorSessionFee(tx, feeRecord);
 
-    await repo.insertCompletionFeedback(tx, {
+    await insertCompletionFeedbackWithAudit(tx, {
       bookingId,
       sessionId: session.id,
-      authorId: tutorId,
-      discussion: feedback!.discussion,
-      strengths: feedback!.strengths,
-      improvements: feedback!.improvements,
+      tutorId,
+      feedback,
+      audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: "series_child",
+          completionId: session.id,
+          completedAt: sessionCompletedAt,
+        });
+      }
+    }
 
     await notification.writeBestEffort({
       db: tx,
@@ -1714,10 +2703,12 @@ export function createBookingService(deps: {
     });
 
     const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
-    const allCompleted = sessions.every(
-      (s) => s.currentState === BOOKING_STATE.COMPLETED,
+    const allSettled = sessions.every(
+      (s) =>
+        s.currentState === BOOKING_STATE.COMPLETED ||
+        s.currentState === BOOKING_STATE.CANCELLED,
     );
-    if (!allCompleted) {
+    if (!allSettled) {
       const refreshed = await repo.findBookingById(tx, bookingId);
       if (!refreshed) throw new BookingNotFoundError(bookingId);
       return refreshed;
@@ -1762,9 +2753,9 @@ export function createBookingService(deps: {
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
     await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-      actorId: tutorId,
-      actorType: ACTOR_TYPE.TUTOR,
-      reason: "All series sessions completed",
+      actorId: reportAudit.actorId,
+      actorType: reportAudit.actorRole,
+      reason: reportAudit.reason ?? "All series sessions settled",
     });
 
     await notification.writeBestEffort({
@@ -1774,7 +2765,7 @@ export function createBookingService(deps: {
       category: NOTIFICATION_CATEGORY.BOOKING,
       severity: NOTIFICATION_SEVERITY.INFO,
       title: "Series completed",
-      body: "All sessions in your series are completed. Remaining holds released.",
+      body: "All sessions in your series are settled. Remaining holds released.",
       eventKey: `booking.${bookingId}.series_completed.student`,
     });
     await notification.writeBestEffort({
@@ -1784,7 +2775,7 @@ export function createBookingService(deps: {
       category: NOTIFICATION_CATEGORY.BOOKING,
       severity: NOTIFICATION_SEVERITY.INFO,
       title: "Series completed",
-      body: "All sessions in the series are completed.",
+      body: "All sessions in the series are settled.",
       eventKey: `booking.${bookingId}.series_completed.tutor`,
     });
 
@@ -1795,10 +2786,26 @@ export function createBookingService(deps: {
 
   async function cancelSession(userId: string, sessionId: string) {
     return db.transaction(async (tx) => {
-      const session = await repo.findSessionById(tx, sessionId);
-      if (!session) throw new BookingSessionNotFoundError(sessionId);
-      const b = await repo.findBookingById(tx, session.seriesBookingId);
-      if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+      const discoveredSession = await repo.findSessionById(tx, sessionId);
+      if (!discoveredSession) throw new BookingSessionNotFoundError(sessionId);
+
+      // Share the reschedule lock before row locks so an accepted reschedule
+      // cannot move a session after cancellation has validated its old state.
+      await lockBookingReschedule(tx, discoveredSession.seriesBookingId);
+      const b = await repo.findBookingById(
+        tx,
+        discoveredSession.seriesBookingId,
+        { forUpdate: true },
+      );
+      if (!b) {
+        throw new BookingNotFoundError(discoveredSession.seriesBookingId);
+      }
+      const session = await repo.findSessionById(tx, sessionId, {
+        forUpdate: true,
+      });
+      if (!session || session.seriesBookingId !== b.id) {
+        throw new BookingSessionNotFoundError(sessionId);
+      }
       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
       // PRD (prd.tex:887): only the student may cancel an individual future
       // series session; a tutor cannot skip the wallet release path.
@@ -1824,27 +2831,26 @@ export function createBookingService(deps: {
         );
       }
 
-      if (Date.now() >= session.scheduledStartAt.getTime()) {
+      const participant = await repo.findParticipant(tx, b.id, userId, {
+        forUpdate: true,
+      });
+      if (!participant) throw new BookingParticipantNotFoundError(b.id);
+      const now = new Date();
+      if (now.getTime() >= session.scheduledStartAt.getTime()) {
         throw new BookingCancellationDeadlinePassedError(sessionId);
       }
 
-      const now = new Date();
       const h2 = new Date(
         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-
-      const participant = await repo.findParticipant(tx, b.id, userId);
       // M4: cap the release/deduct at the participant's current held amount.
       // After an admin cancelSeriesSession(..., release) the participant may
       // hold less than session.holdAmount; releasing/deducting the full
       // session amount would draw the difference from the wallet's pooled
       // held balance (other bookings' holds) and strand later completions.
-      const effective = Math.min(
-        session.holdAmount,
-        participant?.heldAmount ?? session.holdAmount,
-      );
-      if (participant && effective > 0) {
+      const effective = Math.min(session.holdAmount, participant.heldAmount);
+      if (effective > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
         if (isLate) {
@@ -1875,7 +2881,13 @@ export function createBookingService(deps: {
         });
       }
 
-      await repo.cancelSession(tx, session.id);
+      if (!(await repo.cancelSession(tx, session.id))) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
       await repo.updateBookingHoldAmount(
         tx,
         b.id,
@@ -1936,10 +2948,69 @@ export function createBookingService(deps: {
   ) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    if (userRole !== "admin") {
+    const isStaffReader = userRole === "admin" || b.tutorId === userId;
+    if (!isStaffReader) {
       await assertBookingAccess(b, userId, db, bookingId);
     }
-    return repo.listCompletionFeedbackByBooking(db, bookingId);
+    const feedbacks = await repo.listCompletionFeedbackByBooking(db, bookingId);
+    if (isStaffReader) return feedbacks;
+    const entitled = [];
+    const bookingType =
+      b.type === BOOKING_TYPE.SERIES
+        ? BOOKING_TYPE.SERIES
+        : b.type === BOOKING_TYPE.GROUP
+          ? BOOKING_TYPE.GROUP
+          : BOOKING_TYPE.SOLO;
+    for (const report of feedbacks) {
+      let delivered = false;
+      if (report.sessionId) {
+        if (b.type !== BOOKING_TYPE.SERIES) continue;
+        const session = await repo.findSessionById(db, report.sessionId);
+        delivered =
+          session?.seriesBookingId === bookingId &&
+          session.currentState === BOOKING_STATE.COMPLETED;
+      } else {
+        delivered =
+          b.type !== BOOKING_TYPE.SERIES &&
+          b.currentState === BOOKING_STATE.COMPLETED;
+      }
+      if (!delivered) continue;
+      const eventKeys = completionFeedbackEntitlementEventKeys({
+        bookingId,
+        bookingType,
+        userId,
+        sessionId: report.sessionId,
+        seriesTargetGroupSize: b.targetGroupSize,
+      });
+      if (
+        await repo.hasChargeableFeedbackEntitlement(
+          db,
+          bookingId,
+          userId,
+          eventKeys,
+        )
+      ) {
+        entitled.push(report);
+      }
+    }
+    return entitled;
+  }
+
+  async function listCompletionFeedbackHistory(
+    bookingId: string,
+    userId: string,
+    userRole?: string,
+  ) {
+    if (userRole !== "admin") {
+      throw new BookingNotOwnedError(bookingId, userId);
+    }
+    const b = await repo.findBookingById(db, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    const history = await repo.listCompletionFeedbackHistoryByBooking(
+      db,
+      bookingId,
+    );
+    return history;
   }
 
   /**
@@ -1957,30 +3028,39 @@ export function createBookingService(deps: {
     sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
-
-      const participant = await repo.findParticipant(
-        tx,
-        bookingId,
-        participantUserId,
-      );
-      if (!participant)
-        throw new BookingParticipantNotFoundError(participantUserId);
-
       const isSeries = b.type === BOOKING_TYPE.SERIES;
+      if (isSeries) {
+        const lockedBooking = await repo.findBookingById(tx, bookingId, {
+          forUpdate: true,
+        });
+        if (!lockedBooking) throw new BookingNotFoundError(bookingId);
+        if (lockedBooking.tutorId !== tutorId)
+          throw new BookingNotOwnedError(bookingId, tutorId);
+        b = lockedBooking;
+      }
       const session = isSeries
         ? sessionId
-          ? await repo.findSessionById(tx, sessionId)
+          ? await repo.findSessionById(tx, sessionId, { forUpdate: true })
           : null
         : null;
       if (isSeries && !session)
         throw new BookingSessionNotFoundError(sessionId ?? "");
       if (session && session.seriesBookingId !== bookingId) {
-        throw new BookingSessionNotFoundError(sessionId ?? "");
+        throw new BookingSessionNotFoundError(sessionId!);
       }
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        participantUserId,
+        { forUpdate: isSeries },
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(participantUserId);
 
       const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
       const now = new Date();
@@ -1999,6 +3079,31 @@ export function createBookingService(deps: {
         );
       }
 
+      if (isSeries) {
+        const existingReport = await repo.findCompletionFeedback(
+          tx,
+          bookingId,
+          sessionId!,
+        );
+        if (existingReport) {
+          throw new BookingNotEditableError(
+            "A session report has already been submitted",
+          );
+        }
+        const eventKey = seriesNoShowEventKey(
+          bookingId,
+          participantUserId,
+          sessionId!,
+        );
+        if (
+          (await repo.findLedgerEventKeys(tx, bookingId, [eventKey])).length
+        ) {
+          throw new BookingNotEditableError(
+            "Participant was already marked as a no-show for this session",
+          );
+        }
+      }
+
       const forfeitAmount = isSeries
         ? Math.min(session!.holdAmount, participant.heldAmount)
         : participant.heldAmount;
@@ -2008,7 +3113,9 @@ export function createBookingService(deps: {
         await wallet.deduct(tx, {
           walletId: w.id,
           amount: forfeitAmount,
-          eventKey: `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
+          eventKey: isSeries
+            ? seriesNoShowEventKey(bookingId, participantUserId, sessionId!)
+            : `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
           sourceReference: bookingId,
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
@@ -2057,7 +3164,7 @@ export function createBookingService(deps: {
           0,
         );
         await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
-      } else if (!isSeries) {
+      } else {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
         await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
           actorId: tutorId,
@@ -2645,10 +3752,6 @@ export function createBookingService(deps: {
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
     assertTutorCapacity(profile, input.modality, input.targetGroupSize);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     // Validate invitees: registered users (DL-19), no duplicates, no self-
     // invite, and the total headcount must fit the target group size.
@@ -2681,24 +3784,16 @@ export function createBookingService(deps: {
     assertSessionFitsAvailability(slot, session, input.modality);
 
     const size = input.targetGroupSize;
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      size as GroupSize,
-    );
-    const totalMarks = priceSnapshot.perStudent * size;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
 
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, size as GroupSize);
+      assertTutorCapacity(profile, input.modality, size);
+      const totalMarks = priceSnapshot.collectedMarks;
+
       await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
@@ -2713,6 +3808,12 @@ export function createBookingService(deps: {
           session.scheduledStartAt.toISOString(),
           session.scheduledEndAt.toISOString(),
         );
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -2774,7 +3875,7 @@ export function createBookingService(deps: {
           body: [
             "You have been invited to a group session. Confirm within 12 hours.",
             `Schedule: ${session.scheduledStartAt.toISOString()}`,
-            `Per-student price: ${priceSnapshot.perStudent} Marks`,
+            `Per-student price: ${getPerStudentMarks(priceSnapshot)} Marks`,
             `Total Marks held on acceptance: ${totalMarks}`,
             `View and accept in-platform: ${formatInviteCta(bookingId)}`,
           ].join(" "),
@@ -2835,8 +3936,9 @@ export function createBookingService(deps: {
       }
 
       const size = b.targetGroupSize;
-      const pricePerStudent = (b.priceSnapshot?.perStudent ??
-        DEFAULT_SOLO_PRICE) as number;
+      const pricePerStudent = getPerStudentMarks(b.priceSnapshot);
+      if (pricePerStudent === null)
+        throw new BookingV3PricingRevisionUnavailableError(0);
 
       // A group-series invitee accepts the whole package up front: the hold is
       // pricePerStudent per session × the number of sessions. The proposer of a
@@ -3084,11 +4186,17 @@ export function createBookingService(deps: {
         // legacy price maps, rounding coincidences) it NOW syncs holdAmount
         // to the participant-held total — without that sync the mismatch
         // below would re-fire on every reconfirm accept forever.
-        const perStudent = b.priceSnapshot?.perStudent;
+        const perStudent = getPerStudentMarks(b.priceSnapshot);
+        const isV3GroupSeries =
+          b.type === BOOKING_TYPE.SERIES &&
+          b.targetGroupSize > 1 &&
+          b.priceSnapshot?.engine === "v3";
         const snapshotHeadcount =
           b.type === BOOKING_TYPE.GROUP && perStudent && perStudent > 0
             ? Math.round(b.holdAmount / perStudent)
-            : null;
+            : isV3GroupSeries && b.priceSnapshot?.engine === "v3"
+              ? b.priceSnapshot.headcount
+              : null;
         if (
           snapshotHeadcount !== null &&
           confirmed.length !== snapshotHeadcount
@@ -3474,10 +4582,6 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3509,25 +4613,18 @@ export function createBookingService(deps: {
     );
     assertNoIntraSeriesOverlap(sessions);
 
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      1,
-    );
-    const perSession = priceSnapshot.perStudent;
-    const totalMarks = perSession * input.sessions.length;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
-
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { sessionTopic, priceSnapshot } = await resolveNewBookingTerms(
+        tx,
+        input,
+        1,
+      );
+      const perSession = getPerStudentMarks(priceSnapshot)!;
+      const totalMarks = perSession * input.sessions.length;
+
       await lockTutorForBooking(tx, input.tutorId);
       for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
@@ -3545,6 +4642,12 @@ export function createBookingService(deps: {
             session.scheduledEndAt.toISOString(),
           );
         }
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -3631,10 +4734,6 @@ export function createBookingService(deps: {
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
     assertTutorCapacity(profile, input.modality, input.targetGroupSize);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3686,25 +4785,17 @@ export function createBookingService(deps: {
     }
 
     const size = input.targetGroupSize;
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      size as GroupSize,
-    );
-    const perSession = priceSnapshot.perStudent;
-    const packageTotal = perSession * input.sessions.length;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < packageTotal) {
-      throw new InsufficientMarksError(packageTotal, w.availableBalance);
-    }
 
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, size as GroupSize);
+      assertTutorCapacity(profile, input.modality, size);
+      const perSession = getPerStudentMarks(priceSnapshot)!;
+      const packageTotal = perSession * input.sessions.length;
+
       await lockTutorForBooking(tx, input.tutorId);
       for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
@@ -3722,6 +4813,12 @@ export function createBookingService(deps: {
             session.scheduledEndAt.toISOString(),
           );
         }
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < packageTotal) {
+        throw new InsufficientMarksError(packageTotal, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -3844,15 +4941,7 @@ export function createBookingService(deps: {
     return repo.listSessionsBySeriesId(db, bookingId);
   }
 
-  /**
-   * Aggregates tutor earnings from COMPLETED bookings in a date range.
-   *
-   * The stored per-booking `priceSnapshot` (G19-correct tutorShare/cogitoTake)
-   * is authoritative — no flat-rate recomputation. For series bookings the
-   * per-session snapshots are summed so a completed series pays out every
-   * session; a series completed without session rows falls back to its
-   * booking-level snapshot.
-   */
+  // Earnings are sourced exclusively from immutable delivered-session fee events.
   async function aggregateTutorPayouts(
     conn: DbOrTx,
     input: {
@@ -3860,60 +4949,92 @@ export function createBookingService(deps: {
       dateFrom?: Date;
       dateTo?: Date;
       dateBasis?: "scheduledStartAt" | "completedAt";
+      excludeAllocatedSources?: boolean;
+      excludedSourceKeys?: ReadonlySet<string>;
     },
-  ): Promise<TutorPayoutResult> {
-    const bookings = await repo.findCompletedBookingsByTutor(
+  ): Promise<TutorPayoutAggregate> {
+    const feeRows = await repo.findTutorSessionFeesByTutor(
       conn,
       input.tutorId,
       input.dateFrom,
       input.dateTo,
       input.dateBasis,
     );
+    const allocatedSourceKeys = new Set(
+      input.excludeAllocatedSources
+        ? await repo.listTutorPayoutAllocatedSourceKeys(conn, input.tutorId)
+        : [],
+    );
 
     let completedSessions = 0;
     let totalMarks = 0;
-    let cogitoTake = 0;
-    let tutorPayout = 0;
+    const cogitoTake = 0;
+    const tutorPayout = 0;
     let tutorPayoutIdr = 0;
+    const items: TutorPayoutSourceItem[] = [];
 
-    for (const b of bookings) {
-      if (b.type === BOOKING_TYPE.SERIES) {
-        const sessions = await repo.listSessionsBySeriesId(conn, b.id);
-        const completed = sessions.filter(
-          (s) => s.currentState === BOOKING_STATE.COMPLETED,
+    const addPayoutSnapshot = (
+      snap: BookingPriceSnapshot | null | undefined,
+      source: Omit<
+        TutorPayoutSourceItem,
+        "grossHonorariumIdr" | "priceSnapshot" | "collectedMarks"
+      > & { collectedMarks?: number },
+      grossHonorariumIdr?: number,
+    ) => {
+      if (input.excludedSourceKeys?.has(source.sourceKey)) return;
+      completedSessions++;
+      const collectedMarks =
+        source.collectedMarks ??
+        (snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0));
+      totalMarks += collectedMarks;
+      const sourceGrossHonorariumIdr = grossHonorariumIdr;
+      if (
+        !Number.isSafeInteger(sourceGrossHonorariumIdr) ||
+        sourceGrossHonorariumIdr! < 0
+      ) {
+        throw new RangeError(
+          "Session fee event must contain a valid IDR honorarium",
         );
-        if (completed.length > 0) {
-          for (const s of completed) {
-            completedSessions++;
-            const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks += snap?.baseline ?? 0;
-            cogitoTake += snap?.cogitoTake ?? 0;
-            tutorPayout += snap?.tutorShare ?? 0;
-            tutorPayoutIdr +=
-              snap?.tutorHonorariumIdr ??
-              (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
-          }
-        } else {
-          completedSessions++;
-          const snap = b.priceSnapshot;
-          totalMarks += snap?.baseline ?? 0;
-          cogitoTake += snap?.cogitoTake ?? 0;
-          tutorPayout += snap?.tutorShare ?? 0;
-          tutorPayoutIdr +=
-            snap?.tutorHonorariumIdr ??
-            (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
-        }
-      } else {
-        completedSessions++;
-        const snap = b.priceSnapshot;
-        totalMarks += snap?.baseline ?? 0;
-        cogitoTake += snap?.cogitoTake ?? 0;
-        tutorPayout += snap?.tutorShare ?? 0;
-        tutorPayoutIdr +=
-          snap?.tutorHonorariumIdr ??
-          (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
       }
+      items.push({
+        ...source,
+        grossHonorariumIdr: sourceGrossHonorariumIdr!,
+        collectedMarks,
+        priceSnapshot: snap ?? null,
+      });
+    };
+
+    for (const fee of feeRows) {
+      if (allocatedSourceKeys.has(fee.eventKey)) continue;
+      addPayoutSnapshot(
+        fee.priceSnapshot,
+        {
+          sourceKey: fee.eventKey,
+          sourceType: "fee_event",
+          tutorSessionFeeId: fee.id,
+          bookingId: fee.bookingId,
+          bookingNumber: fee.bookingNumber,
+          bookingSessionId: fee.bookingSessionId,
+          classSessionId: fee.academyClassSessionId,
+          deliveryLabel: fee.deliveryLabel,
+          bookingType: fee.bookingType as TutorPayoutSourceItem["bookingType"],
+          deliveryStatus: "completed",
+          scheduledStartAt: fee.scheduledStartAt,
+          earnedAt: fee.earnedAt,
+          ...(fee.academyClassSessionId
+            ? { collectedMarks: fee.collectedMarks }
+            : {}),
+        },
+        fee.grossHonorariumIdr,
+      );
     }
+
+    items.sort(
+      (a, b) =>
+        a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime() ||
+        a.sourceKey.localeCompare(b.sourceKey),
+    );
+    tutorPayoutIdr = sumSafeIdr(items.map((item) => item.grossHonorariumIdr));
 
     return {
       completedSessions,
@@ -3921,12 +5042,17 @@ export function createBookingService(deps: {
       cogitoTake,
       tutorPayout,
       tutorPayoutIdr: Math.round(tutorPayoutIdr),
+      items,
     };
   }
 
   function normalizeOptionalText(value: string | null | undefined) {
     const normalized = value?.trim();
     return normalized || null;
+  }
+
+  function normalizeBankAccountOwnership(value: string | null | undefined) {
+    return value === "self" || value === "trusted_person" ? value : null;
   }
 
   function hasCompletePayoutDetails(profile: {
@@ -3942,58 +5068,281 @@ export function createBookingService(deps: {
       profile.bankAccountNumber?.trim() &&
       profile.bankAccountHolderName?.trim() &&
       profile.bankAccountOpeningCity?.trim() &&
-      profile.bankAccountOwnership &&
+      normalizeBankAccountOwnership(profile.bankAccountOwnership) &&
       profile.bankTransferDisclaimerAccepted,
     );
   }
 
-  /**
-   * Builds the admin report as immutable paid batches plus the current unpaid
-   * balance for each tutor. Paid rows use transfer date for the date window;
-   * pending rows use completed-session date while respecting each tutor's last
-   * paid cutoff.
-   */
+  async function readTutorTaxConfig(conn: DbOrTx): Promise<TutorTaxConfigView> {
+    const row = await repo.findTutorTaxConfig(conn);
+    return {
+      id: "default",
+      version: row?.version ?? 0,
+      nikNpwpRateBps:
+        row?.nikNpwpRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.nikNpwp,
+      nikOnlyRateBps:
+        row?.nikOnlyRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.nikOnly,
+      missingRateBps:
+        row?.missingRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.missing,
+    };
+  }
+
+  async function getUnpaidAggregate(
+    conn: DbOrTx,
+    tutorId: string,
+    dateTo?: Date,
+  ) {
+    const [payouts, blockedSourceRows] = await Promise.all([
+      repo.listTutorPayoutsByTutorId(conn, tutorId),
+      repo.listTutorPayoutReconciliationSourceKeys(conn, tutorId),
+    ]);
+    const aggregate = await aggregateTutorPayouts(conn, {
+      tutorId,
+      dateTo,
+      dateBasis: "completedAt",
+      excludeAllocatedSources: true,
+      excludedSourceKeys: new Set(
+        blockedSourceRows.map((row) => row.sourceKey),
+      ),
+    });
+    return {
+      ...aggregate,
+      lastPaidAt:
+        payouts.find((payout) => payout.status === "paid")?.paidAt ?? null,
+    };
+  }
+
+  function taxRateFor(
+    profile: NonNullable<Awaited<ReturnType<typeof repo.findTutorProfile>>>,
+    config: TutorTaxConfigView,
+  ) {
+    const taxStatus = tutorTaxStatus({
+      legalName: profile.taxLegalName,
+      nik: profile.nik,
+      npwp: profile.npwp,
+    });
+    const rateBps =
+      profile.taxRateOverrideBps ??
+      (taxStatus === "nik_npwp"
+        ? config.nikNpwpRateBps
+        : taxStatus === "nik_only"
+          ? config.nikOnlyRateBps
+          : config.missingRateBps);
+    const rateSource: TutorTaxRateSource =
+      profile.taxRateOverrideBps != null
+        ? "tutor_override"
+        : `default_${taxStatus}`;
+    return { taxStatus, rateBps, rateSource };
+  }
+
+  async function buildTutorPayoutPreview(
+    conn: DbOrTx,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      payoutId?: string;
+    },
+  ): Promise<TutorPayoutPreview> {
+    const profile = await repo.findTutorProfile(conn, input.tutorId);
+    if (!profile) {
+      throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+        "tutorProfile",
+      ]);
+    }
+    const sourceKeys = [...new Set(input.sourceKeys)].sort();
+    if (!sourceKeys.length || sourceKeys.length !== input.sourceKeys.length) {
+      throw new TutorPayoutPreviewStaleError(
+        "Select one or more unique sessions",
+      );
+    }
+
+    const [aggregate, config, blockedSourceRows] = await Promise.all([
+      (async () => {
+        const allSources = await aggregateTutorPayouts(conn, {
+          tutorId: input.tutorId,
+          dateTo: new Date(),
+          dateBasis: "completedAt",
+          excludeAllocatedSources: !input.payoutId,
+        });
+        if (!input.payoutId) return allSources;
+
+        const ownAllocations = await repo.listTutorPayoutAllocationsByPayoutId(
+          conn,
+          input.payoutId,
+        );
+        const ownKeys = new Set(
+          ownAllocations
+            .filter((row) => row.active)
+            .map((row) => row.sourceKey),
+        );
+        const allActiveKeys = new Set(
+          await repo.listTutorPayoutAllocatedSourceKeys(conn, input.tutorId),
+        );
+        return {
+          ...allSources,
+          items: allSources.items.filter(
+            (item) =>
+              ownKeys.has(item.sourceKey) || !allActiveKeys.has(item.sourceKey),
+          ),
+        };
+      })(),
+      readTutorTaxConfig(conn),
+      repo.listTutorPayoutReconciliationSourceKeys(conn, input.tutorId),
+    ]);
+    const blockedSourceKeys = new Set(
+      blockedSourceRows.map((row) => row.sourceKey),
+    );
+    const blockedKey = sourceKeys.find((key) => blockedSourceKeys.has(key));
+    if (blockedKey) {
+      const blockedRow = blockedSourceRows.find(
+        (row) => row.sourceKey === blockedKey,
+      );
+      throw new TutorPayoutReconciliationRequiredError(
+        blockedRow?.payoutId ?? blockedKey,
+      );
+    }
+
+    const items = aggregate.items.filter((item) =>
+      sourceKeys.includes(item.sourceKey),
+    );
+    if (items.length !== sourceKeys.length) {
+      throw new TutorPayoutPreviewStaleError(
+        "One or more selected sessions are no longer available",
+      );
+    }
+    if (input.payoutId) {
+      const ownAllocations = await repo.listTutorPayoutAllocationsByPayoutId(
+        conn,
+        input.payoutId,
+      );
+      const ownKeys = new Set(
+        ownAllocations.filter((row) => row.active).map((row) => row.sourceKey),
+      );
+      if (items.some((item) => !ownKeys.has(item.sourceKey))) {
+        throw new TutorPayoutPreviewStaleError(
+          "Prepared session allocations changed",
+        );
+      }
+    }
+
+    const tax = taxRateFor(profile, config);
+    const grossHonorariumIdr = sumSafeIdr(
+      items.map((item) => item.grossHonorariumIdr),
+    );
+    const bankName = normalizeOptionalText(profile.bankName);
+    const amounts = calculateTutorPayoutAmounts({
+      grossIdr: grossHonorariumIdr,
+      taxRateBps: tax.rateBps,
+      bankName: bankName ?? "",
+    });
+    const basis = {
+      tutorId: input.tutorId,
+      profileVersion: profile.version,
+      taxConfigVersion: config.version,
+      taxStatus: tax.taxStatus,
+      taxRateBps: tax.rateBps,
+      taxRateSource: tax.rateSource,
+      legalName: normalizeOptionalText(profile.taxLegalName),
+      nik: normalizeOptionalText(profile.nik),
+      npwp: normalizeOptionalText(profile.npwp),
+      bankName,
+      bankAccountNumber: normalizeOptionalText(profile.bankAccountNumber),
+      bankAccountHolderName: normalizeOptionalText(
+        profile.bankAccountHolderName,
+      ),
+      bankAccountOpeningCity: normalizeOptionalText(
+        profile.bankAccountOpeningCity,
+      ),
+      bankAccountOwnership: profile.bankAccountOwnership ?? null,
+      sourceKeys,
+      items: items.map((item) => ({
+        ...item,
+        scheduledStartAt: item.scheduledStartAt.toISOString(),
+        earnedAt: item.earnedAt.toISOString(),
+      })),
+      amounts,
+    };
+    const previewVersion = createHash("sha256")
+      .update(stableSerialize(basis))
+      .digest("hex");
+
+    return {
+      previewVersion,
+      tutorId: input.tutorId,
+      profileVersion: profile.version,
+      taxConfigVersion: config.version,
+      sourceKeys,
+      items,
+      grossHonorariumIdr,
+      taxStatus: tax.taxStatus,
+      taxRateBps: tax.rateBps,
+      taxRateSource: tax.rateSource,
+      taxHonorariumIdr: amounts.taxIdr,
+      transferFeeIdr: amounts.transferFeeIdr,
+      netHonorariumIdr: amounts.netIdr,
+      legalName: normalizeOptionalText(profile.taxLegalName),
+      nik: normalizeOptionalText(profile.nik),
+      npwp: normalizeOptionalText(profile.npwp),
+      bankName,
+      bankAccountNumber: normalizeOptionalText(profile.bankAccountNumber),
+      bankAccountHolderName: normalizeOptionalText(
+        profile.bankAccountHolderName,
+      ),
+    };
+  }
+
+  async function previewTutorPayout(tutorId: string, sourceKeys: string[]) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, tutorId);
+      return buildTutorPayoutPreview(tx, { tutorId, sourceKeys });
+    });
+  }
+
   async function getTutorPayoutReport(input: {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<TutorPayoutReportRow[]> {
     const dateTo = input.dateTo ?? new Date();
-    const [profiles, paidRows] = await Promise.all([
+    const [profiles, records, config] = await Promise.all([
       repo.listTutorPayoutProfiles(db),
       repo.listTutorPayoutRecords(db, input.dateFrom, dateTo),
+      readTutorTaxConfig(db),
     ]);
-
     const pendingRows: Array<TutorPayoutReportRow | null> = await mapLimit(
       profiles,
       5,
       async (profile) => {
-        const lastPaid = await repo.findLatestPaidTutorPayout(
-          db,
-          profile.tutorId,
-        );
-        const lastPaidCutoff = lastPaid
-          ? new Date(lastPaid.cutoffAt.getTime() + 1)
-          : undefined;
-        // Current unpaid balances must never disappear just because the admin
-        // selected a shorter historical window. The date window limits paid
-        // transfer history; outstanding work is always operationally relevant.
-        const pendingFrom = lastPaidCutoff;
-        const result = await aggregateTutorPayouts(db, {
-          tutorId: profile.tutorId,
-          dateFrom: pendingFrom,
-          dateTo,
-          dateBasis: "completedAt",
+        const result = await getUnpaidAggregate(db, profile.tutorId, dateTo);
+        if (result.completedSessions === 0) return null;
+
+        const taxStatus = tutorTaxStatus({
+          legalName: profile.taxLegalName,
+          nik: profile.nik,
+          npwp: profile.npwp,
         });
-
-        if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
-          return null;
-        }
-
-        const bankName = normalizeOptionalText(profile.bankName);
+        const taxRateBps =
+          profile.taxRateOverrideBps ??
+          (taxStatus === "nik_npwp"
+            ? config.nikNpwpRateBps
+            : taxStatus === "nik_only"
+              ? config.nikOnlyRateBps
+              : config.missingRateBps);
+        const taxRateSource =
+          profile.taxRateOverrideBps != null
+            ? "tutor_override"
+            : `default_${taxStatus}`;
         const grossHonorariumIdr = result.tutorPayoutIdr;
-        const transferFeeIdr = bankName
-          ? getTutorPayoutTransferFeeIdr(bankName)
-          : 0;
+        const taxHonorariumIdr = calculateTutorTaxIdr(
+          grossHonorariumIdr,
+          taxRateBps,
+        );
+        const bankName = normalizeOptionalText(profile.bankName);
+        const transferFeeIdr =
+          grossHonorariumIdr === 0 || bankName?.toUpperCase() === "BCA"
+            ? 0
+            : 2_500;
+        const net = grossHonorariumIdr - taxHonorariumIdr - transferFeeIdr;
 
         return {
           id: `pending:${profile.tutorId}`,
@@ -4007,45 +5356,96 @@ export function createBookingService(deps: {
           bankAccountOpeningCity: normalizeOptionalText(
             profile.bankAccountOpeningCity,
           ),
-          bankAccountOwnership: profile.bankAccountOwnership ?? null,
+          bankAccountOwnership: normalizeBankAccountOwnership(
+            profile.bankAccountOwnership,
+          ),
+          taxLegalName: normalizeOptionalText(profile.taxLegalName),
+          taxNik: normalizeOptionalText(profile.nik),
+          taxNpwp: normalizeOptionalText(profile.npwp),
           grossHonorariumIdr,
           transferFeeIdr,
-          netHonorariumIdr: Math.max(0, grossHonorariumIdr - transferFeeIdr),
+          netHonorariumIdr: net >= 0 ? net : null,
           status: "pending" as const,
           paidAt: null,
           payoutAccountComplete: hasCompletePayoutDetails(profile),
+          taxProfileComplete: Boolean(
+            profile.taxLegalName?.trim() && /^\d{16}$/.test(profile.nik ?? ""),
+          ),
+          taxStatus,
+          taxRateBps,
+          taxRateSource,
+          taxHonorariumIdr,
+          actualAmountIdr: null,
+          actualReference: null,
+          actualProofUrl: null,
+          transferRecordedAt: null,
+          transferRecordedBy: null,
+          preparedAt: null,
+          voidedAt: null,
+          voidReason: null,
+          reconciliationStatus: "not_required",
+          reconciliationReason: null,
+          previewVersion: null,
+          coveredSessionCount: result.items.length,
         } satisfies TutorPayoutReportRow;
       },
     );
 
-    const paidReportRows = paidRows.map(
+    const historicalRows = records.map(
       (row) =>
         ({
           id: row.id,
           tutorId: row.tutorId,
           tutorName: row.tutorName,
           bankName: normalizeOptionalText(row.bankName),
-          bankAccountNumber:
-            normalizeOptionalText(row.bankAccountNumber) ??
-            normalizeOptionalText(row.profileBankAccountNumber),
-          bankAccountHolderName:
-            normalizeOptionalText(row.bankAccountHolderName) ??
-            normalizeOptionalText(row.profileBankAccountHolderName),
-          bankAccountOpeningCity: normalizeOptionalText(
-            row.profileBankAccountOpeningCity,
+          // Historical exports use saved payout snapshots. They never fall
+          // back to the tutor's current bank or identity details.
+          bankAccountNumber: normalizeOptionalText(row.bankAccountNumber),
+          bankAccountHolderName: normalizeOptionalText(
+            row.bankAccountHolderName,
           ),
-          bankAccountOwnership: row.profileBankAccountOwnership ?? null,
+          bankAccountOpeningCity: normalizeOptionalText(
+            row.bankAccountOpeningCity,
+          ),
+          bankAccountOwnership: normalizeBankAccountOwnership(
+            row.bankAccountOwnership,
+          ),
+          taxLegalName: normalizeOptionalText(row.taxLegalName),
+          taxNik: normalizeOptionalText(row.taxNik),
+          taxNpwp: normalizeOptionalText(row.taxNpwp),
           grossHonorariumIdr: row.grossHonorariumIdr,
           transferFeeIdr: row.transferFeeIdr,
           netHonorariumIdr: row.netHonorariumIdr,
-          status: "paid" as const,
+          status: row.status as "prepared" | "paid" | "void",
           paidAt: row.paidAt,
-          payoutAccountComplete: true,
+          payoutAccountComplete: Boolean(
+            row.bankName && row.bankAccountNumber && row.bankAccountHolderName,
+          ),
+          taxProfileComplete: Boolean(
+            row.taxLegalName && row.taxNik && /^\d{16}$/.test(row.taxNik),
+          ),
+          taxStatus:
+            (row.taxStatus as "nik_npwp" | "nik_only" | "missing" | null) ??
+            null,
+          taxRateBps: row.taxRateBps,
+          taxRateSource: row.taxRateSource,
+          taxHonorariumIdr: row.taxHonorariumIdr,
+          actualAmountIdr: row.actualAmountIdr,
+          actualReference: row.actualReference,
+          actualProofUrl: row.actualProofUrl,
+          transferRecordedAt: row.transferRecordedAt,
+          transferRecordedBy: row.paidBy,
+          preparedAt: row.preparedAt,
+          voidedAt: row.voidedAt,
+          voidReason: row.voidReason,
+          reconciliationStatus: row.reconciliationStatus,
+          reconciliationReason: row.reconciliationReason,
+          previewVersion: row.previewVersion,
+          coveredSessionCount: row.coveredSessionCount,
         }) satisfies TutorPayoutReportRow,
     );
-
     return [
-      ...paidReportRows,
+      ...historicalRows,
       ...pendingRows.filter((row): row is TutorPayoutReportRow => row !== null),
     ];
   }
@@ -4055,76 +5455,631 @@ export function createBookingService(deps: {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<TutorPayoutResult> {
-    return aggregateTutorPayouts(db, input);
+    const result = await aggregateTutorPayouts(db, input);
+    return {
+      completedSessions: result.completedSessions,
+      totalMarks: result.totalMarks,
+      cogitoTake: result.cogitoTake,
+      tutorPayout: result.tutorPayout,
+      tutorPayoutIdr: result.tutorPayoutIdr,
+    };
   }
 
   async function getPendingTutorPayouts(tutorId: string) {
-    const lastPaid = await repo.findLatestPaidTutorPayout(db, tutorId);
-    const result = await aggregateTutorPayouts(db, {
-      tutorId,
-      dateFrom: lastPaid
-        ? new Date(lastPaid.cutoffAt.getTime() + 1)
-        : undefined,
-      dateBasis: "completedAt",
-    });
-    return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
+    const result = await getUnpaidAggregate(db, tutorId);
+    return result;
   }
 
-  async function markTutorPayoutPaid(tutorId: string, adminId: string) {
+  async function prepareTutorPayout(
+    adminId: string,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      previewVersion: string;
+      operationId: string;
+    },
+  ) {
     return db.transaction(async (tx) => {
-      await lockTutorForPayout(tx, tutorId);
-      const lastPaid = await repo.findLatestPaidTutorPayout(tx, tutorId);
-      const cutoffAt = new Date();
-      const result = await aggregateTutorPayouts(tx, {
-        tutorId,
-        dateFrom: lastPaid
-          ? new Date(lastPaid.cutoffAt.getTime() + 1)
-          : undefined,
-        dateTo: cutoffAt,
-        dateBasis: "completedAt",
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, input.tutorId);
+
+      const prior = await repo.findTutorPayoutByIdempotencyKey(
+        tx,
+        input.operationId,
+      );
+      if (prior) {
+        if (
+          prior.tutorId !== input.tutorId ||
+          prior.previewVersion !== input.previewVersion
+        ) {
+          throw new TutorPayoutPreviewStaleError(
+            "This payout operation was already used for another preview",
+          );
+        }
+        return toTutorPayoutMutationResult(prior);
+      }
+
+      const preview = await buildTutorPayoutPreview(tx, {
+        tutorId: input.tutorId,
+        sourceKeys: input.sourceKeys,
       });
-      if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
-        return null;
+      if (preview.previewVersion !== input.previewVersion) {
+        throw new TutorPayoutPreviewStaleError();
       }
-      const profile = await repo.findTutorProfile(tx, tutorId);
-      if (
-        !profile?.bankName?.trim() ||
-        !profile.bankAccountNumber?.trim() ||
-        !profile.bankAccountHolderName?.trim() ||
-        !profile.bankAccountOpeningCity?.trim() ||
-        !profile.bankAccountOwnership ||
-        !profile.bankTransferDisclaimerAccepted
-      ) {
-        return null;
+      const profile = await repo.findTutorProfile(tx, input.tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+          "tutorProfile",
+        ]);
       }
-      const bankName = profile.bankName.trim();
-      const transferFeeIdr = getTutorPayoutTransferFeeIdr(bankName);
-      const paidAt = new Date();
+      const missingBankFields = [
+        !profile.bankName?.trim() && "bankName",
+        !profile.bankAccountNumber?.trim() && "bankAccountNumber",
+        !profile.bankAccountHolderName?.trim() && "bankAccountHolderName",
+        !profile.bankAccountOpeningCity?.trim() && "bankAccountOpeningCity",
+        !profile.bankAccountOwnership && "bankAccountOwnership",
+        !profile.bankTransferDisclaimerAccepted &&
+          "bankTransferDisclaimerAccepted",
+      ].filter((field): field is string => Boolean(field));
+      if (missingBankFields.length) {
+        throw new TutorPayoutProfileIncompleteError(
+          input.tutorId,
+          missingBankFields,
+        );
+      }
+      const missingTaxFields = [
+        !profile.taxLegalName?.trim() && "taxLegalName",
+        !/^\d{16}$/.test(profile.nik ?? "") && "nik",
+      ].filter((field): field is string => Boolean(field));
+      if (missingTaxFields.length) {
+        throw new TutorPayoutTaxProfileIncompleteError(
+          input.tutorId,
+          missingTaxFields,
+        );
+      }
+
+      const preparedAt = new Date();
       const row = await repo.insertTutorPayout(tx, {
-        tutorId,
-        cutoffAt,
-        grossHonorariumIdr: result.tutorPayoutIdr,
-        transferFeeIdr,
-        netHonorariumIdr: Math.max(0, result.tutorPayoutIdr - transferFeeIdr),
-        bankName,
-        bankAccountNumber: profile.bankAccountNumber.trim(),
-        bankAccountHolderName: profile.bankAccountHolderName.trim(),
-        status: "paid",
-        paidAt,
-        paidBy: adminId,
+        tutorId: input.tutorId,
+        cutoffAt: preparedAt,
+        previewVersion: preview.previewVersion,
+        sourceKeys: preview.sourceKeys,
+        idempotencyKey: input.operationId,
+        grossHonorariumIdr: preview.grossHonorariumIdr,
+        taxStatus: preview.taxStatus,
+        taxRateBps: preview.taxRateBps,
+        taxRateSource: preview.taxRateSource,
+        taxHonorariumIdr: preview.taxHonorariumIdr,
+        transferFeeIdr: preview.transferFeeIdr,
+        netHonorariumIdr: preview.netHonorariumIdr,
+        bankName: profile.bankName!.trim(),
+        bankAccountNumber: profile.bankAccountNumber!.trim(),
+        bankAccountHolderName: profile.bankAccountHolderName!.trim(),
+        bankAccountOpeningCity: profile.bankAccountOpeningCity!.trim(),
+        bankAccountOwnership: profile.bankAccountOwnership,
+        taxLegalName: profile.taxLegalName!.trim(),
+        taxNik: profile.nik!.trim(),
+        taxNpwp: normalizeOptionalText(profile.npwp),
+        taxProfileVersion: profile.version,
+        taxConfigVersion: preview.taxConfigVersion,
+        status: "prepared",
+        preparedAt,
+        preparedBy: adminId,
+        reconciliationStatus: "not_required",
       });
-      return {
-        id: row.id,
+      await repo.insertTutorPayoutAllocations(
+        tx,
+        preview.items.map((item) => ({
+          payoutId: row.id,
+          sourceKey: item.sourceKey,
+          sourceType: item.sourceType,
+          tutorSessionFeeId: item.tutorSessionFeeId,
+          bookingId: item.bookingId,
+          bookingSessionId: item.bookingSessionId,
+          academyClassSessionId: item.classSessionId,
+          deliveryLabel: item.deliveryLabel,
+          bookingType: item.bookingType,
+          deliveryStatus: item.deliveryStatus,
+          scheduledStartAt: item.scheduledStartAt,
+          earnedAt: item.earnedAt,
+          grossHonorariumIdr: item.grossHonorariumIdr,
+          collectedMarks: item.collectedMarks,
+          priceSnapshot: item.priceSnapshot,
+          active: true,
+        })),
+      );
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_prepared",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { status: "pending" },
+        afterState: {
+          status: row.status,
+          grossHonorariumIdr: row.grossHonorariumIdr,
+          taxStatus: row.taxStatus,
+          taxRateBps: row.taxRateBps,
+          taxHonorariumIdr: row.taxHonorariumIdr,
+          transferFeeIdr: row.transferFeeIdr,
+          netHonorariumIdr: row.netHonorariumIdr,
+          sourceKeys: row.sourceKeys,
+        },
+      });
+      return toTutorPayoutMutationResult(row);
+    });
+  }
+
+  async function recordTutorPayoutTransfer(
+    adminId: string,
+    input: {
+      payoutId: string;
+      previewVersion: string;
+      actualAmountIdr: number;
+      paidAt: Date;
+      reference?: string;
+      proofUrl?: string;
+    },
+  ) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (Number.isNaN(input.paidAt.getTime())) {
+        throw new TutorPayoutStateError("Transfer date must be valid");
+      }
+      const actualReference = normalizeOptionalText(input.reference) ?? null;
+      const actualProofUrl = normalizeOptionalText(input.proofUrl) ?? null;
+      if (row.status === "paid") {
+        const isIdenticalReplay =
+          row.previewVersion === input.previewVersion &&
+          row.actualAmountIdr === input.actualAmountIdr &&
+          row.paidAt?.getTime() === input.paidAt.getTime() &&
+          row.actualReference === actualReference &&
+          row.actualProofUrl === actualProofUrl;
+        if (isIdenticalReplay) return toTutorPayoutMutationResult(row);
+        throw new TutorPayoutStateError(
+          "Transfer was already recorded with different details",
+        );
+      }
+      if (row.status !== "prepared") {
+        throw new TutorPayoutStateError(
+          "Only a prepared payout can record an external transfer",
+        );
+      }
+      const sourceKeys = row.sourceKeys ?? [];
+      const current = await buildTutorPayoutPreview(tx, {
         tutorId: row.tutorId,
+        sourceKeys,
+        payoutId: row.id,
+      });
+      if (
+        row.previewVersion !== input.previewVersion ||
+        current.previewVersion !== row.previewVersion
+      ) {
+        throw new TutorPayoutPreviewStaleError();
+      }
+      if (input.actualAmountIdr !== row.netHonorariumIdr) {
+        throw new TutorPayoutAmountMismatchError(
+          row.netHonorariumIdr,
+          input.actualAmountIdr,
+        );
+      }
+      const paidAt = input.paidAt;
+      const transferRecordedAt = new Date();
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          status: "paid",
+          actualAmountIdr: input.actualAmountIdr,
+          actualReference,
+          actualProofUrl,
+          transferRecordedAt,
+          paidAt,
+          paidBy: adminId,
+        })
+        .where(
+          and(eq(tutorPayout.id, row.id), eq(tutorPayout.status, "prepared")),
+        )
+        .returning();
+      const updated = updatedRows[0];
+      if (!updated) {
+        throw new TutorPayoutStateError(
+          "Payout state changed; reload and retry",
+        );
+      }
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_transfer_recorded",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { status: row.status },
+        afterState: {
+          status: updated.status,
+          actualAmountIdr: updated.actualAmountIdr,
+          actualReference: updated.actualReference,
+          paidAt: updated.paidAt?.toISOString() ?? null,
+          paidBy: adminId,
+        },
+      });
+      const allocations = await repo.listTutorPayoutAllocationsByPayoutId(
+        tx,
+        row.id,
+      );
+      const coveredSessions =
+        allocations.length === 0
+          ? "Legacy aggregate (session details unavailable)"
+          : allocations
+              .map((item) =>
+                escapeHtml(
+                  `${item.deliveryLabel ?? (item.bookingNumber === null ? `Class session ${item.classSessionId ?? ""}` : `Booking #${item.bookingNumber}`)} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
+                ),
+              )
+              .join("; ");
+      const taxSnapshot =
+        row.taxRateBps === null || row.taxHonorariumIdr === null
+          ? "Tax snapshot unavailable."
+          : `Tax Rp${row.taxHonorariumIdr.toLocaleString("id-ID")} (${(row.taxRateBps / 100).toFixed(2)}%).`;
+      await notification.write({
+        db: tx,
+        userId: row.tutorId,
+        category: NOTIFICATION_CATEGORY.PAYMENT,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Tutor payout recorded",
+        body: [
+          `Payout recorded for covered sessions: ${coveredSessions}.`,
+          `Gross Rp${row.grossHonorariumIdr.toLocaleString("id-ID")}.`,
+          taxSnapshot,
+          `Transfer fee Rp${row.transferFeeIdr.toLocaleString("id-ID")}.`,
+          `Net Rp${updated.actualAmountIdr?.toLocaleString("id-ID") ?? "0"}.`,
+          `Recorded transfer date: ${paidAt.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}.`,
+        ].join(" "),
+        eventKey: `tutor-payout.${row.id}.paid`,
+        emailRequired: true,
+        metadata: { payoutId: row.id },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function voidTutorPayout(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Void reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (row.status === "void") {
+        throw new TutorPayoutStateError("Payout is already void");
+      }
+      const voidedAt = new Date();
+      const hasTransferEvidence =
+        row.status === "paid" || row.actualAmountIdr !== null;
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          status: "void",
+          voidedAt,
+          voidedBy: adminId,
+          voidReason: reason,
+          reconciliationStatus: hasTransferEvidence
+            ? "required"
+            : "not_required",
+        })
+        .where(eq(tutorPayout.id, row.id))
+        .returning();
+      const updated = updatedRows[0]!;
+      await tx
+        .update(tutorPayoutAllocation)
+        .set({
+          active: false,
+          releasedAt: voidedAt,
+          releasedBy: adminId,
+          releaseReason: reason,
+        })
+        .where(
+          and(
+            eq(tutorPayoutAllocation.payoutId, row.id),
+            eq(tutorPayoutAllocation.active, true),
+          ),
+        );
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_voided",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: {
+          status: row.status,
+          reconciliationStatus: row.reconciliationStatus,
+        },
+        afterState: {
+          status: updated.status,
+          reconciliationStatus: updated.reconciliationStatus,
+          reason,
+          voidedAt: voidedAt.toISOString(),
+          transferEvidenceRetained: hasTransferEvidence,
+        },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function resolveTutorPayoutReconciliation(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    const reason = input.reason.trim();
+    if (!reason)
+      throw new TutorPayoutStateError("Resolution reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (row.status !== "void" || row.reconciliationStatus !== "required") {
+        throw new TutorPayoutStateError(
+          "This payout has no outstanding transfer reconciliation",
+        );
+      }
+      const resolvedAt = new Date();
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          reconciliationStatus: "resolved",
+          reconciliationResolvedAt: resolvedAt,
+          reconciliationResolvedBy: adminId,
+          reconciliationReason: reason,
+        })
+        .where(eq(tutorPayout.id, row.id))
+        .returning();
+      const updated = updatedRows[0]!;
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_reconciliation_resolved",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { reconciliationStatus: row.reconciliationStatus },
+        afterState: {
+          reconciliationStatus: updated.reconciliationStatus,
+          reason,
+          resolvedAt: resolvedAt.toISOString(),
+        },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function getTutorTaxConfig() {
+    return readTutorTaxConfig(db);
+  }
+
+  async function updateTutorTaxConfig(
+    adminId: string,
+    input: {
+      expectedVersion: number;
+      nikNpwpRateBps: number;
+      nikOnlyRateBps: number;
+      missingRateBps: number;
+      reason: string;
+    },
+  ) {
+    for (const rate of [
+      input.nikNpwpRateBps,
+      input.nikOnlyRateBps,
+      input.missingRateBps,
+    ]) {
+      if (!Number.isSafeInteger(rate) || rate < 0 || rate > 10_000) {
+        throw new TutorPayoutCalculationDomainError(
+          "Tax rates must be whole basis points from 0 to 10000",
+        );
+      }
+    }
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Change reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const before = await readTutorTaxConfig(tx);
+      if (before.version !== input.expectedVersion) {
+        throw new TutorPayoutTaxConfigConflictError(
+          input.expectedVersion,
+          before.version,
+        );
+      }
+      const values = {
+        nikNpwpRateBps: input.nikNpwpRateBps,
+        nikOnlyRateBps: input.nikOnlyRateBps,
+        missingRateBps: input.missingRateBps,
+        version: before.version + 1,
+        updatedBy: adminId,
+        updatedAt: new Date(),
+      };
+      if (before.version === 0) {
+        await tx.insert(tutorTaxConfig).values({ id: "default", ...values });
+      } else {
+        const updated = await tx
+          .update(tutorTaxConfig)
+          .set(values)
+          .where(
+            and(
+              eq(tutorTaxConfig.id, "default"),
+              eq(tutorTaxConfig.version, before.version),
+            ),
+          )
+          .returning({ id: tutorTaxConfig.id });
+        if (!updated.length) {
+          throw new TutorPayoutTaxConfigConflictError(
+            input.expectedVersion,
+            (await readTutorTaxConfig(tx)).version,
+          );
+        }
+      }
+      const result = await readTutorTaxConfig(tx);
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_tax_config_updated",
+        targetId: "default",
+        targetType: "tutor_tax_config",
+        beforeState: { ...before },
+        afterState: { ...result },
+        details: { reason },
+      });
+      return result;
+    });
+  }
+
+  async function setTutorTaxRateOverride(
+    adminId: string,
+    input: { tutorId: string; rateBps: number | null; reason: string },
+  ) {
+    if (
+      input.rateBps !== null &&
+      (!Number.isSafeInteger(input.rateBps) ||
+        input.rateBps < 0 ||
+        input.rateBps > 10_000)
+    ) {
+      throw new TutorPayoutCalculationDomainError(
+        "Tax rate override must be whole basis points from 0 to 10000",
+      );
+    }
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Override reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, input.tutorId);
+      const profile = await repo.findTutorProfile(tx, input.tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+          "tutorProfile",
+        ]);
+      }
+      const [updated] = await tx
+        .update(tutorProfile)
+        .set({
+          taxRateOverrideBps: input.rateBps,
+          version: profile.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tutorProfile.userId, input.tutorId),
+            eq(tutorProfile.version, profile.version),
+          ),
+        )
+        .returning({ taxRateOverrideBps: tutorProfile.taxRateOverrideBps });
+      if (!updated) {
+        throw new TutorPayoutPreviewStaleError(
+          "Tutor profile changed; reload and retry",
+        );
+      }
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_tax_rate_override_updated",
+        targetId: input.tutorId,
+        targetType: "tutor_profile",
+        beforeState: { taxRateOverrideBps: profile.taxRateOverrideBps },
+        afterState: { taxRateOverrideBps: updated.taxRateOverrideBps },
+        details: { reason },
+      });
+      return { tutorId: input.tutorId, ...updated };
+    });
+  }
+
+  async function getTutorPayoutFinance(tutorId: string) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, tutorId);
+      const profile = await repo.findTutorProfile(tx, tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(tutorId, ["tutorProfile"]);
+      }
+      const [pending, config, payoutRows] = await Promise.all([
+        getUnpaidAggregate(tx, tutorId, new Date()),
+        readTutorTaxConfig(tx),
+        repo.listTutorPayoutsByTutorId(tx, tutorId),
+      ]);
+      const tax = taxRateFor(profile, config);
+      const grossHonorariumIdr = pending.tutorPayoutIdr;
+      const taxHonorariumIdr = calculateTutorTaxIdr(
+        grossHonorariumIdr,
+        tax.rateBps,
+      );
+      const bankName = normalizeOptionalText(profile.bankName);
+      const transferFeeIdr =
+        pending.items.length === 0 || bankName?.toUpperCase() === "BCA"
+          ? 0
+          : 2_500;
+      const net = grossHonorariumIdr - taxHonorariumIdr - transferFeeIdr;
+      const history = await mapLimit(payoutRows, 5, async (row) => ({
+        id: row.id,
+        status: row.status as "prepared" | "paid" | "void",
         grossHonorariumIdr: row.grossHonorariumIdr,
+        taxStatus: row.taxStatus,
+        taxRateBps: row.taxRateBps,
+        taxRateSource: row.taxRateSource,
+        taxHonorariumIdr: row.taxHonorariumIdr,
         transferFeeIdr: row.transferFeeIdr,
         netHonorariumIdr: row.netHonorariumIdr,
-        bankName: row.bankName,
-        bankAccountNumber: profile.bankAccountNumber.trim(),
-        bankAccountHolderName: profile.bankAccountHolderName.trim(),
+        actualAmountIdr: row.actualAmountIdr,
         paidAt: row.paidAt,
+        actualReference: row.actualReference,
+        reconciliationStatus: row.reconciliationStatus,
+        items: (await repo.listTutorPayoutAllocationsByPayoutId(
+          tx,
+          row.id,
+        )) as TutorPayoutAllocationDetail[],
+      }));
+      return {
+        pending: {
+          completedSessions: pending.completedSessions,
+          grossHonorariumIdr,
+          taxStatus: tax.taxStatus,
+          taxRateBps: tax.rateBps,
+          taxRateSource: tax.rateSource,
+          taxHonorariumIdr,
+          transferFeeIdr,
+          netHonorariumIdr: net >= 0 ? net : null,
+          payoutAccountComplete: hasCompletePayoutDetails(profile),
+          taxProfileComplete: Boolean(
+            profile.taxLegalName?.trim() && /^\d{16}$/.test(profile.nik ?? ""),
+          ),
+          items: pending.items,
+        },
+        history,
       };
     });
+  }
+
+  async function getTutorPayoutAllocations(payoutId: string) {
+    const items = (await repo.listTutorPayoutAllocationsByPayoutId(
+      db,
+      payoutId,
+    )) as TutorPayoutAllocationDetail[];
+    return {
+      detailsAvailable: items.length > 0,
+      items,
+    };
   }
 
   /**
@@ -4324,7 +6279,8 @@ export function createBookingService(deps: {
   async function finalizeMeetingSchedule(
     tx: DbOrTx,
     b: BookingRow,
-    tutorId: string,
+    actorId: string,
+    actorType: "tutor" | "admin" = ACTOR_TYPE.TUTOR,
   ): Promise<{ scheduled: boolean; booking: BookingRow }> {
     const bookingId = b.id;
     try {
@@ -4366,9 +6322,12 @@ export function createBookingService(deps: {
       }
 
       const updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
-        actorId: tutorId,
-        actorType: ACTOR_TYPE.TUTOR,
-        reason: "Meeting created automatically",
+        actorId,
+        actorType,
+        reason:
+          actorType === ACTOR_TYPE.ADMIN
+            ? "Admin retried Google Meet creation"
+            : "Meeting created automatically",
       });
 
       await repo.updateBookingDeadline(
@@ -4431,7 +6390,7 @@ export function createBookingService(deps: {
           "Meeting creation or scheduled transition failed; booking left CONFIRMED and will be retried by the scheduler",
         error: { message: String(error) },
         bookingId,
-        tutorId,
+        actorId,
       });
       // L2: the local meetingEvent row is inside the booking tx and rolls back
       // with it — but the provider-side Google event cannot be rolled back. If
@@ -4460,6 +6419,32 @@ export function createBookingService(deps: {
         booking: (await repo.findBookingById(tx, bookingId)) ?? b,
       };
     }
+  }
+
+  async function retryMeetingByAdmin(adminId: string, bookingId: string) {
+    return db.transaction(async (tx) => {
+      const bookingRow = await repo.findBookingById(tx, bookingId, {
+        forUpdate: true,
+      });
+      if (!bookingRow) throw new BookingNotFoundError(bookingId);
+      if (
+        bookingRow.currentState !== BOOKING_STATE.CONFIRMED ||
+        bookingRow.modality !== MODALITY.ONLINE ||
+        !(await repo.hasFailedGoogleMeeting(tx, bookingId))
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Only confirmed online bookings with a failed Google Meet can be retried",
+        );
+      }
+      const result = await finalizeMeetingSchedule(
+        tx,
+        bookingRow,
+        adminId,
+        ACTOR_TYPE.ADMIN,
+      );
+      return { bookingId, scheduled: result.scheduled };
+    });
   }
 
   /**
@@ -4962,6 +6947,8 @@ export function createBookingService(deps: {
 
   return {
     getById,
+    listReportSessions: (actorId: string, role: string) =>
+      listPrivateReportSessions(db, actorId, role),
     getRescheduleAvailability,
     listMine,
     listForTutor,
@@ -4980,6 +6967,7 @@ export function createBookingService(deps: {
     tutorDecline,
     tutorSetMeetingLink,
     completeSession,
+    submitAdminCompletionReport,
     markTutorAttendance,
     markParticipantNoShow,
     proposeReschedule,
@@ -4989,15 +6977,26 @@ export function createBookingService(deps: {
     addSessionNote,
     getSessionNotes,
     listCompletionFeedback,
+    listCompletionFeedbackHistory,
     listSessions,
     getTutorPayoutReport,
     getTutorPayouts,
     getPendingTutorPayouts,
-    markTutorPayoutPaid,
+    getTutorPayoutAllocations,
+    previewTutorPayout,
+    prepareTutorPayout,
+    recordTutorPayoutTransfer,
+    voidTutorPayout,
+    resolveTutorPayoutReconciliation,
+    getTutorTaxConfig,
+    updateTutorTaxConfig,
+    setTutorTaxRateOverride,
+    getTutorPayoutFinance,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,
     retryFailedMeetings,
+    retryMeetingByAdmin,
     transition,
     canTransition,
     transitionBookingToScheduled,

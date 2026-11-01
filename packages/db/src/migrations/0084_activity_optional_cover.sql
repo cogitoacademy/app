@@ -1,0 +1,1 @@
+ALTER TABLE "activity_article" ALTER COLUMN "cover_url" DROP NOT NULL;

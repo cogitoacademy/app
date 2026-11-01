@@ -71,6 +71,15 @@ describe("Admin Types (Zod schemas)", () => {
     expect(result.data).toEqual({ query: "ada", limit: 10 });
   });
 
+  test("adminSearchUsersInput accepts only supported role filters", () => {
+    expect(
+      adminSearchUsersInput.parse({ query: "ada", role: "student" }),
+    ).toEqual({ query: "ada", limit: 10, role: "student" });
+    expect(
+      adminSearchUsersInput.safeParse({ query: "ada", role: "parent" }).success,
+    ).toBe(false);
+  });
+
   test("adminSearchUsersInput rejects short queries and oversized limits", () => {
     expect(adminSearchUsersInput.safeParse({ query: "a" }).success).toBe(false);
     expect(

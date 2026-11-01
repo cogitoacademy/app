@@ -21,6 +21,14 @@ describe("getAuthTrustedOrigins", () => {
     expect(origins).toContain("http://172.31.*.*:3000");
     expect(origins).toContain("http://192.168.*.*:3000");
   });
+
+  test("uses the HTTP default port when the configured origin omits it", () => {
+    const origins = getAuthTrustedOrigins("http://localhost", "development");
+
+    expect(origins).toContain("http://localhost");
+    expect(origins).toContain("http://127.0.0.1");
+    expect(origins).toContain("http://10.*.*.*");
+  });
 });
 
 describe("isAllowedFrontendOrigin", () => {
@@ -60,5 +68,18 @@ describe("isAllowedFrontendOrigin", () => {
         "production",
       ),
     ).toBe(false);
+  });
+
+  test("rejects missing origins and accepts private hosts on the default port", () => {
+    expect(isAllowedFrontendOrigin(null, configuredOrigin, "development")).toBe(
+      false,
+    );
+    expect(
+      isAllowedFrontendOrigin(
+        "http://192.168.1.5",
+        "http://localhost",
+        "development",
+      ),
+    ).toBe(true);
   });
 });

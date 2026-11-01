@@ -9,6 +9,7 @@ import {
   availabilitySlot,
   bookingParticipant,
   notification,
+  tutorSessionFee,
 } from "@cogito-app/db/schema";
 
 import {
@@ -163,7 +164,7 @@ describe("G4: group repricing on headcount change", () => {
     await creditWallet(i3Id, 200);
   });
 
-  test("create group of 4 at 28 marks/student → awaiting_tutor_review", async () => {
+  test("create group of 4 at the V3 debate rate → awaiting_tutor_review", async () => {
     const start = new Date(Date.now() + 72 * 3600_000).toISOString();
     const end = new Date(Date.now() + 73 * 3600_000).toISOString();
 
@@ -180,7 +181,11 @@ describe("G4: group repricing on headcount change", () => {
 
     bookingId = b.id;
     expect(b.currentState).toBe("awaiting_participant_confirmation");
-    expect(b.priceSnapshot.perStudent).toBe(28);
+    expect(b.priceSnapshot).toMatchObject({
+      engine: "v3",
+      competition: "competition-debate",
+      perStudentMarks: 20,
+    });
   });
 
   test("all three invitees confirm → headcount 4 → awaiting_tutor_review", async () => {
@@ -195,18 +200,18 @@ describe("G4: group repricing on headcount change", () => {
 
   test("group of 4: proposer is charged only perStudent once all invitees confirm", async () => {
     const b = await proposerClient.booking.get({ bookingId });
-    expect(b.holdAmount).toBe(112);
+    expect(b.holdAmount).toBe(80);
 
     const [proposerWallet] = await db
       .select()
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
-    expect(proposerWallet!.heldBalance).toBe(28);
+    expect(proposerWallet!.heldBalance).toBe(20);
     expect(proposerWallet!.totalBalance).toBe(200);
-    expect(proposerWallet!.availableBalance).toBe(200 - 28);
+    expect(proposerWallet!.availableBalance).toBe(200 - 20);
   });
 
-  test("proposer withdraws → remaining 3 repriced to 35 marks/student", async () => {
+  test("proposer withdraws → remaining 3 are repriced at the V3 rate", async () => {
     const result = await proposerClient.booking.withdraw({
       bookingId,
       reason: "schedule conflict",
@@ -216,8 +221,11 @@ describe("G4: group repricing on headcount change", () => {
     const b = await proposerClient.booking.get({ bookingId });
     expect(b.currentState).toBe("awaiting_reconfirmation");
     expect(b.confirmedHeadcount).toBe(3);
-    expect(b.holdAmount).toBe(105);
-    expect(b.priceSnapshot.perStudent).toBe(35);
+    expect(b.holdAmount).toBe(69);
+    expect(b.priceSnapshot).toMatchObject({
+      engine: "v3",
+      perStudentMarks: 23,
+    });
 
     const participants = await db
       .select()
@@ -228,7 +236,7 @@ describe("G4: group repricing on headcount change", () => {
     );
     expect(remaining.length).toBe(3);
     for (const p of remaining) {
-      expect(p.heldAmount).toBe(35);
+      expect(p.heldAmount).toBe(23);
       expect(p.confirmationState).toBe("confirmed");
     }
 
@@ -246,7 +254,7 @@ describe("G4: group repricing on headcount change", () => {
 
     for (const id of [i1Id, i2Id, i3Id]) {
       const [w] = await db.select().from(wallet).where(eq(wallet.userId, id));
-      expect(w!.heldBalance).toBe(35);
+      expect(w!.heldBalance).toBe(23);
     }
   });
 
@@ -295,7 +303,7 @@ describe("G4: group repricing on headcount change", () => {
     for (const id of [i1Id, i2Id, i3Id]) {
       const [w] = await db.select().from(wallet).where(eq(wallet.userId, id));
       expect(w!.heldBalance).toBe(0);
-      expect(w!.totalBalance).toBe(200 - 35);
+      expect(w!.totalBalance).toBe(200 - 23);
     }
 
     const [proposerWallet] = await db
@@ -307,5 +315,17 @@ describe("G4: group repricing on headcount change", () => {
 
     const b = await i1Client.booking.get({ bookingId });
     expect(b.holdAmount).toBe(0);
+
+    const fees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(fees).toHaveLength(1);
+    expect(fees[0]).toMatchObject({
+      bookingId,
+      bookingSessionId: null,
+      tutorId,
+      eventKey: `tutor-session-fee:booking:${bookingId}`,
+    });
   });
 });

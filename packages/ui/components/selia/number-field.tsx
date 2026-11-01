@@ -5,6 +5,7 @@ import { NumberField as BaseNumberField } from "@base-ui/react/number-field";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@cogito-app/ui/lib/utils";
 import { inputVariants } from "./input";
+import { IconMinus, IconPlus } from "@tabler/icons-react";
 
 type NumberFieldInputProps = React.ComponentProps<typeof BaseNumberField.Input>;
 
@@ -25,20 +26,32 @@ export function NumberField({
       data-slot="number-field"
       {...props}
       className={cn(
-        "flex w-full flex-col items-start gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-70",
+        "flex min-w-0 w-full flex-col items-start gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-70",
         className,
       )}
     >
       {children ?? (
-        <BaseNumberField.Input
-          data-slot="number-field-input"
-          {...inputProps}
+        <NumberFieldGroup
           className={cn(
-            inputVariants({ variant }),
-            inputProps?.className,
-            inputClassName,
+            "w-full min-w-0",
+            variant === "subtle" && "bg-input/60",
           )}
-        />
+        >
+          <NumberFieldDecrement aria-label="Decrease value">
+            <IconMinus />
+          </NumberFieldDecrement>
+          <NumberFieldInput
+            {...inputProps}
+            className={cn(
+              "min-w-0 flex-1",
+              inputProps?.className,
+              inputClassName,
+            )}
+          />
+          <NumberFieldIncrement aria-label="Increase value">
+            <IconPlus />
+          </NumberFieldIncrement>
+        </NumberFieldGroup>
       )}
     </BaseNumberField.Root>
   );
@@ -157,7 +170,7 @@ export function NumberFieldInput({
       data-slot="number-field-input"
       {...props}
       className={cn(
-        "z-10 w-28 px-2.5 text-center text-foreground outline-none transition-[color,box-shadow] placeholder:text-dimmed disabled:pointer-events-none disabled:opacity-70",
+        "z-10 w-28 px-2.5 text-[16px] md:text-base text-center text-foreground outline-none transition-[color,box-shadow] placeholder:text-dimmed disabled:pointer-events-none disabled:opacity-70",
         "aria-invalid:text-danger aria-invalid:ring-danger-border/24 aria-invalid:ring-2",
         className,
       )}

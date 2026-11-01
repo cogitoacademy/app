@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { format, parseISO } from "date-fns";
+import { useId, useState } from "react";
+import { format, isValid, parseISO } from "date-fns";
 import { Popover } from "@base-ui/react/popover";
 import { IconCalendar } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -15,6 +15,7 @@ export type DatePickerProps = {
   disabled?: boolean;
   minDate?: string;
   maxDate?: string;
+  required?: boolean;
 };
 
 export function DatePicker({
@@ -25,10 +26,18 @@ export function DatePicker({
   disabled,
   minDate,
   maxDate,
+  required,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
+  const generatedId = useId();
+  const triggerId = id ?? generatedId;
 
-  const date = value ? parseISO(value) : undefined;
+  const parsedDate = value ? parseISO(value) : undefined;
+  const date = parsedDate && isValid(parsedDate) ? parsedDate : undefined;
+  // DayPicker otherwise caps its year dropdown at the current year.
+  const endMonth = maxDate
+    ? parseISO(maxDate)
+    : new Date(new Date().getFullYear() + 100, 11, 31);
   const disabledDates = [
     ...(minDate ? [{ before: parseISO(minDate) }] : []),
     ...(maxDate ? [{ after: parseISO(maxDate) }] : []),
@@ -45,11 +54,24 @@ export function DatePicker({
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
+      {required ? (
+        <input
+          type="text"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          required
+          disabled={disabled}
+          value={date ? value : ""}
+          onChange={() => {}}
+          onInvalid={() => document.getElementById(triggerId)?.focus()}
+        />
+      ) : null}
       <Popover.Trigger
-        id={id}
+        id={triggerId}
         disabled={disabled}
         className={cn(
-          "flex items-center gap-2 w-full",
+          "flex min-w-0 items-center gap-2 w-full",
           "h-9.5 px-4 rounded",
           "bg-secondary text-secondary-foreground",
           "ring ring-secondary-border",
@@ -62,7 +84,7 @@ export function DatePicker({
         )}
       >
         <IconCalendar className="size-4 text-muted" />
-        <span className={cn(!date && "text-muted")}>
+        <span className={cn("truncate", !date && "text-muted")}>
           {date ? format(date, "PPP") : placeholder}
         </span>
       </Popover.Trigger>
@@ -87,10 +109,11 @@ export function DatePicker({
             <Calendar
               mode="single"
               selected={date}
+              defaultMonth={date}
               onSelect={handleSelect}
               disabled={disabledDates}
               startMonth={minDate ? parseISO(minDate) : undefined}
-              endMonth={maxDate ? parseISO(maxDate) : undefined}
+              endMonth={endMonth}
             />
           </Popover.Popup>
         </Popover.Positioner>

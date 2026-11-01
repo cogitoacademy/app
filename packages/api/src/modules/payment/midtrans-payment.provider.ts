@@ -57,6 +57,101 @@ function parseIdrAmount(value: unknown): number | undefined {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : undefined;
 }
 
+function parseMidtransTimestamp(value: unknown): Date | undefined {
+  if (typeof value !== "string") return undefined;
+  // Midtrans notification timestamps are WIB without an offset; status API
+  // values may be ISO strings with an explicit offset.
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(
+    value,
+  )
+    ? `${value.replace(" ", "T")}+07:00`
+    : value;
+  const parts = normalized.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!parts) return undefined;
+  const wallTime = new Date(0);
+  wallTime.setUTCFullYear(
+    Number(parts[1]),
+    Number(parts[2]) - 1,
+    Number(parts[3]),
+  );
+  wallTime.setUTCHours(
+    Number(parts[4]),
+    Number(parts[5]),
+    Number(parts[6]),
+    Number((parts[7] ?? "").padEnd(3, "0").slice(0, 3)),
+  );
+  if (
+    wallTime.getUTCFullYear() !== Number(parts[1]) ||
+    wallTime.getUTCMonth() !== Number(parts[2]) - 1 ||
+    wallTime.getUTCDate() !== Number(parts[3]) ||
+    wallTime.getUTCHours() !== Number(parts[4]) ||
+    wallTime.getUTCMinutes() !== Number(parts[5]) ||
+    wallTime.getUTCSeconds() !== Number(parts[6])
+  ) {
+    return undefined;
+  }
+  const parsed = new Date(normalized);
+  return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+}
+
+function midtransRefundIdentity(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const evidence = value.slice(-100).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const refund = entry as Record<string, unknown>;
+    const identity =
+      (typeof refund.refund_chargeback_id === "number" &&
+      Number.isSafeInteger(refund.refund_chargeback_id)
+        ? String(refund.refund_chargeback_id)
+        : undefined) ??
+      (typeof refund.refund_key === "string" && refund.refund_key.length <= 128
+        ? refund.refund_key
+        : undefined);
+    if (!identity) return [];
+    return [
+      {
+        identity,
+        amountIdr: parseIdrAmount(refund.refund_amount) ?? null,
+        createdAt:
+          parseMidtransTimestamp(refund.created_at)?.toISOString() ?? null,
+      },
+    ];
+  });
+  if (evidence.length === 0) return undefined;
+  const latest = evidence
+    .toSorted(
+      (a, b) =>
+        (a.createdAt ?? "").localeCompare(b.createdAt ?? "") ||
+        a.identity.localeCompare(b.identity),
+    )
+    .slice(-100);
+  return createHash("sha256").update(JSON.stringify(latest)).digest("hex");
+}
+
+function midtransSuccessTime(
+  status: PaymentStatus,
+  value: {
+    payment_type?: unknown;
+    transaction_time?: unknown;
+    settlement_time?: unknown;
+  },
+) {
+  // Midtrans defines transaction_time as when the transaction was initiated,
+  // not when a card capture succeeded. Its status API exposes no capture_time,
+  // so card capture and later card settlement/refund cannot prove the original
+  // success instant. Non-card settlement_time is the successful transition.
+  if (
+    (status === "SETTLED" || status === "REFUNDED") &&
+    typeof value.payment_type === "string" &&
+    value.payment_type !== "credit_card"
+  ) {
+    return parseMidtransTimestamp(value.settlement_time);
+  }
+  return undefined;
+}
+
 async function throwProviderHttpError(
   response: Response,
   operation: string,
@@ -142,6 +237,8 @@ interface MidtransNotification {
   status_message?: string;
   merchant_id?: string;
   currency?: string;
+  transaction_time?: string;
+  settlement_time?: string;
 }
 
 /**
@@ -206,7 +303,8 @@ export function createMidtransPaymentProvider(opts: {
     redis: opts.redis ?? undefined,
     monitor: (state, error) => {
       log({
-        level: state === "open" ? "error" : "info",
+        // The breaker monitors failures before it transitions to open.
+        level: "info",
         action: "circuit_breaker_state_change",
         service: "midtrans",
         midtransMode: opts.mode,
@@ -315,12 +413,21 @@ export function createMidtransPaymentProvider(opts: {
       transaction_status?: string;
       transaction_id?: string;
       order_id?: string;
+      payment_type?: string;
       fraud_status?: string;
       status_message?: string;
       gross_amount?: string;
       refund_amount?: string;
       currency?: string;
+      transaction_time?: string;
+      settlement_time?: string;
+      refunds?: unknown;
     };
+    if (json.order_id && json.order_id !== orderId) {
+      throw serviceUnavailable(
+        "Payment status error: provider returned a different order",
+      );
+    }
     const status = mapMidtransStatus(
       json.transaction_status ?? "",
       json.fraud_status,
@@ -329,7 +436,23 @@ export function createMidtransPaymentProvider(opts: {
     const providerReference =
       (await resolveProviderReference(remoteOrderId)) ?? remoteOrderId;
     const amountIdr = parseIdrAmount(json.gross_amount);
+    if (
+      (status === "PAID" || status === "SETTLED" || status === "REFUNDED") &&
+      (amountIdr === undefined || json.currency !== "IDR")
+    ) {
+      throw serviceUnavailable(
+        "Payment status error: provider response is missing a valid IDR amount or currency",
+      );
+    }
     const refundAmountIdr = parseIdrAmount(json.refund_amount);
+    const providerSuccessAt = midtransSuccessTime(status, json);
+    const providerRefundIdentity = midtransRefundIdentity(json.refunds);
+    const refundKind =
+      status === "REFUNDED"
+        ? json.transaction_status === "partial_refund"
+          ? "partial"
+          : "full"
+        : undefined;
     return {
       providerReference,
       providerEventId: json.transaction_id ?? remoteOrderId,
@@ -342,14 +465,16 @@ export function createMidtransPaymentProvider(opts: {
       amountIdr,
       refundAmountIdr,
       currency: json.currency,
-      refundKind:
-        json.transaction_status === "partial_refund" ||
-        (status === "REFUNDED" &&
-          amountIdr !== undefined &&
-          refundAmountIdr !== undefined &&
-          refundAmountIdr < amountIdr)
-          ? "partial"
-          : undefined,
+      ...(providerRefundIdentity ? { providerRefundIdentity } : {}),
+      ...(providerSuccessAt ? { providerSuccessAt } : {}),
+      refundKind,
+      ...(status === "PAID" || status === "SETTLED" || status === "REFUNDED"
+        ? {
+            providerSuccessTimeStatus: providerSuccessAt
+              ? ("verified" as const)
+              : ("unavailable" as const),
+          }
+        : {}),
     };
   }
 
@@ -381,11 +506,48 @@ export function createMidtransPaymentProvider(opts: {
       throw badRequest("Invalid webhook payment amount or currency");
     }
 
-    const orderId = body.order_id ?? "";
+    // Signature verification above requires a string order_id.
+    const orderId = body.order_id!;
     const status = mapMidtransStatus(
       body.transaction_status ?? "",
       body.fraud_status,
     );
+    if (status === "PAID" || status === "SETTLED") {
+      // Midtrans's signature authenticates the order, status code, and gross
+      // amount, but not time fields. Use the authenticated status API for the
+      // payment state and only use timestamps whose documented meaning matches
+      // provider success time.
+      const providerStatus = await getPaymentRequestStatus(orderId);
+      if (providerStatus.status === "REFUNDED") {
+        // A delayed success notification can arrive after a refund. The
+        // authenticated current status wins; it still reserves the original
+        // success event, but never credits Marks again.
+        return providerStatus;
+      }
+      if (
+        providerStatus.status !== "PAID" &&
+        providerStatus.status !== "SETTLED"
+      ) {
+        throw serviceUnavailable(
+          "Payment status error: provider has not confirmed a successful payment",
+        );
+      }
+      return providerStatus;
+    }
+
+    if (status === "REFUNDED") {
+      // The notification timestamp is not covered by Midtrans's signature.
+      // Read the authenticated status to verify both a full refund and any
+      // recoverable original success time before reserving KOL eligibility.
+      const providerStatus = await getPaymentRequestStatus(orderId);
+      if (providerStatus.status !== "REFUNDED") {
+        throw serviceUnavailable(
+          "Payment status error: provider has not confirmed a refund",
+        );
+      }
+      return providerStatus;
+    }
+
     const providerReference =
       (await resolveProviderReference(orderId)) ?? orderId;
     return {
@@ -400,8 +562,7 @@ export function createMidtransPaymentProvider(opts: {
       amountIdr,
       refundAmountIdr: parseIdrAmount(body.refund_amount),
       currency: body.currency,
-      refundKind:
-        body.transaction_status === "partial_refund" ? "partial" : undefined,
+      refundKind: undefined,
     };
   }
 

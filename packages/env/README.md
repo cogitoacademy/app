@@ -24,7 +24,7 @@ Covers the base set plus cross-field rules enforced with `superRefine` — the s
   - `R2_ACCOUNT_ID` + `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` + `R2_BUCKET` together **and** `R2_PUBLIC_URL` — partial R2 config fails; without these, uploads silently write to the container-local `UPLOAD_DIR` and are lost on redeploy.
   - `SCHEDULER_ENABLED=true` — a prod server without the scheduler silently skips booking expiry, hold release, email dispatch, and SLA escalation.
 - **`GOOGLE_MEET_ENABLED=true`** requires a complete credential set — either the OAuth triple (`GOOGLE_MEET_CLIENT_ID` + `GOOGLE_MEET_CLIENT_SECRET` + `GOOGLE_MEET_REFRESH_TOKEN`, falling back to the shared `GOOGLE_CLIENT_*`) **or** the service account (`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`); service-account mode also requires `GOOGLE_IMPERSONATED_USER` (domain-wide delegation).
-- **Boolean parsing** goes through `boolFromEnv` (H1): string `"false"`/`"0"` parse as `false`, unknown strings fail loudly, and empty strings fall back to the schema default — `z.coerce.boolean()` is never used directly.
+- **Boolean parsing** goes through `boolFromEnv` (H1): string `"false"`/`"0"` parse as `false`, unknown strings fail loudly, and empty or whitespace-only strings fall back to the schema default — `z.coerce.boolean()` is never used directly.
 
 Notable base fields: `DATABASE_URL`, `BETTER_AUTH_SECRET` (min 32), `BETTER_AUTH_URL`, `CORS_ORIGIN`, `PAYMENT_PROVIDER` (stub/midtrans, default `stub`), `PAYMENT_WEBHOOK_SECRET` (min 32), `REDIS_URL`, `SESSION_COOKIE_CACHE_MAX_AGE` (default 60), `PORT` (default 3001), `ADMIN_EMAILS`, and `UPLOAD_DIR`.
 

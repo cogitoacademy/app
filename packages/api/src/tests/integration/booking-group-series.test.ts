@@ -9,7 +9,10 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
+  tutorSessionFee,
+  type BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
+import { createBookingRepo } from "../../modules/booking/booking.repo";
 
 import {
   createTestContext,
@@ -377,12 +380,12 @@ describe("Booking group series flow (FR-20)", () => {
     expect(b.disclaimer).toContain("full-series commitment");
     expect(b.disclaimer).toContain("cannot opt out");
 
-    // Proposer holds the full package up front: 40 marks × 3 sessions.
+    // Proposer holds the full package up front: 23 Marks × 3 sessions.
     const [proposerWallet] = await db
       .select()
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
-    expect(proposerWallet!.heldBalance).toBe(120);
+    expect(proposerWallet!.heldBalance).toBe(69);
     expect(proposerWallet!.totalBalance).toBe(500);
 
     // Each session carries the per-participant per-session amount.
@@ -392,7 +395,7 @@ describe("Booking group series flow (FR-20)", () => {
       .where(eq(bookingSession.seriesBookingId, bookingId));
     expect(sessionsRows.length).toBe(3);
     for (const s of sessionsRows) {
-      expect(s.holdAmount).toBe(40);
+      expect(s.holdAmount).toBe(23);
     }
 
     // Invitation notifications carry the G15 disclaimer per TC-25.
@@ -408,11 +411,76 @@ describe("Booking group series flow (FR-20)", () => {
     const body = inviteNotifs[0]!.body;
     expect(body).toContain("full-series commitment");
     expect(body).toContain("cannot opt out");
-    expect(body).toContain("40 Marks");
-    expect(body).toContain("120");
+    expect(body).toContain("23 Marks");
+    expect(body).toContain("69");
     expect(body).toMatch(/schedule/i);
     expect(body).toContain("/bookings/");
     expect(inviteNotifs[0]!.severity).toBe("action");
+  });
+
+  test("scheduled series sessions accept updated price snapshots in the repository", async () => {
+    const sessionsBefore = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.seriesBookingId, bookingId));
+    expect(sessionsBefore.length).toBe(3);
+
+    const replacementSnapshot: BookingPriceSnapshot = {
+      engine: "v3",
+      v3Revision: 7,
+      competition: "mathematics",
+      modality: "online",
+      headcount: 2,
+      perStudentMarks: 27,
+      collectedMarks: 54,
+      tutorHonorariumIdr: 1000,
+    };
+    const skippedSession = sessionsBefore[0]!;
+
+    try {
+      await db
+        .update(bookingSession)
+        .set({ currentState: "completed" })
+        .where(eq(bookingSession.id, skippedSession.id));
+
+      await createBookingRepo(db).updateScheduledSeriesPriceSnapshot(
+        db,
+        bookingId,
+        { priceSnapshot: replacementSnapshot, holdAmount: 27 },
+      );
+
+      const sessionsAfter = await db
+        .select()
+        .from(bookingSession)
+        .where(eq(bookingSession.seriesBookingId, bookingId));
+      const scheduledSessions = sessionsAfter.filter(
+        (session) => session.currentState === "scheduled",
+      );
+      const skippedAfter = sessionsAfter.find(
+        (session) => session.id === skippedSession.id,
+      );
+
+      expect(scheduledSessions).toHaveLength(2);
+      for (const session of scheduledSessions) {
+        expect(session.priceSnapshot).toEqual(replacementSnapshot);
+        expect(session.holdAmount).toBe(27);
+      }
+      expect(skippedAfter?.priceSnapshot).toEqual(skippedSession.priceSnapshot);
+      expect(skippedAfter?.holdAmount).toBe(skippedSession.holdAmount);
+    } finally {
+      await Promise.all(
+        sessionsBefore.map((session) =>
+          db
+            .update(bookingSession)
+            .set({
+              currentState: session.currentState,
+              priceSnapshot: session.priceSnapshot,
+              holdAmount: session.holdAmount,
+            })
+            .where(eq(bookingSession.id, session.id)),
+        ),
+      );
+    }
   });
 
   test("invitee confirms the full-series package (hold is the whole package)", async () => {
@@ -423,8 +491,8 @@ describe("Booking group series flow (FR-20)", () => {
       .select()
       .from(wallet)
       .where(eq(wallet.userId, invitee1Id));
-    expect(w!.heldBalance).toBe(120);
-    expect(w!.availableBalance).toBe(380);
+    expect(w!.heldBalance).toBe(69);
+    expect(w!.availableBalance).toBe(431);
   });
 
   test("all confirm → tutor accepts → each completed session deducts per participant (P1-8)", async () => {
@@ -466,21 +534,72 @@ describe("Booking group series flow (FR-20)", () => {
         .where(eq(bookingSession.id, s.id));
     }
 
-    for (const s of sessions) {
+    const firstSession = sessions[0]!;
+    await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
+      sessionId: firstSession.id,
+    });
+
+    const firstFees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(firstFees).toHaveLength(1);
+    expect(firstFees[0]).toMatchObject({
+      bookingId,
+      bookingSessionId: firstSession.id,
+      tutorId,
+      eventKey: `tutor-session-fee:session:${firstSession.id}`,
+    });
+    expect(firstFees[0]!.grossHonorariumIdr).toBeGreaterThan(0);
+
+    const parentAfterFirstSession = await proposerClient.booking.get({
+      bookingId,
+    });
+    expect(parentAfterFirstSession.currentState).toBe("scheduled");
+    const payoutAfterFirstSession = await tutorClient.tutor.getMyPayouts({});
+    expect(payoutAfterFirstSession.completedSessions).toBe(1);
+    expect(payoutAfterFirstSession.tutorPayoutIdr).toBe(
+      firstFees[0]!.grossHonorariumIdr,
+    );
+
+    await expect(
+      tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId,
+        sessionId: firstSession.id,
+      }),
+    ).rejects.toThrow();
+    const afterDuplicate = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(afterDuplicate).toHaveLength(1);
+
+    // Keep completion order deterministic because the final child finishes the parent.
+    for (const s of sessions.slice(1)) {
+      // eslint-disable-next-line no-await-in-loop
       await tutorClient.tutorActions.completeSession({
         feedback: TEST_COMPLETION_FEEDBACK,
         bookingId,
         sessionId: s.id,
       });
     }
+    const allFees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(allFees).toHaveLength(3);
+    expect(new Set(allFees.map((fee) => fee.eventKey)).size).toBe(3);
 
     for (const userId of [proposerId, invitee1Id, invitee2Id]) {
       const [w] = await db
         .select()
         .from(wallet)
         .where(eq(wallet.userId, userId));
-      // 3 sessions × 40 marks deducted per participant.
-      expect(w!.totalBalance).toBe(500 - 120);
+      // 3 sessions × 23 Marks deducted per participant.
+      expect(w!.totalBalance).toBe(500 - 69);
       expect(w!.heldBalance).toBe(0);
     }
 

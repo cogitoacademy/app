@@ -1,9 +1,11 @@
 import { describe, test, expect, mock } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   listUsers,
   countUsers,
   getById,
   countAdmins,
+  lockAdminRows,
   getDashboardAnalytics,
   searchUsers,
   updateRoleWithExpected,
@@ -20,6 +22,7 @@ function makeQueryChain(resolvedValue: any) {
     "offset",
     "orderBy",
     "groupBy",
+    "for",
   ];
   const promise = Promise.resolve(resolvedValue);
 
@@ -56,10 +59,6 @@ describe("getDashboardAnalytics", () => {
       completed: 2,
       exceptions: 1,
       activeLearners: 3,
-      grossMarks: 120,
-      platformTakeMarks: 24,
-      grossIdr: 600_000,
-      platformTakeIdr: 120_000,
     };
     const select = makeSelectSequence([
       [bookingSummary],
@@ -82,10 +81,10 @@ describe("getDashboardAnalytics", () => {
         },
       ],
       [{ studentsWithMarks: 9, studentsWithoutMarks: 7 }],
-      [{ payingStudents: 6, grossRevenueIdr: 1_250_000 }],
+      [{ payingStudents: 6, grossReceiptsIdr: 1_250_000 }],
       [{ refundedIdr: 100_000 }],
     ]);
-    const conn: any = { select };
+    const conn: any = { select, execute: mock(async () => [{}]) };
 
     const result = await getDashboardAnalytics(conn, {
       periodStart: new Date("2026-08-01T00:00:00.000Z"),
@@ -103,7 +102,7 @@ describe("getDashboardAnalytics", () => {
     ]);
     expect(result.accountSummary.monthlyActiveUsers).toBe(8);
     expect(result.marksSummary.studentsWithMarks).toBe(9);
-    expect(result.paymentSummary.grossRevenueIdr).toBe(1_250_000);
+    expect(result.paymentSummary.grossReceiptsIdr).toBe(1_250_000);
     expect(result.refundSummary.refundedIdr).toBe(100_000);
   });
 });
@@ -144,6 +143,19 @@ describe("searchUsers", () => {
     expect(chain.from).toHaveBeenCalledTimes(1);
     expect(chain.where).toHaveBeenCalledTimes(1);
     expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(10);
+  });
+
+  test("filters by role in the query before limiting results", async () => {
+    const { select, chain } = makeSelectConn([]);
+    const conn: any = { select };
+
+    await searchUsers(conn, "ada", 10, "student");
+
+    const where = chain.where.mock.calls[0]![0];
+    const query = new PgDialect().sqlToQuery(where);
+    expect(query.sql).toContain('"role" = $');
+    expect(query.params).toContain("student");
     expect(chain.limit).toHaveBeenCalledWith(10);
   });
 });
@@ -254,4 +266,31 @@ describe("updateRoleWithExpected", () => {
 
     expect(result).toEqual([]);
   });
+});
+
+test("analytics returns zero aggregate defaults when queries return no rows", async () => {
+  const conn = {
+    select: makeSelectSequence(Array.from({ length: 11 }, () => [])),
+    execute: mock(async () => [{}]),
+  } as any;
+  const result = await getDashboardAnalytics(conn, {
+    periodStart: new Date("2026-01-01"),
+    periodEnd: new Date("2026-01-02"),
+    activeSince: new Date("2026-01-01"),
+    previousActiveSince: new Date("2025-12-01"),
+    now: new Date("2026-01-02"),
+  });
+  expect(result.bookingSummary.bookings).toBe(0);
+  expect(result.userSummary.newStudents).toBe(0);
+  expect(result.accountSummary.totalAccounts).toBe(0);
+  expect(result.marksSummary.studentsWithMarks).toBe(0);
+  expect(result.paymentSummary.grossReceiptsIdr).toBe(0);
+  expect(result.refundSummary.refundedIdr).toBe(0);
+});
+
+test("counting absent admin aggregates returns zero and locks use FOR UPDATE", async () => {
+  const conn = makeSelectConn([]);
+  await expect(countAdmins({ select: conn.select } as any)).resolves.toBe(0);
+  await lockAdminRows({ select: conn.select } as any);
+  expect(conn.chain.for).toHaveBeenCalledWith("update");
 });

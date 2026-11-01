@@ -1,0 +1,2146 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        font-family: var(--font-sans, system-ui);
+        color: var(--foreground);
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        background: var(--secondary);
+        color: var(--foreground);
+        border: 1px solid var(--border);
+        border-radius: var(--radius, 8px);
+      }
+      small,
+      #detail {
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+      .viewport {
+        overflow: auto;
+        height: 1050px;
+        touch-action: pan-x pan-y;
+      }
+      .canvas {
+        position: relative;
+      }
+      svg {
+        display: block;
+        transform-origin: top left;
+      }
+      .node rect {
+        fill: var(--secondary);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .node text {
+        fill: var(--foreground);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node .sub {
+        font-size: 11px;
+        font-weight: 400;
+        fill: var(--muted-foreground);
+      }
+      .node {
+        cursor: crosshair;
+      }
+      .node:focus rect,
+      .node.selected rect {
+        stroke: var(--primary);
+        stroke-width: 3;
+      }
+      .edge path {
+        fill: none;
+        stroke: var(--muted-foreground);
+        stroke-width: 1.5;
+        opacity: 0.65;
+      }
+      .edge text {
+        fill: var(--foreground);
+        font-size: 10px;
+        paint-order: stroke;
+        stroke: var(--background);
+        stroke-width: 4;
+        stroke-linejoin: round;
+      }
+      .effect path {
+        stroke: var(--chart-2);
+        stroke-dasharray: 6 5;
+        opacity: 0.35;
+      }
+      .edge.hot path {
+        stroke: var(--primary);
+        stroke-width: 3;
+        opacity: 1;
+      }
+      .edge.dim {
+        opacity: 0.12;
+      }
+      marker path {
+        fill: var(--muted-foreground);
+      }
+      #detail {
+        min-height: 35px;
+        margin: 8px 0;
+      }
+      .legend {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button id="out" aria-label="Zoom out">−</button
+      ><span id="zoom">100%</span><button id="in" aria-label="Zoom in">+</button
+      ><button id="fit">Fit all</button><button id="read">Readable</button
+      ><button id="reset">Clear highlight</button>
+    </div>
+    <div class="legend">
+      Solid → alur bisnis · Putus-putus ⇢ hubungan / efek lintas modul · Klik
+      node untuk highlight · Scroll untuk menjelajah
+    </div>
+    <div id="detail" aria-live="polite">
+      B01–O05 merujuk checklist manual test. Peta ringkasan; guard dan nominal
+      mengikuti policy aplikasi.
+    </div>
+    <div class="viewport" id="vp">
+      <div class="canvas" id="canvas">
+        <svg
+          id="diagram"
+          width="2400"
+          height="2250"
+          role="img"
+          aria-label="Cogito end-to-end flow: 71 nodes connecting tutor onboarding, bookings, classes, wallet, payouts, referral KOL and notifications"
+        >
+          <defs>
+            <marker
+              id="arrow"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
+              <path d="M0,0 L8,4 L0,8 Z" />
+            </marker>
+          </defs>
+          <g class="edge" data-a="start" data-b="invite">
+            <path
+              d="M830,96 C830,128 130,128 130,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="start" data-b="book">
+            <path
+              d="M830,96 C830,128 690,128 690,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="start" data-b="classdraft">
+            <path
+              d="M830,96 C830,128 1490,128 1490,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="start" data-b="payment">
+            <path
+              d="M830,96 C830,128 2010,128 2010,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="invite" data-b="draft">
+            <path d="M240,198 L260,198" marker-end="url(#arrow)" />
+            <text x="254" y="193">accept</text>
+          </g>
+          <g class="edge" data-a="invite" data-b="invitefail">
+            <path
+              d="M130,236 C130,253 130,253 130,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="134" y="248">timeout/revoke</text>
+          </g>
+          <g class="edge" data-a="draft" data-b="review">
+            <path
+              d="M370,236 C370,253 370,253 370,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="374" y="248">submit</text>
+          </g>
+          <g class="edge" data-a="review" data-b="changes">
+            <path
+              d="M370,346 C370,363 130,363 130,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="254" y="358">request changes</text>
+          </g>
+          <g class="edge" data-a="changes" data-b="draft">
+            <path
+              d="M130,456 C130,308 370,308 370,160"
+              marker-end="url(#arrow)"
+            />
+            <text x="254" y="303">revise</text>
+          </g>
+          <g class="edge" data-a="review" data-b="approved">
+            <path
+              d="M370,346 C370,363 370,363 370,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="374" y="358">approve</text>
+          </g>
+          <g class="edge" data-a="approved" data-b="published">
+            <path
+              d="M370,456 C370,473 370,473 370,490"
+              marker-end="url(#arrow)"
+            />
+            <text x="374" y="468">publish</text>
+          </g>
+          <g class="edge" data-a="published" data-b="suspended">
+            <path d="M260,528 L240,528" marker-end="url(#arrow)" />
+            <text x="254" y="523">moderate</text>
+          </g>
+          <g class="edge" data-a="book" data-b="participants">
+            <path
+              d="M690,236 C690,253 690,253 690,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="694" y="248">group</text>
+          </g>
+          <g class="edge" data-a="book" data-b="tutor">
+            <path
+              d="M690,236 C690,253 930,253 930,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="814" y="248">solo</text>
+          </g>
+          <g class="edge" data-a="participants" data-b="tutor">
+            <path d="M800,308 L820,308" marker-end="url(#arrow)" />
+            <text x="814" y="303">accepted</text>
+          </g>
+          <g class="edge" data-a="tutor" data-b="confirmed">
+            <path
+              d="M930,346 C930,418 930,418 930,490"
+              marker-end="url(#arrow)"
+            />
+            <text x="934" y="413">accept</text>
+          </g>
+          <g class="edge" data-a="tutor" data-b="declined">
+            <path d="M1040,308 L1060,308" marker-end="url(#arrow)" />
+            <text x="1054" y="303">decline/timeout</text>
+          </g>
+          <g class="edge" data-a="tutor" data-b="reschedule">
+            <path
+              d="M930,346 C930,363 1170,363 1170,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="1054" y="358">propose</text>
+          </g>
+          <g class="edge" data-a="participants" data-b="reconfirm">
+            <path
+              d="M690,346 C690,363 690,363 690,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="694" y="358">change</text>
+          </g>
+          <g class="edge" data-a="reconfirm" data-b="tutor">
+            <path
+              d="M690,456 C690,363 930,363 930,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="814" y="358">confirm</text>
+          </g>
+          <g class="edge" data-a="reschedule" data-b="confirmed">
+            <path
+              d="M1170,456 C1170,473 930,473 930,490"
+              marker-end="url(#arrow)"
+            />
+            <text x="1054" y="468">eligible return</text>
+          </g>
+          <g class="edge" data-a="confirmed" data-b="room">
+            <path
+              d="M930,566 C930,583 1170,583 1170,600"
+              marker-end="url(#arrow)"
+            />
+            <text x="1054" y="578">offline</text>
+          </g>
+          <g class="edge" data-a="confirmed" data-b="scheduled">
+            <path
+              d="M930,566 C930,638 930,638 930,710"
+              marker-end="url(#arrow)"
+            />
+            <text x="934" y="633">online</text>
+          </g>
+          <g class="edge" data-a="room" data-b="scheduled">
+            <path
+              d="M1170,676 C1170,693 930,693 930,710"
+              marker-end="url(#arrow)"
+            />
+            <text x="1054" y="688">approve</text>
+          </g>
+          <g class="edge" data-a="scheduled" data-b="complete">
+            <path
+              d="M930,786 C930,858 930,858 930,930"
+              marker-end="url(#arrow)"
+            />
+            <text x="934" y="853">submit delivery</text>
+          </g>
+          <g class="edge" data-a="scheduled" data-b="noshow">
+            <path
+              d="M930,786 C930,803 1170,803 1170,820"
+              marker-end="url(#arrow)"
+            />
+            <text x="1054" y="798">no show</text>
+          </g>
+          <g class="edge" data-a="scheduled" data-b="cancel">
+            <path d="M820,748 L800,748" marker-end="url(#arrow)" />
+            <text x="814" y="743">cancel</text>
+          </g>
+          <g class="edge" data-a="complete" data-b="report">
+            <path
+              d="M930,1006 C930,1023 690,1023 690,1040"
+              marker-end="url(#arrow)"
+            />
+            <text x="814" y="1018">read/correct</text>
+          </g>
+          <g class="edge" data-a="classdraft" data-b="classpub">
+            <path
+              d="M1490,236 C1490,253 1490,253 1490,270"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="248">publish</text>
+          </g>
+          <g class="edge" data-a="classpub" data-b="plan">
+            <path
+              d="M1490,346 C1490,363 1490,363 1490,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="358">enroll</text>
+          </g>
+          <g class="edge" data-a="plan" data-b="checkout">
+            <path
+              d="M1490,456 C1490,473 1490,473 1490,490"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="468">reserve</text>
+          </g>
+          <g class="edge" data-a="checkout" data-b="active">
+            <path
+              d="M1490,566 C1490,583 1490,583 1490,600"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="578">fund</text>
+          </g>
+          <g class="edge" data-a="checkout" data-b="cexpired">
+            <path d="M1600,528 L1620,528" marker-end="url(#arrow)" />
+            <text x="1614" y="523">timeout/cancel</text>
+          </g>
+          <g class="edge" data-a="active" data-b="half">
+            <path
+              d="M1490,676 C1490,693 1730,693 1730,710"
+              marker-end="url(#arrow)"
+            />
+            <text x="1614" y="688">half</text>
+          </g>
+          <g class="edge" data-a="active" data-b="minimum">
+            <path
+              d="M1490,676 C1490,748 1490,748 1490,820"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="743">cohort</text>
+          </g>
+          <g class="edge" data-a="minimum" data-b="postpone">
+            <path
+              d="M1490,896 C1490,913 1730,913 1730,930"
+              marker-end="url(#arrow)"
+            />
+            <text x="1614" y="908">decision</text>
+          </g>
+          <g class="edge" data-a="minimum" data-b="classsession">
+            <path
+              d="M1490,896 C1490,968 1490,968 1490,1040"
+              marker-end="url(#arrow)"
+            />
+            <text x="1494" y="963">continue + deliver</text>
+          </g>
+          <g class="edge" data-a="half" data-b="released">
+            <path
+              d="M1730,786 C1730,913 1730,913 1730,1040"
+              marker-end="url(#arrow)"
+            />
+            <text x="1734" y="908">default</text>
+          </g>
+          <g class="edge" data-a="postpone" data-b="released">
+            <path
+              d="M1730,1006 C1730,1023 1730,1023 1730,1040"
+              marker-end="url(#arrow)"
+            />
+            <text x="1734" y="1018">eligible exit</text>
+          </g>
+          <g class="edge" data-a="payment" data-b="pending">
+            <path
+              d="M2010,236 C2010,253 2010,253 2010,270"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="pending" data-b="paid">
+            <path
+              d="M2010,346 C2010,418 2010,418 2010,490"
+              marker-end="url(#arrow)"
+            />
+            <text x="2014" y="413">success</text>
+          </g>
+          <g class="edge" data-a="pending" data-b="failedpay">
+            <path
+              d="M2010,346 C2010,363 2250,363 2250,380"
+              marker-end="url(#arrow)"
+            />
+            <text x="2134" y="358">failure</text>
+          </g>
+          <g class="edge" data-a="paid" data-b="refund">
+            <path
+              d="M2010,566 C2010,583 2250,583 2250,600"
+              marker-end="url(#arrow)"
+            />
+            <text x="2134" y="578">refund</text>
+          </g>
+          <g class="edge" data-a="paid" data-b="wallet">
+            <path
+              d="M2010,566 C2010,638 2010,638 2010,710"
+              marker-end="url(#arrow)"
+            />
+            <text x="2014" y="633">credit once</text>
+          </g>
+          <g class="edge" data-a="wallet" data-b="hold">
+            <path
+              d="M2010,786 C2010,803 2010,803 2010,820"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="wallet" data-b="low">
+            <path
+              d="M2010,786 C2010,803 2250,803 2250,820"
+              marker-end="url(#arrow)"
+            />
+            <text x="2134" y="798">insufficient</text>
+          </g>
+          <g class="edge" data-a="complete" data-b="fee">
+            <path
+              d="M930,1006 C930,1123 930,1123 930,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="classsession" data-b="fee">
+            <path
+              d="M1490,1116 C1490,1178 930,1178 930,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="fee" data-b="preview">
+            <path
+              d="M930,1316 C930,1333 930,1333 930,1350"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="preview" data-b="prepared">
+            <path
+              d="M930,1426 C930,1443 930,1443 930,1460"
+              marker-end="url(#arrow)"
+            />
+            <text x="934" y="1438">prepare</text>
+          </g>
+          <g class="edge" data-a="prepared" data-b="payoutpaid">
+            <path
+              d="M930,1536 C930,1553 930,1553 930,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="934" y="1548">record transfer</text>
+          </g>
+          <g class="edge" data-a="prepared" data-b="void">
+            <path
+              d="M930,1536 C930,1553 690,1553 690,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="814" y="1548">void</text>
+          </g>
+          <g class="edge" data-a="payoutpaid" data-b="reconcile">
+            <path d="M1040,1608 L1060,1608" marker-end="url(#arrow)" />
+            <text x="1054" y="1603">mismatch</text>
+          </g>
+          <g class="edge" data-a="choice" data-b="none">
+            <path
+              d="M130,1316 C130,1333 130,1333 130,1350"
+              marker-end="url(#arrow)"
+            />
+            <text x="134" y="1328">none/invalid</text>
+          </g>
+          <g class="edge" data-a="choice" data-b="friend">
+            <path
+              d="M130,1316 C130,1333 370,1333 370,1350"
+              marker-end="url(#arrow)"
+            />
+            <text x="254" y="1328">friend</text>
+          </g>
+          <g class="edge" data-a="friend" data-b="reward">
+            <path
+              d="M370,1426 C370,1443 370,1443 370,1460"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="reward" data-b="friendcredit">
+            <path
+              d="M370,1536 C370,1553 370,1553 370,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="374" y="1548">capped credit</text>
+          </g>
+          <g class="edge" data-a="choice" data-b="kol">
+            <path
+              d="M130,1316 C130,1498 130,1498 130,1680"
+              marker-end="url(#arrow)"
+            />
+            <text x="134" y="1493">KOL</text>
+          </g>
+          <g class="edge" data-a="kol" data-b="commission">
+            <path
+              d="M130,1756 C130,1773 370,1773 370,1790"
+              marker-end="url(#arrow)"
+            />
+            <text x="254" y="1768">qualifying purchase</text>
+          </g>
+          <g class="edge" data-a="commission" data-b="unresolved">
+            <path
+              d="M370,1866 C370,1883 130,1883 130,1900"
+              marker-end="url(#arrow)"
+            />
+            <text x="254" y="1878">facts missing/refund</text>
+          </g>
+          <g class="edge" data-a="commission" data-b="settlement">
+            <path
+              d="M370,1866 C370,1938 370,1938 370,2010"
+              marker-end="url(#arrow)"
+            />
+            <text x="374" y="1933">eligible</text>
+          </g>
+          <g class="edge" data-a="settlement" data-b="balance">
+            <path
+              d="M370,2086 C370,2103 370,2103 370,2120"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="events" data-b="dedupe">
+            <path
+              d="M1490,1316 C1490,1333 1490,1333 1490,1350"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="dedupe" data-b="inbox">
+            <path
+              d="M1490,1426 C1490,1443 1250,1443 1250,1460"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="dedupe" data-b="gate">
+            <path
+              d="M1490,1426 C1490,1443 1730,1443 1730,1460"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="gate" data-b="inapponly">
+            <path
+              d="M1730,1536 C1730,1553 1490,1553 1490,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="1614" y="1548">fails</text>
+          </g>
+          <g class="edge" data-a="gate" data-b="queued">
+            <path
+              d="M1730,1536 C1730,1553 1970,1553 1970,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="1854" y="1548">passes + recipient</text>
+          </g>
+          <g class="edge" data-a="queued" data-b="sent">
+            <path
+              d="M1970,1646 C1970,1663 1730,1663 1730,1680"
+              marker-end="url(#arrow)"
+            />
+            <text x="1854" y="1658">success/skip</text>
+          </g>
+          <g class="edge" data-a="queued" data-b="emailfailed">
+            <path
+              d="M1970,1646 C1970,1663 2210,1663 2210,1680"
+              marker-end="url(#arrow)"
+            />
+            <text x="2094" y="1658">error</text>
+          </g>
+          <g class="edge" data-a="emailfailed" data-b="reclaim">
+            <path
+              d="M2210,1756 C2210,1773 2210,1773 2210,1790"
+              marker-end="url(#arrow)"
+            />
+            <text x="2214" y="1768">recovery</text>
+          </g>
+          <g class="edge" data-a="reclaim" data-b="queued">
+            <path
+              d="M2210,1866 C2210,1718 1970,1718 1970,1570"
+              marker-end="url(#arrow)"
+            />
+            <text x="2094" y="1713">claim</text>
+          </g>
+          <g class="edge" data-a="other" data-b="achievement">
+            <path
+              d="M930,1976 C930,1993 690,1993 690,2010"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="other" data-b="support">
+            <path
+              d="M930,1976 C930,2048 930,2048 930,2120"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge" data-a="other" data-b="content">
+            <path
+              d="M930,1976 C930,1993 1170,1993 1170,2010"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="published" data-b="book">
+            <path
+              d="M370,566 C370,363 690,363 690,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="published" data-b="classdraft">
+            <path
+              d="M370,566 C370,363 1490,363 1490,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="hold" data-b="book">
+            <path
+              d="M2010,896 C2010,528 690,528 690,160"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="hold" data-b="active">
+            <path
+              d="M2010,896 C2010,748 1490,748 1490,600"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="complete" data-b="reward">
+            <path
+              d="M930,1006 C930,1233 370,1233 370,1460"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="paid" data-b="commission">
+            <path
+              d="M2010,566 C2010,1178 370,1178 370,1790"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="complete" data-b="events">
+            <path
+              d="M930,1006 C930,1123 1490,1123 1490,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="classsession" data-b="events">
+            <path
+              d="M1490,1116 C1490,1178 1490,1178 1490,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="prepared" data-b="events">
+            <path
+              d="M930,1536 C930,1388 1490,1388 1490,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="other" data-b="events">
+            <path
+              d="M930,1976 C930,1608 1490,1608 1490,1240"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g class="edge effect" data-a="refund" data-b="commission">
+            <path
+              d="M2250,676 C2250,1233 370,1233 370,1790"
+              marker-end="url(#arrow)"
+            />
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Student / Tutor / Admin; Login · role &amp; authorization"
+            data-id="start"
+            transform="translate(720,20)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Student / Tutor / Admin</text>
+            <text class="sub" x="12" y="51">
+              Login · role &amp; authorization
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="TUTOR · Invite; invited"
+            data-id="invite"
+            transform="translate(20,160)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">TUTOR · Invite</text>
+            <text class="sub" x="12" y="51">invited</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Expired / revoked; T01 · token tidak bisa dipakai"
+            data-id="invitefail"
+            transform="translate(20,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Expired / revoked</text>
+            <text class="sub" x="12" y="51">
+              T01 · token tidak bisa dipakai
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Onboarding draft; profile + subject + modality"
+            data-id="draft"
+            transform="translate(260,160)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Onboarding draft</text>
+            <text class="sub" x="12" y="51">profile + subject + modality</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="pending_review; T01 · admin review"
+            data-id="review"
+            transform="translate(260,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">pending_review</text>
+            <text class="sub" x="12" y="51">T01 · admin review</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="changes_requested; revisi → submit ulang"
+            data-id="changes"
+            transform="translate(20,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">changes_requested</text>
+            <text class="sub" x="12" y="51">revisi → submit ulang</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="approved_unpublished; approve → publish"
+            data-id="approved"
+            transform="translate(260,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">approved_unpublished</text>
+            <text class="sub" x="12" y="51">approve → publish</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Published tutor; T02–T04 · availability + capacity"
+            data-id="published"
+            transform="translate(260,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Published tutor</text>
+            <text class="sub" x="12" y="51">
+              T02–T04 · availability + capacity
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Suspended / profile edits; visibility + approval"
+            data-id="suspended"
+            transform="translate(20,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Suspended / profile edits</text>
+            <text class="sub" x="12" y="51">visibility + approval</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="BOOKING · Request; B01–B08 · solo / group / series"
+            data-id="book"
+            transform="translate(580,160)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">BOOKING · Request</text>
+            <text class="sub" x="12" y="51">
+              B01–B08 · solo / group / series
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Participant confirmation; group · accept / decline / withdraw"
+            data-id="participants"
+            transform="translate(580,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Participant confirmation</text>
+            <text class="sub" x="12" y="51">
+              group · accept / decline / withdraw
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Tutor review; awaiting_tutor_review"
+            data-id="tutor"
+            transform="translate(820,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Tutor review</text>
+            <text class="sub" x="12" y="51">awaiting_tutor_review</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Confirmed; online / offline"
+            data-id="confirmed"
+            transform="translate(820,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Confirmed</text>
+            <text class="sub" x="12" y="51">online / offline</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Declined / expired; terminal · reason + release policy"
+            data-id="declined"
+            transform="translate(1060,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Declined / expired</text>
+            <text class="sub" x="12" y="51">
+              terminal · reason + release policy
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Reschedule proposed; accept / reject / timeout"
+            data-id="reschedule"
+            transform="translate(1060,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Reschedule proposed</text>
+            <text class="sub" x="12" y="51">accept / reject / timeout</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Reconfirmation; harga / headcount berubah"
+            data-id="reconfirm"
+            transform="translate(580,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Reconfirmation</text>
+            <text class="sub" x="12" y="51">harga / headcount berubah</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Admin room approval; offline · conflict / relocate"
+            data-id="room"
+            transform="translate(1060,600)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Admin room approval</text>
+            <text class="sub" x="12" y="51">offline · conflict / relocate</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Scheduled; online meeting / approved room"
+            data-id="scheduled"
+            transform="translate(820,710)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Scheduled</text>
+            <text class="sub" x="12" y="51">
+              online meeting / approved room
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Cancelled / late_cancelled; B05–B06 · cutoff policy"
+            data-id="cancel"
+            transform="translate(580,710)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Cancelled / late_cancelled</text>
+            <text class="sub" x="12" y="51">B05–B06 · cutoff policy</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="No show; B06 · attendance + policy"
+            data-id="noshow"
+            transform="translate(1060,820)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">No show</text>
+            <text class="sub" x="12" y="51">B06 · attendance + policy</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Completed + report; B01 / B07 · per series child"
+            data-id="complete"
+            transform="translate(820,930)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Completed + report</text>
+            <text class="sub" x="12" y="51">B01 / B07 · per series child</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Report / correction / PDF; akses siswa + report history"
+            data-id="report"
+            transform="translate(580,1040)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Report / correction / PDF</text>
+            <text class="sub" x="12" y="51">akses siswa + report history</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="CLASSES · Draft; C01 · cohort / masterclass"
+            data-id="classdraft"
+            transform="translate(1380,160)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">CLASSES · Draft</text>
+            <text class="sub" x="12" y="51">C01 · cohort / masterclass</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Published class; cohort ≥1 · masterclass 1 sesi"
+            data-id="classpub"
+            transform="translate(1380,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Published class</text>
+            <text class="sub" x="12" y="51">
+              cohort ≥1 · masterclass 1 sesi
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Choose plan; full / half / single / masterclass"
+            data-id="plan"
+            transform="translate(1380,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Choose plan</text>
+            <text class="sub" x="12" y="51">
+              full / half / single / masterclass
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="checkout_pending; C03/C06 · reserve seat"
+            data-id="checkout"
+            transform="translate(1380,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">checkout_pending</text>
+            <text class="sub" x="12" y="51">C03/C06 · reserve seat</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Expired / cancelled; release reservation"
+            data-id="cexpired"
+            transform="translate(1620,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Expired / cancelled</text>
+            <text class="sub" x="12" y="51">release reservation</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Active enrollment; funded allocation + wallet hold"
+            data-id="active"
+            transform="translate(1380,600)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Active enrollment</text>
+            <text class="sub" x="12" y="51">
+              funded allocation + wallet hold
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Half · installment 2; pending → funded / defaulted"
+            data-id="half"
+            transform="translate(1620,710)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Half · installment 2</text>
+            <text class="sub" x="12" y="51">pending → funded / defaulted</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Cohort minimum check; admin continue / postpone / cancel"
+            data-id="minimum"
+            transform="translate(1380,820)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Cohort minimum check</text>
+            <text class="sub" x="12" y="51">
+              admin continue / postpone / cancel
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Postpone / cancel; C05 · free exit + release policy"
+            data-id="postpone"
+            transform="translate(1620,930)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Postpone / cancel</text>
+            <text class="sub" x="12" y="51">
+              C05 · free exit + release policy
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Session completed + report; C07 · session fee once"
+            data-id="classsession"
+            transform="translate(1380,1040)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Session completed + report</text>
+            <text class="sub" x="12" y="51">C07 · session fee once</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Released allocation; unfunded future / cancellation"
+            data-id="released"
+            transform="translate(1620,1040)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Released allocation</text>
+            <text class="sub" x="12" y="51">
+              unfunded future / cancellation
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="WALLET · Top-up; P01 · provider checkout"
+            data-id="payment"
+            transform="translate(1900,160)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">WALLET · Top-up</text>
+            <text class="sub" x="12" y="51">P01 · provider checkout</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="PENDING; provider intent + reference"
+            data-id="pending"
+            transform="translate(1900,270)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">PENDING</text>
+            <text class="sub" x="12" y="51">provider intent + reference</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="FAILED / EXPIRED; no successful payment credit"
+            data-id="failedpay"
+            transform="translate(2140,380)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">FAILED / EXPIRED</text>
+            <text class="sub" x="12" y="51">no successful payment credit</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="PAID / SETTLED; verified provider success"
+            data-id="paid"
+            transform="translate(1900,490)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">PAID / SETTLED</text>
+            <text class="sub" x="12" y="51">verified provider success</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="REFUNDED / partial refund; reconcile provider facts"
+            data-id="refund"
+            transform="translate(2140,600)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">REFUNDED / partial refund</text>
+            <text class="sub" x="12" y="51">reconcile provider facts</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Wallet + ledger; total = available + held"
+            data-id="wallet"
+            transform="translate(1900,710)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Wallet + ledger</text>
+            <text class="sub" x="12" y="51">total = available + held</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Hold / release / deduct; P02 · event idempotency"
+            data-id="hold"
+            transform="translate(1900,820)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Hold / release / deduct</text>
+            <text class="sub" x="12" y="51">P02 · event idempotency</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Insufficient balance; top-up / reject; no double hold"
+            data-id="low"
+            transform="translate(2140,820)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Insufficient balance</text>
+            <text class="sub" x="12" y="51">
+              top-up / reject; no double hold
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="TUTOR SESSION FEE; booking / series child / class"
+            data-id="fee"
+            transform="translate(820,1240)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">TUTOR SESSION FEE</text>
+            <text class="sub" x="12" y="51">
+              booking / series child / class
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Payout preview; eligible unpaid sources + tax"
+            data-id="preview"
+            transform="translate(820,1350)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Payout preview</text>
+            <text class="sub" x="12" y="51">eligible unpaid sources + tax</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Prepared payout; source allocation + bank snapshot"
+            data-id="prepared"
+            transform="translate(820,1460)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Prepared payout</text>
+            <text class="sub" x="12" y="51">
+              source allocation + bank snapshot
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Paid; P04 · transfer evidence"
+            data-id="payoutpaid"
+            transform="translate(820,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Paid</text>
+            <text class="sub" x="12" y="51">P04 · transfer evidence</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Void; P05 · release allocation"
+            data-id="void"
+            transform="translate(580,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Void</text>
+            <text class="sub" x="12" y="51">P05 · release allocation</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Reconciliation; P06 · required → resolved"
+            data-id="reconcile"
+            transform="translate(1060,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Reconciliation</text>
+            <text class="sub" x="12" y="51">P06 · required → resolved</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="REFERRAL · Signup choice; R01 · none / friend / KOL"
+            data-id="choice"
+            transform="translate(20,1240)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">REFERRAL · Signup choice</text>
+            <text class="sub" x="12" y="51">R01 · none / friend / KOL</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="None / invalid code; validate; no fake attribution"
+            data-id="none"
+            transform="translate(20,1350)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">None / invalid code</text>
+            <text class="sub" x="12" y="51">validate; no fake attribution</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Friend attribution; welcome + immutable snapshot"
+            data-id="friend"
+            transform="translate(260,1350)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Friend attribution</text>
+            <text class="sub" x="12" y="51">welcome + immutable snapshot</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="First qualifying completion; R02–R03 · semester cap"
+            data-id="reward"
+            transform="translate(260,1460)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">First qualifying completion</text>
+            <text class="sub" x="12" y="51">R02–R03 · semester cap</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Friend reward credit; once · ledger + remaining cap"
+            data-id="friendcredit"
+            transform="translate(260,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Friend reward credit</text>
+            <text class="sub" x="12" y="51">once · ledger + remaining cap</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="KOL campaign + code; active dates + attribution window"
+            data-id="kol"
+            transform="translate(20,1680)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">KOL campaign + code</text>
+            <text class="sub" x="12" y="51">
+              active dates + attribution window
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Commission decision; R05–R06 · flat + percent"
+            data-id="commission"
+            transform="translate(260,1790)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Commission decision</text>
+            <text class="sub" x="12" y="51">R05–R06 · flat + percent</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Unresolved / refund; missing time / refund reconcile"
+            data-id="unresolved"
+            transform="translate(20,1900)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Unresolved / refund</text>
+            <text class="sub" x="12" y="51">
+              missing time / refund reconcile
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="KOL settlement; R07 · transfer / adjustment"
+            data-id="settlement"
+            transform="translate(260,2010)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">KOL settlement</text>
+            <text class="sub" x="12" y="51">R07 · transfer / adjustment</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Unpaid / partial / settled; obligation vs transferred"
+            data-id="balance"
+            transform="translate(260,2120)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Unpaid / partial / settled</text>
+            <text class="sub" x="12" y="51">obligation vs transferred</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="NOTIFICATIONS · Domain events; booking / classes / money / others"
+            data-id="events"
+            transform="translate(1380,1240)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">NOTIFICATIONS · Domain events</text>
+            <text class="sub" x="12" y="51">
+              booking / classes / money / others
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="write · eventKey dedupe; N01–N02 · recipient + action link"
+            data-id="dedupe"
+            transform="translate(1380,1350)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">write · eventKey dedupe</text>
+            <text class="sub" x="12" y="51">
+              N01–N02 · recipient + action link
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="In-app notification; unread / read · ownership"
+            data-id="inbox"
+            transform="translate(1140,1460)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">In-app notification</text>
+            <text class="sub" x="12" y="51">unread / read · ownership</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Email gate · ALL required; opt-in + action/critical + category"
+            data-id="gate"
+            transform="translate(1620,1460)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Email gate · ALL required</text>
+            <text class="sub" x="12" y="51">
+              opt-in + action/critical + category
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="In-app only; N03–N04 · gate fails / no email"
+            data-id="inapponly"
+            transform="translate(1380,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">In-app only</text>
+            <text class="sub" x="12" y="51">
+              N03–N04 · gate fails / no email
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="queued → sending; N05 · atomic claim"
+            data-id="queued"
+            transform="translate(1860,1570)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">queued → sending</text>
+            <text class="sub" x="12" y="51">N05 · atomic claim</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Sent / suppressed; success / provider skipped"
+            data-id="sent"
+            transform="translate(1620,1680)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Sent / suppressed</text>
+            <text class="sub" x="12" y="51">success / provider skipped</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Failed + attempts; N06 · retry if attempts &lt;3"
+            data-id="emailfailed"
+            transform="translate(2100,1680)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Failed + attempts</text>
+            <text class="sub" x="12" y="51">N06 · retry if attempts &lt;3</text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Stale sending >10 min; reclaim only with retry budget"
+            data-id="reclaim"
+            transform="translate(2100,1790)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Stale sending >10 min</text>
+            <text class="sub" x="12" y="51">
+              reclaim only with retry budget
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="OTHER MODULES · O01–O05; achievement / support / content"
+            data-id="other"
+            transform="translate(820,1900)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">OTHER MODULES · O01–O05</text>
+            <text class="sub" x="12" y="51">
+              achievement / support / content
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Achievement review; draft → review → approve/reject"
+            data-id="achievement"
+            transform="translate(580,2010)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Achievement review</text>
+            <text class="sub" x="12" y="51">
+              draft → review → approve/reject
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="Support ticket; open → in_progress → resolved/closed"
+            data-id="support"
+            transform="translate(820,2120)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">Support ticket</text>
+            <text class="sub" x="12" y="51">
+              open → in_progress → resolved/closed
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="KB / calendar; CRUD · visibility · private access"
+            data-id="content"
+            transform="translate(1060,2010)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">KB / calendar</text>
+            <text class="sub" x="12" y="51">
+              CRUD · visibility · private access
+            </text>
+          </g>
+          <g
+            class="node"
+            tabindex="0"
+            role="button"
+            aria-label="ALL FLOWS · Cross checks; auth · audit · duplicate · conflict"
+            data-id="cross"
+            transform="translate(1380,2120)"
+          >
+            <rect width="220" height="76" rx="9" />
+            <text x="12" y="26">ALL FLOWS · Cross checks</text>
+            <text class="sub" x="12" y="51">
+              auth · audit · duplicate · conflict
+            </text>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <script>
+      const nodes = [
+        {
+          id: "start",
+          x: 720,
+          y: 20,
+          t: "Student / Tutor / Admin",
+          s: "Login · role & authorization",
+        },
+        { id: "invite", x: 20, y: 160, t: "TUTOR · Invite", s: "invited" },
+        {
+          id: "invitefail",
+          x: 20,
+          y: 270,
+          t: "Expired / revoked",
+          s: "T01 · token tidak bisa dipakai",
+        },
+        {
+          id: "draft",
+          x: 260,
+          y: 160,
+          t: "Onboarding draft",
+          s: "profile + subject + modality",
+        },
+        {
+          id: "review",
+          x: 260,
+          y: 270,
+          t: "pending_review",
+          s: "T01 · admin review",
+        },
+        {
+          id: "changes",
+          x: 20,
+          y: 380,
+          t: "changes_requested",
+          s: "revisi → submit ulang",
+        },
+        {
+          id: "approved",
+          x: 260,
+          y: 380,
+          t: "approved_unpublished",
+          s: "approve → publish",
+        },
+        {
+          id: "published",
+          x: 260,
+          y: 490,
+          t: "Published tutor",
+          s: "T02–T04 · availability + capacity",
+        },
+        {
+          id: "suspended",
+          x: 20,
+          y: 490,
+          t: "Suspended / profile edits",
+          s: "visibility + approval",
+        },
+        {
+          id: "book",
+          x: 580,
+          y: 160,
+          t: "BOOKING · Request",
+          s: "B01–B08 · solo / group / series",
+        },
+        {
+          id: "participants",
+          x: 580,
+          y: 270,
+          t: "Participant confirmation",
+          s: "group · accept / decline / withdraw",
+        },
+        {
+          id: "tutor",
+          x: 820,
+          y: 270,
+          t: "Tutor review",
+          s: "awaiting_tutor_review",
+        },
+        {
+          id: "confirmed",
+          x: 820,
+          y: 490,
+          t: "Confirmed",
+          s: "online / offline",
+        },
+        {
+          id: "declined",
+          x: 1060,
+          y: 270,
+          t: "Declined / expired",
+          s: "terminal · reason + release policy",
+        },
+        {
+          id: "reschedule",
+          x: 1060,
+          y: 380,
+          t: "Reschedule proposed",
+          s: "accept / reject / timeout",
+        },
+        {
+          id: "reconfirm",
+          x: 580,
+          y: 380,
+          t: "Reconfirmation",
+          s: "harga / headcount berubah",
+        },
+        {
+          id: "room",
+          x: 1060,
+          y: 600,
+          t: "Admin room approval",
+          s: "offline · conflict / relocate",
+        },
+        {
+          id: "scheduled",
+          x: 820,
+          y: 710,
+          t: "Scheduled",
+          s: "online meeting / approved room",
+        },
+        {
+          id: "cancel",
+          x: 580,
+          y: 710,
+          t: "Cancelled / late_cancelled",
+          s: "B05–B06 · cutoff policy",
+        },
+        {
+          id: "noshow",
+          x: 1060,
+          y: 820,
+          t: "No show",
+          s: "B06 · attendance + policy",
+        },
+        {
+          id: "complete",
+          x: 820,
+          y: 930,
+          t: "Completed + report",
+          s: "B01 / B07 · per series child",
+        },
+        {
+          id: "report",
+          x: 580,
+          y: 1040,
+          t: "Report / correction / PDF",
+          s: "akses siswa + report history",
+        },
+        {
+          id: "classdraft",
+          x: 1380,
+          y: 160,
+          t: "CLASSES · Draft",
+          s: "C01 · cohort / masterclass",
+        },
+        {
+          id: "classpub",
+          x: 1380,
+          y: 270,
+          t: "Published class",
+          s: "cohort ≥1 · masterclass 1 sesi",
+        },
+        {
+          id: "plan",
+          x: 1380,
+          y: 380,
+          t: "Choose plan",
+          s: "full / half / single / masterclass",
+        },
+        {
+          id: "checkout",
+          x: 1380,
+          y: 490,
+          t: "checkout_pending",
+          s: "C03/C06 · reserve seat",
+        },
+        {
+          id: "cexpired",
+          x: 1620,
+          y: 490,
+          t: "Expired / cancelled",
+          s: "release reservation",
+        },
+        {
+          id: "active",
+          x: 1380,
+          y: 600,
+          t: "Active enrollment",
+          s: "funded allocation + wallet hold",
+        },
+        {
+          id: "half",
+          x: 1620,
+          y: 710,
+          t: "Half · installment 2",
+          s: "pending → funded / defaulted",
+        },
+        {
+          id: "minimum",
+          x: 1380,
+          y: 820,
+          t: "Cohort minimum check",
+          s: "admin continue / postpone / cancel",
+        },
+        {
+          id: "postpone",
+          x: 1620,
+          y: 930,
+          t: "Postpone / cancel",
+          s: "C05 · free exit + release policy",
+        },
+        {
+          id: "classsession",
+          x: 1380,
+          y: 1040,
+          t: "Session completed + report",
+          s: "C07 · session fee once",
+        },
+        {
+          id: "released",
+          x: 1620,
+          y: 1040,
+          t: "Released allocation",
+          s: "unfunded future / cancellation",
+        },
+        {
+          id: "payment",
+          x: 1900,
+          y: 160,
+          t: "WALLET · Top-up",
+          s: "P01 · provider checkout",
+        },
+        {
+          id: "pending",
+          x: 1900,
+          y: 270,
+          t: "PENDING",
+          s: "provider intent + reference",
+        },
+        {
+          id: "failedpay",
+          x: 2140,
+          y: 380,
+          t: "FAILED / EXPIRED",
+          s: "no successful payment credit",
+        },
+        {
+          id: "paid",
+          x: 1900,
+          y: 490,
+          t: "PAID / SETTLED",
+          s: "verified provider success",
+        },
+        {
+          id: "refund",
+          x: 2140,
+          y: 600,
+          t: "REFUNDED / partial refund",
+          s: "reconcile provider facts",
+        },
+        {
+          id: "wallet",
+          x: 1900,
+          y: 710,
+          t: "Wallet + ledger",
+          s: "total = available + held",
+        },
+        {
+          id: "hold",
+          x: 1900,
+          y: 820,
+          t: "Hold / release / deduct",
+          s: "P02 · event idempotency",
+        },
+        {
+          id: "low",
+          x: 2140,
+          y: 820,
+          t: "Insufficient balance",
+          s: "top-up / reject; no double hold",
+        },
+        {
+          id: "fee",
+          x: 820,
+          y: 1240,
+          t: "TUTOR SESSION FEE",
+          s: "booking / series child / class",
+        },
+        {
+          id: "preview",
+          x: 820,
+          y: 1350,
+          t: "Payout preview",
+          s: "eligible unpaid sources + tax",
+        },
+        {
+          id: "prepared",
+          x: 820,
+          y: 1460,
+          t: "Prepared payout",
+          s: "source allocation + bank snapshot",
+        },
+        {
+          id: "payoutpaid",
+          x: 820,
+          y: 1570,
+          t: "Paid",
+          s: "P04 · transfer evidence",
+        },
+        {
+          id: "void",
+          x: 580,
+          y: 1570,
+          t: "Void",
+          s: "P05 · release allocation",
+        },
+        {
+          id: "reconcile",
+          x: 1060,
+          y: 1570,
+          t: "Reconciliation",
+          s: "P06 · required → resolved",
+        },
+        {
+          id: "choice",
+          x: 20,
+          y: 1240,
+          t: "REFERRAL · Signup choice",
+          s: "R01 · none / friend / KOL",
+        },
+        {
+          id: "none",
+          x: 20,
+          y: 1350,
+          t: "None / invalid code",
+          s: "validate; no fake attribution",
+        },
+        {
+          id: "friend",
+          x: 260,
+          y: 1350,
+          t: "Friend attribution",
+          s: "welcome + immutable snapshot",
+        },
+        {
+          id: "reward",
+          x: 260,
+          y: 1460,
+          t: "First qualifying completion",
+          s: "R02–R03 · semester cap",
+        },
+        {
+          id: "friendcredit",
+          x: 260,
+          y: 1570,
+          t: "Friend reward credit",
+          s: "once · ledger + remaining cap",
+        },
+        {
+          id: "kol",
+          x: 20,
+          y: 1680,
+          t: "KOL campaign + code",
+          s: "active dates + attribution window",
+        },
+        {
+          id: "commission",
+          x: 260,
+          y: 1790,
+          t: "Commission decision",
+          s: "R05–R06 · flat + percent",
+        },
+        {
+          id: "unresolved",
+          x: 20,
+          y: 1900,
+          t: "Unresolved / refund",
+          s: "missing time / refund reconcile",
+        },
+        {
+          id: "settlement",
+          x: 260,
+          y: 2010,
+          t: "KOL settlement",
+          s: "R07 · transfer / adjustment",
+        },
+        {
+          id: "balance",
+          x: 260,
+          y: 2120,
+          t: "Unpaid / partial / settled",
+          s: "obligation vs transferred",
+        },
+        {
+          id: "events",
+          x: 1380,
+          y: 1240,
+          t: "NOTIFICATIONS · Domain events",
+          s: "booking / classes / money / others",
+        },
+        {
+          id: "dedupe",
+          x: 1380,
+          y: 1350,
+          t: "write · eventKey dedupe",
+          s: "N01–N02 · recipient + action link",
+        },
+        {
+          id: "inbox",
+          x: 1140,
+          y: 1460,
+          t: "In-app notification",
+          s: "unread / read · ownership",
+        },
+        {
+          id: "gate",
+          x: 1620,
+          y: 1460,
+          t: "Email gate · ALL required",
+          s: "opt-in + action/critical + category",
+        },
+        {
+          id: "inapponly",
+          x: 1380,
+          y: 1570,
+          t: "In-app only",
+          s: "N03–N04 · gate fails / no email",
+        },
+        {
+          id: "queued",
+          x: 1860,
+          y: 1570,
+          t: "queued → sending",
+          s: "N05 · atomic claim",
+        },
+        {
+          id: "sent",
+          x: 1620,
+          y: 1680,
+          t: "Sent / suppressed",
+          s: "success / provider skipped",
+        },
+        {
+          id: "emailfailed",
+          x: 2100,
+          y: 1680,
+          t: "Failed + attempts",
+          s: "N06 · retry if attempts <3",
+        },
+        {
+          id: "reclaim",
+          x: 2100,
+          y: 1790,
+          t: "Stale sending >10 min",
+          s: "reclaim only with retry budget",
+        },
+        {
+          id: "other",
+          x: 820,
+          y: 1900,
+          t: "OTHER MODULES · O01–O05",
+          s: "achievement / support / content",
+        },
+        {
+          id: "achievement",
+          x: 580,
+          y: 2010,
+          t: "Achievement review",
+          s: "draft → review → approve/reject",
+        },
+        {
+          id: "support",
+          x: 820,
+          y: 2120,
+          t: "Support ticket",
+          s: "open → in_progress → resolved/closed",
+        },
+        {
+          id: "content",
+          x: 1060,
+          y: 2010,
+          t: "KB / calendar",
+          s: "CRUD · visibility · private access",
+        },
+        {
+          id: "cross",
+          x: 1380,
+          y: 2120,
+          t: "ALL FLOWS · Cross checks",
+          s: "auth · audit · duplicate · conflict",
+        },
+      ];
+      let z = 1;
+      const svg = document.getElementById("diagram"),
+        canvas = document.getElementById("canvas"),
+        vp = document.getElementById("vp");
+      function scale(v) {
+        z = Math.max(0.2, Math.min(1.5, v));
+        svg.style.transform = "scale(" + z + ")";
+        canvas.style.width = 2400 * z + "px";
+        canvas.style.height = 2250 * z + "px";
+        document.getElementById("zoom").textContent = Math.round(z * 100) + "%";
+      }
+      document.getElementById("in").onclick = () => scale(z + 0.15);
+      document.getElementById("out").onclick = () => scale(z - 0.15);
+      document.getElementById("fit").onclick = () =>
+        scale((vp.clientWidth - 8) / 2400);
+      document.getElementById("read").onclick = () => scale(1);
+      function clear() {
+        document
+          .querySelectorAll(".edge")
+          .forEach((e) => e.classList.remove("hot", "dim"));
+        document
+          .querySelectorAll(".node")
+          .forEach((e) => e.classList.remove("selected"));
+      }
+      document.getElementById("reset").onclick = clear;
+      function select(e) {
+        const el = e.target.closest(".node");
+        if (!el) return;
+        clear();
+        el.classList.add("selected");
+        const id = el.dataset.id,
+          n = nodes.find((n) => n.id === id);
+        document.getElementById("detail").textContent = n.t + " — " + n.s;
+        document
+          .querySelectorAll(".edge")
+          .forEach((p) =>
+            p.classList.add(
+              p.dataset.a === id || p.dataset.b === id ? "hot" : "dim",
+            ),
+          );
+      }
+      svg.addEventListener("click", select);
+      svg.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          select(e);
+        }
+      });
+      scale(z);
+    </script>
+  </body>
+</html>

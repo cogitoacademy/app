@@ -1,37 +1,27 @@
 import { createRouterClient } from "@orpc/server";
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
-import { economyConfig, user } from "@cogito-app/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  economyV3Activation,
+  economyV3Revision,
+  markPackage,
+  subjectCategory,
+  tutorProfile,
+  tutorProfileSubject,
+  user,
+} from "@cogito-app/db/schema";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
-import { appRouter, type AppRouter } from "../../routers";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+import { appRouter } from "../../routers";
 import { services } from "../../services";
+import {
+  assertSafeTestDatabaseUrl,
+  assertTestDatabaseResetAllowed,
+} from "./test-database-safety";
 
-function getDatabaseName(databaseUrl: string | undefined) {
-  if (!databaseUrl) return "";
-
-  try {
-    return new URL(databaseUrl).pathname.replace(/^\/+/, "");
-  } catch {
-    return "";
-  }
-}
-
-function assertSafeTestDatabase() {
-  const databaseUrl = process.env.DATABASE_URL;
-  const databaseName = getDatabaseName(databaseUrl);
-
-  if (
-    process.env.NODE_ENV !== "test" ||
-    !databaseName.toLowerCase().includes("test")
-  ) {
-    throw new Error(
-      [
-        "resetDatabase() is blocked outside a dedicated test database.",
-        `NODE_ENV='${process.env.NODE_ENV ?? ""}', DATABASE_URL database='${databaseName}'.`,
-      ].join(" "),
-    );
-  }
+export function assertSafeTestDatabase() {
+  assertSafeTestDatabaseUrl(process.env.DATABASE_URL, process.env.NODE_ENV);
 }
 
 export type TestClient = ReturnType<typeof createTestClient>;
@@ -56,7 +46,83 @@ export async function createTestContext(sessionCookie?: string) {
 export function createTestClient(
   context: Awaited<ReturnType<typeof createTestContext>>,
 ) {
-  return createRouterClient<AppRouter>(appRouter, { context });
+  const client = createRouterClient(appRouter, { context });
+  const creationMethods = new Set([
+    "createSolo",
+    "createGroup",
+    "createSeries",
+    "createGroupSeries",
+  ]);
+
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "booking" || !value) return value;
+      return new Proxy(value, {
+        get(bookingTarget, bookingProperty, bookingReceiver) {
+          const method = Reflect.get(
+            bookingTarget,
+            bookingProperty,
+            bookingReceiver,
+          );
+          if (
+            typeof method !== "function" ||
+            !creationMethods.has(String(bookingProperty))
+          ) {
+            return method;
+          }
+          return async (input: Record<string, unknown>) => {
+            if (input.subjectId || typeof input.tutorId !== "string") {
+              return method(input);
+            }
+            const subjectId = await ensureTestTutorSubject(input.tutorId);
+            return method({ ...input, subjectId });
+          };
+        },
+      });
+    },
+  }) as typeof client;
+}
+
+export async function ensureTestTutorSubject(tutorId: string) {
+  const profile = await db.query.tutorProfile.findFirst({
+    where: eq(tutorProfile.userId, tutorId),
+    columns: { id: true },
+    with: {
+      subjects: {
+        with: {
+          subject: { with: { parent: true } },
+        },
+      },
+    },
+  });
+
+  const assigned = profile?.subjects.find(
+    ({ subject }) =>
+      subject?.isActive && subject.parentId && subject.parent?.isActive,
+  );
+  if (assigned?.subject) return assigned.subject.id;
+
+  const subjects = await db.query.subjectCategory.findMany({
+    where: and(
+      eq(subjectCategory.isActive, true),
+      isNotNull(subjectCategory.parentId),
+    ),
+    with: { parent: true },
+  });
+  const subject =
+    subjects.find(
+      (row) => row.slug === "competition-debate-law" && row.parent?.isActive,
+    ) ?? subjects.find((row) => row.parent?.isActive);
+  if (!subject) throw new Error("V3 test specialization seed is missing");
+
+  if (!profile) return subject.id;
+
+  await db
+    .insert(tutorProfileSubject)
+    .values({ tutorProfileId: profile.id, subjectId: subject.id })
+    .onConflictDoNothing();
+  return subject.id;
 }
 
 export async function signUpAndSignIn(
@@ -108,6 +174,14 @@ export async function setUserRole(userId: string, role: string) {
 }
 
 const TRUNCATE_TABLES = [
+  "economy_v3_top_up_quote",
+  "economy_v3_activation",
+  "economy_v3_revision",
+  "academy_class_session",
+  "academy_class",
+  "tutor_payout_allocation",
+  "tutor_payout",
+  "tutor_session_fee",
   "booking_state_history",
   "contact_request",
   "booking_participant",
@@ -141,39 +215,73 @@ const TRUNCATE_TABLES = [
 ];
 
 export async function resetDatabase() {
-  assertSafeTestDatabase();
+  assertSafeTestDatabaseUrl(process.env.DATABASE_URL, process.env.NODE_ENV);
+  assertTestDatabaseResetAllowed(
+    process.env.DATABASE_URL,
+    process.env.NODE_ENV,
+    process.env.TEST_DATABASE_ALLOW_RESET,
+    process.env.TEST_DATABASE_RESET_TARGET,
+  );
+  const taxonomy = await db.select().from(subjectCategory);
   await db.execute(
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );
+  const taxonomyParents = taxonomy.filter((entry) => entry.parentId === null);
+  const taxonomySpecializations = taxonomy.filter(
+    (entry) => entry.parentId !== null,
+  );
+  if (taxonomyParents.length) {
+    await db
+      .insert(subjectCategory)
+      .values(taxonomyParents)
+      .onConflictDoNothing({ target: subjectCategory.id });
+  }
+  if (taxonomySpecializations.length) {
+    await db
+      .insert(subjectCategory)
+      .values(taxonomySpecializations)
+      .onConflictDoNothing({ target: subjectCategory.id });
+  }
+  const seededCatalogIds = taxonomy
+    .filter((entry) => /^(30000000|40000000)-0000-4000-8000-/.test(entry.id))
+    .map((entry) => entry.id);
+  if (seededCatalogIds.length) {
+    // Catalog integration tests archive seed rows; each isolated suite needs canonical defaults.
+    await db
+      .update(subjectCategory)
+      .set({ isActive: true, version: 1 })
+      .where(inArray(subjectCategory.id, seededCatalogIds));
+  }
   await seedMarkPackages();
-  await db.update(economyConfig).set({
-    markValueIdr: 5_000,
-    minTutorBaseRateIdr: 50_000,
-    onlineTutorIncrementIdr: 30_000,
-    offlineTutorIncrementIdr: 40_000,
-    onlineCogitoBaseIdr: 50_000,
-    onlineCogitoIncrementIdr: 20_000,
-    offlineCogitoBaseIdr: 90_000,
-    offlineCogitoIncrementIdr: 40_000,
+  await db.insert(economyV3Revision).values({
     version: 1,
+    values: DEFAULT_V3_ECONOMY_CONFIG,
+    reason: "Reset V3 economy defaults for isolated tests",
+    createdBy: null,
+  });
+  await db.insert(economyV3Activation).values({
+    id: "default",
+    activeRevision: 1,
     updatedBy: null,
   });
 }
 
 async function seedMarkPackages() {
-  const { markPackage } = await import("@cogito-app/db/schema");
+  const packageNames: Record<string, string> = {
+    starter: "Starter Pack",
+    learner: "Learner Pack",
+    explorer: "Explorer Pack",
+    pioneer: "Pioneer Pack",
+  };
   await db
     .insert(markPackage)
-    .values([
-      { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 312500 },
-      { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 690000 },
-      {
-        code: "explorer",
-        name: "Explorer Pack",
-        marks: 200,
-        priceIdr: 1070000,
-      },
-      { code: "pioneer", name: "Pioneer Pack", marks: 400, priceIdr: 2000000 },
-    ])
+    .values(
+      DEFAULT_V3_ECONOMY_CONFIG.packages.map((pkg) => ({
+        code: pkg.code,
+        marks: pkg.marks,
+        priceIdr: pkg.priceIdr,
+        name: packageNames[pkg.code] ?? pkg.code,
+      })),
+    )
     .onConflictDoNothing({ target: markPackage.code });
 }

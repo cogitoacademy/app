@@ -1,14 +1,22 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import { PAYMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import { NOTIFICATION_CATEGORY } from "../../shared/constants";
 import { NOTIFICATION_SEVERITY } from "../../shared/constants";
 import type { NotificationWriteParams } from "../notification/notification.service";
 import {
-  PackageNotFoundError,
   PaymentNotFoundError,
   PaymentProviderError,
   PaymentSimulationUnavailableError,
   PaymentWebhookMismatchError,
+  V3TopUpUnavailableError,
+  V3PackagePurchaseDisabledError,
+  TopUpQuoteNotFoundError,
+  TopUpQuoteExpiredError,
+  TopUpQuoteRequestConflictError,
+  TopUpQuoteChoiceConflictError,
+  V3TopUpChoiceUnavailableError,
+  TopUpAmountOutOfRangeError,
 } from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
 import type { PaymentAuditPort } from "./index";
@@ -18,7 +26,8 @@ import {
   recordPaymentReconciliation,
 } from "../../lib/metrics";
 import type { PaymentRepo } from "./payment.repo";
-import { lockPaymentIntent } from "../../lib/locks";
+import type { EconomyService } from "../economy/economy.service";
+import { calculateV3TopUpPrice } from "../pricing/v3-rate-card";
 
 export type PaymentStatus =
   | "PENDING"
@@ -38,6 +47,9 @@ export interface WebhookPayload {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerRefundIdentity?: string | null;
+  providerSuccessAt?: Date | null;
+  providerSuccessTimeStatus?: "verified" | "unavailable";
 }
 
 export interface PaymentProvider {
@@ -72,7 +84,113 @@ export type PaymentPort = PaymentProvider;
 export interface CreateIntentResult {
   paymentId: string;
   providerReference: string;
-  checkoutUrl: string;
+  checkoutUrl: string | null;
+  status?: PaymentStatus;
+  recoveryRequired?: boolean;
+}
+
+type TopUpChoice = "package" | "custom" | "recommended";
+
+interface TopUpPackageTerms {
+  code: string;
+  marks: number;
+  priceIdr: number;
+}
+
+interface TopUpTermsSnapshot {
+  packages: TopUpPackageTerms[];
+  exactSurchargeIdr: number;
+  exactPackageCode: string | null;
+  customAmountIdr: number;
+  recommendation: TopUpPackageTerms | null;
+}
+
+const V3_TOP_UP_QUOTE_TTL_MS = 15 * 60 * 1000;
+
+function topUpPackageDto(pkg: TopUpPackageTerms) {
+  return {
+    code: pkg.code,
+    label: `${pkg.code
+      .split("-")
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" ")} package`,
+    marks: pkg.marks,
+    priceIdr: pkg.priceIdr,
+  };
+}
+
+function getTopUpTerms(snapshot: unknown): TopUpTermsSnapshot {
+  const value = snapshot as Partial<TopUpTermsSnapshot>;
+  if (
+    !value ||
+    !Array.isArray(value.packages) ||
+    typeof value.exactSurchargeIdr !== "number" ||
+    typeof value.customAmountIdr !== "number" ||
+    (value.exactPackageCode !== null &&
+      typeof value.exactPackageCode !== "string") ||
+    (value.recommendation !== null && typeof value.recommendation !== "object")
+  ) {
+    throw new Error("Stored V3 top-up quote terms are invalid");
+  }
+  return value as TopUpTermsSnapshot;
+}
+
+function topUpQuoteDto(quote: {
+  id: string;
+  revision: number;
+  requestedMarks: number;
+  termsSnapshot: unknown;
+  expiresAt: Date;
+}) {
+  const terms = getTopUpTerms(quote.termsSnapshot);
+  const exactPackage = terms.exactPackageCode
+    ? terms.packages.find((item) => item.code === terms.exactPackageCode)
+    : null;
+  return {
+    quoteId: quote.id,
+    revision: quote.revision,
+    marks: quote.requestedMarks,
+    customAmountIdr: terms.customAmountIdr,
+    exactPackage: exactPackage ? topUpPackageDto(exactPackage) : null,
+    recommendedPackage: terms.recommendation
+      ? topUpPackageDto(terms.recommendation)
+      : null,
+    expiresAt: quote.expiresAt.toISOString(),
+  };
+}
+
+function selectTopUpTerms(
+  quote: { requestedMarks: number; termsSnapshot: unknown },
+  choice: TopUpChoice,
+) {
+  const terms = getTopUpTerms(quote.termsSnapshot);
+  if (choice === "package") {
+    const pkg = terms.exactPackageCode
+      ? terms.packages.find((item) => item.code === terms.exactPackageCode)
+      : null;
+    if (!pkg) throw new V3TopUpChoiceUnavailableError();
+    return {
+      marks: pkg.marks,
+      amountIdr: pkg.priceIdr,
+      label: `${topUpPackageDto(pkg).label} · ${pkg.marks} Marks`,
+    };
+  }
+  if (choice === "custom") {
+    if (terms.exactPackageCode) throw new V3TopUpChoiceUnavailableError();
+    return {
+      marks: quote.requestedMarks,
+      amountIdr: terms.customAmountIdr,
+      label: `Custom top-up · ${quote.requestedMarks} Marks`,
+    };
+  }
+  if (choice === "recommended" && terms.recommendation) {
+    return {
+      marks: terms.recommendation.marks,
+      amountIdr: terms.recommendation.priceIdr,
+      label: `Recommended ${topUpPackageDto(terms.recommendation).label} · ${terms.recommendation.marks} Marks`,
+    };
+  }
+  throw new V3TopUpChoiceUnavailableError();
 }
 
 export interface ConfirmInput {
@@ -86,6 +204,9 @@ export interface ConfirmInput {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerRefundIdentity?: string | null;
+  providerSuccessAt?: Date | null;
+  providerSuccessTimeStatus?: "verified" | "unavailable";
 }
 
 export type PaymentService = ReturnType<typeof createPaymentService>;
@@ -94,12 +215,22 @@ export interface PaymentNotificationPort {
   writeBestEffort(params: NotificationWriteParams): Promise<void>;
 }
 
+export interface KolCommissionPort {
+  recordSuccessfulKolTopUp(
+    conn: DbOrTx,
+    input: {
+      paymentId: string;
+      providerSuccessTimeStatus?: "verified" | "unavailable";
+    },
+  ): Promise<unknown>;
+}
+
 const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
-  PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
+  PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED", "REFUNDED"],
   PAID: ["SETTLED", "REFUNDED"],
   SETTLED: ["REFUNDED"],
-  FAILED: ["PAID", "SETTLED"],
-  EXPIRED: ["PAID", "SETTLED"],
+  FAILED: ["PAID", "SETTLED", "REFUNDED"],
+  EXPIRED: ["PAID", "SETTLED", "REFUNDED"],
   REFUNDED: [],
 };
 
@@ -130,6 +261,23 @@ const RECONCILE_ATTEMPT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_CHANNEL_FEE_FLAT_IDR = 10_000;
 const MAX_CHANNEL_FEE_RATE = 0.03;
 
+function earliestVerifiedProviderTime(
+  current: Date | null | undefined,
+  incoming: Date | null | undefined,
+) {
+  const currentTime =
+    current instanceof Date && Number.isFinite(current.getTime())
+      ? current
+      : null;
+  const incomingTime =
+    incoming instanceof Date && Number.isFinite(incoming.getTime())
+      ? incoming
+      : null;
+  if (!currentTime) return incomingTime;
+  if (!incomingTime) return currentTime;
+  return incomingTime < currentTime ? incomingTime : currentTime;
+}
+
 /**
  * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
  *
@@ -138,6 +286,7 @@ const MAX_CHANNEL_FEE_RATE = 0.03;
  */
 export function createPaymentService(deps: {
   db: DbType;
+  economy?: Pick<EconomyService, "getActiveV3Config">;
   wallet: PaymentWalletPort;
   repo: PaymentRepo;
   provider: PaymentProvider;
@@ -145,9 +294,11 @@ export function createPaymentService(deps: {
   notification?: PaymentNotificationPort;
   audit?: PaymentAuditPort;
   refundRecord?: PaymentRefundRecordPort;
+  kolCommission?: KolCommissionPort;
 }) {
   const {
     db,
+    economy,
     wallet,
     repo,
     provider,
@@ -155,210 +306,235 @@ export function createPaymentService(deps: {
     notification,
     audit,
     refundRecord,
+    kolCommission,
   } = deps;
 
-  /**
-   * Creates a payment intent for a mark package purchase.
-   *
-   * A current PENDING attempt is reused so retrying the checkout remains
-   * idempotent. Once an attempt reaches a terminal state, the next purchase
-   * gets a new payment row and provider reference; earlier attempts stay as
-   * immutable payment history.
-   *
-   * @param userId - the purchasing student
-   * @param walletId - the student's wallet to credit on confirmation
-   * @param packageCode - the mark package code to purchase
-   * @returns the payment id, provider reference, and checkout URL
-   * @throws {PackageNotFoundError} if the package is missing or inactive
-   * @throws {PaymentProviderError} if the provider rejects intent creation
-   */
-  async function createIntent(
+  async function getTopUpCatalog() {
+    const active = economy ? await economy.getActiveV3Config(db) : null;
+    if (!active) {
+      return {
+        active: false as const,
+        revision: null,
+        packages: [],
+        exactSurchargeIdr: 0,
+        quoteTtlSeconds: 900 as const,
+      };
+    }
+    return {
+      active: true as const,
+      revision: active.version,
+      packages: active.values.packages.map(topUpPackageDto),
+      exactSurchargeIdr: active.values.exactSurchargeIdr,
+      quoteTtlSeconds: 900 as const,
+    };
+  }
+
+  async function createTopUpQuote(
+    userId: string,
+    input: { requestKey: string; marks: number },
+  ) {
+    return db.transaction(async (tx) => {
+      const existing = await repo.findTopUpQuoteByRequestKey(
+        userId,
+        input.requestKey,
+        tx,
+      );
+      if (existing) {
+        if (existing.requestedMarks !== input.marks) {
+          throw new TopUpQuoteRequestConflictError();
+        }
+        return topUpQuoteDto(existing);
+      }
+
+      const active = economy ? await economy.getActiveV3Config(tx) : null;
+      if (!active) throw new V3TopUpUnavailableError();
+      const calculation = calculateV3TopUpPrice(input.marks, active.values);
+      if (calculation.amountIdr > 2_147_483_647) {
+        throw new TopUpAmountOutOfRangeError();
+      }
+      const termsSnapshot: TopUpTermsSnapshot = {
+        packages: active.values.packages.map(({ code, marks, priceIdr }) => ({
+          code,
+          marks,
+          priceIdr,
+        })),
+        exactSurchargeIdr: active.values.exactSurchargeIdr,
+        exactPackageCode: calculation.packageCode,
+        customAmountIdr: calculation.amountIdr,
+        recommendation: calculation.recommendation,
+      };
+      const inserted = await repo.insertTopUpQuote(
+        {
+          id: crypto.randomUUID(),
+          userId,
+          requestKey: input.requestKey,
+          revision: active.version,
+          requestedMarks: input.marks,
+          termsSnapshot,
+          expiresAt: new Date(Date.now() + V3_TOP_UP_QUOTE_TTL_MS),
+        },
+        tx,
+      );
+      if (inserted) return topUpQuoteDto(inserted);
+
+      const winner = await repo.findTopUpQuoteByRequestKey(
+        userId,
+        input.requestKey,
+        tx,
+      );
+      if (!winner) throw new Error("Top-up quote could not be saved");
+      if (winner.requestedMarks !== input.marks) {
+        throw new TopUpQuoteRequestConflictError();
+      }
+      return topUpQuoteDto(winner);
+    });
+  }
+
+  function topUpPurchaseResult(
+    record: NonNullable<Awaited<ReturnType<typeof repo.findPaymentById>>>,
+  ) {
+    return {
+      paymentId: record.id,
+      providerReference: record.providerReference,
+      checkoutUrl: record.checkoutUrl,
+      status: record.status as PaymentStatus,
+      recoveryRequired:
+        record.status === PAYMENT_STATUS.PENDING && !record.checkoutUrl,
+      quoteId: record.quoteId!,
+      choice: record.quoteChoice as TopUpChoice,
+      purchaseLabel: record.purchaseLabel ?? `Top-up · ${record.marks} Marks`,
+    };
+  }
+
+  async function createPurchaseFromTopUpQuote(
     userId: string,
     walletId: string,
-    packageCode: string,
-  ): Promise<CreateIntentResult> {
-    const pkg = await repo.findPackageByCode(packageCode);
-    if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
-
-    const pendingAttempt = await repo.findLatestPaymentByUserAndPackage(
-      userId,
-      pkg.id,
-      providerName,
-    );
-    if (
-      pendingAttempt?.status === PAYMENT_STATUS.PENDING &&
-      pendingAttempt.providerRequestId &&
-      provider.getPaymentRequestStatus
-    ) {
-      try {
-        await reconcilePurchase(pendingAttempt.id, userId);
-      } catch (error) {
-        // Provider availability is required to prove an attempt is terminal.
-        // On lookup failure, preserve idempotency and reuse the pending intent.
-        if (
-          !(error instanceof PaymentProviderError) &&
-          !(error instanceof PaymentNotFoundError)
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    const baseProviderReference = `${providerName}:${userId}:${packageCode}`;
-    // Keep the old reference fallback for rows created before repeat purchases
-    // were supported. New rows are selected by their relational keys so an
-    // earlier terminal attempt does not become a permanent package lock.
+    quoteId: string,
+    choice: TopUpChoice,
+  ) {
     const outcome = await db.transaction(async (tx) => {
-      // B6: unique references prevent duplicate rows; this transaction lock
-      // also prevents concurrent callers from POSTing duplicate provider
-      // intents before either caller persists its checkout URL.
-      await lockPaymentIntent(tx, userId, pkg.id, providerName);
+      const quote = await repo.findTopUpQuoteById(userId, quoteId, tx, true);
+      if (!quote) throw new TopUpQuoteNotFoundError();
 
-      const existingByPackage = repo.findLatestPaymentByUserAndPackage
-        ? await repo.findLatestPaymentByUserAndPackage(
-            userId,
-            pkg.id,
-            providerName,
-            tx,
-          )
-        : null;
-      const existing =
-        existingByPackage ??
-        (await repo.findPaymentByProviderReference(baseProviderReference, tx));
-
-      const persistIntent = async (
-        paymentId: string,
-        providerReference: string,
-      ) => {
-        const intent = await provider.createIntent({
-          paymentId,
-          amountIdr: pkg.priceIdr,
-          providerReference,
-        });
-        const update: {
-          status: string;
-          providerRequestId?: string;
-          checkoutUrl?: string | null;
-        } = {
-          status: PAYMENT_STATUS.PENDING,
-          checkoutUrl: intent.checkoutUrl,
-        };
-        if (intent.paymentRequestId) {
-          update.providerRequestId = intent.paymentRequestId;
+      const existing = await repo.findPaymentByQuote(quote.id, tx);
+      if (existing) {
+        if (existing.quoteChoice !== choice) {
+          throw new TopUpQuoteChoiceConflictError();
         }
-        await repo.updatePaymentStatus(paymentId, update, tx);
-        return {
-          paymentId,
-          providerReference,
-          checkoutUrl: intent.checkoutUrl,
-        };
-      };
-
-      if (existing?.status === PAYMENT_STATUS.PENDING) {
-        // H4: reuse persisted checkout URL; provider intents are not
-        // guaranteed idempotent.
-        if (existing.checkoutUrl) {
-          return {
-            ok: true as const,
-            value: {
-              paymentId: existing.id,
-              providerReference: existing.providerReference,
-              checkoutUrl: existing.checkoutUrl,
-            },
-          };
-        }
-        try {
-          return {
-            ok: true as const,
-            value: await persistIntent(existing.id, existing.providerReference),
-          };
-        } catch (error) {
-          await repo.updatePaymentStatus(
-            existing.id,
-            { status: PAYMENT_STATUS.EXPIRED },
-            tx,
-          );
-          return { ok: false as const, error };
-        }
+        return { kind: "existing" as const, record: existing };
       }
 
-      // PAID, SETTLED, FAILED, EXPIRED, and REFUNDED are historical outcomes,
-      // not package-level locks. Each retry gets independent webhook and
-      // wallet-credit idempotency history.
+      if (quote.expiresAt.getTime() <= Date.now()) {
+        throw new TopUpQuoteExpiredError();
+      }
+      const selected = selectTopUpTerms(quote, choice);
       const paymentId = crypto.randomUUID();
-      const providerReference = existing
-        ? `${baseProviderReference}:${paymentId}`
-        : baseProviderReference;
+      const providerReference = `${providerName}:v3:${paymentId}`;
+      const pricingSnapshot = {
+        schema: "v3-top-up-v1",
+        quoteId: quote.id,
+        revision: quote.revision,
+        choice,
+        marks: selected.marks,
+        amountIdr: selected.amountIdr,
+        label: selected.label,
+        terms: quote.termsSnapshot,
+      };
       const inserted = await repo.insertPayment(
         {
           id: paymentId,
           userId,
           walletId,
-          packageId: pkg.id,
+          packageId: null,
+          quoteId: quote.id,
+          quoteChoice: choice,
+          purchaseLabel: selected.label,
+          pricingSnapshot,
           provider: providerName,
           providerReference,
-          amountIdr: pkg.priceIdr,
-          marks: pkg.marks,
+          // Midtrans order_id is this stable UUID. Save it before network I/O
+          // so an uncertain response can be reconciled without a new order.
+          providerRequestId:
+            providerName === "midtrans" ? paymentId : undefined,
+          providerIntentState: "CREATING",
+          amountIdr: selected.amountIdr,
+          marks: selected.marks,
           status: PAYMENT_STATUS.PENDING,
         },
         tx,
       );
-
-      // Keep conflict recovery for callers using older repository behavior.
-      if (inserted === null) {
-        const existingRow = await repo.findPaymentByProviderReference(
-          providerReference,
-          tx,
-        );
-        if (existingRow) {
-          if (existingRow.checkoutUrl) {
-            return {
-              ok: true as const,
-              value: {
-                paymentId: existingRow.id,
-                providerReference: existingRow.providerReference,
-                checkoutUrl: existingRow.checkoutUrl,
-              },
-            };
-          }
-          try {
-            return {
-              ok: true as const,
-              value: await persistIntent(
-                existingRow.id,
-                existingRow.providerReference,
-              ),
-            };
-          } catch (error) {
-            await repo.updatePaymentStatus(
-              existingRow.id,
-              { status: PAYMENT_STATUS.EXPIRED },
-              tx,
-            );
-            return { ok: false as const, error };
-          }
+      if (!inserted) {
+        const winner = await repo.findPaymentByQuote(quote.id, tx);
+        if (!winner) throw new Error("Top-up payment could not be saved");
+        if (winner.quoteChoice !== choice) {
+          throw new TopUpQuoteChoiceConflictError();
         }
+        return { kind: "existing" as const, record: winner };
       }
-
-      try {
-        return {
-          ok: true as const,
-          value: await persistIntent(paymentId, providerReference),
-        };
-      } catch (error) {
-        await repo.updatePaymentStatus(
-          paymentId,
-          { status: PAYMENT_STATUS.EXPIRED },
-          tx,
-        );
-        return { ok: false as const, error };
-      }
+      return { kind: "create" as const, record: inserted };
     });
 
-    if (!outcome.ok) {
-      throw new PaymentProviderError(providerName, outcome.error);
+    if (outcome.kind === "existing") {
+      if (
+        outcome.record.status === PAYMENT_STATUS.PENDING &&
+        !outcome.record.checkoutUrl &&
+        outcome.record.providerRequestId &&
+        provider.getPaymentRequestStatus
+      ) {
+        try {
+          await reconcilePurchase(outcome.record.id, userId);
+        } catch {
+          // An absent/uncertain provider response never authorizes a second
+          // createIntent call for this quote.
+        }
+      }
+      const current = await repo.findPaymentById(outcome.record.id);
+      if (!current) throw new PaymentNotFoundError(outcome.record.id);
+      return topUpPurchaseResult(current);
     }
-    return outcome.value;
+
+    try {
+      const intent = await provider.createIntent({
+        paymentId: outcome.record.id,
+        amountIdr: outcome.record.amountIdr,
+        providerReference: outcome.record.providerReference,
+      });
+      await repo.updatePaymentIntent(outcome.record.id, {
+        providerRequestId:
+          intent.paymentRequestId ??
+          outcome.record.providerRequestId ??
+          undefined,
+        checkoutUrl: intent.checkoutUrl,
+        providerIntentState: "READY",
+      });
+    } catch {
+      await repo.updatePaymentIntent(outcome.record.id, {
+        providerIntentState: "UNCERTAIN",
+      });
+      if (
+        outcome.record.providerRequestId &&
+        provider.getPaymentRequestStatus
+      ) {
+        try {
+          await reconcilePurchase(outcome.record.id, userId);
+        } catch {
+          // Keep the same payment identity available for status recovery.
+        }
+      }
+    }
+
+    const current = await repo.findPaymentById(outcome.record.id);
+    if (!current) throw new PaymentNotFoundError(outcome.record.id);
+    return topUpPurchaseResult(current);
+  }
+
+  // Retired entry point: all purchases require an explicit V3 quote choice.
+  async function createIntent(
+    _userId: string,
+    _walletId: string,
+    _packageCode: string,
+  ): Promise<CreateIntentResult> {
+    throw new V3PackagePurchaseDisabledError();
   }
 
   async function simulatePurchase(paymentId: string, userId: string) {
@@ -499,6 +675,7 @@ export function createPaymentService(deps: {
       const record = await repo.findPaymentByProviderReference(
         input.providerReference,
         tx,
+        true,
       );
 
       if (!record) throw new PaymentNotFoundError(input.providerReference);
@@ -507,23 +684,29 @@ export function createPaymentService(deps: {
           recordPaymentIntegrity("midtrans", "provider_mismatch");
         throw new PaymentWebhookMismatchError("Payment provider mismatch");
       }
-      // Currency/amount checks only guard money movement: the provider gross
-      // includes channel fees (e.g. Midtrans echannel reports 2004440 for a
-      // 2000000 package), so enforcing equality on EXPIRED/FAILED/REFUNDED
-      // statuses strands rows in PENDING forever — each reconcile retry
-      // re-records amount_mismatch and the terminal status never lands.
-      // On PAID/SETTLED the gross must still match within channel-fee
-      // tolerance: any underpayment throws (fees never reduce gross), and
-      // overpayment beyond the cap throws (a Rp1M overpay is not a fee).
-      // Tolerance gates ACCEPTANCE only — the credit below always uses the
-      // stored package Marks, never the received gross, so it cannot
-      // over-credit. Cap = max(Rp10k, 3%): covers VA Rp4,440 / outlet Rp5k /
-      // QRIS 0.7% / wallets ~2% / cards 2.9%+2k per Midtrans pricing.
+      // Full and partial refund statuses must bind to the original charge.
+      // A partial refund can be the first successful status we observe, so its
+      // branch below credits saved Marks once without prorating or reversing
+      // them. Provider gross includes channel fees, so charge/refund checks
+      // allow the same capped tolerance; wallet credit uses saved package Marks.
       const creditsMoney =
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED;
+      const validatesProviderAmount =
+        creditsMoney || input.status === PAYMENT_STATUS.REFUNDED;
+      const requiresBoundRefundStatus =
+        providerName === "midtrans" && input.status === PAYMENT_STATUS.REFUNDED;
       if (
-        creditsMoney &&
+        requiresBoundRefundStatus &&
+        (input.amountIdr === undefined || input.currency === undefined)
+      ) {
+        recordPaymentIntegrity("midtrans", "amount_mismatch");
+        throw new PaymentWebhookMismatchError(
+          "Payment refund status is missing its amount or currency",
+        );
+      }
+      if (
+        validatesProviderAmount &&
         input.currency !== undefined &&
         input.currency !== "IDR"
       ) {
@@ -533,7 +716,7 @@ export function createPaymentService(deps: {
           receivedCurrency: input.currency,
         });
       }
-      if (creditsMoney && input.amountIdr !== undefined) {
+      if (validatesProviderAmount && input.amountIdr !== undefined) {
         const overpaid = input.amountIdr - record.amountIdr;
         const feeTolerance = Math.max(
           MAX_CHANNEL_FEE_FLAT_IDR,
@@ -551,10 +734,110 @@ export function createPaymentService(deps: {
         }
       }
 
-      if (input.refundKind === "partial") {
+      if (
+        input.status === PAYMENT_STATUS.REFUNDED &&
+        input.refundAmountIdr !== undefined &&
+        (!Number.isSafeInteger(input.refundAmountIdr) ||
+          input.refundAmountIdr < 0 ||
+          (input.amountIdr !== undefined &&
+            input.refundAmountIdr > input.amountIdr))
+      ) {
+        throw new PaymentWebhookMismatchError("Payment refund amount mismatch");
+      }
+      if (input.providerEventId) {
+        const existing = await repo.findPaymentByProviderEventId(
+          input.providerEventId,
+          tx,
+        );
+        if (existing && existing.id !== record.id) {
+          return { status: existing.status };
+        }
+      }
+
+      const incomingSuccessAt =
+        input.providerSuccessAt instanceof Date &&
+        Number.isFinite(input.providerSuccessAt.getTime())
+          ? input.providerSuccessAt
+          : null;
+      const providerSuccessAt = earliestVerifiedProviderTime(
+        record.providerSuccessAt,
+        incomingSuccessAt,
+      );
+      const providerSuccessTimeChanged =
+        providerSuccessAt?.getTime() !== record.providerSuccessAt?.getTime();
+      const providerSuccessTimeStatus = providerSuccessAt
+        ? "verified"
+        : (input.providerSuccessTimeStatus ?? "unavailable");
+      const incomingRefundKind =
+        input.status === PAYMENT_STATUS.REFUNDED
+          ? (input.refundKind ?? "full")
+          : input.refundKind;
+      const alreadyFullyRefunded =
+        record.status === PAYMENT_STATUS.REFUNDED ||
+        record.providerRefundKind === "full";
+      const incomingRefundIdentity =
+        typeof input.providerRefundIdentity === "string" &&
+        /^[a-f0-9]{64}$/.test(input.providerRefundIdentity)
+          ? input.providerRefundIdentity
+          : null;
+      const providerRefundAmountIdr =
+        input.refundAmountIdr === undefined
+          ? (record.providerRefundAmountIdr ?? null)
+          : Math.max(
+              record.providerRefundAmountIdr ?? 0,
+              input.refundAmountIdr,
+            );
+      const providerRefundIdentity = alreadyFullyRefunded
+        ? incomingRefundKind === "full" && incomingRefundIdentity
+          ? incomingRefundIdentity
+          : (record.providerRefundIdentity ?? null)
+        : (incomingRefundIdentity ?? record.providerRefundIdentity ?? null);
+
+      if (
+        input.status === PAYMENT_STATUS.REFUNDED &&
+        incomingRefundKind === "partial" &&
+        !alreadyFullyRefunded
+      ) {
         if (providerName === "midtrans")
           recordPaymentIntegrity("midtrans", "partial_refund");
-        if (audit) {
+        // Midtrans can report partial_refund before the success notification is
+        // delivered. The status lifecycle only reaches partial_refund from a
+        // successful settlement, so record the original purchase and credit
+        // its Marks once while retaining the partial-refund reconciliation.
+        const creditsSuccessfulPartialPurchase =
+          record.status !== PAYMENT_STATUS.PAID &&
+          record.status !== PAYMENT_STATUS.SETTLED;
+        const statusAfterPartialRefund = creditsSuccessfulPartialPurchase
+          ? PAYMENT_STATUS.SETTLED
+          : record.status;
+        const providerEventIdChanged =
+          typeof input.providerEventId === "string" &&
+          input.providerEventId.length > 0 &&
+          record.providerEventId !== input.providerEventId;
+        const refundFactsChanged =
+          record.providerRefundKind !== "partial" ||
+          record.providerRefundAmountIdr !== providerRefundAmountIdr ||
+          record.providerRefundIdentity !== providerRefundIdentity;
+        const changed =
+          refundFactsChanged ||
+          providerEventIdChanged ||
+          providerSuccessTimeChanged ||
+          statusAfterPartialRefund !== record.status;
+        if (changed) {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: statusAfterPartialRefund,
+              providerEventId: input.providerEventId,
+              providerSuccessAt,
+              providerRefundKind: "partial",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
+            },
+            tx,
+          );
+        }
+        if (changed && audit) {
           await audit.record({
             db: tx,
             actorId: null,
@@ -562,27 +845,167 @@ export function createPaymentService(deps: {
             action: "partial_refund_reconciliation",
             targetId: record.id,
             targetType: "payment_record",
+            beforeState: {
+              persistedPaymentStatus: record.status,
+              providerSuccessAt: record.providerSuccessAt ?? null,
+              refundKind: record.providerRefundKind ?? null,
+              refundAmountIdr: record.providerRefundAmountIdr ?? null,
+              providerRefundIdentity: record.providerRefundIdentity ?? null,
+            },
+            afterState: {
+              persistedPaymentStatus: statusAfterPartialRefund,
+              providerSuccessAt,
+              refundKind: "partial",
+              refundAmountIdr: providerRefundAmountIdr,
+              providerRefundIdentity,
+              reconciliationRequired: true,
+            },
             details: {
               paymentId: record.id,
               providerEventId: input.providerEventId,
               amountIdr: input.amountIdr,
-              refundAmountIdr: input.refundAmountIdr,
             },
           });
         }
-        if (refundRecord) {
+        // Preserve the existing manual-reconciliation record for a new
+        // authenticated partial-refund fact. Its event ID insert is idempotent;
+        // the later full refund is processed through the payment status path.
+        if (refundFactsChanged && input.providerEventId && refundRecord) {
           await refundRecord.insertRefundRecord(tx, {
             paymentId: record.id,
             walletId: record.walletId,
-            amountIdr: input.refundAmountIdr ?? 0,
+            amountIdr: input.refundAmountIdr ?? providerRefundAmountIdr ?? 0,
             marks: 0,
             reason:
               "Provider partial refund: manual Marks reconciliation required",
             providerEventId: input.providerEventId,
           });
         }
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
+        if (creditsSuccessfulPartialPurchase) {
+          await wallet.credit(tx, {
+            walletId: record.walletId,
+            actorType: "student",
+            amount: record.marks,
+            eventKey: `purchase.${record.id}`,
+            sourceReference: record.id,
+            reason: record.purchaseLabel ?? `Purchase: ${record.marks} Marks`,
+          });
+          if (notification) {
+            await notification.writeBestEffort({
+              db: tx,
+              userId: record.userId,
+              category: NOTIFICATION_CATEGORY.PAYMENT,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Payment received",
+              body: `Your payment of ${record.amountIdr} IDR was received and ${record.marks} Marks were added to your balance. A partial refund needs manual reconciliation.`,
+              eventKey: `payment.${record.id}.credited`,
+              emailRequired: true,
+            });
+          }
+        }
+        return { status: statusAfterPartialRefund };
+      }
+
+      if (record.status === PAYMENT_STATUS.REFUNDED) {
+        if (input.status !== PAYMENT_STATUS.REFUNDED) {
+          return { status: PAYMENT_STATUS.REFUNDED };
+        }
+        if (
+          providerSuccessTimeChanged ||
+          record.providerRefundKind !== "full" ||
+          record.providerRefundAmountIdr !== providerRefundAmountIdr ||
+          record.providerRefundIdentity !== providerRefundIdentity
+        ) {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: PAYMENT_STATUS.REFUNDED,
+              providerEventId: input.providerEventId,
+              providerSuccessAt,
+              providerRefundKind: "full",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
+            },
+            tx,
+          );
+        }
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
+        return { status: PAYMENT_STATUS.REFUNDED };
+      }
+
+      // A later authenticated status lookup may expose a provider timestamp
+      // that was unavailable on the first success response. Persist that
+      // evidence and re-evaluate the KOL hold without replaying the wallet
+      // credit. A settled row also ignores any attempt to move it backwards.
+      if (
+        (record.status === PAYMENT_STATUS.PAID &&
+          input.status === PAYMENT_STATUS.PAID) ||
+        (record.status === PAYMENT_STATUS.SETTLED &&
+          (input.status === PAYMENT_STATUS.PAID ||
+            input.status === PAYMENT_STATUS.SETTLED))
+      ) {
+        if (providerSuccessTimeChanged) {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: record.status,
+              providerEventId: input.providerEventId,
+              providerSuccessAt,
+              ...(record.providerRefundKind
+                ? {
+                    providerRefundKind: record.providerRefundKind,
+                    providerRefundAmountIdr,
+                    providerRefundIdentity,
+                  }
+                : {}),
+            },
+            tx,
+          );
+        }
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
         return { status: record.status };
       }
+
+      if (
+        input.status === PAYMENT_STATUS.REFUNDED &&
+        (record.status === PAYMENT_STATUS.PENDING ||
+          record.status === PAYMENT_STATUS.FAILED ||
+          record.status === PAYMENT_STATUS.EXPIRED)
+      ) {
+        // The provider confirms this purchase was refunded before our local
+        // success callback. Reserve its KOL first-event identity without ever
+        // crediting its Marks; the decision port records an unresolved hold if
+        // Midtrans no longer exposes the original success time.
+        await repo.updatePaymentStatus(
+          record.id,
+          {
+            status: PAYMENT_STATUS.REFUNDED,
+            providerEventId: input.providerEventId,
+            failureReason: input.failureReason ?? null,
+            providerSuccessAt,
+            providerRefundKind: "full",
+            providerRefundAmountIdr,
+            providerRefundIdentity,
+          },
+          tx,
+        );
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
+        return { status: PAYMENT_STATUS.REFUNDED };
+      }
+
       // PAID/SETTLED are terminal for idempotency purposes, EXCEPT a REFUNDED
       // webhook (per ALLOWED_TRANSITIONS PAID/SETTLED -> REFUNDED) which must be
       // processed so the payment is marked REFUNDED and the payer is notified.
@@ -594,7 +1017,8 @@ export function createPaymentService(deps: {
       if (
         record.status === PAYMENT_STATUS.FAILED &&
         input.status !== PAYMENT_STATUS.PAID &&
-        input.status !== PAYMENT_STATUS.SETTLED
+        input.status !== PAYMENT_STATUS.SETTLED &&
+        input.status !== PAYMENT_STATUS.REFUNDED
       )
         return { status: PAYMENT_STATUS.FAILED };
       if (
@@ -605,60 +1029,47 @@ export function createPaymentService(deps: {
       if (
         record.status === PAYMENT_STATUS.EXPIRED &&
         input.status !== PAYMENT_STATUS.PAID &&
-        input.status !== PAYMENT_STATUS.SETTLED
+        input.status !== PAYMENT_STATUS.SETTLED &&
+        input.status !== PAYMENT_STATUS.REFUNDED
       )
         return { status: PAYMENT_STATUS.EXPIRED };
-      if (record.status === PAYMENT_STATUS.REFUNDED)
-        return { status: PAYMENT_STATUS.REFUNDED };
 
       const allowed = ALLOWED_TRANSITIONS[record.status] ?? [];
       if (!allowed.includes(input.status)) {
         return { status: record.status };
       }
 
-      if (input.providerEventId) {
-        const existing = await repo.findPaymentByProviderEventId(
-          input.providerEventId,
-          tx,
-        );
-        if (existing && existing.id !== record.id) {
-          return { status: existing.status };
-        }
-      }
-
-      const shouldCredit =
-        record.status !== PAYMENT_STATUS.PAID &&
-        record.status !== PAYMENT_STATUS.SETTLED &&
-        record.status !== PAYMENT_STATUS.REFUNDED &&
-        (input.status === PAYMENT_STATUS.PAID ||
-          input.status === PAYMENT_STATUS.SETTLED);
-
+      // Existing credited states returned above; every allowed success here
+      // is the first credit for this payment.
       if (
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED
       ) {
-        await repo.updatePaymentStatus(
-          record.id,
-          {
-            status: input.status,
-            providerEventId: input.providerEventId,
-            receiptUrl: input.receiptUrl ?? null,
-          },
-          tx,
-        );
+        const statusUpdate = {
+          status: input.status,
+          providerEventId: input.providerEventId,
+          receiptUrl: input.receiptUrl ?? null,
+          ...(providerSuccessAt ? { providerSuccessAt } : {}),
+        };
+        await repo.updatePaymentStatus(record.id, statusUpdate, tx);
 
-        if (shouldCredit) {
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
+
+        {
           await wallet.credit(tx, {
             walletId: record.walletId,
             actorType: "student",
             amount: record.marks,
             eventKey: `purchase.${record.id}`,
             sourceReference: record.id,
-            reason: `Purchase: ${record.marks} Marks`,
+            reason: record.purchaseLabel ?? `Purchase: ${record.marks} Marks`,
           });
         }
 
-        if (notification && shouldCredit) {
+        if (notification) {
           await notification.writeBestEffort({
             db: tx,
             userId: record.userId,
@@ -684,12 +1095,20 @@ export function createPaymentService(deps: {
               status: input.status,
               providerEventId: input.providerEventId,
               failureReason: input.failureReason ?? null,
+              providerSuccessAt,
+              providerRefundKind: "full",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
             },
             tx,
           );
 
           let didReverse = false;
           if (reversed) {
+            await kolCommission?.recordSuccessfulKolTopUp(tx, {
+              paymentId: record.id,
+              providerSuccessTimeStatus,
+            });
             // N4: read the wallet through the transaction so the
             // reversal-vs-reconciliation decision uses the transaction's view
             // of the balance (a concurrent wallet change cannot skew it).
@@ -729,10 +1148,11 @@ export function createPaymentService(deps: {
                 await refundRecord.insertRefundRecord(tx, {
                   paymentId: record.id,
                   walletId: record.walletId,
-                  amountIdr: record.amountIdr,
+                  amountIdr: input.refundAmountIdr ?? record.amountIdr,
                   marks: record.marks,
                   reason:
                     "REFUNDED webhook: marks already spent; manual reconciliation required",
+                  providerEventId: input.providerEventId,
                 });
               }
             } else {
@@ -781,10 +1201,8 @@ export function createPaymentService(deps: {
               emailRequired: true,
             });
           }
-        } else if (
-          input.status === PAYMENT_STATUS.FAILED ||
-          input.status === PAYMENT_STATUS.EXPIRED
-        ) {
+        } else {
+          // The allowed-transition check leaves only FAILED or EXPIRED here.
           // H3: after a re-purchase the row is reset to PENDING with a NEW
           // providerRequestId (the current attempt's generation). A late
           // FAILED/EXPIRED webhook for the OLD attempt would otherwise flip the
@@ -834,6 +1252,9 @@ export function createPaymentService(deps: {
   }
 
   return {
+    getTopUpCatalog,
+    createTopUpQuote,
+    createPurchaseFromTopUpQuote,
     createIntent,
     simulatePurchase,
     reconcilePurchase,

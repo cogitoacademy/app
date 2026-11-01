@@ -148,7 +148,7 @@ describe("H3: relocateRoom transitions AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULE
     const studentCtx = await createTestContext(studentRes.cookie);
     if (!studentCtx.session?.user) throw new Error("Student session missing");
     studentId = studentCtx.session.user.id;
-    await creditWallet(studentId, 200);
+    await creditWallet(studentId, 1000);
     studentClient = createTestClient(
       await createTestContext(studentRes.cookie),
     );

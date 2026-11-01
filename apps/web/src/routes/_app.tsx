@@ -16,18 +16,24 @@ const routeTitles: Record<string, string> = {
   "/admin": "Admin workspace",
   "/balance": "Balance",
   "/bookings": "Bookings",
-  "/tutor-bookings": "Bookings",
+  "/classes": "Classes",
+  "/class-reports": "Session reports",
   "/achievements": "Achievements",
+  "/referrals": "My referrals",
+  "/admin-referrals": "Referral usage",
   "/tutors": "Tutors",
   "/profile": "Profile",
-  "/onboarding": "Tutor Profile",
   "/availability": "Availability",
   "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
   "/admin-tutor-payouts": "Tutor Payouts",
+  "/admin-kol-commissions": "KOL commissions",
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",
+  "/admin-classes": "Class studio",
+  "/admin-competitions": "Competition types",
+  "/faq": "FAQ",
   "/admin-knowledge-bank": "Knowledge Bank Access",
   "/calendar": "Competition Calendar",
   "/knowledge-bank": "Knowledge Bank",
@@ -43,10 +49,13 @@ export const Route = createFileRoute("/_app")({
       query: { disableCookieCache: true },
     });
     if (!session.data) {
-      redirect({
+      throw redirect({
         to: "/login",
-        throw: true,
       });
+    }
+    const sessionUser = session.data.user as CogitoUser;
+    if (sessionUser.role === "student" && sessionUser.referralChoicePending) {
+      redirect({ to: "/referral-choice", throw: true });
     }
     return { session };
   },
@@ -67,11 +76,13 @@ function RouteComponent() {
   const isTutorProfile = pathname === "/profile" && role === "tutor";
   const title = isTutorProfile
     ? "Tutor Profile"
-    : pathname.startsWith("/bookings/")
-      ? "Booking Details"
-      : pathname.startsWith("/tutors/")
-        ? "Book a Session"
-        : (routeTitles[pathname] ?? "Dashboard");
+    : pathname.startsWith("/classes/")
+      ? "Class details"
+      : pathname.startsWith("/bookings/")
+        ? "Booking Details"
+        : pathname.startsWith("/tutors/")
+          ? "Book a Session"
+          : (routeTitles[pathname] ?? "Dashboard");
 
   return (
     <Layout

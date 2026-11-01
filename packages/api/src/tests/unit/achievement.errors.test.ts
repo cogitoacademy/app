@@ -3,6 +3,7 @@ import { DomainError } from "../../lib/domain-errors";
 import {
   AchievementNotFoundError,
   AchievementNotEditableError,
+  OptimisticLockError,
   mapAchievementError,
 } from "../../modules/achievement/achievement.errors";
 
@@ -54,6 +55,11 @@ describe("achievement.errors", () => {
       const err = new AchievementNotEditableError("ach_456");
       const result = mapAchievementError(err);
       expect(result.status).toBe(400);
+    });
+    it("should map optimistic lock conflicts to CONFLICT", () => {
+      expect(
+        mapAchievementError(new OptimisticLockError("ach_123", 2)).status,
+      ).toBe(409);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const err = new TestDomainError();

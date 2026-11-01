@@ -106,7 +106,7 @@ export function AchievementsPage() {
           <Heading level={1} size="md">
             Showcase what you’ve achieved
           </Heading>
-          <Text className="text-muted">
+          <Text className="max-w-full text-muted">
             Build a verified record of your competition journey for
             cogitoacademy.id.
           </Text>

@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import type { RedisClient } from "../../lib/redis";
 import type {
+  AcademyClassMeetingResult,
   MeetingEvent,
   MeetingEventDetails,
   MeetingPort,
@@ -27,15 +28,39 @@ export function createMeetingModule(deps: {
   googleMeetEnabled?: boolean;
   googleConfig?: GoogleMeetingConfig;
   redis?: RedisClient;
+  classMeetingCancellationProvider?: NonNullable<
+    MeetingPort["cancelAcademyClassEvent"]
+  >;
+  classMeetingProvider?: NonNullable<MeetingPort["createAcademyClassEvent"]>;
+  classMeetingUpdateProvider?: NonNullable<
+    MeetingPort["updateAcademyClassEvent"]
+  >;
 }): MeetingPort {
-  if (deps.googleMeetEnabled && deps.googleConfig) {
-    return createGoogleMeetingProviderWithFallback(
-      deps.googleConfig,
-      deps.db,
-      deps.redis,
-    );
-  }
-  return createFallbackMeetingProvider(deps.db);
+  const provider =
+    deps.googleMeetEnabled && deps.googleConfig
+      ? createGoogleMeetingProviderWithFallback(
+          deps.googleConfig,
+          deps.db,
+          deps.redis,
+        )
+      : createFallbackMeetingProvider(deps.db);
+  return {
+    ...provider,
+    ...(deps.classMeetingProvider
+      ? { createAcademyClassEvent: deps.classMeetingProvider }
+      : {}),
+    ...(deps.classMeetingCancellationProvider
+      ? { cancelAcademyClassEvent: deps.classMeetingCancellationProvider }
+      : {}),
+    ...(deps.classMeetingUpdateProvider
+      ? { updateAcademyClassEvent: deps.classMeetingUpdateProvider }
+      : {}),
+  };
 }
 
-export type { MeetingEvent, MeetingEventDetails, MeetingPort };
+export type {
+  AcademyClassMeetingResult,
+  MeetingEvent,
+  MeetingEventDetails,
+  MeetingPort,
+};

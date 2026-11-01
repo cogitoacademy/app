@@ -20,15 +20,25 @@ export type CreateContextOptions = {
  */
 export async function refreshSessionUser(
   conn: Pick<DbType, "query">,
-  sessionUser: { id: string; role?: string | null; emailVerified: boolean },
+  sessionUser: {
+    id: string;
+    role?: string | null;
+    emailVerified: boolean;
+    referralChoicePending?: boolean | null;
+  },
 ): Promise<void> {
   const currentUser = await conn.query.user.findFirst({
-    columns: { role: true, emailVerified: true },
+    columns: {
+      role: true,
+      emailVerified: true,
+      referralChoicePending: true,
+    },
     where: eq(user.id, sessionUser.id),
   });
   if (currentUser) {
     sessionUser.role = currentUser.role;
     sessionUser.emailVerified = currentUser.emailVerified;
+    sessionUser.referralChoicePending = currentUser.referralChoicePending;
   }
 }
 

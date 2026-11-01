@@ -2,12 +2,16 @@ import { describe, it, expect } from "bun:test";
 import { DomainError } from "../../lib/domain-errors";
 import {
   PackageNotFoundError,
+  PaymentNotFoundError,
   PackageAlreadyPurchasedError,
   PaymentProviderError,
   WebhookSignatureError,
   WebhookTimestampError,
   UnknownPaymentStatusError,
   PaymentWebhookMismatchError,
+  TopUpAmountOutOfRangeError,
+  TopUpQuoteNotFoundError,
+  V3TopUpUnavailableError,
   mapPaymentError,
 } from "../../modules/payment/payment.errors";
 
@@ -115,6 +119,15 @@ describe("payment.errors", () => {
     });
   });
   describe("mapPaymentError", () => {
+    it("maps invalid top-up amounts and missing quotes", () => {
+      expect(mapPaymentError(new TopUpAmountOutOfRangeError()).status).toBe(
+        400,
+      );
+      expect(mapPaymentError(new TopUpQuoteNotFoundError()).status).toBe(404);
+    });
+    it("maps disabled V3 top-up states to CONFLICT", () => {
+      expect(mapPaymentError(new V3TopUpUnavailableError()).status).toBe(409);
+    });
     it("should map PackageNotFoundError to NOT_FOUND", () => {
       const result = mapPaymentError(new PackageNotFoundError("pkg_1"));
       expect(result.status).toBe(404);
@@ -135,5 +148,13 @@ describe("payment.errors", () => {
       const result = mapPaymentError(new TestDomainError());
       expect(result.status).toBe(500);
     });
+  });
+});
+
+it("maps an owned payment lookup failure to NOT_FOUND", () => {
+  const error = new PaymentNotFoundError("missing-owned-payment");
+  expect(mapPaymentError(error)).toMatchObject({
+    code: "NOT_FOUND",
+    message: error.message,
   });
 });

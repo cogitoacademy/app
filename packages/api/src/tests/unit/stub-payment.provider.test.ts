@@ -8,6 +8,29 @@ import {
 const secret = "stub-secret";
 
 describe("stub payment provider", () => {
+  test.each([
+    {
+      timestamp: "2040-01-01T00:00:00Z",
+      expected: new Date("2040-01-01T00:00:00Z"),
+    },
+    { timestamp: "invalid", expected: null },
+    { timestamp: null, expected: null },
+  ])(
+    "normalizes signed provider timestamps: $timestamp",
+    async ({ timestamp, expected }) => {
+      const provider = createStubPaymentProvider(secret);
+      const body = JSON.stringify({
+        status: "PAID",
+        providerReference: "ref_1",
+        providerSuccessAt: timestamp,
+      });
+      const signature = createHmac("sha256", secret).update(body).digest("hex");
+      expect(
+        (await provider.verifyWebhook(body, signature)).providerSuccessAt,
+      ).toEqual(expected);
+    },
+  );
+
   test("creates a deterministic checkout intent", async () => {
     await expect(
       createIntent({
@@ -33,9 +56,10 @@ describe("stub payment provider", () => {
     const body = JSON.stringify({ status: "PAID", providerReference: "ref_1" });
     const signature = createHmac("sha256", secret).update(body).digest("hex");
 
-    await expect(provider.verifyWebhook(body, signature)).resolves.toEqual(
-      JSON.parse(body),
-    );
+    await expect(provider.verifyWebhook(body, signature)).resolves.toEqual({
+      ...JSON.parse(body),
+      providerSuccessAt: null,
+    });
     await expect(provider.verifyWebhook(body, "00".repeat(32))).rejects.toThrow(
       "Invalid webhook signature",
     );

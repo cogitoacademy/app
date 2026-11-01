@@ -120,6 +120,16 @@ export class InvalidDateRangeError extends DomainError {
   }
 }
 
+export class TutorPayoutFinanceUnavailableError extends DomainError {
+  readonly domain = "tutor";
+  constructor() {
+    super(
+      "TUTOR_PAYOUT_FINANCE_UNAVAILABLE",
+      "Tutor payout finance is not available",
+    );
+  }
+}
+
 export function mapTutorError(err: DomainError): ORPCError<string, unknown> {
   if (err instanceof TutorProfileNotFoundError)
     return notFound(err.message, err);
@@ -140,5 +150,7 @@ export function mapTutorError(err: DomainError): ORPCError<string, unknown> {
     return badRequestWithTutorDetails(err);
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
   if (err instanceof InvalidDateRangeError) return badRequest(err.message, err);
+  if (err instanceof TutorPayoutFinanceUnavailableError)
+    return internalServerError(err.message, err);
   return internalServerError(err.message, err);
 }

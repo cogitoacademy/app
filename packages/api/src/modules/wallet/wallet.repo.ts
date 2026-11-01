@@ -9,7 +9,6 @@ import {
   getTableColumns,
 } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
-import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletSnapshot } from "./wallet.service";
 
@@ -357,7 +356,7 @@ export async function sumLedgerAmount(
  * @returns the created wallet, or null when the user already has a wallet
  */
 export async function upsert(
-  db: DbType,
+  db: DbOrTx,
   values: {
     userId: string;
     totalBalance: number;

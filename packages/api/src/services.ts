@@ -1,3 +1,7 @@
+import { createContentAdminModule } from "./modules/content-admin";
+import type { ContentAdminService } from "./modules/content-admin/content-admin.service";
+import type { ContentAdminHandler } from "./modules/content-admin/content-admin.handler";
+import { createPrivateKbStorage } from "./lib/private-kb-storage";
 import { db } from "./lib/db";
 import { env } from "@cogito-app/env/server";
 import { initRedis } from "./lib/redis";
@@ -11,11 +15,15 @@ import { createAdminModule } from "./modules/admin";
 import { createAdminTutorModule } from "./modules/admin-tutor";
 import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
+import { createCompetitionCatalogModule } from "./modules/competition-catalog";
+import { createAcademyClassModule } from "./modules/academy-class";
+import { createClassEnrollmentModule } from "./modules/class-enrollment";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
 import { createAchievementModule } from "./modules/achievement";
 import { createBookingModule } from "./modules/booking";
+import type { BookingReportReminderService } from "./modules/booking";
 import { createNotificationModule } from "./modules/notification";
 import { createEmailModule } from "./modules/email";
 import { createPaymentModule } from "./modules/payment";
@@ -23,12 +31,21 @@ import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
+import {
+  createTestClassMeetingProvider,
+  updateTestClassMeetingEvent,
+} from "./modules/meeting/test-class-meeting.provider";
 import type { MeetingModule } from "./modules/meeting";
 import { createContentModule } from "./modules/content";
 import type { ContentService } from "./modules/content/content.service";
+import { createPublicContentModule } from "./modules/public-content";
+import type { PublicContentService } from "./modules/public-content";
+import { createFaqModule } from "./modules/faq";
+import type { FaqService } from "./modules/faq/faq.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
+import { createReferralModule } from "./modules/referral";
 import { createStorage } from "./lib/storage";
 import type { MidtransMode } from "./modules/payment/midtrans-payment.provider";
 
@@ -40,6 +57,9 @@ import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
 import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
 import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
+import type { CompetitionCatalogService } from "./modules/competition-catalog/competition-catalog.service";
+import type { AcademyClassService } from "./modules/academy-class/academy-class.service";
+import type { ClassEnrollmentService } from "./modules/class-enrollment/class-enrollment.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -62,6 +82,9 @@ import type { AdminHandler } from "./modules/admin/admin.handler";
 import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
 import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
 import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
+import type { CompetitionCatalogHandler } from "./modules/competition-catalog/competition-catalog.handler";
+import type { AcademyClassHandler } from "./modules/academy-class/academy-class.handler";
+import type { ClassEnrollmentHandler } from "./modules/class-enrollment/class-enrollment.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -74,8 +97,14 @@ import type { SupportHandler } from "./modules/support/support.handler";
 import type { UploadService } from "./modules/upload/upload.service";
 import type { UploadHandler } from "./modules/upload/upload.handler";
 import type { ContentHandler } from "./modules/content/content.handler";
+import type { PublicContentHandler } from "./modules/public-content";
+import type { FaqHandler } from "./modules/faq/faq.handler";
 import type { ContactService } from "./modules/contact/contact.service";
 import type { ContactHandler } from "./modules/contact/contact.handler";
+import type { ReferralService } from "./modules/referral/referral.service";
+import type { ReferralHandler } from "./modules/referral/referral.handler";
+import { createReportExportModule } from "./modules/report-export";
+import type { ReportExportService } from "./modules/report-export";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -86,10 +115,14 @@ export interface ServiceRegistry {
   adminTutor: AdminTutorService;
   adminMarkPackage: AdminMarkPackageService;
   adminKnowledgeBank: AdminKnowledgeBankService;
+  competitionCatalog: CompetitionCatalogService;
+  academyClass: AcademyClassService;
+  classEnrollment: ClassEnrollmentService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
   booking: BookingService;
+  bookingReportReminders: BookingReportReminderService;
   notification: NotificationService;
   email: EmailService;
   payment: PaymentService;
@@ -99,8 +132,13 @@ export interface ServiceRegistry {
   support: SupportService;
   upload: UploadService;
   content: ContentService;
+  publicContent: PublicContentService;
+  contentAdmin: ContentAdminService;
+  faq: FaqService;
   meeting: MeetingModule;
   contact: ContactService;
+  referral: ReferralService;
+  reportExport: ReportExportService;
 }
 
 export interface HandlerRegistry {
@@ -109,6 +147,9 @@ export interface HandlerRegistry {
   adminTutor: AdminTutorHandler;
   adminMarkPackage: AdminMarkPackageHandler;
   adminKnowledgeBank: AdminKnowledgeBankHandler;
+  competitionCatalog: CompetitionCatalogHandler;
+  academyClass: AcademyClassHandler;
+  classEnrollment: ClassEnrollmentHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -124,7 +165,11 @@ export interface HandlerRegistry {
   support: SupportHandler;
   upload: UploadHandler;
   content: ContentHandler;
+  publicContent: PublicContentHandler;
+  contentAdmin: ContentAdminHandler;
+  faq: FaqHandler;
   contact: ContactHandler;
+  referral: ReferralHandler;
 }
 
 export interface GoogleMeetConfigInput {
@@ -201,7 +246,7 @@ export function resolveMidtransConfig(input: MidtransConfigInput) {
   if (input.testAllowedEmails === undefined) return base;
   return {
     ...base,
-    testAllowedEmails: (input.testAllowedEmails ?? "")
+    testAllowedEmails: input.testAllowedEmails
       .split(",")
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),
@@ -242,6 +287,13 @@ function createServices() {
     db,
     economy: economy.service,
   });
+  const competitionCatalog = createCompetitionCatalogModule({
+    includeCalendarReferences:
+      env.CONTENT_ADMIN_ENABLED || env.CC_SOURCE === "database",
+    db,
+    audit: audit.service,
+    economy: economy.service,
+  });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
@@ -256,6 +308,25 @@ function createServices() {
     googleMeetEnabled: !!(env.GOOGLE_MEET_ENABLED && googleMeetConfig),
     googleConfig: googleMeetConfig,
     redis,
+    ...(env.NODE_ENV === "test"
+      ? {
+          classMeetingCancellationProvider: async (
+            externalEventId: string | null,
+            sessionId?: string,
+          ) => {
+            const eventId = externalEventId ?? `test-class-event-${sessionId}`;
+            if (!eventId.startsWith("test-class-event-"))
+              throw new Error(
+                "Refusing non-synthetic class event in the test provider",
+              );
+          },
+          classMeetingProvider: createTestClassMeetingProvider({
+            failFirstTitlePrefix:
+              process.env.ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX,
+          }),
+          classMeetingUpdateProvider: updateTestClassMeetingEvent,
+        }
+      : {}),
   });
 
   // Core modules
@@ -263,9 +334,36 @@ function createServices() {
     db,
     knowledgeBankAccess: adminKnowledgeBank.service,
   });
-  const content = createContentModule({ wallet: wallet.service });
+  const referral = createReferralModule({
+    db,
+    wallet: wallet.service,
+    audit: audit.service,
+  });
+  const privateKbStorage = () => createPrivateKbStorage(env);
+  const contentAdmin = createContentAdminModule({
+    db,
+    audit: audit.service,
+    storage: privateKbStorage,
+    enabled: () => env.CONTENT_ADMIN_ENABLED,
+  });
+  const content = createContentModule({
+    database: contentAdmin.repo,
+    privateStorage: privateKbStorage,
+    kbSource: env.KB_SOURCE,
+    ccSource: env.CC_SOURCE,
+    wallet: wallet.service,
+    competitionPalette: competitionCatalog.service,
+  });
+  const publicContent = createPublicContentModule({ db });
+  const faq = createFaqModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
+  const academyClass = createAcademyClassModule({
+    db,
+    audit: audit.service,
+    meeting,
+    notification: notification.service,
+  });
   const contact = createContactModule({
     db,
     notification: notification.service,
@@ -298,12 +396,15 @@ function createServices() {
   });
   const booking = createBookingModule({
     db,
+    appBaseUrl: env.CORS_ORIGIN,
     wallet: wallet.service,
     pricing: pricing.service,
     audit: audit.service,
+    competitionPalette: competitionCatalog.service,
     notification: notification.service,
     meeting,
     roomPort: room.service,
+    referralPort: referral.service,
   });
   bookingService = booking.service;
   const admin = createAdminModule({
@@ -312,6 +413,7 @@ function createServices() {
     wallet: wallet.service,
     payout: booking.service,
     economy: economy.service,
+    competitionCatalog: competitionCatalog.service,
   });
   const adminTutor = createAdminTutorModule({
     db,
@@ -345,6 +447,7 @@ function createServices() {
 
   const payment = createPaymentModule({
     db,
+    economy: economy.service,
     wallet: wallet.service,
     provider: env.PAYMENT_PROVIDER,
     midtransConfig: resolveMidtransConfig({
@@ -360,8 +463,19 @@ function createServices() {
     notification: notification.service,
     audit: audit.service,
     refundRecord: refund.repo,
+    kolCommission: referral.service,
     redis,
   });
+
+  const classEnrollment = createClassEnrollmentModule({
+    db,
+    wallet: wallet.service,
+    payment: payment.service,
+    notification: notification.service,
+    appBaseUrl: env.CORS_ORIGIN,
+    referralPort: referral.service,
+  });
+  const reportExport = createReportExportModule({ db });
 
   const adminBooking = createAdminBookingModule({
     db,
@@ -377,6 +491,7 @@ function createServices() {
     },
     notification: notification.service,
     meeting,
+    meetingRetry: booking.service,
   });
 
   const support = createSupportModule({
@@ -405,10 +520,14 @@ function createServices() {
     adminTutor: adminTutor.service,
     adminMarkPackage: adminMarkPackage.service,
     adminKnowledgeBank: adminKnowledgeBank.service,
+    competitionCatalog: competitionCatalog.service,
+    academyClass: academyClass.service,
+    classEnrollment: classEnrollment.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
     booking: booking.service,
+    bookingReportReminders: booking.reportReminders,
     notification: notification.service,
     email: email.service,
     payment: payment.service,
@@ -418,8 +537,13 @@ function createServices() {
     support: support.service,
     upload: upload.service,
     content: content.service,
+    publicContent: publicContent.service,
+    contentAdmin: contentAdmin.service,
+    faq: faq.service,
     meeting,
     contact: contact.service,
+    referral: referral.service,
+    reportExport: reportExport.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -428,6 +552,9 @@ function createServices() {
     adminTutor: adminTutor.handler,
     adminMarkPackage: adminMarkPackage.handler,
     adminKnowledgeBank: adminKnowledgeBank.handler,
+    competitionCatalog: competitionCatalog.handler,
+    academyClass: academyClass.handler,
+    classEnrollment: classEnrollment.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,
@@ -443,7 +570,11 @@ function createServices() {
     support: support.handler,
     upload: upload.handler,
     content: content.handler,
+    publicContent: publicContent.handler,
+    contentAdmin: contentAdmin.handler,
+    faq: faq.handler,
     contact: contact.handler,
+    referral: referral.handler,
   };
 
   return { services, handlers, redis };

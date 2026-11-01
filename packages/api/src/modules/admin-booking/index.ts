@@ -67,6 +67,16 @@ export interface AdminBookingMeetingPort {
   cancelEvent(bookingId: string): Promise<void>;
 }
 
+export interface AdminBookingMeetingRetryPort {
+  retryMeetingByAdmin(
+    adminId: string,
+    bookingId: string,
+  ): Promise<{
+    bookingId: string;
+    scheduled: boolean;
+  }>;
+}
+
 export function createAdminBookingModule(deps: {
   db: DbType;
   audit: AdminBookingAuditPort;
@@ -74,6 +84,7 @@ export function createAdminBookingModule(deps: {
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
   meeting: AdminBookingMeetingPort;
+  meetingRetry?: AdminBookingMeetingRetryPort;
 }) {
   const repo = createAdminBookingRepo();
   const service = createAdminBookingService({
@@ -84,6 +95,7 @@ export function createAdminBookingModule(deps: {
     refund: deps.refund,
     notification: deps.notification,
     meeting: deps.meeting,
+    meetingRetry: deps.meetingRetry,
   });
   const handler = createAdminBookingHandler(service);
   return { service, handler };

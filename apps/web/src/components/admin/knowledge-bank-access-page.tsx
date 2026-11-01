@@ -369,12 +369,12 @@ export function KnowledgeBankAccessPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Heading level={1} size="md">
-              Knowledge Bank access
+              Grant access before the Marks gate
             </Heading>
-            <Text className="mt-1 max-w-2xl text-muted">
-              Give selected students temporary access when their legacy
-              membership or package predates the Marks gate. Access closes
-              automatically at the expiry time.
+            <Text className="max-w-full text-muted">
+              Add temporary access for students whose membership or package
+              predates the Marks gate. Access ends automatically at the expiry
+              time.
             </Text>
           </div>
           <Button onClick={openCreate}>
@@ -492,7 +492,7 @@ export function KnowledgeBankAccessPage() {
                           </TableCell>
                           <TableCell>
                             <Text className="max-w-56 text-sm text-muted">
-                              {grant.note || "—"}
+                              {grant.note || "No note"}
                             </Text>
                           </TableCell>
                           <TableCell>
@@ -718,7 +718,7 @@ export function KnowledgeBankAccessPage() {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="knowledge-bank-access-expires-at-date">
+                <FieldLabel htmlFor="knowledge-bank-access-expires-at">
                   Access expires
                 </FieldLabel>
                 <CrossBrowserDateTimeInput
@@ -751,7 +751,7 @@ export function KnowledgeBankAccessPage() {
                       note: event.target.value,
                     }))
                   }
-                  placeholder="Legacy membership / package purchased before launch"
+                  placeholder="Reason for granting access"
                   maxLength={500}
                 />
               </Field>

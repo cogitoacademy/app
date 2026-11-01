@@ -195,7 +195,6 @@ describe("Tutor Invite & Onboarding", () => {
         ],
         subjectIds: ["40000000-0000-4000-8000-000000000001"],
         modality: "online",
-        prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
         bankName: "BCA",
         bankAccountNumber: "1234567890",
         bankAccountHolderName: "Prof Awesome",
@@ -222,7 +221,7 @@ describe("Tutor Invite & Onboarding", () => {
       expect(profile!.termsOfServiceVersion).toBeNull();
     });
 
-    test("prices below floor are rejected", async () => {
+    test("tutor profile cannot edit the economy-owned fee table", async () => {
       const version = await getTutorVersion();
       await expectRejects(
         tutorClient.tutor.updateMyProfile({

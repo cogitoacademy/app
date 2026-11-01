@@ -3,6 +3,10 @@ import {
   findPackageByCode,
   findPaymentByProviderReference,
   findLatestPaymentByUserAndPackage,
+  findTopUpQuoteById,
+  findTopUpQuoteByRequestKey,
+  findPaymentByQuote,
+  insertTopUpQuote,
   findPaymentById,
   findPaymentByProviderEventId,
   findPaymentsForReconciliation,
@@ -13,7 +17,15 @@ import {
 
 function makeQueryChain(resolvedValue: any) {
   const chain: any = {};
-  const methods = ["from", "where", "limit", "offset", "orderBy"];
+  const methods = [
+    "from",
+    "innerJoin",
+    "where",
+    "limit",
+    "offset",
+    "orderBy",
+    "for",
+  ];
   const promise = Promise.resolve(resolvedValue);
 
   for (const method of methods) {
@@ -34,6 +46,21 @@ function makeSelectConn(resolvedValue: any) {
 }
 
 describe("findPackageByCode", () => {
+  test("bound latest-package lookup honors an explicit transaction instead of its default database", async () => {
+    const base = makeSelectConn([{ id: "base" }]);
+    const tx = makeSelectConn([{ id: "transaction" }]);
+    const repo = createPaymentRepo({ select: base.select } as any);
+    expect(
+      await repo.findLatestPaymentByUserAndPackage("u1", "pkg1", "midtrans"),
+    ).toEqual({ id: "base" });
+    expect(
+      await repo.findLatestPaymentByUserAndPackage("u1", "pkg1", "midtrans", {
+        select: tx.select,
+      } as any),
+    ).toEqual({ id: "transaction" });
+    expect(base.select).toHaveBeenCalledTimes(1);
+    expect(tx.select).toHaveBeenCalledTimes(1);
+  });
   test("returns package when found", async () => {
     const row = { id: "pkg1", code: "starter", isActive: true };
     const { select, chain } = makeSelectConn([row]);
@@ -54,6 +81,64 @@ describe("findPackageByCode", () => {
     const result = await findPackageByCode(conn, "missing");
 
     expect(result).toBeNull();
+  });
+
+  test("locks the matching provider reference when requested", async () => {
+    const row = { id: "p2", providerReference: "ref-2" };
+    const { select, chain } = makeSelectConn([row]);
+    const result = await findPaymentByProviderReference(
+      { select } as any,
+      "ref-2",
+      true,
+    );
+    expect(result).toEqual(row);
+    expect(chain.for).toHaveBeenCalledWith("update");
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("findTopUpQuoteById", () => {
+  test("uses an update lock when requested and returns null when unavailable", async () => {
+    const quote = { id: "quote1", userId: "u1" };
+    const locked = makeSelectConn([quote]);
+    await expect(
+      findTopUpQuoteById(
+        { select: locked.select } as any,
+        "u1",
+        "quote1",
+        true,
+      ),
+    ).resolves.toEqual(quote);
+    expect(locked.chain.for).toHaveBeenCalledWith("update");
+
+    await expect(
+      findTopUpQuoteById(
+        { select: makeSelectConn([]).select } as any,
+        "u1",
+        "absent",
+      ),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("insertTopUpQuote", () => {
+  test("returns the inserted quote or null when the request key already exists", async () => {
+    for (const rows of [[{ id: "quote1" }], []]) {
+      const returning = mock(async () => rows);
+      const onConflictDoNothing = mock(() => ({ returning }));
+      const values = mock(() => ({ onConflictDoNothing }));
+      const insert = mock(() => ({ values }));
+      const result = await insertTopUpQuote(
+        { insert } as any,
+        {
+          id: "quote1",
+          userId: "u1",
+          requestKey: "request1",
+        } as any,
+      );
+      expect(result).toEqual(rows[0] ?? null);
+      expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
@@ -290,6 +375,32 @@ describe("updatePaymentStatus", () => {
 });
 
 describe("createPaymentRepo", () => {
+  test("package-code lookup uses the provided connection and handles a missing attempt", async () => {
+    const row = { id: "payment-1", userId: "u1", provider: "midtrans" };
+    const defaultConn = makeSelectConn([row]);
+    const repo = createPaymentRepo(defaultConn as any);
+    expect(
+      await repo.findLatestPaymentByUserAndPackageCode(
+        "u1",
+        "starter",
+        "midtrans",
+      ),
+    ).toEqual(row);
+    expect(defaultConn.chain.innerJoin).toHaveBeenCalledTimes(1);
+    expect(defaultConn.chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(defaultConn.chain.limit).toHaveBeenCalledWith(1);
+    const tx = makeSelectConn([]);
+    expect(
+      await repo.findLatestPaymentByUserAndPackageCode(
+        "u1",
+        "starter",
+        "midtrans",
+        tx as any,
+      ),
+    ).toBeNull();
+    expect(tx.select).toHaveBeenCalledTimes(1);
+    expect(defaultConn.select).toHaveBeenCalledTimes(1);
+  });
   test("returns object with all repo methods", () => {
     const db: any = {};
     const repo = createPaymentRepo(db);
@@ -316,6 +427,90 @@ describe("createPaymentRepo", () => {
     const result = await repo.findPackageByCode("starter");
     expect(result).toEqual(row);
     expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  test("top-up quote methods default to db and use the default unlocked lookup", async () => {
+    const quote = { id: "quote1", userId: "u1" };
+    const db = makeSelectConn([quote]);
+    const repo = createPaymentRepo(db as any);
+    await expect(
+      repo.findTopUpQuoteByRequestKey("u1", "request1"),
+    ).resolves.toEqual(quote);
+    await expect(repo.findTopUpQuoteById("u1", "quote1")).resolves.toEqual(
+      quote,
+    );
+    expect(db.select).toHaveBeenCalledTimes(2);
+    expect(db.chain.for).not.toHaveBeenCalled();
+  });
+
+  test("provider-reference lookup defaults to the repository database", async () => {
+    const row = { id: "payment1", providerReference: "ref1" };
+    const db = makeSelectConn([row]);
+    const repo = createPaymentRepo(db as any);
+    await expect(repo.findPaymentByProviderReference("ref1")).resolves.toEqual(
+      row,
+    );
+    expect(db.select).toHaveBeenCalledTimes(1);
+  });
+
+  test("payment readers use the default database when no transaction is supplied", async () => {
+    const row = { id: "payment1" };
+    for (const method of ["quote", "event", "id"] as const) {
+      const db = makeSelectConn([row]);
+      const repo = createPaymentRepo(db as any);
+      const result =
+        method === "quote"
+          ? repo.findPaymentByQuote("quote1")
+          : method === "event"
+            ? repo.findPaymentByProviderEventId("event1")
+            : repo.findPaymentById("payment1");
+      await expect(result).resolves.toEqual(row);
+      expect(db.select).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  test("quote insert defaults to db and returns the inserted row", async () => {
+    const quote = { id: "quote1" };
+    const returning = mock(async () => [quote]);
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
+    const insert = mock(() => ({ values }));
+    const repo = createPaymentRepo({ insert } as any);
+    await expect(
+      repo.insertTopUpQuote({ id: "quote1" } as any),
+    ).resolves.toEqual(quote);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  test("reconciliation query defaults to db and returns its bounded result", async () => {
+    const rows = [{ id: "payment1" }];
+    const db = makeSelectConn(rows);
+    const repo = createPaymentRepo(db as any);
+    await expect(
+      repo.findPaymentsForReconciliation(
+        "midtrans",
+        new Date("2026-10-01T00:00:00Z"),
+        5,
+        new Date("2026-09-01T00:00:00Z"),
+      ),
+    ).resolves.toEqual(rows);
+    expect(db.chain.limit).toHaveBeenCalledWith(5);
+  });
+
+  test("status mutation wrappers default to db", async () => {
+    const returning = mock(async () => []);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const repo = createPaymentRepo({ update } as any);
+    await repo.updatePaymentStatus("payment1", { status: "FAILED" });
+    await repo.updatePaymentIntent("payment1", {
+      providerIntentState: "READY",
+    });
+    await repo.updatePaymentStatusIfInCreditState("payment1", {
+      status: "REFUNDED",
+    });
+    expect(update).toHaveBeenCalledTimes(3);
   });
 
   test("repo methods use provided conn when given", async () => {
@@ -415,4 +610,42 @@ describe("createPaymentRepo", () => {
     );
     expect(result).toEqual(rows);
   });
+});
+
+test("missing quote and quote payment return null", async () => {
+  const conn = { select: makeSelectConn([]).select } as any;
+  await expect(
+    findTopUpQuoteByRequestKey(conn, "u1", "absent-key"),
+  ).resolves.toBeNull();
+  await expect(findPaymentByQuote(conn, "absent-quote")).resolves.toBeNull();
+});
+
+test("event lookup uses its bound DB when no transaction is supplied", async () => {
+  const base = makeSelectConn([{ id: "base-payment" }]);
+  const repo = createPaymentRepo({ select: base.select } as any);
+  await expect(repo.findPaymentByProviderEventId("event1")).resolves.toEqual({
+    id: "base-payment",
+  });
+  expect(base.select).toHaveBeenCalledTimes(1);
+});
+
+test("payment insert uses its bound DB when no transaction is supplied", async () => {
+  const returning = mock(async () => [{ id: "bound-insert" }]);
+  const insert = mock(() => ({
+    values: mock(() => ({ onConflictDoNothing: mock(() => ({ returning })) })),
+  }));
+  const repo = createPaymentRepo({ insert } as any);
+  await expect(
+    repo.insertPayment({
+      id: "bound-insert",
+      userId: "u1",
+      walletId: "w1",
+      provider: "stub",
+      providerReference: "stub-bound",
+      amountIdr: 100,
+      marks: 1,
+      status: "PENDING",
+    }),
+  ).resolves.toEqual({ id: "bound-insert" });
+  expect(insert).toHaveBeenCalledTimes(1);
 });

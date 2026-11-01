@@ -8,6 +8,51 @@ import {
 } from "../../modules/admin-booking/admin-booking.errors";
 
 describe("adminBookingHandlers", () => {
+  test("previews override without applying it and preserves all policy inputs", async () => {
+    const previewOverride = mock(async () => ({ allowed: true }));
+    const handler = createAdminBookingHandler({ previewOverride } as any);
+    const input = {
+      bookingId: "b1",
+      category: "tutor_no_show",
+      reason: "Absent",
+      affectedParticipants: ["student"],
+      marksAction: "release",
+      userNote: "Refund",
+      internalNote: "Verified",
+    };
+    expect(
+      await handler.previewOverride({
+        context: {} as any,
+        input: input as any,
+      }),
+    ).toEqual({ allowed: true });
+    expect(previewOverride).toHaveBeenCalledWith(input);
+  });
+  test("forwards administrator identity for manual meeting links and session cancellation", async () => {
+    const setMeetingLink = mock(async () => ({ updated: true }));
+    const cancelSeriesSession = mock(async () => ({ cancelled: true }));
+    const handler = createAdminBookingHandler({
+      setMeetingLink,
+      cancelSeriesSession,
+    } as any);
+    const context = { session: { user: { id: "admin1" } } } as any;
+    const link = {
+      bookingId: "b1",
+      url: "https://meet.google.com/abc-defg-hij",
+    };
+    const cancellation = {
+      sessionId: "session1",
+      marksAction: "release" as const,
+    };
+    expect(await handler.setMeetingLink({ context, input: link })).toEqual({
+      updated: true,
+    });
+    expect(setMeetingLink).toHaveBeenCalledWith("admin1", link);
+    expect(
+      await handler.cancelSeriesSession({ context, input: cancellation }),
+    ).toEqual({ cancelled: true });
+    expect(cancelSeriesSession).toHaveBeenCalledWith("admin1", cancellation);
+  });
   describe("applyOverride", () => {
     test("calls adminBooking.applyOverride with session user id and input", async () => {
       const applyOverride = mock(async () => ({

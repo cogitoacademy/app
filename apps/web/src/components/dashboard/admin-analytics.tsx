@@ -39,7 +39,6 @@ import {
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
 import {
   Area,
@@ -57,7 +56,6 @@ import {
 
 import { orpc } from "@/utils/orpc";
 import { InfoPreview } from "@/components/info-preview";
-import { getBusinessSummary } from "./admin-analytics-compat";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -211,7 +209,6 @@ export function AdminAnalytics() {
   const analytics = useQuery(
     orpc.admin.getDashboardAnalytics.queryOptions({ input: selection }),
   );
-  const economy = useQuery(orpc.admin.getEconomySettings.queryOptions());
   const selectedPeriod =
     "period" in selection
       ? PERIOD_OPTIONS.find((option) => option.value === selection.period)
@@ -330,7 +327,6 @@ export function AdminAnalytics() {
         <AnalyticsContent
           data={analytics.data}
           periodDescription={periodDescription}
-          fallbackMarkValueIdr={economy.data?.markValueIdr}
         />
       )}
     </section>
@@ -340,13 +336,12 @@ export function AdminAnalytics() {
 function AnalyticsContent({
   data,
   periodDescription,
-  fallbackMarkValueIdr,
 }: {
   data: DashboardAnalytics;
   periodDescription: string;
-  fallbackMarkValueIdr?: number;
 }) {
-  const businessSummary = getBusinessSummary(data);
+  const businessSummary = data.businessSummary;
+  const operations = data.operationsSummary;
   const stateData = STATE_ORDER.map((state) => {
     const row = data.stateBreakdown.find(
       (candidate) => candidate.state === state,
@@ -363,24 +358,9 @@ function AnalyticsContent({
     1,
     ...data.categoryBreakdown.map((row) => row.bookings),
   );
-  const lockedGrossIdr = Number(data.summary.grossIdr);
-  const lockedPlatformTakeIdr = Number(data.summary.platformTakeIdr);
-  const usesCurrentRateFallback =
-    !Number.isFinite(lockedGrossIdr) || !Number.isFinite(lockedPlatformTakeIdr);
-  const grossIdr = Number.isFinite(lockedGrossIdr)
-    ? lockedGrossIdr
-    : fallbackMarkValueIdr
-      ? data.summary.grossMarks * fallbackMarkValueIdr
-      : undefined;
-  const platformTakeIdr = Number.isFinite(lockedPlatformTakeIdr)
-    ? lockedPlatformTakeIdr
-    : fallbackMarkValueIdr
-      ? data.summary.platformTakeMarks * fallbackMarkValueIdr
-      : undefined;
-
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <AnalyticsMetric
           icon={<IconChartBar />}
           label="Bookings"
@@ -394,31 +374,6 @@ function AnalyticsContent({
           value={`${percentageFormatter.format(data.summary.completionRate)}%`}
           helper={`${numberFormatter.format(data.summary.resolvedBookings)} resolved bookings`}
           tone="success-subtle"
-        />
-        <AnalyticsMetric
-          icon={<IconChartHistogram />}
-          label="Booked value (locked at booking)"
-          value={formatIdr(grossIdr)}
-          helper={
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-x-1">
-                Equivalent to
-                <CogitoMarks
-                  value={numberFormatter.format(data.summary.grossMarks)}
-                  size="3"
-                />
-              </div>
-              <div>
-                Platform share: {formatIdr(platformTakeIdr)} (
-                <CogitoMarks
-                  value={numberFormatter.format(data.summary.platformTakeMarks)}
-                  size="3"
-                />
-                )
-              </div>
-            </div>
-          }
-          tone="info-subtle"
         />
         <AnalyticsMetric
           icon={<IconUserPlus />}
@@ -469,8 +424,8 @@ function AnalyticsContent({
           </AnalyticsSection>
 
           <AnalyticsSection
-            title="Marks & revenue"
-            description="Current student wallet health and realized top-up payments."
+            title="Wallets & top-up receipts"
+            description="Wallet health and successful top-up receipts, separate from service delivery."
           >
             <AnalyticsMetric
               icon={<IconCoins />}
@@ -498,14 +453,78 @@ function AnalyticsContent({
             />
             <AnalyticsMetric
               icon={<IconCash />}
-              label="Net top-up revenue"
-              value={formatIdr(businessSummary.netRevenueIdr)}
-              helper={`Gross ${formatIdr(businessSummary.grossRevenueIdr)} · refunds ${formatIdr(businessSummary.refundedIdr)}`}
+              label="Top-up receipts"
+              value={formatIdr(businessSummary.netReceiptsIdr)}
+              helper={`Gross ${formatIdr(businessSummary.grossReceiptsIdr)} · refunds ${formatIdr(businessSummary.refundedIdr)}`}
               tone="info-subtle"
             />
           </AnalyticsSection>
         </>
       ) : null}
+
+      {operations.unavailablePaymentDates > 0 ? (
+        <Text role="status" className="mt-4 text-sm text-muted">
+          Some successful payments have no success date; period receipts exclude
+          them.
+        </Text>
+      ) : null}
+      {operations.unavailablePrivateRates > 0 ? (
+        <Text role="status" className="mt-4 text-sm text-muted">
+          Some upcoming rates are unavailable; totals exclude those seats.
+        </Text>
+      ) : null}
+      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-3">
+        <BusinessFacts
+          title="Service delivered"
+          description="Selected period · by session delivery date. Marks measure settled service, not IDR revenue."
+          rows={[
+            {
+              label: "Private service delivered",
+              value: `${numberFormatter.format(operations.delivered.privateMarks)} Marks`,
+              detail: `${numberFormatter.format(operations.delivered.privateSessions)} sessions`,
+            },
+            {
+              label: "Academy service delivered",
+              value: `${numberFormatter.format(operations.delivered.academyMarks)} Marks`,
+              detail: `${numberFormatter.format(operations.delivered.academySeatSessions)} student seat-sessions`,
+            },
+          ]}
+        />
+        <BusinessFacts
+          title="Upcoming commitments"
+          description={`As of ${new Date(operations.asOf).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" })} WIB · confirmed future sessions; independent of the period filter.`}
+          rows={[
+            {
+              label: "Upcoming private sessions",
+              value: `${numberFormatter.format(operations.upcoming.privateSeatSessions)} seat-sessions`,
+              detail: `${numberFormatter.format(operations.upcoming.privateFundedMarks)} funded Marks · ${numberFormatter.format(operations.upcoming.privateUnfundedMarks)} unfunded Marks`,
+            },
+            {
+              label: "Upcoming Academy seats",
+              value: `${numberFormatter.format(operations.upcoming.academySeatSessions)} seat-sessions`,
+              detail: `${numberFormatter.format(operations.upcoming.academyFundedMarks)} funded Marks · ${numberFormatter.format(operations.upcoming.academyUnfundedMarks)} unfunded Marks`,
+            },
+          ]}
+        />
+        <BusinessFacts
+          title="Tutor fees"
+          description="Earned in the selected period. Payment status is current; paid fees include allocated gross honorarium before tax and transfer deductions."
+          rows={[
+            {
+              label: "Tutor fees earned",
+              value: formatIdr(operations.tutorFees.earnedIdr),
+            },
+            {
+              label: "Tutor fees paid",
+              value: formatIdr(operations.tutorFees.paidIdr),
+            },
+            {
+              label: "Tutor fees unpaid",
+              value: formatIdr(operations.tutorFees.unpaidIdr),
+            },
+          ]}
+        />
+      </div>
 
       <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
         <Card className="h-full">
@@ -875,10 +894,10 @@ function AnalyticsContent({
       </div>
 
       <Text className="mt-3 text-xs text-dimmed">
-        {usesCurrentRateFallback
-          ? "IDR estimates use the active Marks rate because this API response predates locked IDR totals. "
-          : "Booked value and platform share use IDR amounts locked when each booking was created. Later price changes do not alter these figures. "}
-        This is an operational booking value, not cash revenue received.
+        Booking demand charts use request creation dates. Service delivery uses
+        session dates; top-up receipts use successful payment and refund dates.
+        Marks, top-up receipts and tutor costs are separate measures and do not
+        represent profit.
       </Text>
     </>
   );
@@ -980,5 +999,35 @@ function AnalyticsError({ onRetry }: { onRetry: () => void }) {
         </Button>
       </CardBody>
     </Card>
+  );
+}
+
+function BusinessFacts({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: Array<{ label: string; value: string; detail?: string }>;
+}) {
+  return (
+    <section className="min-w-0" aria-label={title}>
+      <Heading size="sm">{title}</Heading>
+      <Text className="mt-1 text-sm text-muted">{description}</Text>
+      <dl className="mt-3 divide-y divide-border">
+        {rows.map((row) => (
+          <div key={row.label} className="py-3">
+            <dt className="text-sm text-muted">{row.label}</dt>
+            <dd className="mt-1 break-words text-xl font-semibold">
+              {row.value}
+            </dd>
+            {row.detail ? (
+              <dd className="mt-1 text-xs text-dimmed">{row.detail}</dd>
+            ) : null}
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

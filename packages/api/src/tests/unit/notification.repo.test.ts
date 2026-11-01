@@ -18,6 +18,26 @@ import {
   createNotificationRepo,
 } from "../../modules/notification/notification.repo";
 
+test("dispatch consumers default to bounded batches and preserve absent error and unread state", async () => {
+  const limit = mock(async () => []);
+  const returning = mock(async () => []);
+  const where = mock(() => ({ orderBy: () => ({ limit }), returning }));
+  const set = mock(() => ({ where }));
+  const conn = {
+    select: () => ({ from: () => ({ where }) }),
+    update: () => ({ set }),
+  } as any;
+  expect(await listPendingDispatches(conn)).toEqual([]);
+  expect(limit).toHaveBeenCalledWith(50);
+  expect(await claimPendingDispatches(conn)).toEqual([]);
+  await incrementDispatchAttempts(conn, "dispatch");
+  expect(set).toHaveBeenLastCalledWith(
+    expect.objectContaining({ lastError: null }),
+  );
+  await updateReadStatus(conn, "notification", "student", false);
+  expect(set).toHaveBeenLastCalledWith({ isRead: false, readAt: null });
+});
+
 describe("findNotificationByEventKey", () => {
   test("returns row when found", async () => {
     const limit = mock(async () => [{ id: "n1" }]);

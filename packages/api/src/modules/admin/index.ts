@@ -13,6 +13,7 @@ import type { AdminService } from "./admin.service";
 import type { AdminHandler } from "./admin.handler";
 import type { BookingPayoutPort } from "../booking";
 import type { EconomyService } from "../economy";
+import type { CompetitionCatalogService } from "../competition-catalog";
 
 export type AdminModule = ReturnType<typeof createAdminModule>;
 
@@ -36,6 +37,7 @@ export function createAdminModule(deps: {
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
   economy: AdminEconomyPort;
+  competitionCatalog: Pick<CompetitionCatalogService, "listParents">;
 }) {
   const repo = createAdminRepo();
   const service = createAdminService({
@@ -45,6 +47,7 @@ export function createAdminModule(deps: {
     wallet: deps.wallet,
     payout: deps.payout,
     economy: deps.economy,
+    competitionCatalog: deps.competitionCatalog,
   });
   const handler = createAdminHandler(service);
   return { service, handler };

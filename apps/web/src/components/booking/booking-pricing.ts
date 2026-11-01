@@ -1,20 +1,14 @@
-const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
-
 export type HonorariumSnapshotInput = {
-  perStudent?: number;
-  tutorShare?: number;
+  engine?: "v3";
+  perStudentMarks?: number;
   tutorHonorariumIdr?: number;
 } | null;
-
 export type HonorariumBookingInput = {
   type: string;
   originalMarks: number;
   priceSnapshot: HonorariumSnapshotInput;
 };
-
-export type HonorariumSessionInput = {
-  priceSnapshot: HonorariumSnapshotInput;
-};
+export type HonorariumSessionInput = { priceSnapshot: HonorariumSnapshotInput };
 
 export type BookingPriceSummaryInput = {
   perStudentPrice: number;
@@ -53,50 +47,36 @@ export function getBookingPriceSummary({
   return { displayPrice, requiredHold };
 }
 
-function getPerSessionHonorariumIdr(snapshot: HonorariumSnapshotInput): number {
-  if (snapshot?.tutorHonorariumIdr != null) return snapshot.tutorHonorariumIdr;
-  return (snapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
+/** Missing or old snapshots must never be displayed as zero-valued fees. */
+export function getPerSessionHonorariumIdr(
+  snapshot: HonorariumSnapshotInput,
+): number | null {
+  const fee = snapshot?.tutorHonorariumIdr;
+  return snapshot?.engine === "v3" &&
+    typeof fee === "number" &&
+    Number.isSafeInteger(fee) &&
+    fee >= 0
+    ? fee
+    : null;
 }
-
-/**
- * Derives the series session count. Prefers the loaded session rows, then
- * falls back to originalMarks / perStudent (booking.priceSnapshot stores one
- * session for series bookings).
- */
+/** Session counts cannot be inferred from Marks after group repricing. */
 export function getSeriesSessionCount(
   booking: HonorariumBookingInput,
   sessions?: HonorariumSessionInput[] | null,
-): number {
-  if (sessions && sessions.length > 0) return sessions.length;
+): number | null {
   if (booking.type !== "series") return 1;
-  const perStudent = booking.priceSnapshot?.perStudent ?? 0;
-  if (perStudent > 0 && booking.originalMarks > 0) {
-    return Math.max(1, Math.round(booking.originalMarks / perStudent));
-  }
-  return 1;
+  return sessions?.length ? sessions.length : null;
 }
-
-/**
- * Totals tutor honorarium across series sessions. Single bookings return the
- * per-session snapshot. Series bookings sum each session snapshot (legacy
- * tutorShare * 7000 fallback), or booking snapshot * derived session count
- * when session rows are unavailable.
- */
 export function getTotalHonorariumIdr(
   booking: HonorariumBookingInput,
   sessions?: HonorariumSessionInput[] | null,
-): number {
-  if (booking.type !== "series") {
+): number | null {
+  if (booking.type !== "series")
     return getPerSessionHonorariumIdr(booking.priceSnapshot);
-  }
-  if (sessions && sessions.length > 0) {
-    return sessions.reduce((total, session) => {
-      const snapshot = session.priceSnapshot ?? booking.priceSnapshot;
-      return total + getPerSessionHonorariumIdr(snapshot);
-    }, 0);
-  }
-  return (
-    getPerSessionHonorariumIdr(booking.priceSnapshot) *
-    getSeriesSessionCount(booking, sessions)
+  if (!sessions?.length) return null;
+  const fees = sessions.map((session) =>
+    getPerSessionHonorariumIdr(session.priceSnapshot),
   );
+  if (fees.some((fee) => fee === null)) return null;
+  return fees.reduce<number>((total, fee) => total + fee!, 0);
 }

@@ -4,10 +4,10 @@ import { db } from "@cogito-app/db";
 import {
   wallet,
   tutorInvite,
-  tutorProfile,
   availabilitySlot,
   roomBooking,
   booking,
+  tutorProfile,
 } from "@cogito-app/db/schema";
 
 import {
@@ -112,6 +112,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
   let adminClient: TestClient;
   let studentClient: TestClient;
   let studentId: string;
+  let tutorId: string;
   let slotId: string;
   let roomAId: string;
 
@@ -137,9 +138,10 @@ describe("U14: room availability integrated into offline booking creation (FR-22
     const studentCtx = await createTestContext(studentRes.cookie);
     if (!studentCtx.session?.user) throw new Error("Student session missing");
     studentId = studentCtx.session.user.id;
-    await creditWallet(studentId, 200);
+    await creditWallet(studentId, 1000);
 
     const tutor = await createPublishedTutor(`tutor.u14.${ts}@cogito.test`, ts);
+    tutorId = tutor.tutorId;
     slotId = tutor.slotId;
 
     const roomA = await adminClient.room.create({
@@ -152,7 +154,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
 
   test("U14: offline booking with a free requested room creates a requested room booking", async () => {
     const b = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "offline",
       scheduledStartAt: t1Start,
@@ -176,7 +178,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
   test("U14: offline booking with a taken room proceeds without room and flags the conflict", async () => {
     // Occupy room A for the same slot via the admin assign flow.
     const firstBooking = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "offline",
       scheduledStartAt: t2Start,
@@ -200,7 +202,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
     });
 
     const b = await studentClient.booking.createSolo({
-      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      tutorId,
       availabilitySlotId: slotId,
       modality: "offline",
       scheduledStartAt: t3Start,
@@ -226,7 +228,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
   test("U14: requestedRoomId is rejected for online bookings", async () => {
     await expect(
       studentClient.booking.createSolo({
-        tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+        tutorId,
         availabilitySlotId: slotId,
         modality: "online",
         scheduledStartAt: t1Start,
@@ -240,8 +242,6 @@ describe("U14: room availability integrated into offline booking creation (FR-22
   test("M6: admin cancels the room of an awaiting-room-approval booking → the booking is cancelled with hold release (FR-22 no room available)", async () => {
     const t4Start = new Date(Date.now() + 66 * 3600_000).toISOString();
     const t4End = new Date(Date.now() + 67 * 3600_000).toISOString();
-    const tutorId = (await db.select().from(tutorProfile).limit(1))[0]!.userId;
-
     const b = await studentClient.booking.createSolo({
       tutorId,
       availabilitySlotId: slotId,
@@ -294,6 +294,8 @@ describe("U14: room availability integrated into offline booking creation (FR-22
       .from(wallet)
       .where(eq(wallet.userId, studentId));
     expect(walletAfter!.heldBalance).toBe(heldBefore - before!.holdAmount);
-    expect(walletAfter!.totalBalance).toBe(200);
+    expect(walletAfter!.availableBalance).toBe(
+      walletBefore!.availableBalance + before!.holdAmount,
+    );
   });
 });

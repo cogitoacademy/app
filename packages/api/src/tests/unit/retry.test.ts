@@ -33,6 +33,20 @@ describe("retryWithBackoff", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  test.each(["AbortError", "TimeoutError"])(
+    "retries the default transient %s error",
+    async (name) => {
+      const error = new Error("request interrupted");
+      error.name = name;
+      const fn = mock(() => Promise.reject(error));
+
+      await expect(retryWithBackoff(fn, { maxAttempts: 1 })).rejects.toBe(
+        error,
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+    },
+  );
+
   test("throws after max attempts exhausted", async () => {
     const fn = mock(() => {
       throw new TypeError("fetch error");

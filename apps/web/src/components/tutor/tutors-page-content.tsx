@@ -54,10 +54,11 @@ type PublishedTutor = {
   modality: string | null;
   onlineMaxClassSize: number;
   offlineMaxClassSize: number;
-  prices: Record<string, number> | null;
-  pricesByModality?: Partial<
-    Record<"online" | "offline", Record<string, number>>
+  pricesByCompetition?: Record<
+    string,
+    Partial<Record<"online" | "offline", Record<string, number>>>
   > | null;
+  pricingRevision?: number | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 };
@@ -144,11 +145,6 @@ export function TutorsPageContent() {
   const tutorListInput = useMemo(
     () => ({
       search: search.trim() || undefined,
-      // Keep the singular fields for rolling/stale API instances. The
-      // current API prefers the array fields, so multiple selections still
-      // use the complete multi-select contract after the server reloads.
-      categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
-      subjectId: subjectIds.length === 1 ? subjectIds[0] : undefined,
       categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
       subjectIds: subjectIds.length > 0 ? subjectIds : undefined,
       modality: (modality || undefined) as
@@ -231,14 +227,14 @@ export function TutorsPageContent() {
         <Heading level={1} size="md">
           Book a Session
         </Heading>
-        <Text className="text-muted">
+        <Text className="max-w-full text-muted">
           Find a verified tutor by name, field of competition, and
           specialization.
         </Text>
       </div>
 
-      <div className="flex w-full min-w-0 max-w-full items-center gap-3">
-        <InputGroup className="min-w-0 flex-1">
+      <div className="flex w-full min-w-0 max-w-full items-center gap-3 lg:justify-between">
+        <InputGroup className="min-w-0 lg:min-w-lg max-w-xl">
           <InputGroupAddon>
             <IconSearch className="size-4" />
           </InputGroupAddon>

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { formatBookingEventTitle } from "../../modules/booking/booking-event-title";
+import {
+  formatBookingEventTitle,
+  formatCalendarCompetitionLabel,
+} from "../../modules/booking/booking-event-title";
 
 describe("formatBookingEventTitle", () => {
   const munTopic = {
@@ -35,5 +38,14 @@ describe("formatBookingEventTitle", () => {
         targetGroupSize: 1,
       }),
     ).toBe("Cogito - Session | Cogito tutor x Student");
+  });
+
+  test("uses the category name when a competition slug has no calendar alias", () => {
+    expect(
+      formatCalendarCompetitionLabel({
+        categorySlug: "competition-debate",
+        categoryName: "Debate",
+      }),
+    ).toBe("Debate");
   });
 });

@@ -10,6 +10,8 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { EconomyParameters, EconomyService } from "../economy";
 import { DEFAULT_ECONOMY_CONFIG } from "../economy";
+import { calculateV3SessionPrice } from "./v3-rate-card";
+import type { V3EconomyConfig } from "./v3-economy.config";
 
 export type GroupSize = 1 | 2 | 3 | 4 | 5 | 6;
 export type Modality = "online" | "offline" | "both";
@@ -40,6 +42,9 @@ export interface EconomyPriceSnapshot extends PriceSnapshot {
   actualMarksPooled: number;
 }
 
+export type V3SessionPrice = ReturnType<typeof calculateV3SessionPrice>;
+export type V3ConfigRevision = { version: number; values: V3EconomyConfig };
+
 export interface PricingPort {
   validatePrices(
     prices: Record<string, number>,
@@ -62,6 +67,19 @@ export interface PricingPort {
     config: EconomyParameters,
   ): EconomyPriceSnapshot;
   getEconomyConfig(conn?: DbOrTx): Promise<EconomyParameters>;
+  calculateV3SessionPrice(
+    input: {
+      competition: string;
+      modality: "online" | "offline";
+      headcount: GroupSize;
+    },
+    values: V3EconomyConfig,
+  ): V3SessionPrice;
+  getActiveV3Config(conn?: DbOrTx): Promise<V3ConfigRevision | null>;
+  getV3ConfigByVersion(
+    version: number,
+    conn?: DbOrTx,
+  ): Promise<V3ConfigRevision | null>;
 }
 
 export type PricingService = ReturnType<typeof createPricingService>;
@@ -287,11 +305,39 @@ export function createPricingService(
     return deps.economy.getConfig(conn ?? deps.db!);
   }
 
+  async function getActiveV3Config(
+    conn?: DbOrTx,
+  ): Promise<V3ConfigRevision | null> {
+    if (!deps.economy) return null;
+    if (!conn && !deps.db) {
+      throw new Error(
+        "A database connection is required for V3 pricing config",
+      );
+    }
+    return deps.economy.getActiveV3Config(conn ?? deps.db!);
+  }
+
+  async function getV3ConfigByVersion(
+    version: number,
+    conn?: DbOrTx,
+  ): Promise<V3ConfigRevision | null> {
+    if (!deps.economy) return null;
+    if (!conn && !deps.db) {
+      throw new Error(
+        "A database connection is required for V3 pricing config",
+      );
+    }
+    return deps.economy.getV3ConfigByVersion(version, conn ?? deps.db!);
+  }
+
   return {
     validatePrices,
     computeSplit,
     validateBaseRates,
     computeEconomics,
     getEconomyConfig,
+    calculateV3SessionPrice,
+    getActiveV3Config,
+    getV3ConfigByVersion,
   };
 }

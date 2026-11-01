@@ -7,7 +7,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Menu,
   MenuItem,
@@ -18,9 +17,11 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Sidebar,
   SidebarContent,
+  SidebarCollapsible,
+  SidebarCollapsibleTrigger,
+  SidebarCollapsiblePanel,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupTitle,
   SidebarHeader,
   SidebarItem,
   SidebarItemButton,
@@ -29,18 +30,28 @@ import {
   SidebarMenu,
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
+  IconChevronDown,
   IconCalendarEvent,
+  IconCalendarCheck,
   IconBrandWhatsapp,
+  IconClipboardText,
   IconCertificate,
   IconCoins,
   IconAdjustments,
   IconHome,
+  IconUsers,
+  IconHelp,
+  IconArticle,
+  IconClock,
+  IconBook2,
   IconLibrary,
   IconLogout,
   IconShieldCheck,
+  IconTrophy,
   IconRoute,
   IconSelector,
   IconSettings,
+  IconSchool,
   IconTimelineEventText,
   IconUser,
   IconUserSquare,
@@ -52,48 +63,121 @@ import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 import { orpc } from "@/utils/orpc";
 
 const BOOKING_ACTION_QUERY_INPUT = {
-  limit: 100,
+  limit: 1,
   view: "action" as const,
 };
 
-const studentNavItems = [
-  { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
-  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
-  { to: "/balance", label: "Balance", icon: IconCoins },
-  { to: "/achievements", label: "Achievements", icon: IconCertificate },
-] as const;
-
-const tutorNavItems = [
-  { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
-  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
-  { to: "/profile", label: "Tutor Profile", icon: IconUser },
-] as const;
-
-const adminNavItems = [
-  { to: "/admin", label: "Dashboard", icon: IconHome },
-  { to: "/admin-operations", label: "Operations", icon: IconSettings },
-  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
-  { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
-  { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
-  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+const studentNavGroups = [
   {
-    to: "/admin-knowledge-bank",
-    label: "Knowledge access",
-    icon: IconShieldCheck,
+    label: "Overview",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: IconHome },
+      { to: "/balance", label: "Balance", icon: IconCoins },
+    ],
   },
   {
-    to: "/admin-achievements",
-    label: "Achievements",
-    icon: IconCertificate,
+    label: "Learning",
+    items: [
+      { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+      { to: "/classes", label: "Classes", icon: IconSchool },
+      { to: "/bookings", label: "My Bookings", icon: IconCalendarCheck },
+      {
+        to: "/class-reports",
+        label: "Session Reports",
+        icon: IconClipboardText,
+      },
+      { to: "/achievements", label: "Achievements", icon: IconCertificate },
+      { to: "/referrals", label: "My Referrals", icon: IconUsers },
+    ],
+  },
+] as const;
+
+const tutorNavGroups = [
+  {
+    label: "Overview",
+    items: [{ to: "/dashboard", label: "Dashboard", icon: IconHome }],
+  },
+  {
+    label: "Teaching",
+    items: [
+      { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
+      {
+        to: "/class-reports",
+        label: "Session Reports",
+        icon: IconTimelineEventText,
+      },
+      {
+        to: "/availability",
+        label: "Availability",
+        icon: IconClock,
+      },
+      { to: "/profile", label: "Tutor Profile", icon: IconUser },
+    ],
+  },
+] as const;
+
+const adminNavGroups = [
+  {
+    label: "Overview",
+    items: [
+      { to: "/admin", label: "Dashboard", icon: IconHome },
+      { to: "/admin-operations", label: "Operations", icon: IconSettings },
+    ],
+  },
+  {
+    label: "Teaching",
+    items: [
+      { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
+      { to: "/admin-classes", label: "Classes", icon: IconBook2 },
+      {
+        to: "/class-reports",
+        label: "Session Reports",
+        icon: IconClipboardText,
+      },
+      { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { to: "/admin-tutor-payouts", label: "Tutor Payouts", icon: IconWallet },
+      { to: "/admin-referrals", label: "Referral Activity", icon: IconUsers },
+      {
+        to: "/admin-kol-commissions",
+        label: "KOL Commissions",
+        icon: IconCoins,
+      },
+      {
+        to: "/admin-economy",
+        label: "Economy Settings",
+        icon: IconAdjustments,
+      },
+    ],
+  },
+  {
+    label: "Content & Reviews",
+    items: [
+      { to: "/admin-competitions", label: "Competitions", icon: IconTrophy },
+      {
+        to: "/admin-achievements",
+        label: "Achievements",
+        icon: IconCertificate,
+      },
+      {
+        to: "/admin-knowledge-bank",
+        label: "Knowledge Bank Access",
+        icon: IconShieldCheck,
+      },
+      { to: "/faq", label: "FAQ", icon: IconHelp },
+      { to: "/activities", label: "Activities", icon: IconArticle },
+    ],
   },
 ] as const;
 
 const resourceItems = [
   {
     to: "/guide",
-    label: "How it works",
+    label: "How It Works",
     icon: IconRoute,
   },
   {
@@ -128,26 +212,24 @@ export function AppSidebar({
     ...orpc.booking.listMine.queryOptions({
       input: BOOKING_ACTION_QUERY_INPUT,
     }),
-    select: (data) => ({
-      count: data.items.length,
-      hasMore: Boolean(data.nextCursor),
-    }),
+    select: (data) => data.items.length > 0,
   });
-  const bookingActionCount = bookingActionQuery.data?.count ?? 0;
-  const bookingActionBadge =
-    bookingActionCount > 99 || bookingActionQuery.data?.hasMore
-      ? "99+"
-      : bookingActionCount;
+  const hasBookingAction = bookingActionQuery.data ?? false;
 
-  const navigationItems =
+  const navigationGroups =
     role === "admin"
-      ? adminNavItems
+      ? adminNavGroups
       : role === "tutor"
-        ? tutorNavItems
-        : studentNavItems;
+        ? tutorNavGroups
+        : studentNavGroups;
   const visibleResourceItems =
     role === "student" || role === "tutor" || role === "admin"
-      ? resourceItems
+      ? role === "admin"
+        ? resourceItems
+        : [
+            ...resourceItems,
+            { to: "/faq", label: "FAQ", icon: IconHelp } as const,
+          ]
       : resourceItems.slice(0, 2);
 
   function signOut() {
@@ -196,91 +278,124 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          <SidebarGroup>
-            <SidebarGroupTitle>Navigation</SidebarGroupTitle>
-            <SidebarList>
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <SidebarItem key={item.to}>
+          {navigationGroups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarCollapsible defaultOpen>
+                <SidebarCollapsibleTrigger
+                  render={
                     <SidebarItemButton
-                      active={pathname === item.to}
-                      render={
-                        <Link
-                          to={item.to}
-                          className={
-                            pathname === item.to
-                              ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                              : undefined
-                          }
-                          preload="intent"
-                          aria-label={
-                            item.to === "/bookings" && bookingActionCount > 0
-                              ? `${item.label}, ${bookingActionBadge} needs action`
-                              : item.label
-                          }
-                        />
-                      }
-                    >
-                      <Icon />
-                      <span className="min-w-0 truncate">{item.label}</span>
-                      {item.to === "/bookings" && bookingActionCount > 0 ? (
-                        <Badge
-                          variant="danger-solid"
-                          size="sm"
-                          pill
-                          aria-label={`${bookingActionBadge} bookings need action`}
-                          className="ml-auto min-w-5 shrink-0 justify-center tabular-nums text-[10px]"
-                        >
-                          {bookingActionBadge}
-                        </Badge>
-                      ) : null}
-                    </SidebarItemButton>
-                  </SidebarItem>
-                );
-              })}
-            </SidebarList>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupTitle>Resources</SidebarGroupTitle>
-            <SidebarList>
-              {visibleResourceItems.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <SidebarItem key={item.to}>
-                    <SidebarItemButton
-                      active={pathname === item.to}
-                      render={
-                        <Link
-                          to={item.to}
-                          className={
-                            pathname === item.to
-                              ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                              : undefined
-                          }
-                          aria-label={item.label}
-                        />
-                      }
-                    >
-                      <Icon />
-                      {item.label}
-                    </SidebarItemButton>
-                  </SidebarItem>
-                );
-              })}
-              <SidebarItem>
-                <WhatsAppSupportDialog
-                  trigger={
-                    <SidebarItemButton aria-label="WhatsApp Support">
-                      <IconBrandWhatsapp />
-                      WhatsApp Support
-                    </SidebarItemButton>
+                      className="text-sm font-medium text-dimmed"
+                      expandableIndicator={false}
+                    />
                   }
+                >
+                  {group.label}
+                  <IconChevronDown
+                    aria-hidden="true"
+                    className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                  />
+                </SidebarCollapsibleTrigger>
+                <SidebarCollapsiblePanel>
+                  <SidebarList>
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+
+                      return (
+                        <SidebarItem key={item.to}>
+                          <SidebarItemButton
+                            active={pathname === item.to}
+                            render={
+                              <Link
+                                to={item.to}
+                                className={
+                                  pathname === item.to
+                                    ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                                    : undefined
+                                }
+                                preload="intent"
+                                aria-label={
+                                  item.to === "/bookings" && hasBookingAction
+                                    ? `${item.label}, bookings need action`
+                                    : item.label
+                                }
+                              />
+                            }
+                          >
+                            <Icon />
+                            <span className="min-w-0 truncate">
+                              {item.label}
+                            </span>
+                            {item.to === "/bookings" && hasBookingAction ? (
+                              <span
+                                aria-hidden="true"
+                                className="ml-auto size-2 shrink-0 rounded-full bg-danger"
+                              />
+                            ) : null}
+                          </SidebarItemButton>
+                        </SidebarItem>
+                      );
+                    })}
+                  </SidebarList>
+                </SidebarCollapsiblePanel>
+              </SidebarCollapsible>
+            </SidebarGroup>
+          ))}
+          <SidebarGroup>
+            <SidebarCollapsible defaultOpen>
+              <SidebarCollapsibleTrigger
+                render={
+                  <SidebarItemButton
+                    className="text-sm font-medium text-dimmed"
+                    expandableIndicator={false}
+                  />
+                }
+              >
+                Resources
+                <IconChevronDown
+                  aria-hidden="true"
+                  className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
                 />
-              </SidebarItem>
-            </SidebarList>
+              </SidebarCollapsibleTrigger>
+              <SidebarCollapsiblePanel>
+                <SidebarList>
+                  {visibleResourceItems.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <SidebarItem key={item.to}>
+                        <SidebarItemButton
+                          active={pathname === item.to}
+                          render={
+                            <Link
+                              to={item.to}
+                              className={
+                                pathname === item.to
+                                  ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                                  : undefined
+                              }
+                              aria-label={item.label}
+                            />
+                          }
+                        >
+                          <Icon />
+                          {item.label}
+                        </SidebarItemButton>
+                      </SidebarItem>
+                    );
+                  })}
+                  <SidebarItem>
+                    <WhatsAppSupportDialog
+                      trigger={
+                        <SidebarItemButton aria-label="WhatsApp Support">
+                          <IconBrandWhatsapp />
+                          WhatsApp Support
+                        </SidebarItemButton>
+                      }
+                    />
+                  </SidebarItem>
+                </SidebarList>
+              </SidebarCollapsiblePanel>
+            </SidebarCollapsible>
           </SidebarGroup>
         </SidebarMenu>
       </SidebarContent>

@@ -8,6 +8,9 @@ function makeRoomService() {
     createRoom: mock(async () => ({ id: "r1" })),
     updateRoom: mock(async () => ({ id: "r1", name: "Room B" })),
     deactivateRoom: mock(async () => ({ id: "r1", isActive: false })),
+    checkAvailability: mock(async () => true),
+    relocateRoom: mock(async () => ({ id: "relocated" })),
+    cancelRoomBooking: mock(async () => ({ cancelled: true })),
     assignRoom: mock(async () => ({
       id: "rb1",
       bookingId: "b1",
@@ -17,6 +20,57 @@ function makeRoomService() {
 }
 
 describe("roomHandler", () => {
+  test("returns availability and forwards relocation and cancellation actor", async () => {
+    const room = makeRoomService();
+    const handler = createRoomHandler(room as any);
+    const input = {
+      bookingId: "b1",
+      roomId: "r1",
+      startAt: new Date(),
+      endAt: new Date(),
+    };
+    for (const session of [undefined, { user: { id: "admin" } }]) {
+      const context = { session } as any;
+      expect(await handler.checkAvailability({ context, input })).toEqual({
+        available: true,
+      });
+      expect(room.checkAvailability).toHaveBeenLastCalledWith(
+        input.roomId,
+        input.startAt,
+        input.endAt,
+      );
+      expect(await handler.relocate({ context, input })).toEqual({
+        id: "relocated",
+      });
+      expect(room.relocateRoom).toHaveBeenLastCalledWith(
+        input.bookingId,
+        input.roomId,
+        input.startAt,
+        input.endAt,
+        session?.user.id,
+      );
+      expect(
+        await handler.cancelBooking({ context, input: { bookingId: "b1" } }),
+      ).toEqual({ cancelled: true });
+      expect(room.cancelRoomBooking).toHaveBeenLastCalledWith(
+        "b1",
+        session?.user.id,
+      );
+      await handler.assign({ context, input });
+      expect(room.assignRoom).toHaveBeenLastCalledWith(
+        input.bookingId,
+        input.roomId,
+        input.startAt,
+        input.endAt,
+        session?.user.id,
+      );
+    }
+    await handler.listPendingApprovals({
+      context: {} as any,
+      input: undefined as any,
+    });
+    expect(room.listPendingApprovals).toHaveBeenLastCalledWith(undefined);
+  });
   describe("list", () => {
     test("calls room.listActive", async () => {
       const roomService = makeRoomService();

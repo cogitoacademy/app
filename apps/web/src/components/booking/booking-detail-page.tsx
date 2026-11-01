@@ -1,5 +1,7 @@
 "use client";
 
+"use client";
+
 import { useState, type ReactNode } from "react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +21,7 @@ import {
   IconLink,
   IconMapPin,
   IconSend,
+  IconRefresh,
   IconUserCheck,
   IconUserPlus,
   IconUsers,
@@ -75,6 +78,10 @@ import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
+import {
   canCancelBooking,
   formatBookingEventTitle,
   formatBookingDate,
@@ -100,8 +107,8 @@ import {
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 
-const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import {
+  getPerSessionHonorariumIdr,
   getSeriesSessionCount,
   getTotalHonorariumIdr,
 } from "./booking-pricing";
@@ -119,6 +126,10 @@ type BookingConfirmation = {
 
 type CompleteDialogState = {
   sessionId?: string;
+  adminMode?: boolean;
+  report?: CompletionFeedbackDraft;
+  expectedVersion?: number;
+  requestScope: string;
 } | null;
 
 type BookingDetail = Awaited<ReturnType<typeof client.booking.get>>;
@@ -195,7 +206,7 @@ export function BookingDetailPage({
   });
 
   function refreshBookingQueries() {
-    void Promise.all([
+    return Promise.all([
       queryClient.invalidateQueries({
         queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
       }),
@@ -209,6 +220,11 @@ export function BookingDetailPage({
         ? [
             queryClient.invalidateQueries({
               queryKey: orpc.adminBooking.listBookings.key(),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orpc.booking.listCompletionFeedbackHistory.queryKey({
+                input: { bookingId },
+              }),
             }),
           ]
         : []),
@@ -286,6 +302,38 @@ export function BookingDetailPage({
         }),
     }),
   );
+  const adminReport = useMutation(
+    orpc.booking.submitAdminCompletionReport.mutationOptions({
+      onSuccess: () => {
+        setCompleteDialog(null);
+        toastManager.add({
+          title: completeDialog?.expectedVersion
+            ? "Session report corrected"
+            : "Session report recorded",
+          type: "success",
+        });
+        refreshBookingQueries();
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.booking.listCompletionFeedback.queryKey({
+              input: { bookingId },
+            }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.booking.listCompletionFeedbackHistory.queryKey({
+              input: { bookingId },
+            }),
+          }),
+        ]);
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Session report could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
   const tutorSetMeetingLink = useMutation(
     orpc.tutorActions.setMeetingLink.mutationOptions({
       onSuccess: () => {
@@ -324,6 +372,26 @@ export function BookingDetailPage({
         }),
     }),
   );
+  const retryMeeting = useMutation(
+    orpc.adminBooking.retryMeeting.mutationOptions({
+      onSuccess: async (result) => {
+        await refreshBookingQueries();
+        toastManager.add({
+          title: result.scheduled ? "Meeting created" : "Retry failed",
+          description: result.scheduled
+            ? "The Google Meet link is ready."
+            : "Google Meet could not be created. You can retry again.",
+          type: result.scheduled ? "success" : "error",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Google Meet link could not be created",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
   const meetingLinkPending =
     tutorSetMeetingLink.isPending || adminSetMeetingLink.isPending;
 
@@ -336,8 +404,17 @@ export function BookingDetailPage({
   const feedbackQuery = useQuery(
     orpc.booking.listCompletionFeedback.queryOptions({ input: { bookingId } }),
   );
+  const feedbackHistoryQuery = useQuery({
+    ...orpc.booking.listCompletionFeedbackHistory.queryOptions({
+      input: { bookingId },
+    }),
+    enabled: isAdmin,
+  });
   const completeSessionById = (sessionId: string) => {
-    setCompleteDialog({ sessionId });
+    setCompleteDialog({
+      sessionId,
+      requestScope: `tutor:${bookingId}:${sessionId}`,
+    });
   };
 
   if (bookingQuery.isPending) return <Loader />;
@@ -458,7 +535,10 @@ export function BookingDetailPage({
         userId: participant.userId,
         name: participant.user?.name ?? "Participant",
       })),
-    perStudentMarks: booking.priceSnapshot?.perStudent,
+    perStudentMarks:
+      booking.priceSnapshot?.engine === "v3"
+        ? booking.priceSnapshot.perStudentMarks
+        : undefined,
     activeProposalId: activeRescheduleProposal?.id,
     isRescheduleProposer: activeRescheduleProposal?.proposedBy === viewerId,
     viewerRescheduleDecision,
@@ -475,10 +555,20 @@ export function BookingDetailPage({
   const seriesSessions = sessionsQuery.data ?? undefined;
   const totalHonorariumIdr = getTotalHonorariumIdr(booking, seriesSessions);
   const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
-  const perSessionHonorariumIdr =
-    booking.priceSnapshot?.tutorHonorariumIdr ??
-    (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
+  const perSessionHonorariumIdr = getPerSessionHonorariumIdr(
+    booking.priceSnapshot,
+  );
   const completionFeedbacks = feedbackQuery.data ?? [];
+  const singleSessionFeedback =
+    completionFeedbacks.find((entry) => entry.sessionId === null) ?? null;
+  const canAdminManageSingleReport =
+    isAdmin &&
+    !isSeriesBooking &&
+    (booking.currentState === "completed" ||
+      ((booking.currentState === "scheduled" ||
+        (booking.type === "solo" && booking.currentState === "no_show")) &&
+        sessionHasEnded));
+  const reportHistory = feedbackHistoryQuery.data ?? [];
   const sessionLabels: Record<string, string> = {};
   for (const s of seriesSessions ?? []) {
     sessionLabels[s.id] =
@@ -498,18 +588,59 @@ export function BookingDetailPage({
   }
 
   function completeSession() {
-    setCompleteDialog({});
+    setCompleteDialog({ requestScope: `tutor:${bookingId}:solo` });
   }
 
-  function confirmCompleteSession(feedback: CompletionFeedbackDraft) {
+  function openAdminCompletionReport(sessionId?: string) {
+    const report =
+      completionFeedbacks.find(
+        (entry) => entry.sessionId === (sessionId ?? null),
+      ) ?? null;
+    setCompleteDialog({
+      sessionId,
+      adminMode: true,
+      report: report
+        ? {
+            discussion: report.discussion,
+            strengths: report.strengths,
+            improvements: report.improvements,
+          }
+        : undefined,
+      expectedVersion: report?.version,
+      requestScope: `admin:${bookingId}:${sessionId ?? "solo"}:${report?.id ?? "new"}:${report?.version ?? 0}`,
+    });
+  }
+
+  function confirmCompleteSession(
+    feedback: CompletionFeedbackDraft,
+    admin: { deliveryConfirmed: boolean; reason: string; requestKey: string },
+  ) {
+    if (completeDialog?.adminMode) {
+      if (!admin.deliveryConfirmed) return;
+      adminReport.mutate({
+        bookingId,
+        ...(completeDialog.sessionId
+          ? { sessionId: completeDialog.sessionId }
+          : {}),
+        feedback,
+        deliveryConfirmed: true,
+        reason: admin.reason,
+        ...(completeDialog.expectedVersion !== undefined
+          ? { expectedVersion: completeDialog.expectedVersion }
+          : {}),
+        requestKey: admin.requestKey,
+      });
+      return;
+    }
     if (completeDialog?.sessionId) {
       complete.mutate({
         bookingId,
         sessionId: completeDialog.sessionId,
         feedback,
+        requestKey: admin.requestKey,
       });
     } else {
-      complete.mutate({ bookingId, feedback });
+      complete.mutate({ bookingId, feedback, requestKey: admin.requestKey });
     }
   }
 
@@ -561,7 +692,26 @@ export function BookingDetailPage({
                 {booking.modality === "online" ? "Online" : "Offline"}
               </Text>
             </div>
-            <Heading className="break-words text-2xl">{eventTitle}</Heading>
+            <Heading level={1} size="sm" className="mb-2">
+              {eventTitle}
+            </Heading>
+            {booking.sessionTopic ? (
+              <Badge
+                variant="secondary"
+                size="sm"
+                className={
+                  booking.sessionTopic.parentColors
+                    ? competitionPaletteClassName
+                    : undefined
+                }
+                style={getCompetitionPaletteStyle(
+                  booking.sessionTopic.parentColors,
+                )}
+              >
+                {booking.sessionTopic.categoryName} ·{" "}
+                {booking.sessionTopic.subcategoryName}
+              </Badge>
+            ) : null}
             <Text className="mt-2 max-w-2xl text-muted">
               {lifecycleContext ??
                 getBookingStateDescription(booking.currentState)}
@@ -654,6 +804,17 @@ export function BookingDetailPage({
                     </div>
                   </div>
                 ) : null}
+                {canAdminManageSingleReport ? (
+                  <Button
+                    size="sm"
+                    variant={singleSessionFeedback ? "secondary" : "primary"}
+                    onClick={() => openAdminCompletionReport()}
+                    progress={adminReport.isPending}
+                    disabled={adminReport.isPending}
+                  >
+                    {singleSessionFeedback ? "Correct report" : "Record report"}
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -724,15 +885,36 @@ export function BookingDetailPage({
                         {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
                       {booking.modality === "online" ? (
-                        <MeetingStatusPopover
-                          bookingState={booking.currentState}
-                          meetingStatus={booking.meetingStatus}
-                          providerStatus={booking.meeting?.status}
-                          meetingUrl={meetingUrl}
-                          canSetManualLink={canSetManualLink}
-                          onSetManualLink={() => setManualLinkDialogOpen(true)}
-                          manualLinkPending={meetingLinkPending}
-                        />
+                        <>
+                          <MeetingStatusPopover
+                            bookingState={booking.currentState}
+                            meetingStatus={booking.meetingStatus}
+                            providerStatus={booking.meeting?.status}
+                            meetingUrl={meetingUrl}
+                            canSetManualLink={canSetManualLink}
+                            onSetManualLink={() =>
+                              setManualLinkDialogOpen(true)
+                            }
+                            manualLinkPending={meetingLinkPending}
+                          />
+                          {isAdmin &&
+                          booking.currentState === "confirmed" &&
+                          booking.meetingStatus === "failed" &&
+                          !meetingUrl ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="xs"
+                              aria-label="Retry Google Meet creation"
+                              title="Retry Google Meet creation"
+                              disabled={retryMeeting.isPending}
+                              progress={retryMeeting.isPending}
+                              onClick={() => retryMeeting.mutate({ bookingId })}
+                            >
+                              <IconRefresh aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                        </>
                       ) : !activeRoomBooking ? (
                         <InfoPreview
                           title="Room details"
@@ -875,8 +1057,29 @@ export function BookingDetailPage({
                     feedbacks={completionFeedbacks}
                     timezone={booking.timezone}
                     sessionLabels={sessionLabels}
+                    adminHistory={isAdmin ? reportHistory : undefined}
                   />
                 </>
+              ) : null}
+              {(isTutor || isAdmin) &&
+              booking.type !== "series" &&
+              sessionHasEnded ? (
+                <Button
+                  variant="plain"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/class-reports"
+                      aria-label="Open Session Reporting"
+                      search={{
+                        workspace: "sessions",
+                        report: `private:${bookingId}`,
+                      }}
+                    />
+                  }
+                >
+                  Open Session Reporting
+                </Button>
               ) : null}
             </CardBody>
           </Card>
@@ -910,7 +1113,7 @@ export function BookingDetailPage({
               </CardHeader>
               <CardBody className="grid gap-3">
                 {sessionsQuery.isPending ? (
-                  <Text className="text-muted">Loading series sessions…</Text>
+                  <Loader />
                 ) : sessionsQuery.isError ? (
                   <EmptyState
                     icon={<IconCalendarEvent />}
@@ -932,6 +1135,16 @@ export function BookingDetailPage({
                   sessionsQuery.data.map((session) => {
                     const sessionEnded =
                       new Date(session.scheduledEndAt).getTime() <= now;
+                    const sessionFeedback =
+                      completionFeedbacks.find(
+                        (entry) => entry.sessionId === session.id,
+                      ) ?? null;
+                    const canAdminManageReport =
+                      isAdmin &&
+                      (session.currentState === "completed" ||
+                        (booking.currentState === "scheduled" &&
+                          session.currentState === "scheduled" &&
+                          sessionEnded));
                     const completed =
                       session.currentState === "completed" ||
                       session.currentState === "cancelled";
@@ -994,6 +1207,42 @@ export function BookingDetailPage({
                           ) : (
                             <Badge pill>{session.currentState}</Badge>
                           )}
+                          {canAdminManageReport ? (
+                            <Button
+                              size="sm"
+                              variant={
+                                sessionFeedback ? "secondary" : "primary"
+                              }
+                              onClick={() =>
+                                openAdminCompletionReport(session.id)
+                              }
+                              progress={adminReport.isPending}
+                              disabled={adminReport.isPending}
+                            >
+                              {sessionFeedback
+                                ? "Correct report"
+                                : "Record report"}
+                            </Button>
+                          ) : null}
+                          {(isTutor || isAdmin) && sessionEnded ? (
+                            <Button
+                              variant="plain"
+                              size="sm"
+                              nativeButton={false}
+                              render={
+                                <Link
+                                  to="/class-reports"
+                                  aria-label="Open Session Reporting"
+                                  search={{
+                                    workspace: "sessions",
+                                    report: `private:${session.id}`,
+                                  }}
+                                />
+                              }
+                            >
+                              Open Session Reporting
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -1091,17 +1340,31 @@ export function BookingDetailPage({
                   isSeriesBooking ? (
                     <Stack className="m-0!" direction="column" spacing="sm">
                       <SummaryRow
-                        label={`Total honorarium (${seriesSessionCount} sessions)`}
-                        value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
+                        label={
+                          seriesSessionCount === null
+                            ? "Total honorarium"
+                            : `Total honorarium (${seriesSessionCount} sessions)`
+                        }
+                        value={
+                          totalHonorariumIdr === null
+                            ? "Unavailable"
+                            : `Rp${totalHonorariumIdr.toLocaleString("id-ID")}`
+                        }
                       />
                       <Text className="text-sm text-muted">
-                        {`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
+                        {perSessionHonorariumIdr === null
+                          ? "Honorarium unavailable"
+                          : `Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
                       </Text>
                     </Stack>
                   ) : (
                     <SummaryRow
                       label="Session honorarium"
-                      value={`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`}
+                      value={
+                        perSessionHonorariumIdr === null
+                          ? "Unavailable"
+                          : `Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`
+                      }
                     />
                   )
                 ) : (
@@ -1124,12 +1387,12 @@ export function BookingDetailPage({
                         <CogitoMarks value={booking.refundedAmount} size="4" />
                       }
                     />
-                    {booking.priceSnapshot ? (
+                    {booking.priceSnapshot?.engine === "v3" ? (
                       <SummaryRow
                         label="Per participant"
                         value={
                           <CogitoMarks
-                            value={booking.priceSnapshot.perStudent}
+                            value={booking.priceSnapshot.perStudentMarks}
                             size="4"
                           />
                         }
@@ -1324,8 +1587,12 @@ export function BookingDetailPage({
         </Field>
       </ConfirmationDialog>
       <CompleteSessionDialog
+        key={completeDialog?.requestScope ?? "closed"}
         open={completeDialog !== null}
-        pending={complete.isPending}
+        pending={complete.isPending || adminReport.isPending}
+        adminMode={completeDialog?.adminMode}
+        initialFeedback={completeDialog?.report}
+        requestScope={completeDialog?.requestScope}
         onOpenChange={(open) => {
           if (!open) setCompleteDialog(null);
         }}

@@ -186,7 +186,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ### Task 2.2: Apply env + wire providers (Ansible → Coolify; operator confirms console bits)
 
-- [x] Ansible applies the decrypted vault to the API resource env (incl. `NODE_ENV=production`, `SCHEDULER_ENABLED=true`, `TRUST_PROXY=true`, `DB_SSL_ENABLED=false`, `BETTER_AUTH_URL=https://api.cogitoacademy.id`, `CORS_ORIGIN=https://app.cogitoacademy.id`). **DONE 2026-08-31 — 47 env vars applied (fail-loud + async-queue-aware restart, #146/#147).**
+- [x] Ansible applies the decrypted vault to the API resource env (incl. `NODE_ENV=production`, `SCHEDULER_ENABLED=true`, `TRUST_PROXY=true`, `DB_SSL_ENABLED=false`, `BETTER_AUTH_URL=https://api.cogitoacademy.id`, `CORS_ORIGIN=https://app.cogitoacademy.id`). **DONE 2026-08-31 — 47 env vars applied (fail-loud + async-queue-aware restart, #146/#147).** Boolean env values accept `true`/`1` and `false`/`0`; blank or whitespace-only values use schema defaults.
 - [x] Add `COOLIFY_PROD_SERVER_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` as GH secrets (from Coolify resource webhooks) — unblocks S7. **DONE (all 8 secrets set 2026-08-28; recreated on the `cl.` host; CD verified green 2026-09-01).**
 - [x] Repo fix: keep production session cookies `SameSite=Strict` while overriding Better Auth's short-lived OAuth state cookie to `SameSite=Lax`, so the Google top-level callback can complete state verification without disabling CSRF checks (2026-08-31).
 - [x] Repo fix: configure Google sign-in with `prompt=consent` so the OAuth permission screen is visible in verification evidence; keep the broader Calendar scope isolated to the dedicated Meet OAuth flow (2026-09-01).

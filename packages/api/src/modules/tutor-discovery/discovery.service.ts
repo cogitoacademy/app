@@ -1,8 +1,8 @@
 import type { tutorProfile, user } from "@cogito-app/db/schema";
 import type { DiscoveryRepo } from "./discovery.repo";
 import { TutorProfileNotFoundError } from "./discovery.errors";
-import type { EconomyParameters } from "../economy";
 import type { GroupSize, PricingPort } from "../pricing/pricing.service";
+import type { V3ConfigRevision } from "../pricing/pricing.service";
 import {
   toNormalizedTutorSubjects,
   toSubjectCategoryGroup,
@@ -17,6 +17,7 @@ type SupportedModality = "online" | "offline";
 type PricesByModality = Partial<
   Record<SupportedModality, Record<string, number>>
 >;
+type PricesByCompetition = Record<string, PricesByModality>;
 
 export interface ProfileWithUser extends Omit<
   TutorProfileRow,
@@ -48,25 +49,15 @@ export interface ProfileProjection {
   offlineMaxClassSize: number;
   prices: Record<string, number> | null;
   pricesByModality: PricesByModality | null;
+  pricesByCompetition: PricesByCompetition | null;
+  pricingRevision: number | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
-}
-
-function limitPrices(
-  prices: Record<string, number> | null,
-  maxClassSize: number,
-) {
-  if (!prices) return null;
-  return Object.fromEntries(
-    Object.entries(prices).filter(([size]) => Number(size) <= maxClassSize),
-  );
 }
 
 export function buildProjection(profile: ProfileWithUser): ProfileProjection {
   const onlineMaxClassSize = profile.onlineMaxClassSize ?? 6;
   const offlineMaxClassSize = profile.offlineMaxClassSize ?? 6;
-  const preferredMaxClassSize =
-    profile.modality === "offline" ? offlineMaxClassSize : onlineMaxClassSize;
   return {
     id: profile.id,
     userId: profile.userId,
@@ -82,8 +73,10 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     modality: profile.modality,
     onlineMaxClassSize,
     offlineMaxClassSize,
-    prices: limitPrices(profile.prices, preferredMaxClassSize),
+    prices: null,
     pricesByModality: null,
+    pricesByCompetition: null,
+    pricingRevision: null,
     publishedAt: profile.publishedAt,
     user: profile.user
       ? { name: profile.user.name, image: profile.user.image }
@@ -97,45 +90,45 @@ function getSupportedModalities(modality: string | null): SupportedModality[] {
   return ["online"];
 }
 
-function buildEconomyPrices(
+function buildV3CompetitionPrices(
   profile: ProfileWithUser,
   projection: ProfileProjection,
   pricing: PricingPort,
-  config: EconomyParameters,
+  active: V3ConfigRevision,
 ): ProfileProjection {
-  if (!profile.baseRatesIdr) return projection;
-
-  const pricesByModality: PricesByModality = {};
-  for (const modality of getSupportedModalities(profile.modality)) {
-    const baseRateIdr = profile.baseRatesIdr[modality];
-    if (typeof baseRateIdr !== "number") continue;
-
-    const prices: Record<string, number> = {};
-    const maxClassSize =
-      modality === "offline"
-        ? (profile.offlineMaxClassSize ?? 6)
-        : (profile.onlineMaxClassSize ?? 6);
-    for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
-      if (size > maxClassSize) break;
-      prices[String(size)] = pricing.computeEconomics(
-        modality,
-        baseRateIdr,
-        size,
-        config,
-      ).perStudent;
+  const pricesByCompetition: PricesByCompetition = {};
+  for (const subject of projection.subjects) {
+    const slug = subject.parent.slug;
+    if (
+      !subject.isSelectable ||
+      !Object.hasOwn(active.values.competitionRates, slug)
+    )
+      continue;
+    const pricesByModality: PricesByModality = {};
+    for (const modality of getSupportedModalities(profile.modality)) {
+      const maxClassSize =
+        modality === "offline"
+          ? (profile.offlineMaxClassSize ?? 6)
+          : (profile.onlineMaxClassSize ?? 6);
+      const prices: Record<string, number> = {};
+      for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
+        if (size > maxClassSize) break;
+        prices[String(size)] = pricing.calculateV3SessionPrice(
+          { competition: slug, modality, headcount: size },
+          active.values,
+        ).perStudentMarks;
+      }
+      pricesByModality[modality] = prices;
     }
-    pricesByModality[modality] = prices;
+    pricesByCompetition[slug] = pricesByModality;
   }
-
-  const preferredModality =
-    profile.modality === "offline" ? "offline" : "online";
-  const preferredPrices =
-    pricesByModality[preferredModality] ?? Object.values(pricesByModality)[0];
 
   return {
     ...projection,
-    prices: preferredPrices ?? projection.prices,
-    pricesByModality,
+    prices: null,
+    pricesByModality: null,
+    pricesByCompetition,
+    pricingRevision: active.version,
   };
 }
 
@@ -149,25 +142,23 @@ export function createDiscoveryService(deps: {
 
   async function projectProfiles(profiles: ProfileWithUser[]) {
     const projections = profiles.map(buildProjection);
-    if (!pricing || !profiles.some((profile) => profile.baseRatesIdr)) {
-      return projections;
+    if (!pricing) return projections;
+    const active = await pricing.getActiveV3Config();
+    if (active) {
+      return profiles.map((profile, index) =>
+        buildV3CompetitionPrices(profile, projections[index]!, pricing, active),
+      );
     }
-
-    const config = await pricing.getEconomyConfig();
-    return profiles.map((profile, index) =>
-      buildEconomyPrices(profile, projections[index]!, pricing, config),
-    );
+    return projections;
   }
 
   async function projectProfile(profile: ProfileWithUser) {
     const projection = buildProjection(profile);
-    if (!pricing || !profile.baseRatesIdr) return projection;
-    return buildEconomyPrices(
-      profile,
-      projection,
-      pricing,
-      await pricing.getEconomyConfig(),
-    );
+    if (!pricing) return projection;
+    const active = await pricing.getActiveV3Config();
+    return active
+      ? buildV3CompetitionPrices(profile, projection, pricing, active)
+      : projection;
   }
 
   async function listPublished(opts?: {

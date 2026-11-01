@@ -31,6 +31,12 @@ describe("server environment schema", () => {
     expect(result.GOOGLE_MEET_ENABLED).toBe(false);
     expect(result.DB_SSL_ENABLED).toBe(true);
     expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
+
+    const whitespaceDefault = serverEnvSchema.parse({
+      ...baseEnv(),
+      TRUST_PROXY: "   ",
+    });
+    expect(whitespaceDefault.TRUST_PROXY).toBe(false);
   });
 
   test("rejects unknown boolean strings", () => {
@@ -81,6 +87,19 @@ describe("server environment schema", () => {
       MIDTRANS_MERCHANT_ID: "G123456789",
       MIDTRANS_MODE: "test",
     });
+    expect(result.success).toBe(true);
+  });
+
+  test("accepts a non-production Midtrans configuration without a UAT list", () => {
+    const result = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "Mid-server-test",
+      MIDTRANS_CLIENT_KEY: "Mid-client-test",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "live",
+    });
+
     expect(result.success).toBe(true);
   });
 
@@ -153,6 +172,15 @@ describe("server environment schema", () => {
       GOOGLE_MEET_REFRESH_TOKEN: "refresh",
     });
     expect(oauth.success).toBe(true);
+
+    const sharedOAuth = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      GOOGLE_MEET_ENABLED: true,
+      GOOGLE_CLIENT_ID: "shared-client",
+      GOOGLE_CLIENT_SECRET: "shared-secret",
+      GOOGLE_MEET_REFRESH_TOKEN: "refresh",
+    });
+    expect(sharedOAuth.success).toBe(true);
   });
 
   test("D3: production-like envs require SCHEDULER_ENABLED=true", () => {

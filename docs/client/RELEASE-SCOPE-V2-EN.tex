@@ -1,0 +1,360 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+% !TEX program = xelatex
+\usepackage{fontspec}
+\setmainfont{Figtree}[Path=fonts/,Extension=.ttf,UprightFont=*-Regular,BoldFont=*-Bold,ItalicFont=*-Italic,BoldItalicFont=*-BoldItalic]
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\graphicspath{{diagrams/}}
+\newcommand{\flowbox}[2]{\fbox{\parbox[c]{#1}{\centering\small #2}}}
+
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue
+}
+
+\setlength{\emergencystretch}{3em}
+
+\begin{document}
+\begin{center}
+{\LARGE \textbf{Cogito Platform Release}}\\[4pt]
+{\Large \textbf{Post-Meeting Scope}}\\[8pt]
+{\normalsize Status: Draft for client confirmation}\\
+{\normalsize Date: October 11, 2026}
+\end{center}
+\vspace{1em}
+
+
+This document compares the current application with planned changes. The latest referral system.md supersedes the meeting notes and original PRD for referral rules; meeting notes remain the reference for other areas. Original PRD figures not reconfirmed remain proposals. Findings use cogito-app commit 14dc4486 and the local cogito-acad website checkout, not a live production audit.
+
+\section*{1. Current state and planned changes}
+
+{\small
+\begin{longtable}{|L{28.54mm}|L{52.57mm}|L{69.09mm}|}
+\hline
+\textbf{Area} & \textbf{Current state} & \textbf{Planned scope} \\ \hline
+\endfirsthead
+\hline
+\textbf{Area} & \textbf{Current state} & \textbf{Planned scope} \\ \hline
+\endhead
+Pricing and tutor fees & Tutor profiles hold Marks prices and base fees; some economic settings are global. & Admin sets fees; tutors view them. Original PRD proposes central competition rates, additional fees per student and group pricing. Final figures need confirmation. \\ \hline
+Payouts and tax & Admin records payouts, reviews history and exports CSV. Non-BCA transfers cost Rp2.500 once per payout. No tax withholding implemented. & Handling depends on NPWP/\allowbreak{}tax-profile completeness; Cogito handles tax when data is missing. Show gross, deductions, net and notifications. Finance must confirm required data and 2.5\%/\allowbreak{}3\% rate mapping. \\ \hline
+Marks & Wallet, ledger and packages exist; exact top-up does not. & Recalibrate packages/\allowbreak{}conversion with VAT absorbed by Cogito. Exact top-up remains under research. Display clear prices and payment totals. \\ \hline
+Cohort /\allowbreak{} regular classes & Private/\allowbreak{}group bookings and 2-4-session series exist; public seat-based cohorts do not. & Admin creates curriculum, schedules, capacity and tutor assignments. Students reserve/\allowbreak{}enroll and buy discounted full plans or configurable installments. November 1, 2026 target requires readiness confirmation. \\ \hline
+Cohort payments & Enrollment/\allowbreak{}installments do not exist. & Configure installment count, covered sessions, amounts and due dates; no automatic half split. Payment before session 7 of 12 is only an example. Later prices are explicit, not necessarily full price minus first payment. \\ \hline
+Tutors and reports & Availability, Meet, completion reports and completed-session fees exist. & Admin assigns tutors after external coordination, potentially per session or on the day. Proposed cohort reports: attendance, material covered, shared notes and optional individual notes. \\ \hline
+Friend referrals & No code/\allowbreak{}reward system found. & Registration-only codes. Referred user: 15 Marks after verification; referrer: 15 after first eligible class completion; cap 75/\allowbreak{}semester. Latest document defaults. \\ \hline
+KOL /\allowbreak{} influencers & No code campaign management. & Admin creates codes; influencers need no accounts. Signup deadlines and attribution windows apply; daily limits need confirmation. First successful IDR top-up triggers commission; partner rates/\allowbreak{}settlement differ from friend rewards. \\ \hline
+CMS and website & App reads Calendar/\allowbreak{}Knowledge Bank from Sanity. Website has an agenda view and Start Learning button. & Merge Cogito 101, Townhall and Simulation Days into one Activities page on cogitoacademy.id. Migrate Activities, Knowledge Bank and Calendar to app database/\allowbreak{}API. Fix duplicate agenda entries. Update tutors after new app profiles are ready. Remove Start Learning; landing-page Activities removal needs confirmation. \\ \hline
+Email registration & OTP follows signup. & OTP inside registration form: input/\allowbreak{}send button in one row; create account after verification. \\ \hline
+Google sign-in & Integration exists. & Investigate "unverified" message/\allowbreak{}status. Distinguish Google consent warnings from account email status; cause unconfirmed. \\ \hline
+\end{longtable}
+}
+
+\section*{2. Edge cases and rules to confirm}
+
+These are proposed safeguards, not additional meeting decisions.
+
+\begin{itemize}
+\item \textbf{Price changes:} confirmed transactions retain original price/\allowbreak{}fee snapshots. Do unpaid reservations lock prices, and for how long?
+\item \textbf{Tax:} completeness determines handling, not an optional tax-free mode. Cogito handles missing data; finance confirms validation, rates, deductions and VAT assumptions.
+\item \textbf{Last seat:} expiring reservations and atomic allocation. Late payments/\allowbreak{}repeated webhooks must not duplicate seats, credits or charges. Confirm payment after expiry.
+\item \textbf{Unpaid installments:} reminders, overdue status and restricted session access. Confirm grace periods, seat release and rejoining; disclose any automatic charges at checkout.
+\item \textbf{Cancellation/\allowbreak{}withdrawal:} distinguish Cogito cancellation, student withdrawal, absence and tutor no-show. Proposed refunds use Marks; plan-specific formulas and cash exceptions require agreement.
+\item \textbf{Same-day tutor changes:} check conflicts, notify parties and update access/\allowbreak{}schedules. Earlier fees stay with the previous tutor; agree replacement fees before recording. Confirm rescheduling/\allowbreak{}cancellation without a replacement.
+\item \textbf{Friend referrals:} welcome 15 after verification; referrer 15 after first completed private/\allowbreak{}masterclass. Cap 75/\allowbreak{}semester applies only to referrers. Credit once; prevent self-referral. Semester dates, expiry and reversal rules remain open.
+\item \textbf{KOL:} confirm any daily redemption/\allowbreak{}conversion limits, timezone, deadlines, compensation and settlement reporting. Attribution does not imply automated payouts.
+\item \textbf{Content:} inventory records, files, languages, URLs and relationships. Confirm editor roles, preview/\allowbreak{}publish, backup and rollback. Stop Sanity reads after verification. Multi-day events on different dates are not necessarily duplicates.
+\item \textbf{Google:} test new/\allowbreak{}existing accounts, consent, callbacks and email status; fix the confirmed cause.
+\end{itemize}
+
+\section*{3. Pricing, tutor fees and rewards}
+
+\textbf{Figure status:} "Current" means repository seed/\allowbreak{}default values, not verified production prices. "Proposed" comes from the original PRD unless stated otherwise. Meeting notes request VAT recalibration but give no replacement prices. Approve figures before applying them. VAT is absorbed in displayed prices, not automatically added at checkout. IDR amounts retain Indonesian number formatting.
+
+\subsection*{Marks packages: current vs proposed}
+
+{\small
+\begin{longtable}{|L{23.56mm}|L{41.23mm}|L{41.23mm}|L{41.23mm}|}
+\hline
+\textbf{Package} & \textbf{Current repository seed} & \textbf{Original PRD proposal} & \textbf{Package change} \\ \hline
+\endfirsthead
+\hline
+\textbf{Package} & \textbf{Current repository seed} & \textbf{Original PRD proposal} & \textbf{Package change} \\ \hline
+\endhead
+Starter & 50 Marks · Rp312.500 & 50 Marks · Rp337.500 & +Rp25.000; same Marks \\ \hline
+Learner & 120 Marks · Rp690.000 & 150 Marks · Rp937.500 & +Rp247.500; +30 Marks \\ \hline
+Explorer & 200 Marks · Rp1.070.000 & 250 Marks · Rp1.462.500 & +Rp392.500; +50 Marks \\ \hline
+Pioneer & 400 Marks · Rp2.000.000 & 500 Marks · Rp2.750.000 & +Rp750.000; +100 Marks \\ \hline
+\end{longtable}
+}
+
+Cost per Mark changes from Rp6.250/\allowbreak{}Rp5.750/\allowbreak{}Rp5.350/\allowbreak{}Rp5.000 to Rp6.750/\allowbreak{}Rp6.250/\allowbreak{}Rp5.850/\allowbreak{}Rp5.500. Larger increases also buy more Marks, so these are not equal-quantity comparisons. Existing balances are not automatically reduced by package price changes.
+
+\subsection*{Booking prices and tutor fees: proposed rate card}
+
+Current rates use tutor profiles/\allowbreak{}global settings; no single previous competition rate exists. Default extra fee per student: Rp30.000 online/\allowbreak{}Rp40.000 offline. Internal Marks value Rp5.000 is not every package's purchase rate.
+
+Proposed rates for a 90-minute online session:
+
+{\small
+\begin{longtable}{|L{23.56mm}|L{41.23mm}|L{41.23mm}|L{41.23mm}|}
+\hline
+\textbf{Competition} & \textbf{Solo price} & \textbf{Tutor fee: one student} & \textbf{Extra fee per student} \\ \hline
+\endfirsthead
+\hline
+\textbf{Competition} & \textbf{Solo price} & \textbf{Tutor fee: one student} & \textbf{Extra fee per student} \\ \hline
+\endhead
+Model UN /\allowbreak{} World Scholar's Cup & 50 Marks & Rp200.000 & Rp25.000 \\ \hline
+Debate /\allowbreak{} Olympiad & 44 Marks & Rp175.000 & Rp25.000 \\ \hline
+Essay \& Writing /\allowbreak{} Business /\allowbreak{} Public Speaking & 38 Marks & Rp150.000 & Rp20.000 \\ \hline
+\end{longtable}
+}
+
+Per-student group price for 1-6 students = solo price  x  1.00/\allowbreak{}0.80/\allowbreak{}0.64/\allowbreak{}0.52/\allowbreak{}0.46/\allowbreak{}0.42, rounded to the nearest Mark. MUN: 50/\allowbreak{}40/\allowbreak{}32/\allowbreak{}26/\allowbreak{}23/\allowbreak{}21 Marks each. Offline adds 20 Marks per student; offline tutor uplift is undecided. Fees use confirmed student count, not attendance. Admin controls rates; Rp20.000/\allowbreak{}Rp25.000/\allowbreak{}Rp30.000 extra fees need confirmation.
+
+\subsection*{Exact top-up: under research}
+
+Buy only the missing balance. Original curve: below 50 Marks, Rp7.000/\allowbreak{}Mark capped at Rp337.500 total; 50-149, Rp6.750 minus Rp5 per Mark above 50; 150-249, Rp6.250 minus Rp4 per Mark above 150; 250-499, Rp5.850 minus Rp1,40 per Mark above 250; 500+, Rp5.500/\allowbreak{}Mark. Total = Marks  x  rate, rounded to whole rupiah. Examples: 25 = Rp175.000; 49 = Rp337.500. Not confirmed for this release.
+
+\subsection*{Cohort prices, payouts and bonuses}
+
+{\small
+\begin{longtable}{|L{28.54mm}|L{52.57mm}|L{69.09mm}|}
+\hline
+\textbf{Item} & \textbf{Proposed figures /\allowbreak{} change} & \textbf{Status} \\ \hline
+\endfirsthead
+\hline
+\textbf{Item} & \textbf{Proposed figures /\allowbreak{} change} & \textbf{Status} \\ \hline
+\endhead
+One cohort session & 25 Marks; Rp175.000 top-up from zero & Original PRD; confirm \\ \hline
+Full 12-session cohort & 240 Marks; Rp1.413.600 top-up from zero & Original PRD; cheaper per session \\ \hline
+Two installments & 132 + 132 Marks; Rp836.880 each if topping up from zero each time & Original reference; flexible installments requested \\ \hline
+Cohort tutor fee & Rp400.000/\allowbreak{}session regardless of student count & Original PRD; confirm \\ \hline
+Masterclass & 5 Marks; tutor fee Rp300.000 & Provisional original PRD \\ \hline
+Tax withholding & 2.5\% or 3\% of gross, then transfer fee & Meeting follow-up; conditions unconfirmed \\ \hline
+Rp400.000 gross, non-BCA & No withholding: Rp397.500; 2.5\%: Rp387.500; 3\%: Rp385.500 & Calculation examples, not approval of tax-free handling \\ \hline
+Friend referral & Recipient 15 after verification; referrer 15 after first class completion; cap 75/\allowbreak{}semester & Latest defaults; admin configurable \\ \hline
+Referral welcome & 15 after verification; one bonus, not an extra old 25-Marks welcome & Latest referral document \\ \hline
+KOL compensation & No agreed amount & Set per campaign \\ \hline
+\end{longtable}
+}
+
+Original cohort: 12  x  90 minutes, capacity 12, minimum 4. Meeting example 100/\allowbreak{}50/\allowbreak{}65 is not a final rate card; admin sets full/\allowbreak{}installment prices separately. IDR equivalents depend on balance and purchase method.
+
+Masterclass, recap PDF, waitlist and private cohorts were not reconfirmed at the meeting. Treat as follow-up scope pending confirmation, not automatically included in the November 1 target.
+
+\section*{4. Referral, registration and operational details}
+
+Latest referral system.md replaces earlier referral rules. Defaults: recipient 15 after verification, referrer 15 after first eligible class completion, cap 75/\allowbreak{}semester. KOL uses first successful IDR payment. Registration-only codes and in-form OTP are agreed; questions cover unresolved details.
+
+\subsection*{Registration and email verification}
+
+\begin{center}
+\begin{tabular}{@{}c@{\hspace{5mm}}c@{}}
+\flowbox{70mm}{\textbf{Email/password}\\Enter email, password and optional referral code} & \flowbox{70mm}{\textbf{Google: new account}\\Verify identity with Google} \\
+$\downarrow$ & $\downarrow$ \\
+\flowbox{70mm}{\textbf{OTP in the same form}\\{}[Enter code | Send code]\\Valid OTP + required fields complete} & \flowbox{70mm}{\textbf{Referral step}\\Apply a valid code or select\\No referral code; no extra OTP} \\
+$\downarrow$ & $\downarrow$ \\
+\flowbox{70mm}{\textbf{Register}\\Create account; consume verification proof once} & \flowbox{70mm}{\textbf{Save choice, enter app}\\Interrupted before choosing? Return to referral at next login} \\
+\end{tabular}
+\end{center}
+
+\textbf{OTP rules:} initially empty; send to the entered email after format validation. Resend has a 60-second countdown and invalidates old codes. Email changes reset verification; referral corrections do not. Handle invalid/\allowbreak{}expired codes, failed sends, attempt limits and existing emails in the form. Expiry/\allowbreak{}rate limits follow server settings.
+
+\textbf{Failed signup:} email-bound verification proof is validated atomically and consumed only after successful account creation. Retry while valid. If network failure leaves the result unknown, check status before retrying to avoid duplicate accounts/\allowbreak{}bonuses. Do not store passwords before signup. Existing Google accounts go straight to the app without new attribution.
+
+\subsection*{Referral flows and IDR equivalents}
+
+\begin{center}
+\begin{tabular}{@{}c@{\;}c@{\;}c@{\;}c@{\;}c@{}}
+\flowbox{43mm}{\textbf{Friend referral}\\Verified signup\\Valid code: recipient +15 Marks} & $\rightarrow$ & \flowbox{43mm}{\textbf{First class completed}\\Private/masterclass\\Booking alone is insufficient} & $\rightarrow$ & \flowbox{43mm}{\textbf{Check semester cap}\\Referrer +15 Marks\\Default cap: 75 Marks} \\
+\multicolumn{5}{c}{\rule{0pt}{5mm}} \\
+\flowbox{43mm}{\textbf{KOL referral}\\Signup with KOL code\\Default attribution: 90 days} & $\rightarrow$ & \flowbox{43mm}{\textbf{First successful top-up}\\IDR gateway payment > 0\\Within attribution window} & $\rightarrow$ & \flowbox{43mm}{\textbf{Record IDR commission}\\Flat + percentage\\Disbursement outside app} \\
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+\item \textbf{Registration only:} Google-step copy: "You can only enter a referral code during this step. If you do not have one, select No referral code." Correct/\allowbreak{}remove invalid or inactive codes. Saved choices cannot be repeated; no code input at checkout/\allowbreak{}in the app. Refresh/\allowbreak{}callback retries do not duplicate welcome credits.
+\item \textbf{Friends:} automatically generate a unique alphanumeric code, e.g. first name + 3 characters. Diagram figures are configurable defaults. Cap 75 permits five 15-Marks rewards. At cap, new recipients still get welcome; referrer gets no extra credit. Never exceed remaining cap; partial/\allowbreak{}no reward, semester dates and cohort eligibility require confirmation.
+\item \textbf{Marks equivalents:} at Rp5.500-Rp7.000/\allowbreak{}Mark, 15 approximately  Rp82.500-Rp105.000; 30 across a completed referral approximately  Rp165.000-Rp210.000; 75 approximately  Rp412.500-Rp525.000. Indicative service value, not cash-out, top-up invoice or Cogito cash cost. Welcome without a code and expiry are unresolved.
+\item \textbf{KOL:} admin creates codes; influencer account optional. Welcome default 15. Signup validity: 30 days from creation/\allowbreak{}activation; attribution: 90 from student signup. Expiry blocks new signups without deleting prior attribution. States: active/\allowbreak{}paused/\allowbreak{}expired; pause effects on prior attribution require a decision.
+\item \textbf{KOL exclusions:} class completion/\allowbreak{}free-Marks classes do not trigger commission. Day-95 first purchases exceed the 90-day window. Manual transfers need a separate decision.
+\item \textbf{IDR commission:} flat + (first top-up value  x  percentage); support either or both. Proposed defaults: 10\%, flat Rp0; campaign configurable. Starter Rp337.500: 10\% = Rp33.750; flat Rp50.000; combined Rp83.750. Pioneer Rp2.750.000: 10\% = Rp275.000. Round to rupiah. Proposed basis: paid top-up price excluding separate gateway fees. Gross commission; KOL tax/\allowbreak{}settlement costs differ from tutor payouts.
+\end{itemize}
+
+\subsection*{Admin controls, records and exceptions}
+
+Admin configures bonuses/\allowbreak{}caps; campaigns configure codes, welcome Marks, flat IDR, percentage, signup deadline, attribution days and status. Monthly reports/\allowbreak{}CSV filter period/\allowbreak{}code/\allowbreak{}partner and show signups, qualifying first purchases, IDR totals, flat + percentage totals, and pending/\allowbreak{}settled amounts. Student history shows rewards/\allowbreak{}remaining cap. Old daily limits are not mandatory under the latest document; confirm separately. KOL payouts remain separate.
+
+Reuse accounts, wallet, payments and completion reports. Keep auditable, deduplicated reward/\allowbreak{}attribution/\allowbreak{}commission/\allowbreak{}settlement records. Decide signup snapshots vs conditions-at-trigger settings. Record verification, completion and payment separately.
+
+Retries/\allowbreak{}webhooks must not duplicate rewards; cap checks are atomic. Failed/\allowbreak{}pending payments do not earn commission; PAID then SETTLED is not two purchases. Refund/\allowbreak{}reversal adjustments, including spent rewards, require agreement. Confirm pause effects, semester boundaries and expiry.
+
+\subsection*{Tutor payouts and history}
+
+\begin{itemize}
+\item \textbf{Current:} unpaid fees, paid history, date/\allowbreak{}status filters and CSV. Records: gross, transfer fee, net, bank account, date and paying admin. Only paid status exists; tax, proof, processing/\allowbreak{}failed states and fixed per-batch session lists are missing.
+\item \textbf{Planned:} manage tutor payouts in-app; KOL disbursement remains external. Bank-transfer integration is a separate decision. Admin reviews fees/\allowbreak{}missing reports and bank/\allowbreak{}tax data, then records payment. Tutors see their own balances/\allowbreak{}history; admin sees all tutors.
+\item \textbf{History fields:} payout ID/\allowbreak{}period; included booking or regular/\allowbreak{}cohort sessions; date; competition; per-session gross; report status; total gross; tax-data completeness; tax basis/\allowbreak{}rate/\allowbreak{}withholding; one transfer fee; net; destination-account snapshot; status; payment date; operator; reference/\allowbreak{}proof; notes. Open details from the list. Show paid/\allowbreak{}unpaid subtotals, period/\allowbreak{}status filters and admin export. Tutor notification/\allowbreak{}statement follows recorded payment.
+\item \textbf{Corrections:} profile changes cannot rewrite old payouts. Processing/\allowbreak{}failed states, validation sequence, corrections, retries and moving sessions to later batches need decisions. Audit who/\allowbreak{}when/\allowbreak{}why and before/\allowbreak{}after values; retain history.
+\end{itemize}
+
+\subsection*{Reports: on-demand vs regular classes}
+
+\begin{itemize}
+\item \textbf{Existing:} private/\allowbreak{}group and 2-4-session series completion reports cover discussion, strengths and improvement areas; tied to completion/\allowbreak{}fee processing. These series are not regular cohorts.
+\item \textbf{New regular/\allowbreak{}cohort:} admin schedule/\allowbreak{}curriculum and seat enrollment. One report per meeting: attendance, editable material covered, shared notes and optional individual notes. Students see their sessions and own individual notes; admin sees all. Shorter masterclass version if approved.
+\item \textbf{Gaps:} regular reports, enrollment-linked attendance/\allowbreak{}rosters, multi-tutor fees, missing-report reminders/\allowbreak{}queues and cohort recaps. Confirm permissions, completion/\allowbreak{}fee timing and undelivered-session handling. Recap PDF is follow-up scope.
+\end{itemize}
+
+\subsection*{cogitoacademy.id: content consolidation and migration}
+
+\begin{center}
+\begin{tabular}{@{}c@{\;}c@{\;}c@{\;}c@{\;}c@{}}
+\flowbox{43mm}{\textbf{Sanity CMS}\\Activities\\Knowledge Bank\\Competition Calendar} & $\rightarrow$ & \flowbox{43mm}{\textbf{App database + API}\\One source of truth\\Content, relationships, metadata\\and file references} & $\rightarrow$ & \flowbox{43mm}{\textbf{cogitoacademy.id}\\One Activities page\\Knowledge Bank\\Calendar + agenda fixes} \\
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+\item \textbf{Activities: one page, one source of truth.} Merge Cogito 101, Townhall and Simulation Days. Migrate content, activity categories, schedules, descriptions, images/\allowbreak{}files and relationships to app DB. Website reads app API; edits use the same source without copies. Preserve activity grouping. Redirect old Activities URLs; preserve details/\allowbreak{}links or provide appropriate redirects.
+\item \textbf{Knowledge Bank:} migrate records, categories, metadata, relationships and file references to app DB/\allowbreak{}API. Preserve current access/\allowbreak{}download links and verify documents open. Physical file storage/\allowbreak{}editorial workflow require confirmation.
+\item \textbf{Calendar and agenda:} migrate competition records, dates/\allowbreak{}schedules, categories and relationships to app DB/\allowbreak{}API. Prevent repeated instances of the same event on the same date from duplicate queries/\allowbreak{}merging. Test single/\allowbreak{}multi-day events, distinct events on the same date, schedule changes and date/\allowbreak{}timezone boundaries. Do not hide distinct events.
+\item \textbf{Tutor website tech debt:} retain current list until new app profiles are available/\allowbreak{}populated; then use app profiles via API. Track as dependent follow-up work; visibility/\allowbreak{}publishing rules need confirmation.
+\item \textbf{Verification/\allowbreak{}cutover:} compare counts by type, categories/\allowbreak{}languages, schedules, relationships, images/\allowbreak{}files, access and old URLs. Test app-source edits on the website. Stop Sanity reads after verification; prepare rollback for missing content/\allowbreak{}broken links. Storage, editor roles and publishing remain client questions.
+\end{itemize}
+
+\section*{5. Client questions and proposed delivery}
+
+\subsection*{Questions to Client}
+
+Latest referral rules apply. These are unresolved details; recommendations are not final rules. Answer cases individually.
+
+\subsection*{1. Pricing and tutor fees}
+
+\begin{itemize}
+\item Approve section 3 package/\allowbreak{}solo/\allowbreak{}group prices or provide replacements?
+\item Additional per-student fees: Rp20.000, Rp25.000 or Rp30.000 by competition? Offline tutor uplift?
+\item Cohort/\allowbreak{}masterclass full, installment, single-session and tutor prices? Two tutors: split one fee or pay each separately?
+\item Exact top-up in this release or packages first?
+\end{itemize}
+
+\subsection*{2. Cohorts, schedules and installments}
+
+\begin{itemize}
+\item Minimum enrollment not reached: minimum/\allowbreak{}check deadline? Postpone once, cancel or admin choice?
+\item Same-day tutor absence: who finds a replacement and by when? Reschedule/\allowbreak{}cancel without one?
+\item Installment count, covered sessions, amounts and due dates? Automatic Marks deduction or student clicks Pay?
+\item Insufficient balance: grace period, access/\allowbreak{}seat removal and reminder count?
+\item Payment after removal: rejoin if a seat remains? Pay for missed sessions?
+\item Late joining allowed? How to price remaining sessions?
+\item November 1 still the target? Mandatory features vs initially manual handling?
+\end{itemize}
+
+\subsection*{3. Refunds, prices and reservations: individual cases}
+
+\begin{itemize}
+\item Cogito cancels before first session: all Marks back or deduction?
+\item Cogito cancels after several sessions: refund undelivered sessions only? Purchased-plan per-session price or another formula?
+\item Full-plan withdrawal before start: full refund or deadline/\allowbreak{}deduction?
+\item Full-plan withdrawal after sessions: discounted-plan or single-session refund rate?
+\item Withdrawal mid-installment: refund unused sessions or forfeit? Stop future installments?
+\item Single-session cancellation: refund deadline? Forfeit Marks for absence?
+\item Tutor no-show/\allowbreak{}technical failure: free reschedule or refund? Tutor still paid?
+\item Price changes during unpaid checkout: reservation or new price? Seat reservation duration?
+\item Late successful payment after expiry/\allowbreak{}full class: wallet credit, alternative class or refund?
+\item Marks-only refunds or IDR exceptions? Who processes cash refunds and removes related Marks?
+\end{itemize}
+
+\subsection*{4. Tax and tutor payouts}
+
+\begin{itemize}
+\item Required NPWP/\allowbreak{}tax data, validator and 2.5\%/\allowbreak{}3\% mapping?
+\item Cogito handles incomplete profiles: proceed or hold until minimum data? Who bears withholding?
+\item Data changed after session completion but before payout: session snapshot or payout-time data?
+\item Failed transfer/\allowbreak{}account change: who corrects/\allowbreak{}retries? Transfer fee charged again? Mandatory proof/\allowbreak{}reference?
+\item Agreed handling order for missing reports, incomplete bank/\allowbreak{}tax data, failures, corrections and sessions moved to the next batch?
+\item Finance confirmed tax figures and VAT absorption?
+\end{itemize}
+
+\subsection*{5. Semester referral cap}
+
+\begin{itemize}
+\item Cap 75 allows five 15-Marks rewards; later recipients still get welcome. Semester = January-June/\allowbreak{}July-December or academic calendar?
+\item Budi signs up in semester 1, completes first class in semester 2: which cap applies?
+\item Remaining cap 10, reward 15: credit 10 or no reward?
+\end{itemize}
+
+\subsection*{6. Welcome and referral rewards}
+
+\begin{itemize}
+\item No-code signup: welcome 15 or valid-code users only?
+\item Private/\allowbreak{}masterclass eligible; cohort too? Free classes count or paid only?
+\item Bonus expiry? How many days? Spend bonus before purchased Marks?
+\item Completed class later refunded/\allowbreak{}cancelled: keep or reverse reward? Bonus already spent?
+\item Missing/\allowbreak{}corrected regular reports: who handles, when completed and fee enters payout? Multiple tutors: submit/\allowbreak{}correct permissions? Keep existing private/\allowbreak{}group/\allowbreak{}series reports?
+\end{itemize}
+
+\subsection*{7. KOL commission settlement}
+
+\begin{itemize}
+\item Defaults: 30-day signup, 90-day attribution, first IDR top-up. Flat/\allowbreak{}percentage per partner?
+\item Pause after signup: prior attribution earns commission or freezes?
+\item Admin-confirmed manual transfer eligible or gateway only?
+\item First purchase refunded: reverse commission? Already paid: next-settlement deduction or manual?
+\item External KOL disbursement: CSV sufficient or mark settled manually in-app? Required proof/\allowbreak{}reference/\allowbreak{}date? No automatic KOL transfers included.
+\item Old daily limits still needed? Signups or conversions; what happens at the limit?
+\end{itemize}
+
+\subsection*{8. Reward changes and account recovery}
+
+\begin{itemize}
+\item Budi signs up with your code on day 1: reward 15. Admin changes it to 20 on day 3. First class completed day 5. Receive 15 (signup rule) or 20 (completion rule)? Recommendation: 15 for Budi; 20 for signups after the change.
+\item Existing email/\allowbreak{}password user chooses Google with same email: link existing account without another welcome/\allowbreak{}referral?
+\end{itemize}
+
+\subsection*{9. CMS, website and release scope}
+
+\begin{itemize}
+\item Agreed: migrate all three sources, merge Activities, fix agenda and defer tutor update. Also remove landing-page Activities section?
+\item Saves go live immediately or preview/\allowbreak{}publish? Who creates, edits, publishes and deletes?
+\item Preserve Knowledge Bank access? File storage? Preserve old links/\allowbreak{}categories/\allowbreak{}languages/\allowbreak{}file access?
+\item Tutor list: approved/\allowbreak{}active only or all profiles? Who confirms readiness/\allowbreak{}source switch?
+\item Priorities across cohorts, referral/\allowbreak{}KOL, CMS, masterclass, recap PDF, waitlist and private cohorts?
+\end{itemize}
+
+\subsection*{Proposed delivery sequence}
+
+\begin{enumerate}
+\item \textbf{Confirm decisions:} prices/\allowbreak{}fees/\allowbreak{}packages, tax, cohort installments/\allowbreak{}refunds, unresolved referrals, CMS workflow and November priorities.
+\item \textbf{Economy/\allowbreak{}payouts:} admin fees, consistent historical transactions and auditable deductions/\allowbreak{}history.
+\item \textbf{Cohorts:} publish curriculum/\allowbreak{}schedules/\allowbreak{}tutors; prevent overselling; agreed payments, access, changes, reports and refunds.
+\item \textbf{Registration/\allowbreak{}referrals:} in-form OTP before creation; reset on email change; Google referral choice. Welcome 15 after verification; referrer 15 after first private/\allowbreak{}masterclass completion; cap 75/\allowbreak{}semester. Credit once.
+\item \textbf{Referral/\allowbreak{}KOL and CMS:} deduplicated credits, working campaign limits and app-managed content without lost files/\allowbreak{}links.
+\end{enumerate}
+
+Website fixes/\allowbreak{}Google investigation can proceed separately. Implementation: schema/\allowbreak{}API/\allowbreak{}UI extensions, class ledgers, financial snapshots, installment/\allowbreak{}notification scheduling, payment/\allowbreak{}reward idempotency, access controls and audit logs. Reuse wallet, gateway, Meet and notifications. Estimate schedule after scope decisions.
+
+\section*{References and review limits}
+
+Cogito Academy Meeting Notes; original Central Economy and Cohort Classes PRD; app commit 14dc4486; local main website checkout. Latest referral source: referral system.md. Production prices/\allowbreak{}live integrations have not been tested. This document does not change application behavior.
+\end{document}

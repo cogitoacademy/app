@@ -21,6 +21,9 @@ const tutorProfileSubjectFilterTable = sql.raw(
 const subjectCategoryFilterTable = sql.raw(
   '"subject_category" as "subjectCategoryFilter"',
 );
+const subjectCategoryParentFilterTable = sql.raw(
+  '"subject_category" as "subjectCategoryParentFilter"',
+);
 const tutorProfileSubjectFilterSubjectId = sql.raw(
   '"tutorProfileSubjectFilter"."subject_id"',
 );
@@ -34,6 +37,15 @@ const subjectCategoryFilterIsActive = sql.raw(
 const subjectCategoryFilterName = sql.raw('"subjectCategoryFilter"."name"');
 const subjectCategoryFilterParentId = sql.raw(
   '"subjectCategoryFilter"."parent_id"',
+);
+const subjectCategoryParentFilterId = sql.raw(
+  '"subjectCategoryParentFilter"."id"',
+);
+const subjectCategoryParentFilterIsActive = sql.raw(
+  '"subjectCategoryParentFilter"."is_active"',
+);
+const subjectCategoryParentFilterParentId = sql.raw(
+  '"subjectCategoryParentFilter"."parent_id"',
 );
 
 export interface ListPublishedInput {
@@ -96,8 +108,12 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
           from ${tutorProfileSubjectFilterTable}
           inner join ${subjectCategoryFilterTable}
             on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
+          inner join ${subjectCategoryParentFilterTable}
+            on ${subjectCategoryFilterParentId} = ${subjectCategoryParentFilterId}
           where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
             and ${subjectCategoryFilterIsActive} = true
+            and ${subjectCategoryParentFilterIsActive} = true
+            and ${subjectCategoryParentFilterParentId} is null
             and lower(${subjectCategoryFilterName}) like lower(${q}) escape '\\'
         )
       )`,
@@ -113,8 +129,12 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
       from ${tutorProfileSubjectFilterTable}
       inner join ${subjectCategoryFilterTable}
         on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
-        where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+      inner join ${subjectCategoryParentFilterTable}
+        on ${subjectCategoryFilterParentId} = ${subjectCategoryParentFilterId}
+      where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
         and ${subjectCategoryFilterIsActive} = true
+        and ${subjectCategoryParentFilterIsActive} = true
+        and ${subjectCategoryParentFilterParentId} is null
         and ${subjectCategoryFilterParentId} is not null
         ${categoryIds.length > 0 ? sql`and ${subjectCategoryFilterParentId} in ${sqlValueList(categoryIds)}` : sql``}
         ${subjectIds.length > 0 ? sql`and ${subjectCategoryFilterId} in ${sqlValueList(subjectIds)}` : sql``}

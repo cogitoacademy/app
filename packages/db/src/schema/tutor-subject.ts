@@ -31,9 +31,16 @@ export const subjectCategory = pgTable(
     ),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
+    nameId: text("name_id"),
     description: text("description"),
-    isActive: boolean("is_active").notNull().default(true),
+    descriptionId: text("description_id"),
+    lightTextColor: text("light_text_color"),
+    lightBackgroundColor: text("light_background_color"),
+    darkTextColor: text("dark_text_color"),
+    darkBackgroundColor: text("dark_background_color"),
+    isActive: boolean("is_active").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -44,6 +51,10 @@ export const subjectCategory = pgTable(
     check(
       "subject_category_parent_not_self_check",
       sql`${table.parentId} IS NULL OR ${table.parentId} <> ${table.id}`,
+    ),
+    check(
+      "subject_category_palette_hierarchy_check",
+      sql`(${table.parentId} IS NULL AND ${table.lightTextColor} IS NOT NULL AND ${table.lightBackgroundColor} IS NOT NULL AND ${table.darkTextColor} IS NOT NULL AND ${table.darkBackgroundColor} IS NOT NULL) OR (${table.parentId} IS NOT NULL AND ${table.lightTextColor} IS NULL AND ${table.lightBackgroundColor} IS NULL AND ${table.darkTextColor} IS NULL AND ${table.darkBackgroundColor} IS NULL)`,
     ),
     uniqueIndex("subject_category_slug_uniq").on(table.slug),
     index("subject_category_parentId_idx").on(table.parentId),

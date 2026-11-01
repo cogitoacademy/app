@@ -1,3 +1,4 @@
+import { requestBodyBudget } from "./body-limits";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
@@ -7,11 +8,7 @@ import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { getTrace } from "@cogito-app/api/lib/trace";
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
-import {
-  MAX_BODY_BYTES,
-  bodyLimitResponse,
-  requestUserId,
-} from "./middlewares";
+import { bodyLimitResponse, requestUserId } from "./middlewares";
 import type { EvlogApp } from "./middlewares";
 
 export function logRpcError(
@@ -77,7 +74,7 @@ export function registerRpcRoutes(app: EvlogApp) {
     async (context) => {
       const { body, tooLarge } = await readBodyWithLimit(
         context.request,
-        MAX_BODY_BYTES,
+        requestBodyBudget(context.request),
       );
       if (tooLarge) {
         return bodyLimitResponse();

@@ -18,8 +18,18 @@ import type {
   adminSearchUsersInput,
   adminGetTutorPayoutsInput,
   adminGetTutorPayoutReportInput,
-  adminMarkTutorPayoutPaidInput,
-  adminUpdateEconomySettingsInput,
+  adminGetPendingTutorPayoutsInput,
+  adminGetTutorPayoutAllocationsInput,
+  adminPreviewTutorPayoutInput,
+  adminPrepareTutorPayoutInput,
+  adminRecordTutorPayoutTransferInput,
+  adminVoidTutorPayoutInput,
+  adminResolveTutorPayoutReconciliationInput,
+  adminUpdateTutorTaxConfigInput,
+  adminSetTutorTaxRateOverrideInput,
+  adminPreviewV3EconomyInput,
+  adminSaveV3EconomyInput,
+  adminActivateV3EconomyInput,
 } from "./admin.types";
 
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
@@ -34,11 +44,11 @@ type AdminGetTutorPayoutsInputZod = z.infer<typeof adminGetTutorPayoutsInput>;
 type AdminGetTutorPayoutReportInputZod = z.infer<
   typeof adminGetTutorPayoutReportInput
 >;
-type AdminMarkTutorPayoutPaidInputZod = z.infer<
-  typeof adminMarkTutorPayoutPaidInput
+type AdminGetPendingTutorPayoutsInputZod = z.infer<
+  typeof adminGetPendingTutorPayoutsInput
 >;
-type AdminUpdateEconomySettingsInputZod = z.infer<
-  typeof adminUpdateEconomySettingsInput
+type AdminGetTutorPayoutAllocationsInputZod = z.infer<
+  typeof adminGetTutorPayoutAllocationsInput
 >;
 
 export type {
@@ -52,6 +62,44 @@ export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(adminService: AdminService) {
   return {
+    activateV3EconomySettings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminActivateV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.activateV3EconomySettings(
+            context.session!.user.id,
+            input,
+          ),
+        mapAdminError,
+      ),
+    getV3EconomySettings: async () =>
+      withDomainMap(() => adminService.getV3EconomySettings(), mapAdminError),
+    previewV3EconomySettings: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminPreviewV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        async () => adminService.previewV3EconomySettings(input),
+        mapAdminError,
+      ),
+    saveV3EconomySettings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminSaveV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.saveV3EconomySettings(context.session!.user.id, input),
+        mapAdminError,
+      ),
     getDashboardAnalytics: async ({
       context: _context,
       input,
@@ -156,7 +204,7 @@ export function createAdminHandler(adminService: AdminService) {
       input,
     }: {
       context: Context;
-      input: AdminMarkTutorPayoutPaidInputZod;
+      input: AdminGetPendingTutorPayoutsInputZod;
     }) => {
       return withDomainMap(
         () => adminService.getPendingTutorPayouts(input),
@@ -164,38 +212,111 @@ export function createAdminHandler(adminService: AdminService) {
       );
     },
 
-    markTutorPayoutPaid: async ({
-      context,
+    getTutorPayoutAllocations: async ({
       input,
     }: {
       context: Context;
-      input: AdminMarkTutorPayoutPaidInputZod;
+      input: AdminGetTutorPayoutAllocationsInputZod;
     }) => {
       return withDomainMap(
-        () => adminService.markTutorPayoutPaid(context.session!.user.id, input),
+        () => adminService.getTutorPayoutAllocations(input),
         mapAdminError,
       );
     },
 
-    getEconomySettings: async ({ context: _context }: { context: Context }) => {
-      return withDomainMap(
-        () => adminService.getEconomySettings(),
+    previewTutorPayout: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminPreviewTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.previewTutorPayout(input),
         mapAdminError,
-      );
-    },
+      ),
 
-    updateEconomySettings: async ({
+    prepareTutorPayout: async ({
       context,
       input,
     }: {
       context: Context;
-      input: AdminUpdateEconomySettingsInputZod;
-    }) => {
-      return withDomainMap(
+      input: z.infer<typeof adminPrepareTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.prepareTutorPayout(context.session!.user.id, input),
+        mapAdminError,
+      ),
+
+    recordTutorPayoutTransfer: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminRecordTutorPayoutTransferInput>;
+    }) =>
+      withDomainMap(
         () =>
-          adminService.updateEconomySettings(context.session!.user.id, input),
+          adminService.recordTutorPayoutTransfer(
+            context.session!.user.id,
+            input,
+          ),
         mapAdminError,
-      );
-    },
+      ),
+
+    voidTutorPayout: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminVoidTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.voidTutorPayout(context.session!.user.id, input),
+        mapAdminError,
+      ),
+
+    resolveTutorPayoutReconciliation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminResolveTutorPayoutReconciliationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.resolveTutorPayoutReconciliation(
+            context.session!.user.id,
+            input,
+          ),
+        mapAdminError,
+      ),
+
+    getTutorTaxConfig: async ({ context: _context }: { context: Context }) =>
+      withDomainMap(() => adminService.getTutorTaxConfig(), mapAdminError),
+
+    updateTutorTaxConfig: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminUpdateTutorTaxConfigInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.updateTutorTaxConfig(context.session!.user.id, input),
+        mapAdminError,
+      ),
+
+    setTutorTaxRateOverride: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminSetTutorTaxRateOverrideInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.setTutorTaxRateOverride(context.session!.user.id, input),
+        mapAdminError,
+      ),
   };
 }

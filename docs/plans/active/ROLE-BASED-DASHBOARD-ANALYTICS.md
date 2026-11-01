@@ -36,8 +36,9 @@ Completed in current worktree:
   nearest-deadline signals.
 - Admin dashboard shows actionable queue counts for escalations, booking
   exceptions, tutor review, and achievement review.
-- Admin labels distinguish locked booking snapshots, proposer-based active
-  counts, and the live all-time state portfolio.
+- Admin reports pricing-snapshot counts and proposer-based activity alongside
+  the live all-time state portfolio. Booking-money totals are omitted pending
+  Q15 because parent and per-session snapshots use different units.
 - Admin analytics supports 7/30/90-day presets plus a 366-day custom WIB range,
   with current/rolling account activity, current Marks ownership, lifetime paid
   conversion, and selected-range gross/refund/net top-up revenue.
@@ -264,13 +265,19 @@ Priority: **P1**. Requires definition and aggregate query work.
 
 ### A2 - "Where does money move, and what is realized?"
 
-Current `grossMarks` and `platformTakeMarks` come from locked booking snapshots.
-They are not payment revenue, settlement, refund, or tutor-cost reports.
+The former `grossMarks` and `platformTakeMarks` summary mixed booking-level and
+per-session values: series parents hold packages while their snapshots describe
+one session, and group-series parent Marks reflect the proposer rather than all
+participants. V3 snapshots also have no total service IDR or platform-take
+field. Those aggregates were removed from the admin analytics response. It now
+returns counts of booking records by V3, legacy, other, or missing price
+snapshot. It still does not count sessions or measure money.
 
 Plan:
 
 - Add separate cards for Marks sold/credited, booking Marks quoted/held,
-  deducted, released, and refunded.
+  deducted, released, and refunded only after their ledger and date bases are
+  defined.
 - Add payment attempts by status: pending, paid/settled, failed, expired,
   refunded.
 - Add tutor gross payout, transfer fees, and net payout.

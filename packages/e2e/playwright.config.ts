@@ -1,32 +1,47 @@
 import { defineConfig, devices } from "@playwright/test";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
+import {
+  resolveE2eEnvironment,
+  resolveE2eEnvFile,
+} from "./src/fixtures/e2e-environment";
 
 /**
  * E2E tests run against the local dev stack.
  *
  * Required environment:
- *   - DATABASE_URL pointing at the local Postgres container
+ *   - DATABASE_URL pointing at the local cogito-test database (or the
+ *     separately isolated cogito-test-payout database for payout coverage)
  *   - SERVER_URL=http://localhost:3101
  *   - WEB_URL=http://localhost:3100
  *
- * Playwright will start the API and web dev servers if they are not already
- * running, then seed the database before the test run.
+ * Playwright starts fresh API and web dev servers, then seeds the dedicated
+ * test database before the test run.
  */
-const envFile =
-  process.env.ENV_FILE ??
-  ["../../apps/server/.env.test", "../../apps/server/.env.test.example"].find(
-    (candidate) => existsSync(path.resolve(process.cwd(), candidate)),
-  ) ??
-  "../../apps/server/.env.test.example";
-const resolvedEnvFile = path.resolve(process.cwd(), envFile);
-dotenv.config({ path: resolvedEnvFile });
-const webUrl = process.env.WEB_URL ?? "http://localhost:3100";
-const serverUrl = process.env.SERVER_URL ?? "http://localhost:3101";
+const resolvedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
+// Preserve ambient values so the guard rejects unsafe database overrides.
+const envLoadResult = dotenv.config({ path: resolvedEnvFile, override: false });
+if (envLoadResult.error) {
+  throw new Error("E2E environment file could not be loaded.");
+}
+// Keep later setup on the same resolved file, even if dotenv defines ENV_FILE.
+process.env.ENV_FILE = resolvedEnvFile;
+const e2eEnvironment = resolveE2eEnvironment(process.env);
+const webUrl = e2eEnvironment.webUrl;
+const serverUrl = e2eEnvironment.serverUrl;
 const serverCwd = path.resolve(process.cwd(), "../../apps/server");
 const webCwd = path.resolve(process.cwd(), "../../apps/web");
 const studentStorageState = path.resolve(process.cwd(), ".auth/student.json");
+const testServerEnv = {
+  ...process.env,
+  NODE_ENV: "test",
+  DATABASE_URL: e2eEnvironment.databaseUrl,
+  SERVER_URL: e2eEnvironment.serverUrl,
+  BETTER_AUTH_URL: e2eEnvironment.serverUrl,
+  VITE_SERVER_URL: e2eEnvironment.serverUrl,
+  PORT: String(e2eEnvironment.serverPort),
+  WEB_PORT: String(e2eEnvironment.webPort),
+};
 
 export default defineConfig({
   testDir: "./src/specs",
@@ -40,7 +55,7 @@ export default defineConfig({
   use: {
     baseURL: webUrl,
     storageState: studentStorageState,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [
@@ -51,10 +66,10 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `bun --env-file=${resolvedEnvFile} run dev`,
+      command: `bun --env-file="${resolvedEnvFile}" run dev`,
       cwd: serverCwd,
       url: `${serverUrl}/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       stderr: "pipe",
       stdout: "pipe",
@@ -62,7 +77,10 @@ export default defineConfig({
       // env (refresh token + enabled flag) would otherwise create/cancel live
       // events for undeliverable seed attendees and spam DSN bounces.
       env: {
+        ...testServerEnv,
         GOOGLE_MEET_ENABLED: "false",
+        ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX:
+          "Cogito E2E RETRY: ",
         GOOGLE_MEET_REFRESH_TOKEN: "",
         GOOGLE_MEET_CLIENT_ID: "",
         GOOGLE_MEET_CLIENT_SECRET: "",
@@ -72,13 +90,14 @@ export default defineConfig({
       },
     },
     {
-      command: `bun --env-file=${resolvedEnvFile} run dev -- --mode test`,
+      command: `bun --env-file="${resolvedEnvFile}" run --bun dev -- --mode test`,
       cwd: webCwd,
       url: webUrl,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       stderr: "pipe",
       stdout: "pipe",
+      env: testServerEnv,
     },
   ],
   globalSetup: "./src/fixtures/global-setup.ts",

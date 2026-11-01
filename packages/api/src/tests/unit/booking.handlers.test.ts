@@ -30,6 +30,7 @@ function makeBookingService() {
     addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
     getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
     listCompletionFeedback: mock(async () => [{ id: "f1" }]),
+    listCompletionFeedbackHistory: mock(async () => [{ id: "history-1" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -72,6 +73,33 @@ function makeContext(userId = "u1") {
 }
 
 describe("bookingHandler", () => {
+  test("report history forwards the requesting user and role", async () => {
+    const booking = makeBookingService();
+    const handler = createBookingHandler(booking as any);
+    const context = makeContext("admin1");
+    context.session.user.role = "admin";
+    expect(
+      await handler.listCompletionFeedbackHistory({
+        context,
+        input: { bookingId: "b1" },
+      }),
+    ).toEqual([{ id: "history-1" }]);
+    expect(booking.listCompletionFeedbackHistory).toHaveBeenCalledWith(
+      "b1",
+      "admin1",
+      "admin",
+    );
+    delete context.session.user.role;
+    await handler.listCompletionFeedbackHistory({
+      context,
+      input: { bookingId: "b1" },
+    });
+    expect(booking.listCompletionFeedbackHistory).toHaveBeenLastCalledWith(
+      "b1",
+      "admin1",
+      undefined,
+    );
+  });
   beforeEach(() => {
     bookingIdempotency["store"].clear();
   });
@@ -599,7 +627,7 @@ describe("tutorActionsHandler", () => {
   });
 
   describe("completeSession", () => {
-    test("calls booking.completeSession with bookingId, session user id, and optional sessionId", async () => {
+    test("forwards completion details and an omitted optional requestKey", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
@@ -619,8 +647,32 @@ describe("tutorActionsHandler", () => {
         "t1",
         "s1",
         TEST_COMPLETION_FEEDBACK,
+        undefined,
       );
       expect(result).toEqual({ id: "b1", currentState: "completed" });
+    });
+
+    test("forwards an explicit requestKey to booking.completeSession", async () => {
+      const booking = makeBookingService();
+      const handler = createTutorActionsHandler(booking as any);
+      const requestKey = "2e10255e-6f8f-4be8-9db2-9b8331d89c3b";
+
+      await handler.completeSession({
+        context: makeContext("t1") as any,
+        input: {
+          bookingId: "b1",
+          feedback: TEST_COMPLETION_FEEDBACK,
+          requestKey,
+        } as any,
+      });
+
+      expect(booking.completeSession).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        requestKey,
+      );
     });
   });
 
@@ -643,5 +695,69 @@ describe("tutorActionsHandler", () => {
       );
       expect(result).toEqual({ bookingId: "b1", attendanceState: "present" });
     });
+  });
+});
+
+describe("booking handler optional scheduling fields", () => {
+  test.each([createBookingHandler, createTutorActionsHandler])(
+    "reschedule supplies ninety-minute end when the client omits it",
+    async (createHandler) => {
+      const booking = makeBookingService();
+      const handler = createHandler(booking as any);
+      const start = new Date("2026-11-10T10:00:00Z");
+      await handler.proposeReschedule({
+        context: makeContext("tutor1"),
+        input: {
+          bookingId: "b1",
+          proposedStartAt: start,
+          reason: "New time",
+        } as any,
+      });
+      expect(booking.proposeReschedule).toHaveBeenCalledWith(
+        "tutor1",
+        "b1",
+        start,
+        new Date("2026-11-10T11:30:00Z"),
+        "New time",
+        undefined,
+        undefined,
+      );
+    },
+  );
+
+  test("group series without an optional subject still forwards its input and keeps request identity", async () => {
+    const createGroupSeries = mock(async () => ({
+      id: "series-optional-subject",
+    }));
+    const handler = createBookingHandler({
+      ...makeBookingService(),
+      createGroupSeries,
+    } as any);
+    const context = makeContext("student1");
+    context.headers = makeHeaders("optional-subject-coverage");
+    const input = {
+      tutorId: "tutor1",
+      availabilitySlotId: "slot1",
+      modality: "online",
+      targetGroupSize: 2,
+      inviteeUserIds: ["student2"],
+      sessions: [
+        { scheduledStartAt: new Date("2026-11-10T10:00:00Z") },
+        { scheduledStartAt: new Date("2026-11-11T10:00:00Z") },
+      ],
+      timezone: "Asia/Jakarta",
+    };
+    await expect(
+      handler.createGroupSeries({ context, input: input as any }),
+    ).resolves.toEqual({ id: "series-optional-subject" });
+    await handler.createGroupSeries({ context, input: input as any });
+    expect(createGroupSeries).toHaveBeenCalledTimes(1);
+    expect(createGroupSeries).toHaveBeenCalledWith(
+      "student1",
+      expect.objectContaining({
+        subjectId: undefined,
+        sessions: input.sessions,
+      }),
+    );
   });
 });

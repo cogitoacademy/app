@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CompetitionPalette } from "../competition-catalog/competition-catalog.types";
 
 export const getStudentResourceFileInput = z.object({
   resourceId: z.string().min(1),
@@ -13,6 +14,7 @@ export type CompetitionContent = {
     id: string;
     name: string;
     coreCategory: string;
+    parentColors: CompetitionPalette;
   }>;
   educationLevels: string[];
   startDate: string;
@@ -31,6 +33,7 @@ export type StudentResourceContent = {
 };
 
 export type StudentResourceFile = {
+  bytes?: Uint8Array;
   fileUrl: string;
   fileName: string | null;
   mimeType: string | null;

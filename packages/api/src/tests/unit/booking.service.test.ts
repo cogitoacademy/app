@@ -6,6 +6,8 @@ import {
   getTutorPayoutTransferFeeIdr,
 } from "../../modules/booking/booking.service";
 import { RESPONSE_WINDOW_MS } from "../../shared/constants";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+import { calculateV3SessionPrice } from "../../modules/pricing/v3-rate-card";
 import {
   BookingNotFoundError,
   BookingNotOwnedError,
@@ -31,13 +33,31 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingCompletionReportConflictError,
   BookingTutorCapacityError,
+  TutorPayoutPreviewStaleError,
+  TutorPayoutTaxProfileIncompleteError,
+  TutorPayoutNotFoundError,
+  BookingV3CompetitionRequiredError,
+  BookingV3CompetitionUnavailableError,
+  BookingV3PricingRevisionUnavailableError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
   return {
     transaction: mock(async (fn: any) => {
-      const tx = { ...makeDb(), ...mockRepo() };
+      const tx = {
+        ...makeDb(),
+        ...mockRepo(),
+        execute: mock(async () => {}),
+        query: {
+          subjectCategory: {
+            findFirst: mock(async () => ({
+              parent: { parentId: null, isActive: true },
+            })),
+          },
+        },
+      };
       return fn(tx);
     }),
     execute: mock(async () => {}),
@@ -60,7 +80,23 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
       all: 0,
     })),
     findTutorProfile: mock(async () => null),
-    findTutorSubjectTopic: mock(async () => null),
+    findTutorSubjectTopic: mock(
+      async (_conn: any, _tutorId: string, subjectId: string) =>
+        subjectId === "mun-speech"
+          ? {
+              categoryId: "competition-mun",
+              categorySlug: "competition-model-united-nations",
+              categoryName: "Model United Nations",
+              subcategoryId: "mun-speech",
+              subcategorySlug: "speech",
+              subcategoryName: "Speech",
+            }
+          : null,
+    ),
+    getTutorSubjectAssignmentState: mock(async () => ({
+      hasAssignments: false,
+      hasActiveAssignments: false,
+    })),
     findAvailabilitySlot: mock(async () => null),
     findAvailabilityWindowContaining: mock(async () => null),
     listActiveTutorAvailability: mock(async () => []),
@@ -78,6 +114,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
+    findLedgerEventKeys: mock(async () => []),
+    findLedgerEventAmounts: mock(async () => new Map()),
     findPendingInvitees: mock(async () => []),
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
@@ -88,6 +126,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateRescheduleProposal: mock(async () => {}),
     insertBookingSession: mock(async () => {}),
     listSessionsBySeriesId: mock(async () => []),
+    updateScheduledSeriesPriceSnapshot: mock(async () => {}),
     findBookingsExpiringByDeadline: mock(async () => []),
     findBookingsWithTutorLateness: mock(async () => []),
     findTutorParticipant: mock(async () => null),
@@ -100,15 +139,40 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findSessionById: mock(async () => null),
     completeSession: mock(async () => {}),
     findCompletedBookingsByTutor: mock(async () => []),
-    findLatestPaidTutorPayout: mock(async () => null),
+    findTutorSessionFeesByTutor: mock(async () => []),
+    listTutorSessionFeeEventKeysByBookings: mock(async () => []),
+    listTutorPayoutAllocatedSourceKeys: mock(async () => []),
+    insertTutorPayoutAllocations: mock(async () => []),
+    listTutorPayoutAllocationsByPayoutId: mock(async () => []),
     listTutorPayoutProfiles: mock(async () => []),
     listTutorPayoutRecords: mock(async () => []),
+    listTutorPayoutsByTutorId: mock(async () => []),
+    findTutorTaxConfig: mock(async () => null),
+    findTutorPayoutByIdempotencyKey: mock(async () => null),
+    listTutorPayoutReconciliationSourceKeys: mock(async () => []),
     insertTutorPayout: mock(async () => ({})),
+    insertTutorSessionFee: mock(async () => ({})),
     updateSessionSchedule: mock(async () => {}),
-    cancelSession: mock(async () => {}),
+    cancelSession: mock(async () => true),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
-    insertCompletionFeedback: mock(async () => ({})),
+    insertCompletionFeedback: mock(async (_conn: any, values: any) => ({
+      id: "feedback1",
+      ...values,
+      version: 1,
+      createdAt: new Date(),
+    })),
+    insertCompletionFeedbackHistory: mock(async (_conn: any, values: any) => ({
+      id: "feedback-history1",
+      ...values,
+      createdAt: new Date(),
+    })),
+    findCompletionFeedbackHistoryByRequestKey: mock(async () => null),
+    listCompletionFeedbackHistoryByBooking: mock(async () => []),
+    listCompletionFeedbackHistoryStatesByBooking: mock(async () => []),
+    listCompletionFeedbackHistoryByFeedback: mock(async () => []),
+    updateCompletionFeedback: mock(async () => null),
+    hasChargeableFeedbackEntitlement: mock(async () => false),
     listCompletionFeedbackByBooking: mock(async () => []),
     findCompletionFeedback: mock(async () => null),
     ...overrides,
@@ -159,18 +223,15 @@ function makeWallet(overrides: Record<string, unknown> = {}) {
 
 function makePricing() {
   return {
-    computeSplit: mock((_modality: string, _price: number, _size: number) => ({
-      perStudent: 42,
-      baseline: 42,
-      tutorShare: 33.6,
-      cogitoTake: 8.4,
-      baselineCogitoTake: 12,
-      baselineTutorShare: 30,
-      extraTotal: 0,
-      cogitoExtraTake: 0,
-      tutorExtraShare: 0,
+    getActiveV3Config: mock(async () => ({
+      version: 1,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
     })),
-    validatePrices: mock(() => null),
+    getV3ConfigByVersion: mock(async () => ({
+      version: 1,
+      values: DEFAULT_V3_ECONOMY_CONFIG,
+    })),
+    calculateV3SessionPrice: mock(calculateV3SessionPrice),
   };
 }
 
@@ -210,6 +271,7 @@ function makeMeeting() {
 function makeBooking(overrides: Record<string, unknown> = {}) {
   return {
     id: "b1",
+    bookingNumber: 1,
     type: "solo",
     modality: "online",
     tutorId: "tutor1",
@@ -222,15 +284,14 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     holdAmount: 42,
     originalMarks: 42,
     priceSnapshot: {
-      perStudent: 42,
-      baseline: 42,
-      tutorShare: 33.6,
-      cogitoTake: 8.4,
-      baselineCogitoTake: 12,
-      baselineTutorShare: 30,
-      extraTotal: 0,
-      cogitoExtraTake: 0,
-      tutorExtraShare: 0,
+      engine: "v3",
+      v3Revision: 1,
+      competition: "competition-model-united-nations",
+      modality: "online",
+      headcount: 1,
+      perStudentMarks: 42,
+      collectedMarks: 42,
+      tutorHonorariumIdr: 200_000,
     },
     scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
     scheduledEndAt: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
@@ -277,50 +338,6 @@ function makeParticipant(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function realComputeSplit(
-  modality: string,
-  tutorPricePerStudent: number,
-  confirmedHeadcount: number,
-) {
-  const ONLINE: Record<number, { tutor: number; cogito: number }> = {
-    1: { tutor: 30, cogito: 12 },
-    2: { tutor: 54, cogito: 16 },
-    3: { tutor: 64, cogito: 20 },
-    4: { tutor: 74, cogito: 22 },
-    5: { tutor: 81, cogito: 24 },
-    6: { tutor: 88, cogito: 26 },
-  };
-  const OFFLINE: Record<number, { tutor: number; cogito: number }> = {
-    1: { tutor: 35, cogito: 15 },
-    2: { tutor: 70, cogito: 20 },
-    3: { tutor: 95, cogito: 25 },
-    4: { tutor: 115, cogito: 25 },
-    5: { tutor: 120, cogito: 30 },
-    6: { tutor: 127, cogito: 35 },
-  };
-  const perStudent = Math.floor(tutorPricePerStudent);
-  const tutorTotal = perStudent * confirmedHeadcount;
-  const baseline =
-    modality === "offline"
-      ? OFFLINE[confirmedHeadcount]
-      : ONLINE[confirmedHeadcount];
-  const baselineTotal = baseline!.tutor + baseline!.cogito;
-  const extraTotal = Math.max(0, tutorTotal - baselineTotal);
-  const cogitoExtraTake = Math.floor(extraTotal / 5);
-  const tutorExtraShare = extraTotal - cogitoExtraTake;
-  return {
-    perStudent,
-    baseline: baselineTotal,
-    tutorShare: baseline!.tutor + tutorExtraShare,
-    cogitoTake: baseline!.cogito + cogitoExtraTake,
-    baselineCogitoTake: baseline!.cogito,
-    baselineTutorShare: baseline!.tutor,
-    extraTotal,
-    cogitoExtraTake,
-    tutorExtraShare,
-  };
-}
-
 function createService(
   overrides: {
     repo?: Record<string, unknown>;
@@ -328,6 +345,7 @@ function createService(
     meeting?: Record<string, unknown>;
     pricing?: Record<string, unknown>;
     roomPort?: Record<string, unknown>;
+    referralPort?: Record<string, unknown> | null;
   } = {},
 ) {
   const db = makeDb();
@@ -344,6 +362,12 @@ function createService(
   const roomPort = overrides.roomPort
     ? { ...makeRoomPort(), ...overrides.roomPort }
     : makeRoomPort();
+  const referralPort =
+    overrides.referralPort === null
+      ? undefined
+      : (overrides.referralPort ?? {
+          recordEligibleFirstCompletion: mock(async () => null),
+        });
   const service = createBookingService({
     db,
     repo,
@@ -353,6 +377,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   } as any);
   return {
     service,
@@ -364,6 +389,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   };
 }
 
@@ -381,6 +407,68 @@ function makeRoomPort(overrides: Record<string, unknown> = {}) {
 }
 
 describe("BookingService", () => {
+  test("manual tutor link rejects a deleted booking", async () => {
+    const { service, meeting } = createService();
+    await expect(
+      service.tutorSetMeetingLink(
+        "deleted",
+        "tutor1",
+        "https://meet.example/link",
+      ),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(meeting.setManualLink).not.toHaveBeenCalled();
+  });
+
+  test.each(["initial", "locked"] as const)(
+    "admin completion rejects a booking missing at %s read",
+    async (scenario) => {
+      let reads = 0;
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            reads++;
+            return scenario === "initial" || reads > 1 ? null : makeBooking();
+          }),
+        },
+      });
+      await expect(
+        service.submitAdminCompletionReport({
+          adminId: "admin1",
+          bookingId: "b1",
+          reason: "Verified delivery",
+          requestKey: crypto.randomUUID(),
+          deliveryConfirmed: true,
+          feedback: TEST_COMPLETION_FEEDBACK,
+        }),
+      ).rejects.toBeInstanceOf(BookingNotFoundError);
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    },
+  );
+
+  test("solo creation rechecks a tutor removed after the initial lookup", async () => {
+    let reads = 0;
+    const { service, wallet } = createService({
+      repo: {
+        findTutorProfile: mock(async () =>
+          ++reads === 1 ? makeTutorProfile() : null,
+        ),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+      },
+    });
+    const start = new Date(Date.now() + 48 * 3600000);
+    await expect(
+      service.createSolo("student1", {
+        tutorId: "tutor1",
+        availabilitySlotId: "slot1",
+        subjectId: "mun-speech",
+        modality: "online",
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(start.getTime() + 90 * 60000),
+        timezone: "Asia/Jakarta",
+      }),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.hold).not.toHaveBeenCalled();
+  });
   test("charges only conventional BCA no transfer fee", () => {
     expect(getTutorPayoutTransferFeeIdr("BCA")).toBe(0);
     expect(getTutorPayoutTransferFeeIdr(" bca ")).toBe(0);
@@ -396,6 +484,30 @@ describe("BookingService", () => {
   });
 
   describe("getById", () => {
+    test("exposes booking-scoped tutor fees only to admins", async () => {
+      const fees = [
+        { id: "fee1", grossHonorariumIdr: 300000, payoutStatus: "paid" },
+      ];
+      const findFees = mock(async () => fees);
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => ({
+            id: "b1",
+            proposerId: "student1",
+            tutorId: "tutor1",
+            currentState: "confirmed",
+          })),
+          findBookingTutorFees: findFees,
+        },
+      });
+      const student = await service.getById("b1", "student1");
+      expect(student).not.toHaveProperty("tutorFees");
+      expect(findFees).not.toHaveBeenCalled();
+      const admin = await service.getById("b1", "admin1", "admin");
+      expect(admin.tutorFees).toEqual(fees);
+      expect(findFees).toHaveBeenCalledWith("b1", "tutor1");
+    });
+
     test("returns booking with participants when found and user is proposer", async () => {
       const booking = {
         id: "b1",
@@ -752,6 +864,7 @@ describe("BookingService", () => {
 
   describe("createSolo", () => {
     const soloInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -815,6 +928,27 @@ describe("BookingService", () => {
       await expect(
         service.createSolo("student1", { ...soloInput, modality: "online" }),
       ).rejects.toThrow(BookingNotEditableError);
+    });
+
+    test("revalidates tutor modality inside booking transaction", async () => {
+      let profileLookup = 0;
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => {
+            profileLookup += 1;
+            return makeTutorProfile({
+              modality: profileLookup === 1 ? "both" : "online",
+            });
+          }),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, modality: "offline" }),
+      ).rejects.toThrow(BookingNotEditableError);
+      expect(profileLookup).toBe(2);
     });
 
     test("throws BookingConflictError when tutor has overlapping booking", async () => {
@@ -917,6 +1051,284 @@ describe("BookingService", () => {
       });
     });
 
+    test("rejects missing subject even when tutor has no catalog assignments", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => null),
+          getTutorSubjectAssignmentState: mock(async () => ({
+            hasAssignments: false,
+            hasActiveAssignments: false,
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking()),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("requires explicit subject even when tutor has one active topic", async () => {
+      const sessionTopic = {
+        categoryId: "competition-mun",
+        categorySlug: "competition-model-united-nations",
+        categoryName: "Model United Nations",
+        subcategoryId: "mun-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
+      const { service, repo } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking()),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("rejects an explicitly requested archived specialization without holding Marks", async () => {
+      const { service, wallet, repo } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => null),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          insertBooking: mock(async () => makeBooking()),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", {
+          ...soloInput,
+          subjectId: "archived-specialization",
+        }),
+      ).rejects.toThrow(BookingNotEditableError);
+
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("rejects omitted topic when all tutor assignments are archived", async () => {
+      const { service, wallet, repo } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => null),
+          getTutorSubjectAssignmentState: mock(async () => ({
+            hasAssignments: true,
+            hasActiveAssignments: false,
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          insertBooking: mock(async () => makeBooking()),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("rejects missing subject when tutor teaches multiple topics", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => null),
+          getTutorSubjectAssignmentState: mock(async () => ({
+            hasAssignments: true,
+            hasActiveAssignments: true,
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking()),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("prices a V3 solo booking from the selected topic and pins its revision", async () => {
+      const sessionTopic = {
+        categoryId: "competition-mun",
+        categorySlug: "competition-model-united-nations",
+        categoryName: "Model United Nations",
+        subcategoryId: "mun-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 11,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.createSolo("student1", {
+        ...soloInput,
+        subjectId: "mun-speech",
+      });
+
+      const snapshot = (repo.insertBooking.mock.calls[0]![1] as any)
+        .priceSnapshot;
+      expect(snapshot).toEqual({
+        engine: "v3",
+        v3Revision: 11,
+        competition: "competition-model-united-nations",
+        modality: "online",
+        headcount: 1,
+        perStudentMarks: 50,
+        collectedMarks: 50,
+        tutorHonorariumIdr: 200_000,
+      });
+      expect(snapshot).not.toHaveProperty("tutorShare");
+      expect(snapshot).not.toHaveProperty("cogitoTake");
+      expect(snapshot).not.toHaveProperty("markValueIdr");
+      expect(wallet.hold.mock.calls[0]![1].amount).toBe(50);
+    });
+
+    test("prices a dynamic catalog parent from its active revision rate", async () => {
+      const sessionTopic = {
+        categoryId: "competition-policy-debate",
+        categorySlug: "competition-policy-debate",
+        categoryName: "Policy Debate",
+        subcategoryId: "policy-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({
+              baseRatesIdr: { online: 900000 },
+              prices: { "1": 99 },
+            }),
+          ),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 12,
+            values: config,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.createSolo("student1", {
+        ...soloInput,
+        subjectId: "policy-speech",
+      });
+
+      expect(
+        (repo.insertBooking.mock.calls[0]![1] as any).priceSnapshot,
+      ).toEqual({
+        engine: "v3",
+        v3Revision: 12,
+        competition: "competition-policy-debate",
+        modality: "online",
+        headcount: 1,
+        perStudentMarks: 41,
+        collectedMarks: 41,
+        tutorHonorariumIdr: 123000,
+      });
+      expect(wallet.hold.mock.calls[0]![1].amount).toBe(41);
+    });
+
+    test("does not sell a dynamic catalog parent through legacy tutor rates before activation", async () => {
+      const { service, repo, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({
+              baseRatesIdr: { online: 900000 },
+              prices: { "1": 99 },
+            }),
+          ),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "competition-policy-debate",
+            categorySlug: "competition-policy-debate",
+            categoryName: "Policy Debate",
+            subcategoryId: "policy-speech",
+            subcategorySlug: "speech",
+            subcategoryName: "Speech",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+        },
+        pricing: { getActiveV3Config: mock(async () => null) },
+      });
+
+      await expect(
+        service.createSolo("student1", {
+          ...soloInput,
+          subjectId: "policy-speech",
+        }),
+      ).rejects.toBeInstanceOf(BookingV3PricingRevisionUnavailableError);
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.insertBooking).not.toHaveBeenCalled();
+    });
+
+    test("requires a resolvable competition topic when V3 pricing is active", async () => {
+      const { service, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => null),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 11,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: undefined }),
+      ).rejects.toThrow(
+        "A supported competition topic must be selected for V3 pricing",
+      );
+      expect(wallet.hold).not.toHaveBeenCalled();
+    });
+
     test("rejects a subject the tutor does not teach", async () => {
       const { service } = createService({
         repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
@@ -925,10 +1337,105 @@ describe("BookingService", () => {
         service.createSolo("student1", { ...soloInput, subjectId: "unknown" }),
       ).rejects.toThrow(BookingNotEditableError);
     });
+
+    test("rejects a tutor topic whose competition is no longer selectable", async () => {
+      const { service, db } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "inactive-competition",
+            categorySlug: "inactive-competition",
+            categoryName: "Inactive Competition",
+            subcategoryId: "topic",
+            subcategorySlug: "topic",
+            subcategoryName: "Topic",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+      });
+      db.transaction.mockImplementation(async (fn: any) =>
+        fn({
+          execute: mock(async () => {}),
+          query: {
+            subjectCategory: {
+              findFirst: mock(async () => ({
+                parent: { parentId: "archived-parent", isActive: false },
+              })),
+            },
+          },
+        }),
+      );
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: "topic" }),
+      ).rejects.toBeInstanceOf(BookingNotEditableError);
+    });
+
+    test("rejects active V3 pricing when the selected competition has no rate", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "competition-without-rate",
+            categorySlug: "competition-without-rate",
+            categoryName: "Competition without rate",
+            subcategoryId: "topic",
+            subcategorySlug: "topic",
+            subcategoryName: "Topic",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 13,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              competitionRates: {},
+            },
+          })),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", { ...soloInput, subjectId: "topic" }),
+      ).rejects.toBeInstanceOf(BookingV3CompetitionUnavailableError);
+    });
+
+    test("rejects unavailable V3 pricing calculation", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => ({
+            categoryId: "competition-mun",
+            categorySlug: "competition-model-united-nations",
+            categoryName: "Model United Nations",
+            subcategoryId: "mun-speech",
+            subcategorySlug: "speech",
+            subcategoryName: "Speech",
+          })),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+        pricing: {
+          calculateV3SessionPrice: undefined,
+          getActiveV3Config: mock(async () => ({
+            version: 13,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+        },
+      });
+
+      await expect(
+        service.createSolo("student1", {
+          ...soloInput,
+          subjectId: "mun-speech",
+        }),
+      ).rejects.toThrow("A supported competition topic must be selected");
+    });
   });
 
   describe("createGroup", () => {
     const groupInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -996,8 +1503,8 @@ describe("BookingService", () => {
       );
       for (const [params] of inviteeWrites) {
         expect(params.body).toMatch(/schedule/i);
-        expect(params.body).toContain("42");
-        expect(params.body).toContain("126");
+        expect(params.body).toContain("25");
+        expect(params.body).toContain("75");
         expect(params.body).toContain("/bookings/");
         expect(params.body).toMatch(/https?:\/\//);
         expect(params.emailRequired).toBe(true);
@@ -1097,6 +1604,7 @@ describe("BookingService", () => {
 
   describe("createSeries", () => {
     const seriesInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -1198,11 +1706,60 @@ describe("BookingService", () => {
       await service.createSeries("student1", seriesInput);
 
       expect(wallet.hold).toHaveBeenCalledTimes(1);
-      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
+      expect(wallet.hold.mock.calls[0][1].amount).toBe(100);
       expect(repo.insertBooking).toHaveBeenCalledTimes(1);
       expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
       expect(repo.insertBookingSession).toHaveBeenCalledTimes(2);
       expect(repo.insertStateHistory).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps the active V3 N1 solo-series path priced as one participant", async () => {
+      const sessionTopic = {
+        categoryId: "competition-model-united-nations",
+        categorySlug: "competition-model-united-nations",
+        categoryName: "Model United Nations",
+        subcategoryId: "mun-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () => makeBooking({ type: "series" })),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 14,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.createSeries("student1", {
+        ...seriesInput,
+        subjectId: "mun-speech",
+      });
+
+      const priceSnapshot = (repo.insertBooking.mock.calls[0]![1] as any)
+        .priceSnapshot;
+      expect(priceSnapshot).toMatchObject({
+        engine: "v3",
+        v3Revision: 14,
+        headcount: 1,
+        perStudentMarks: 50,
+        collectedMarks: 50,
+        tutorHonorariumIdr: 200000,
+      });
+      expect(wallet.hold.mock.calls[0]![1].amount).toBe(100);
+      for (const [, values] of repo.insertBookingSession.mock.calls) {
+        expect(values).toMatchObject({ holdAmount: 50, priceSnapshot });
+      }
     });
 
     test("throws BookingConflictError when overlapping booking exists for a session", async () => {
@@ -1222,6 +1779,7 @@ describe("BookingService", () => {
 
   describe("createGroupSeries (FR-20)", () => {
     const groupSeriesInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -1295,9 +1853,9 @@ describe("BookingService", () => {
         groupSeriesInput,
       );
 
-      // Package = perSession (42) × 2 sessions; proposer holds up front.
+      // Package = perSession (25) × 2 sessions; proposer holds up front.
       expect(wallet.hold).toHaveBeenCalledTimes(1);
-      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
+      expect(wallet.hold.mock.calls[0][1].amount).toBe(50);
       expect(repo.insertBooking).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -1305,7 +1863,7 @@ describe("BookingService", () => {
           targetGroupSize: 3,
           confirmedHeadcount: 1,
           currentState: "awaiting_participant_confirmation",
-          holdAmount: 84,
+          holdAmount: 50,
         }),
       );
       expect(repo.insertParticipant).toHaveBeenCalledTimes(3);
@@ -1325,11 +1883,74 @@ describe("BookingService", () => {
       for (const [params] of inviteeWrites) {
         expect(params.title).toBe("Group series invitation");
         expect(params.body).toContain("cannot opt out");
-        expect(params.body).toContain("42");
-        expect(params.body).toContain("84");
+        expect(params.body).toContain("25");
+        expect(params.body).toContain("50");
         expect(params.body).toContain("/bookings/");
         expect(params.body).toMatch(/https?:\/\//);
         expect(params.emailRequired).toBe(true);
+      }
+    });
+
+    test("creates an active V3 group series at target headcount and pins its revision", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const sessionTopic = {
+        categoryId: "competition-policy-debate",
+        categorySlug: "competition-policy-debate",
+        categoryName: "Policy Debate",
+        subcategoryId: "policy-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          findUsersByIds: mock(async () => [
+            { id: "student2" },
+            { id: "student3" },
+          ]),
+          insertBooking: mock(async () =>
+            makeBooking({ type: "series", targetGroupSize: 3 }),
+          ),
+        },
+        pricing: {
+          getActiveV3Config: mock(async () => ({
+            version: 13,
+            values: config,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.createGroupSeries("student1", {
+        ...groupSeriesInput,
+        subjectId: "policy-speech",
+      });
+
+      const priceSnapshot = (repo.insertBooking.mock.calls[0]![1] as any)
+        .priceSnapshot;
+      expect(priceSnapshot).toEqual({
+        engine: "v3",
+        v3Revision: 13,
+        competition: "competition-policy-debate",
+        modality: "online",
+        headcount: 3,
+        perStudentMarks: 22,
+        collectedMarks: 66,
+        tutorHonorariumIdr: 183000,
+      });
+      expect(wallet.hold.mock.calls[0]![1].amount).toBe(44);
+      expect(repo.insertBookingSession).toHaveBeenCalledTimes(2);
+      for (const [, values] of repo.insertBookingSession.mock.calls) {
+        expect(values).toMatchObject({ holdAmount: 22, priceSnapshot });
       }
     });
   });
@@ -2217,7 +2838,294 @@ describe("BookingService", () => {
     });
   });
 
+  describe("submitAdminCompletionReport", () => {
+    test.each([
+      {
+        patch: { deliveryConfirmed: false },
+        message: "Confirm that the session was delivered",
+      },
+      { patch: { reason: "  " }, message: "audit reason" },
+      { patch: { reason: "😀".repeat(601) }, message: "audit reason" },
+      { patch: { requestKey: "not-a-uuid" }, message: "valid request key" },
+      {
+        patch: { expectedVersion: 0 },
+        message: "expected report version is invalid",
+      },
+      {
+        patch: { expectedVersion: 1.5 },
+        message: "expected report version is invalid",
+      },
+    ])(
+      "rejects invalid admin report metadata: %s",
+      async ({ patch, message }) => {
+        const { service, db, wallet } = createService();
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...patch,
+          }),
+        ).rejects.toThrow(message);
+        expect(db.transaction).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each([
+      "single-with-session",
+      "series-missing-session",
+      "series-wrong-session",
+    ] as const)(
+      "rejects invalid admin report session references: %s",
+      async (scenario) => {
+        const { service, wallet, repo } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                type: scenario === "single-with-session" ? "solo" : "series",
+                currentState: "completed",
+              }),
+            ),
+            findSessionById: mock(async () => ({
+              id: "session1",
+              seriesBookingId: "other-booking",
+            })),
+          },
+        });
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...(scenario === "series-missing-session"
+              ? {}
+              : { sessionId: "session1" }),
+          }),
+        ).rejects.toBeInstanceOf(
+          scenario === "single-with-session"
+            ? BookingNotEditableError
+            : scenario === "series-missing-session"
+              ? BookingSessionRequiredError
+              : BookingSessionNotFoundError,
+        );
+        expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each([
+      "missing-report",
+      "not-delivered",
+      "not-ended",
+      "cancelled-single",
+      "cancelled-series",
+    ] as const)(
+      "rejects an admin report inconsistent with delivery state: %s",
+      async (scenario) => {
+        const isSeries = scenario === "cancelled-series";
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                type: isSeries ? "series" : "solo",
+                currentState: scenario.startsWith("cancelled")
+                  ? "cancelled"
+                  : "scheduled",
+                scheduledEndAt: new Date(
+                  Date.now() + (scenario === "not-ended" ? 60000 : -60000),
+                ),
+              }),
+            ),
+            findSessionById: mock(async () => ({
+              id: "session1",
+              seriesBookingId: "b1",
+              currentState: "cancelled",
+              scheduledEndAt: new Date(Date.now() - 60000),
+            })),
+            findCompletionFeedback: mock(async () =>
+              scenario === "not-delivered"
+                ? { id: "report1", version: 1 }
+                : null,
+            ),
+          },
+        });
+        await expect(
+          service.submitAdminCompletionReport({
+            bookingId: "b1",
+            adminId: "admin1",
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: "Record delivered session",
+            requestKey: crypto.randomUUID(),
+            ...(isSeries ? { sessionId: "session1" } : {}),
+            ...(["missing-report", "not-delivered"].includes(scenario)
+              ? { expectedVersion: 1 }
+              : {}),
+          }),
+        ).rejects.toBeInstanceOf(
+          scenario === "missing-report"
+            ? BookingCompletionReportConflictError
+            : BookingNotEditableError,
+        );
+        expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      },
+    );
+
+    for (const bookingType of ["solo", "group", "series"] as const) {
+      test(`records a report for an already-completed ${bookingType} without settling again`, async () => {
+        const bookingId = `legacy-${bookingType}`;
+        const sessionId =
+          bookingType === "series" ? "series-session" : undefined;
+        const event = {
+          id: "saved-report-event",
+          bookingId,
+          feedbackId: "feedback1",
+          sessionId: sessionId ?? null,
+          version: 1,
+          status: "submitted",
+          actorId: "admin1",
+          actorRole: "admin",
+        };
+        let historyLookups = 0;
+        const feedback = {
+          discussion: ["A & B", "literal &amp;", '<topics> "quoted" \''],
+          strengths: ["Clear explanation"],
+          improvements: ["Practice one example"],
+        };
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                id: bookingId,
+                type: bookingType,
+                currentState: "completed",
+                scheduledEndAt: new Date(Date.now() - 60_000),
+              }),
+            ),
+            findSessionById: mock(async () =>
+              sessionId
+                ? {
+                    id: sessionId,
+                    seriesBookingId: bookingId,
+                    currentState: "completed",
+                    scheduledStartAt: new Date(Date.now() - 120_000),
+                    scheduledEndAt: new Date(Date.now() - 60_000),
+                  }
+                : null,
+            ),
+            findCompletionFeedbackHistoryByRequestKey: mock(async () => {
+              historyLookups += 1;
+              return historyLookups === 1 ? null : event;
+            }),
+          },
+        });
+
+        const result = await service.submitAdminCompletionReport({
+          bookingId,
+          adminId: "admin1",
+          ...(sessionId ? { sessionId } : {}),
+          feedback,
+          deliveryConfirmed: true,
+          reason: "Record the historical report",
+          requestKey: crypto.randomUUID(),
+        });
+
+        expect(result).toBe(event);
+        expect(repo.insertCompletionFeedback).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            bookingId,
+            sessionId: sessionId ?? null,
+            authorId: "tutor1",
+            ...feedback,
+          }),
+        );
+        expect(repo.insertCompletionFeedbackHistory).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            bookingId,
+            status: "submitted",
+            actorId: "admin1",
+            actorRole: "admin",
+            deliveryConfirmed: true,
+          }),
+        );
+        expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      });
+    }
+
+    test("conflicts when the same request key belongs to another booking", async () => {
+      const bookingId = "booking-b";
+      const requestKey = "e79075cf-1e45-455d-8ef4-26f1cc8356a7";
+      const feedback = {
+        discussion: ["Delivered session"],
+        strengths: ["Clear"],
+        improvements: ["Practice"],
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ id: bookingId, currentState: "completed" }),
+          ),
+          findCompletionFeedbackHistoryByRequestKey: mock(async () => ({
+            bookingId: "booking-a",
+            sessionId: null,
+            requestPayload: {
+              feedback,
+              deliveryConfirmed: true,
+              reason: "Same reason",
+              expectedVersion: null,
+            },
+          })),
+        },
+      });
+
+      await expect(
+        service.submitAdminCompletionReport({
+          bookingId,
+          adminId: "admin1",
+          feedback,
+          deliveryConfirmed: true,
+          reason: "Same reason",
+          requestKey,
+        }),
+      ).rejects.toThrow(BookingCompletionReportConflictError);
+      expect(repo.findCompletionFeedback).not.toHaveBeenCalled();
+      expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+      expect(repo.insertCompletionFeedbackHistory).not.toHaveBeenCalled();
+      expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    });
+  });
+
   describe("completeSession", () => {
+    test("rejects overlong feedback before deductions or persistence on direct service calls", async () => {
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled" }),
+          ),
+        },
+      });
+      await expect(
+        service.completeSession("b1", "tutor1", undefined, {
+          discussion: ["a".repeat(601)],
+          strengths: ["Good"],
+          improvements: ["Practice"],
+        }),
+      ).rejects.toThrow("at most 600 characters");
+      expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    });
     test("requires completion feedback before completing a scheduled booking", async () => {
       const { service } = createService({
         repo: {
@@ -2309,7 +3217,7 @@ describe("BookingService", () => {
         repo: {
           findBookingById: mock(async () => refreshed)
             .mockImplementationOnce(async () => booking)
-            .mockImplementationOnce(async () => refreshed),
+            .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => session),
           listSessionsBySeriesId: mock(async () => sessions),
           findParticipant: mock(async () => ({
@@ -2343,7 +3251,20 @@ describe("BookingService", () => {
       expect(repo.completeSession).toHaveBeenCalledWith(
         expect.anything(),
         "s1",
+        expect.any(Date),
       );
+      expect(repo.insertTutorSessionFee).toHaveBeenCalledTimes(1);
+      const feeRecord = repo.insertTutorSessionFee.mock.calls[0]?.[1];
+      expect(feeRecord).toMatchObject({
+        bookingId: "b1",
+        bookingSessionId: "s1",
+        tutorId: "tutor1",
+        scheduledStartAt: session.scheduledStartAt,
+        eventKey: "tutor-session-fee:session:s1",
+        grossHonorariumIdr: 200_000,
+        priceSnapshot: booking.priceSnapshot,
+      });
+      expect(feeRecord.earnedAt).toBeInstanceOf(Date);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
         expect.anything(),
         "p1",
@@ -2360,6 +3281,79 @@ describe("BookingService", () => {
       expect(result.originalMarks).toBe(150);
       expect(wallet.release).not.toHaveBeenCalled();
       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
+    });
+
+    test("Q06: delivered series child qualifies a prior chargeable no-show once", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        holdAmount: 100,
+        originalMarks: 150,
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 3600_000),
+        scheduledEndAt: new Date(Date.now() + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 50,
+        priceSnapshot: null,
+      };
+      const referralPort = {
+        recordEligibleFirstCompletion: mock(async () => null),
+      };
+      const { service, wallet, repo } = createService({
+        referralPort,
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 2 }))
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => [
+            session,
+            { ...session, id: "s2" },
+          ]),
+          findConfirmedParticipants: mock(async () => [
+            { id: "p1", userId: "absent-student", heldAmount: 100 },
+          ]),
+          findLedgerEventAmounts: mock(
+            async () => new Map([["booking.b1.no_show.absent-student.s1", 50]]),
+          ),
+          findParticipant: mock(async () => ({
+            id: "p1",
+            userId: "student1",
+            heldAmount: 100,
+          })),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+        },
+      });
+
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
+
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(referralPort.recordEligibleFirstCompletion).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          studentId: "absent-student",
+          chargedMarks: 50,
+          completionType: "series_child",
+          completionId: "s1",
+          completedAt: expect.any(Date),
+        }),
+      );
+      expect(repo.completeSession).toHaveBeenCalledWith(
+        expect.anything(),
+        "s1",
+        expect.any(Date),
+      );
     });
 
     test("L1: series completion deducts at most the remaining held amount after an admin partial cancel", async () => {
@@ -2545,6 +3539,7 @@ describe("BookingService", () => {
         repo: {
           findBookingById: mock(async () => completedBooking)
             .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => sessions[2]),
           listSessionsBySeriesId: mock(async () => [
@@ -2631,6 +3626,7 @@ describe("BookingService", () => {
       const { service, repo, notification, wallet } = createService({
         repo: {
           findBookingById: mock(async () => completedBooking)
+            .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => sessions[2]),
@@ -2945,21 +3941,42 @@ describe("BookingService", () => {
       );
     });
 
+    test("rejects legacy pricing snapshots when confirming an invite", async () => {
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "awaiting_participant_confirmation",
+              priceSnapshot: { baseline: 42 },
+            }),
+          ),
+          findParticipant: mock(async () =>
+            makeParticipant({ role: "invitee", confirmationState: "pending" }),
+          ),
+        },
+      });
+
+      await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
+        BookingV3PricingRevisionUnavailableError,
+      );
+      expect(repo.updateParticipantState).not.toHaveBeenCalled();
+      expect(wallet.hold).not.toHaveBeenCalled();
+    });
+
     test("confirms invite and holds marks for invitee", async () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
         targetGroupSize: 3,
         confirmedHeadcount: 1,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service, wallet, repo } = createService({
@@ -3002,15 +4019,14 @@ describe("BookingService", () => {
         targetGroupSize: 2,
         confirmedHeadcount: 1,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -3113,6 +4129,121 @@ describe("BookingService", () => {
         }),
       );
       expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+    });
+
+    test("reprices a partial V3 group series from its pinned revision without active pricing", async () => {
+      const booking = makeBooking({
+        type: "series",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+        confirmedHeadcount: 2,
+        holdAmount: 168,
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 84 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 84 }),
+      ];
+      const { service, repo, wallet } = createService({
+        pricing: { getActiveV3Config: mock(async () => null) },
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => []),
+          findConfirmedParticipants: mock(async () => confirmed),
+          listSessionsBySeriesId: mock(async () => [
+            { id: "s1", currentState: "scheduled", holdAmount: 42 },
+            { id: "s2", currentState: "scheduled", holdAmount: 42 },
+          ]),
+        },
+      });
+
+      await service.declineInvite("student2", "b1", "busy");
+
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledTimes(1);
+      expect(repo.updateScheduledSeriesPriceSnapshot).toHaveBeenCalledTimes(1);
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_reconfirmation" }),
+      );
+    });
+
+    test("reprices a dynamic competition from the booking's pinned revision", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+        confirmedHeadcount: 2,
+        holdAmount: 66,
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 22,
+          collectedMarks: 66,
+          tutorHonorariumIdr: 183000,
+        },
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 22 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 22 }),
+      ];
+      const getV3ConfigByVersion = mock(async (version: number) => ({
+        version,
+        values: config,
+      }));
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => []),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+        },
+        pricing: {
+          getV3ConfigByVersion,
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.declineInvite("student2", "b1", "busy");
+
+      expect(getV3ConfigByVersion).toHaveBeenCalledWith(7, expect.anything());
+      expect(repo.updateBookingPriceSnapshot.mock.calls[0]?.[2]).toMatchObject({
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          headcount: 2,
+          perStudentMarks: 27,
+          collectedMarks: 54,
+          tutorHonorariumIdr: 153000,
+        },
+        holdAmount: 54,
+      });
     });
 
     test("expires a series below minimum and cancels its sessions", async () => {
@@ -3291,22 +4422,21 @@ describe("BookingService", () => {
       );
     });
 
-    test("syncs the booking hold when a flat group price map keeps the same rate", async () => {
+    test("syncs the booking hold when a pinned V3 group formula keeps the same rate", async () => {
       let booking = makeBooking({
         type: "group",
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         holdAmount: 126,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       let reconfirmedCount = 0;
@@ -3319,6 +4449,22 @@ describe("BookingService", () => {
         makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
       ];
       const { service, repo } = createService({
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 42,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 42,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
         repo: {
           findBookingById: mock(async () => ({ ...booking, version: 1 })),
           findParticipant: mock(async () => participant),
@@ -3404,15 +4550,14 @@ describe("BookingService", () => {
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -3443,7 +4588,7 @@ describe("BookingService", () => {
 
       const result = await service.reconfirm("student1", "b1", false);
       expect(result).toEqual({ reconfirmed: false });
-      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(wallet.release.mock.calls[0][1].amount).toBe(42);
       expect(repo.decrementBookingConfirmedHeadcount).toHaveBeenCalledTimes(1);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
@@ -3453,7 +4598,7 @@ describe("BookingService", () => {
       );
     });
 
-    test("M5: decline refreshes the reconfirmation deadline to now + 12h when the group survives", async () => {
+    test("rejects a surviving group without its immutable V3 price snapshot", async () => {
       const booking = makeBooking({
         type: "group",
         currentState: "awaiting_reconfirmation",
@@ -3468,6 +4613,46 @@ describe("BookingService", () => {
           extraTotal: 0,
           cogitoExtraTake: 0,
           tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({
+        confirmationState: "reconfirmed",
+        heldAmount: 42,
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          decrementBookingConfirmedHeadcount: mock(async () => undefined),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () => null),
+        },
+      });
+
+      await expect(
+        service.reconfirm("student1", "b1", false),
+      ).rejects.toThrow();
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+    });
+
+    test("M5: decline refreshes the reconfirmation deadline to now + 12h when the group survives", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -3508,7 +4693,7 @@ describe("BookingService", () => {
     });
 
     test("N1: equal per-student price at the old and new headcounts does not loop the F3 reissue forever", async () => {
-      // Legacy flat price map: the per-student price is the same at sizes 2
+      // A pinned V3 formula can have equal per-student prices at sizes 2
       // and 3, so repriceGroupForHeadcount early-returns without updating
       // holdAmount — the F3 derivation (holdAmount/perStudent) then reports a
       // stale size-3 headcount for a booking that now has 2 confirmed
@@ -3521,10 +4706,14 @@ describe("BookingService", () => {
         // left mid-cycle.
         holdAmount: 126,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 126,
-          tutorShare: 100.8,
-          cogitoTake: 25.2,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const p2 = makeParticipant({
@@ -3559,6 +4748,11 @@ describe("BookingService", () => {
               }
             },
           ),
+          updateBookingPriceSnapshot: mock(
+            async (_tx: unknown, _id: string, updates: any) => {
+              Object.assign(liveBooking, updates);
+            },
+          ),
           updateBookingHoldAmount: mock(
             async (_tx: unknown, _id: string, amount: number) => {
               liveBooking.holdAmount = amount;
@@ -3574,7 +4768,7 @@ describe("BookingService", () => {
             }
           }),
           findTutorProfile: mock(async () =>
-            // FLAT legacy price map: sizes 2 and 3 price identically.
+            // The pinned V3 configuration produces the same price at sizes 2 and 3.
             makeTutorProfile({ prices: { "2": 42, "3": 42 } }),
           ),
           updateBookingVersioned: mock(
@@ -3584,7 +4778,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 42,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 42,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       // First accept: headcount dropped 3 → 2 while holdAmount still says 3,
@@ -3619,10 +4828,14 @@ describe("BookingService", () => {
         currentState: "awaiting_reconfirmation",
         targetGroupSize: 3,
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({
@@ -3811,7 +5024,11 @@ describe("BookingService", () => {
       await service.withdraw("student1", "b1");
 
       expect(repo.decrementBookingConfirmedHeadcount).not.toHaveBeenCalled();
-      expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ confirmationState: "withdrawn_pre_h2" }),
+      );
     });
 
     test("B7: double-withdraw is a no-op (no second headcount decrement)", async () => {
@@ -4003,15 +5220,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4042,7 +5258,7 @@ describe("BookingService", () => {
 
       await service.withdraw("student1", "b1");
 
-      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
@@ -4052,6 +5268,50 @@ describe("BookingService", () => {
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
 
+    test("skips wallet changes when remaining participants already hold the repriced amount", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "confirmed",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
+        },
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 42 }),
+          ),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 31 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 31 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({ holdAmount: 62 }),
+      );
+    });
+
     test("M7: group withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the requested roomBooking and refreshes the reconfirmation deadline", async () => {
       const booking = makeBooking({
         type: "group",
@@ -4059,15 +5319,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4148,15 +5407,14 @@ describe("BookingService", () => {
         holdAmount: 126,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 126,
-          tutorShare: 100.8,
-          cogitoTake: 25.2,
-          baselineCogitoTake: 16,
-          baselineTutorShare: 54,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4202,7 +5460,22 @@ describe("BookingService", () => {
             throw new InsufficientMarksError(60, 84);
           }),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 30,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 66,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       const result = await service.withdraw("student1", "b1");
@@ -4360,15 +5633,14 @@ describe("BookingService", () => {
         targetGroupSize: 3,
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -5625,15 +6897,14 @@ describe("BookingService", () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -5667,15 +6938,14 @@ describe("BookingService", () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
         priceSnapshot: {
-          perStudent: 42,
-          baseline: 42,
-          tutorShare: 33.6,
-          cogitoTake: 8.4,
-          baselineCogitoTake: 12,
-          baselineTutorShare: 30,
-          extraTotal: 0,
-          cogitoExtraTake: 0,
-          tutorExtraShare: 0,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 42,
+          collectedMarks: 126,
+          tutorHonorariumIdr: 260_000,
         },
       });
       const { service } = createService({
@@ -6186,6 +7456,40 @@ describe("BookingService", () => {
           expect.objectContaining({ currentState: "no_show" }),
         );
       });
+
+      test("skips no-show forfeits for zero holds and missing wallets", async () => {
+        const expiringBooking = makeBooking({
+          currentState: "scheduled",
+          holdAmount: 42,
+          proposerId: "student1",
+        });
+        const { service, wallet } = createService({
+          repo: {
+            findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+            findBookingById: mock(async () => ({
+              ...expiringBooking,
+              currentState: "scheduled",
+              version: 1,
+            })),
+            findConfirmedParticipants: mock(async () => [
+              makeParticipant({ id: "zero", heldAmount: 0 }),
+              makeParticipant({ id: "missing-wallet", heldAmount: 42 }),
+            ]),
+            updateBookingVersioned: mock(async () => ({
+              updated: { ...expiringBooking, currentState: "no_show" },
+              newVersion: 2,
+            })),
+          },
+          wallet: { getByUserId: mock(async () => null) },
+        });
+
+        await expect(service.expireBookings()).resolves.toEqual({
+          expired: 1,
+          failed: 0,
+        });
+        expect(wallet.deduct).not.toHaveBeenCalled();
+        expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+      });
     });
 
     describe("AWAITING_ADMIN_ROOM_APPROVAL expiry → CANCELLED", () => {
@@ -6394,6 +7698,374 @@ describe("BookingService", () => {
         );
       });
     });
+
+    test.each([
+      "release",
+      "missing-wallet",
+      "missing-revision",
+      "revision-mismatch",
+      "missing-rate",
+      "missing-calculator",
+    ] as const)(
+      "V3 series repricing preserves hold and revision safety: %s",
+      async (scenario) => {
+        const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+        if (scenario !== "missing-rate") {
+          config.competitionRates["competition-policy-debate"] = {
+            soloMarks: 41,
+            soloFeeIdr: 123000,
+          };
+        }
+        const booking = makeBooking({
+          type: "series",
+          currentState: "awaiting_participant_confirmation",
+          targetGroupSize: 3,
+          confirmedHeadcount: 2,
+          holdAmount: 118,
+          priceSnapshot: {
+            engine: "v3",
+            v3Revision: 7,
+            competition: "competition-policy-debate",
+            modality: "online",
+            headcount: 3,
+            perStudentMarks: 22,
+            collectedMarks: 66,
+            tutorHonorariumIdr: 183000,
+          },
+        });
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () => booking),
+            findParticipant: mock(async () =>
+              makeParticipant({
+                role: "invitee",
+                userId: "student2",
+                confirmationState: "pending",
+              }),
+            ),
+            findPendingInvitees: mock(async () => []),
+            findConfirmedParticipants: mock(async () => [
+              makeParticipant({ id: "p1", userId: "student1", heldAmount: 54 }),
+              makeParticipant({ id: "p3", userId: "student3", heldAmount: 64 }),
+            ]),
+            findTutorProfile: mock(async () => makeTutorProfile()),
+            listSessionsBySeriesId: mock(async () => [
+              { id: "s1", currentState: "scheduled" },
+              { id: "s2", currentState: "scheduled" },
+              { id: "s3", currentState: "completed" },
+            ]),
+          },
+          wallet: {
+            getByUserId: mock(async () =>
+              scenario === "missing-wallet"
+                ? null
+                : { id: "wallet3", availableBalance: 0 },
+            ),
+          },
+          pricing: {
+            getV3ConfigByVersion: mock(async (version: number) =>
+              scenario === "missing-revision"
+                ? null
+                : {
+                    version:
+                      scenario === "revision-mismatch" ? version + 1 : version,
+                    values: config,
+                  },
+            ),
+            calculateV3SessionPrice:
+              scenario === "missing-calculator"
+                ? undefined
+                : mock((input: any, values: any) =>
+                    calculateV3SessionPrice(input, values),
+                  ),
+          },
+        });
+        const pending = service.declineInvite("student2", "b1", "Busy");
+        if (scenario === "release") {
+          await pending;
+          expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+          expect(wallet.release).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ walletId: "wallet3", amount: 10 }),
+          );
+          expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+            expect.anything(),
+            "b1",
+            expect.objectContaining({ holdAmount: 108 }),
+          );
+        } else {
+          await expect(pending).rejects.toBeInstanceOf(
+            scenario === "missing-wallet"
+              ? BookingNotFoundError
+              : scenario === "missing-rate"
+                ? BookingV3CompetitionUnavailableError
+                : BookingV3PricingRevisionUnavailableError,
+          );
+          expect(wallet.release).not.toHaveBeenCalled();
+          expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+        }
+        expect(wallet.hold).not.toHaveBeenCalled();
+      },
+    );
+
+    test("reprices a partial V3 group series from its pinned revision before reconfirmation", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const booking = makeBooking({
+        type: "series",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+        confirmedHeadcount: 2,
+        holdAmount: 88,
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 22,
+          collectedMarks: 66,
+          tutorHonorariumIdr: 183000,
+        },
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 44 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 44 }),
+      ];
+      const scheduledSessions = [
+        { id: "s1", currentState: "scheduled", holdAmount: 22 },
+        { id: "s2", currentState: "scheduled", holdAmount: 22 },
+      ];
+      const getV3ConfigByVersion = mock(async (version: number) => ({
+        version,
+        values: config,
+      }));
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => []),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          listSessionsBySeriesId: mock(async () => scheduledSessions),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "wallet",
+            totalBalance: 100,
+            heldBalance: 44,
+            availableBalance: 10,
+          })),
+        },
+        pricing: {
+          getV3ConfigByVersion,
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.declineInvite("student2", "b1", "busy");
+
+      expect(getV3ConfigByVersion).toHaveBeenCalledWith(7, expect.anything());
+      expect(wallet.hold).toHaveBeenCalledTimes(2);
+      expect(
+        (wallet.hold as any).mock.calls.map((call: any) => call[1].amount),
+      ).toEqual([10, 10]);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ heldAmount: 54 }),
+      );
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p3",
+        expect.objectContaining({ heldAmount: 54 }),
+      );
+      expect(
+        (repo.updateBookingPriceSnapshot as any).mock.calls[0]?.[2],
+      ).toMatchObject({
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          headcount: 2,
+          perStudentMarks: 27,
+          collectedMarks: 54,
+          tutorHonorariumIdr: 153000,
+        },
+        holdAmount: 108,
+      });
+      expect(repo.updateScheduledSeriesPriceSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({
+          holdAmount: 27,
+          priceSnapshot: expect.objectContaining({
+            v3Revision: 7,
+            headcount: 2,
+            perStudentMarks: 27,
+          }),
+        }),
+      );
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_reconfirmation" }),
+      );
+    });
+
+    test("does not partially increase V3 series holds when one survivor cannot fund the new package", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const booking = makeBooking({
+        type: "series",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+        confirmedHeadcount: 2,
+        holdAmount: 88,
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 22,
+          collectedMarks: 66,
+          tutorHonorariumIdr: 183000,
+        },
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 44 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 44 }),
+      ];
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => []),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          listSessionsBySeriesId: mock(async () => [
+            { id: "s1", currentState: "scheduled", holdAmount: 22 },
+            { id: "s2", currentState: "scheduled", holdAmount: 22 },
+          ]),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async (_tx: any, userId: string) => ({
+            id: `wallet-${userId}`,
+            totalBalance: 100,
+            heldBalance: 44,
+            availableBalance: userId === "student1" ? 10 : 9,
+          })),
+        },
+        pricing: {
+          getV3ConfigByVersion: mock(async (version: number) => ({
+            version,
+            values: config,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await expect(
+        service.declineInvite("student2", "b1", "busy"),
+      ).rejects.toThrow(InsufficientMarksError);
+
+      // The service preflights all top-ups before changing any participant or
+      // booking/session price, so the transaction has no partial repricing to
+      // commit if the caller aborts on insufficient Marks.
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+      expect(repo.updateScheduledSeriesPriceSnapshot).not.toHaveBeenCalled();
+      expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+      expect(
+        (repo.updateParticipantState as any).mock.calls[0]?.[2],
+      ).toMatchObject({ confirmationState: "declined" });
+    });
+
+    test("finishes reconfirmation for a partial V3 series priced at its confirmed headcount", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const booking = makeBooking({
+        type: "series",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        holdAmount: 108,
+        priceSnapshot: {
+          engine: "v3",
+          v3Revision: 7,
+          competition: "competition-policy-debate",
+          modality: "online",
+          headcount: 2,
+          perStudentMarks: 27,
+          collectedMarks: 54,
+          tutorHonorariumIdr: 153000,
+        },
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 54 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 54 }),
+      ];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => confirmed[0]),
+          findReconfirmedParticipants: mock(async () => confirmed),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          listSessionsBySeriesId: mock(async () => [
+            { id: "s1", currentState: "scheduled", holdAmount: 27 },
+            { id: "s2", currentState: "scheduled", holdAmount: 27 },
+          ]),
+        },
+        pricing: {
+          getV3ConfigByVersion: mock(async (version: number) => ({
+            version,
+            values: config,
+          })),
+          calculateV3SessionPrice: mock((input: any, values: any) =>
+            calculateV3SessionPrice(input, values),
+          ),
+        },
+      });
+
+      await service.reconfirm("student1", "b1", true);
+
+      expect(repo.resetReconfirmedParticipants).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_tutor_review" }),
+      );
+    });
   });
 
   describe("G4 group repricing on headcount change", () => {
@@ -6405,10 +8077,14 @@ describe("BookingService", () => {
         confirmedHeadcount: 4,
         holdAmount: 112,
         priceSnapshot: {
-          perStudent: 28,
-          baseline: 112,
-          tutorShare: 89.6,
-          cogitoTake: 22.4,
+          engine: "v3",
+          v3Revision: 1,
+          competition: "competition-model-united-nations",
+          modality: "online",
+          headcount: 3,
+          perStudentMarks: 28,
+          collectedMarks: 112,
+          tutorHonorariumIdr: 260_000,
         },
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         ...overrides,
@@ -6453,7 +8129,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 7,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 91,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       const result = await service.withdraw("student1", "b1");
@@ -6471,9 +8162,9 @@ describe("BookingService", () => {
         expect.objectContaining({ holdAmount: 105 }),
       );
       const snapshotArg = repo.updateBookingPriceSnapshot.mock.calls[0][2] as {
-        priceSnapshot: { perStudent: number };
+        priceSnapshot: { perStudentMarks: number };
       };
-      expect(snapshotArg.priceSnapshot.perStudent).toBe(35);
+      expect(snapshotArg.priceSnapshot.perStudentMarks).toBe(35);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
         expect.anything(),
         "p2",
@@ -6483,6 +8174,29 @@ describe("BookingService", () => {
       expect(notification.writeBestEffort.mock.calls[0][0]).toMatchObject({
         title: "Group price updated",
       });
+    });
+
+    test("withdrawal rejects a missing immutable V3 snapshot", async () => {
+      const booking = makeGroupBooking({ priceSnapshot: null });
+      const proposer = makeParticipant({ heldAmount: 28 });
+      const remaining = [
+        makeRemainingParticipant("p2", "student2", 28),
+        makeRemainingParticipant("p3", "student3", 28),
+        makeRemainingParticipant("p4", "student4", 28),
+      ];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => proposer),
+          findConfirmedParticipants: mock(async () => remaining),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "3": 35 } }),
+          ),
+        },
+      });
+
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow();
+      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
     });
 
     test("M8: unfunded reprice after withdrawal expires the group instead of rolling back the withdrawal", async () => {
@@ -6516,7 +8230,6 @@ describe("BookingService", () => {
             availableBalance: 0,
           })),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
       });
 
       // PRD TC-19: the group falls through to expiry on an unfunded reprice —
@@ -6560,7 +8273,22 @@ describe("BookingService", () => {
             }),
           ),
         },
-        pricing: { computeSplit: mock(realComputeSplit) },
+        pricing: {
+          getV3ConfigByVersion: mock(async () => ({
+            version: 1,
+            values: {
+              ...DEFAULT_V3_ECONOMY_CONFIG,
+              onlineAdditionalMarks: 36,
+              competitionRates: {
+                ...DEFAULT_V3_ECONOMY_CONFIG.competitionRates,
+                "competition-model-united-nations": {
+                  soloMarks: 4,
+                  soloFeeIdr: 200_000,
+                },
+              },
+            },
+          })),
+        },
       });
 
       await service.withdraw("student1", "b1");
@@ -6652,6 +8380,9 @@ describe("BookingService", () => {
         repo: {
           findSessionById: mock(async () => session),
           findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 42 }),
+          ),
         },
       });
 
@@ -6706,12 +8437,60 @@ describe("BookingService", () => {
         expect.objectContaining({ heldAmount: 42 }),
       );
       expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
+      expect(repo.findBookingById).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        { forUpdate: true },
+      );
+      expect(repo.findSessionById).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        "s1",
+        { forUpdate: true },
+      );
+      expect(repo.findParticipant).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        "student1",
+        { forUpdate: true },
+      );
       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
         42,
       );
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+    });
+
+    test("refuses cancellation when the locked proposer hold row is missing", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "scheduled",
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => null),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingParticipantNotFoundError,
+      );
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+      expect(repo.cancelSession).not.toHaveBeenCalled();
     });
 
     test("TC-30: cancelling a session within 2h of start forfeits the session hold", async () => {
@@ -7559,6 +9338,62 @@ describe("BookingService additional coverage paths", () => {
     ).rejects.toThrow(BookingStateTransitionError);
   });
 
+  test("rejects reusing a completion request key for another booking", async () => {
+    const requestKey = "c1a882cb-bb16-4de2-a7ae-dbbd3a67291e";
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+        findCompletionFeedbackHistoryByRequestKey: mock(async () => ({
+          bookingId: "another-booking",
+          sessionId: null,
+          requestPayload: {},
+        })),
+      },
+    });
+
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        requestKey,
+      ),
+    ).rejects.toThrow(BookingCompletionReportConflictError);
+    expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
+  test("rejects completing a solo booking that already has a report", async () => {
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+        findCompletionFeedback: mock(async () => ({ id: "report1" })),
+      },
+    });
+
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+      ),
+    ).rejects.toThrow(BookingNotEditableError);
+    expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
   test("rejects completing a session that belongs to another booking", async () => {
     const { service } = createService({
       repo: {
@@ -7579,6 +9414,34 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
     ).rejects.toThrow(BookingSessionNotFoundError);
+  });
+
+  test("rejects completing a series session with an existing report", async () => {
+    const booking = makeBooking({
+      type: "series",
+      currentState: "scheduled",
+    });
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+          holdAmount: 42,
+          priceSnapshot: booking.priceSnapshot,
+        })),
+        findCompletionFeedback: mock(async () => ({ id: "report1" })),
+      },
+    });
+
+    await expect(
+      service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+    ).rejects.toThrow(BookingNotEditableError);
+    expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
   });
 
   test("releases residual holds when a group series completes", async () => {
@@ -7606,7 +9469,10 @@ describe("BookingService additional coverage paths", () => {
     const { service, wallet, repo } = createService({
       repo: {
         findBookingById: mock(async () => booking),
-        findSessionById: mock(async () => session),
+        findSessionById: mock(async () => ({
+          ...session,
+          currentState: "scheduled",
+        })),
         findConfirmedParticipants: mock(async () => {
           participantCall += 1;
           return participantCall === 1
@@ -7702,6 +9568,69 @@ describe("BookingService additional coverage paths", () => {
     );
   });
 
+  test("Q06: a no-show penalty alone does not create a friend reward", async () => {
+    const { service, referralPort } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+      },
+    });
+
+    await service.markParticipantNoShow("b1", "tutor1", "student1");
+
+    expect(referralPort.recordEligibleFirstCompletion).not.toHaveBeenCalled();
+  });
+
+  test("rejects no-show marking by a different tutor", async () => {
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+      },
+    });
+
+    await expect(
+      service.markParticipantNoShow("b1", "other-tutor", "student1"),
+    ).rejects.toThrow(BookingNotOwnedError);
+    expect(repo.findParticipant).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
+  test("rejects no-show marking after a series session report exists", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+          holdAmount: 42,
+        })),
+        findCompletionFeedback: mock(async () => ({ id: "report1" })),
+      },
+    });
+
+    await expect(
+      service.markParticipantNoShow("b1", "tutor1", "student1", "s1"),
+    ).rejects.toThrow(BookingNotEditableError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.updateParticipantState).not.toHaveBeenCalled();
+  });
+
   test("rejects no-show marking when the session is no longer scheduled", async () => {
     const { service } = createService({
       repo: {
@@ -7726,20 +9655,26 @@ describe("BookingService additional coverage paths", () => {
   });
 
   test("rejects no-show marking with a session from another series", async () => {
-    const { service, wallet } = createService({
+    const foreignSession = {
+      id: "foreign-session",
+      seriesBookingId: "another-booking",
+      currentState: "scheduled",
+      scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+      holdAmount: 42,
+    };
+    let fetchedSession: typeof foreignSession | undefined;
+    const findSessionById = mock(async () => {
+      fetchedSession = foreignSession;
+      return foreignSession;
+    });
+    const { service, wallet, repo } = createService({
       repo: {
         findBookingById: mock(async () =>
           makeBooking({ type: "series", currentState: "scheduled" }),
         ),
         findParticipant: mock(async () => makeParticipant()),
-        findSessionById: mock(async () => ({
-          id: "foreign-session",
-          seriesBookingId: "another-booking",
-          currentState: "scheduled",
-          scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
-          scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
-          holdAmount: 42,
-        })),
+        findSessionById,
       },
     });
 
@@ -7751,6 +9686,13 @@ describe("BookingService additional coverage paths", () => {
         "foreign-session",
       ),
     ).rejects.toThrow(BookingSessionNotFoundError);
+    expect(findSessionById).toHaveBeenCalledWith(
+      expect.anything(),
+      "foreign-session",
+      { forUpdate: true },
+    );
+    expect(fetchedSession).toBe(foreignSession);
+    expect(repo.findParticipant).not.toHaveBeenCalled();
     expect(wallet.deduct).not.toHaveBeenCalled();
   });
 
@@ -7921,7 +9863,7 @@ describe("BookingService additional coverage paths", () => {
     ).rejects.toThrow(BookingNotOwnedError);
   });
 
-  test("aggregates completed series session payout snapshots", async () => {
+  test("ignores completed booking/session snapshots without fee events", async () => {
     const series = makeBooking({
       id: "series-1",
       type: "series",
@@ -7937,6 +9879,9 @@ describe("BookingService additional coverage paths", () => {
         findCompletedBookingsByTutor: mock(async () => [series, solo]),
         listSessionsBySeriesId: mock(async () => [
           {
+            id: "series-session-aggregate",
+            scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
+            completedAt: new Date("2026-08-02T01:30:00Z"),
             currentState: "completed",
             priceSnapshot: {
               baseline: 90,
@@ -7953,15 +9898,96 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getTutorPayouts({ tutorId: "tutor1" }),
     ).resolves.toEqual({
-      completedSessions: 2,
-      totalMarks: 140,
-      cogitoTake: 28,
-      tutorPayout: 112,
-      tutorPayoutIdr: 640_000,
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
     });
   });
 
-  test("falls back to the series booking snapshot when no session rows are completed", async () => {
+  test("no-show override cannot create payout eligibility without a fee event", async () => {
+    const eligibleNoShow = makeBooking({
+      id: "eligible-no-show",
+      currentState: "no_show",
+      overrideMeta: { tutorPayoutEligible: true },
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [eligibleNoShow]),
+      },
+    });
+
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toEqual({
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
+    });
+  });
+
+  test("uses fee facts without double-counting a completed legacy series parent", async () => {
+    const series = makeBooking({
+      id: "series-with-fee",
+      type: "series",
+      currentState: "completed",
+      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
+    });
+    const fee = {
+      bookingId: series.id,
+      bookingSessionId: "session-1",
+      eventKey: "tutor-session-fee:session:session-1",
+      grossHonorariumIdr: 45_000,
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 45_000,
+      },
+    };
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        listTutorSessionFeeEventKeysByBookings: mock(async () => [
+          fee.eventKey,
+        ]),
+        findCompletedBookingsByTutor: mock(async () => [series]),
+        listSessionsBySeriesId: mock(async () => [
+          {
+            id: "session-1",
+            currentState: "completed",
+            priceSnapshot: {
+              baseline: 50,
+              cogitoTake: 10,
+              tutorShare: 40,
+              tutorHonorariumIdr: 45_000,
+            },
+          },
+        ]),
+      },
+    });
+
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toEqual({
+      completedSessions: 1,
+      totalMarks: 50,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 45_000,
+    });
+  });
+
+  test("does not infer missing series fees from parent snapshots", async () => {
     const series = makeBooking({
       id: "series-without-rows",
       type: "series",
@@ -7982,138 +10008,261 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getTutorPayouts({ tutorId: "tutor1" }),
     ).resolves.toEqual({
-      completedSessions: 1,
-      totalMarks: 100,
-      cogitoTake: 20,
-      tutorPayout: 80,
-      tutorPayoutIdr: 81_000,
+      completedSessions: 0,
+      totalMarks: 0,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 0,
     });
   });
 
-  test("reports totalMarks from the split basis (baseline), not actualMarksPooled", async () => {
-    const solo = makeBooking({
-      id: "solo-ledger",
-      type: "solo",
-      priceSnapshot: {
-        baseline: 100,
-        actualMarksPooled: 102,
-        cogitoTake: 20,
-        tutorShare: 80,
-        tutorHonorariumIdr: 400_000,
-      },
-    });
+  test("reports V3 collected Marks separately from IDR honorarium", async () => {
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [solo]),
-        listSessionsBySeriesId: mock(async () => []),
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            eventKey: "fee:solo",
+            grossHonorariumIdr: 400_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 102 },
+          },
+        ]),
       },
     });
-
-    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
-    // The ledger columns reconcile: totalMarks = cogitoTake + tutorPayout
-    // (both are derived from the same `baseline` split basis).
-    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
-    expect(result.totalMarks).toBe(100);
-    // IDR honorarium is authoritative when present.
-    expect(result.tutorPayoutIdr).toBe(400_000);
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 1,
+      totalMarks: 102,
+      cogitoTake: 0,
+      tutorPayout: 0,
+      tutorPayoutIdr: 400_000,
+    });
   });
 
-  test("uses each booking snapshot's honorarium after a tutor changes fee", async () => {
-    const oldBooking = makeBooking({
-      id: "old-booking",
-      currentState: "completed",
-      priceSnapshot: {
-        baseline: 40,
-        cogitoTake: 8,
-        tutorShare: 32,
-        tutorBaseRateIdr: 175_000,
-        tutorHonorariumIdr: 175_000,
+  test.each([undefined, -1, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid immutable fee honorarium %s",
+    async (grossHonorariumIdr) => {
+      const { service } = createService({
+        repo: {
+          findTutorSessionFeesByTutor: mock(async () => [
+            {
+              eventKey: "fee:invalid",
+              grossHonorariumIdr,
+              priceSnapshot: { engine: "v3", collectedMarks: 10 },
+            },
+          ]),
+        },
+      });
+
+      await expect(
+        service.getTutorPayouts({ tutorId: "tutor1" }),
+      ).rejects.toThrow(
+        "Session fee event must contain a valid IDR honorarium",
+      );
+    },
+  );
+
+  test("uses immutable fee-event honoraria after a tutor rate changes", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            scheduledStartAt: new Date("2026-01-01"),
+            earnedAt: new Date("2026-01-01"),
+            eventKey: "fee:old",
+            grossHonorariumIdr: 175_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 40 },
+          },
+          {
+            scheduledStartAt: new Date("2026-02-01"),
+            earnedAt: new Date("2026-02-01"),
+            eventKey: "fee:new",
+            grossHonorariumIdr: 225_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          },
+        ]),
       },
     });
-    const newBooking = makeBooking({
-      id: "new-booking",
-      currentState: "completed",
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 2,
+      totalMarks: 90,
+      tutorPayoutIdr: 400_000,
+    });
+  });
+
+  test("counts delivered series fee events without parent snapshot totals", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            eventKey: "fee:series-session",
+            bookingSessionId: "session-1",
+            grossHonorariumIdr: 210_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 60 },
+          },
+        ]),
+      },
+    });
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 1,
+      totalMarks: 60,
+      tutorPayoutIdr: 210_000,
+    });
+  });
+
+  test("includes fee facts without a historical payout cutoff", async () => {
+    const fee = {
+      id: "fee-1",
+      bookingId: "series-1",
+      bookingNumber: 2,
+      bookingType: "series",
+      bookingSessionId: "session-1",
+      scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
+      earnedAt: new Date("2026-08-02T01:30:00Z"),
+      eventKey: "tutor-session-fee:session:session-1",
+      grossHonorariumIdr: 45_000,
       priceSnapshot: {
         baseline: 50,
         cogitoTake: 10,
         tutorShare: 40,
-        tutorBaseRateIdr: 225_000,
-        tutorHonorariumIdr: 225_000,
+        tutorHonorariumIdr: 45_000,
       },
-    });
+    };
+    const findCompletedBookingsByTutor = mock(async () => []);
+    const findTutorSessionFeesByTutor = mock(async () => [fee]);
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [
-          oldBooking,
-          newBooking,
+        findCompletedBookingsByTutor,
+        findTutorSessionFeesByTutor,
+        listTutorSessionFeeEventKeysByBookings: mock(async () => [
+          fee.eventKey,
         ]),
       },
     });
 
     await expect(
-      service.getTutorPayouts({ tutorId: "tutor1" }),
-    ).resolves.toMatchObject({
-      completedSessions: 2,
-      tutorPayoutIdr: 400_000,
-    });
+      service.getPendingTutorPayouts("tutor1"),
+    ).resolves.toMatchObject({ completedSessions: 1, tutorPayoutIdr: 45_000 });
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
+    expect(findTutorSessionFeesByTutor).toHaveBeenCalledWith(
+      expect.anything(),
+      "tutor1",
+      undefined,
+      undefined,
+      "completedAt",
+    );
   });
 
-  test("reconciles series session payouts the same way (baseline basis, not pooled)", async () => {
-    const series = makeBooking({
-      id: "series-ledger",
-      type: "series",
-      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
+  test("does not re-report session sources already allocated to a payout", async () => {
+    const completed = makeBooking({
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
     });
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [series]),
-        listSessionsBySeriesId: mock(async () => [
+        findCompletedBookingsByTutor: mock(async () => [completed]),
+        findTutorSessionFeesByTutor: mock(async () => [
           {
-            currentState: "completed",
-            priceSnapshot: {
-              baseline: 60,
-              actualMarksPooled: 62,
-              cogitoTake: 14,
-              tutorShare: 46,
-              tutorHonorariumIdr: 230_000,
-            },
+            id: "fee1",
+            bookingId: completed.id,
+            eventKey: "tutor-session-fee:booking:b1",
+            scheduledStartAt: completed.scheduledStartAt,
+            earnedAt: completed.scheduledEndAt,
+            grossHonorariumIdr: 200_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          },
+        ]),
+        listTutorPayoutAllocatedSourceKeys: mock(async () => [
+          "tutor-session-fee:booking:b1",
+        ]),
+      },
+    });
+
+    await expect(
+      service.getPendingTutorPayouts("tutor1"),
+    ).resolves.toMatchObject({
+      completedSessions: 0,
+      tutorPayoutIdr: 0,
+      items: [],
+    });
+  });
+
+  test("keeps released sources blocked while payout reconciliation is required", async () => {
+    const released = makeBooking({
+      id: "b1",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const unrelated = makeBooking({
+      id: "b2",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 300_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [released, unrelated]),
+        findTutorSessionFeesByTutor: mock(async () =>
+          [released, unrelated].map((booking) => ({
+            id: booking.id,
+            bookingId: booking.id,
+            eventKey: `tutor-session-fee:booking:${booking.id}`,
+            scheduledStartAt: booking.scheduledStartAt,
+            earnedAt: booking.scheduledEndAt,
+            grossHonorariumIdr: booking.priceSnapshot.tutorHonorariumIdr,
+            priceSnapshot: { engine: "v3", collectedMarks: 50 },
+          })),
+        ),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => [
+          {
+            sourceKey: "tutor-session-fee:booking:b1",
+            payoutId: "payout-1",
           },
         ]),
       },
     });
 
-    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
-    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
-    expect(result.totalMarks).toBe(60);
-    expect(result.tutorPayoutIdr).toBe(230_000);
+    const result = await service.getPendingTutorPayouts("tutor1");
+    expect(result.items.map((item) => item.bookingId)).toEqual(["b2"]);
+    expect(result.tutorPayoutIdr).toBe(300_000);
   });
 
-  test("returns pending payouts since the last cutoff", async () => {
+  test("reports last paid timestamp without using a historical cutoff", async () => {
     const cutoffAt = new Date("2026-08-01T00:00:00Z");
     const findCompletedBookingsByTutor = mock(async () => []);
     const { service } = createService({
       repo: {
-        findLatestPaidTutorPayout: mock(async () => ({
-          cutoffAt,
-          paidAt: cutoffAt,
-        })),
+        listTutorPayoutsByTutorId: mock(async () => [
+          { status: "paid", paidAt: cutoffAt },
+        ]),
         findCompletedBookingsByTutor,
       },
     });
     await expect(
       service.getPendingTutorPayouts("tutor1"),
     ).resolves.toMatchObject({ completedSessions: 0, lastPaidAt: cutoffAt });
-    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
-      expect.anything(),
-      "tutor1",
-      new Date(cutoffAt.getTime() + 1),
-      undefined,
-      "completedAt",
-    );
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
   });
 
   test("builds a report with paid batches and current unpaid rows", async () => {
-    const cutoffAt = new Date("2026-08-01T00:00:00Z");
     const completed = makeBooking({
       currentState: "completed",
       completedAt: new Date("2026-07-01T00:00:00Z"),
@@ -8143,9 +10292,9 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: "00456",
-        bankAccountHolderName: "Budi Tutor",
-        bankAccountOpeningCity: "Bandung",
+        bankAccountNumber: "00999",
+        bankAccountHolderName: "Budi Updated",
+        bankAccountOpeningCity: "Jakarta",
         bankAccountOwnership: "self",
         bankTransferDisclaimerAccepted: true,
       },
@@ -8156,17 +10305,30 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: null,
-        bankAccountHolderName: null,
-        profileBankAccountNumber: "00456",
-        profileBankAccountHolderName: "Budi Tutor",
-        profileBankAccountOpeningCity: "Bandung",
-        profileBankAccountOwnership: "self",
+        bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
+        bankAccountOwnership: "self",
         grossHonorariumIdr: 300_000,
         transferFeeIdr: 2_500,
         netHonorariumIdr: 297_500,
         status: "paid",
         paidAt: new Date("2026-08-10T00:00:00Z"),
+      },
+      {
+        id: "paid-without-account-snapshot",
+        tutorId: "tutor2",
+        tutorName: "Budi Tutor",
+        bankName: "BRI",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        bankAccountOpeningCity: null,
+        bankAccountOwnership: null,
+        grossHonorariumIdr: 100_000,
+        transferFeeIdr: 2_500,
+        netHonorariumIdr: 97_500,
+        status: "paid",
+        paidAt: new Date("2026-08-11T00:00:00Z"),
       },
     ]);
     const { service } = createService({
@@ -8174,8 +10336,21 @@ describe("BookingService additional coverage paths", () => {
         listTutorPayoutProfiles,
         listTutorPayoutRecords,
         findCompletedBookingsByTutor,
-        findLatestPaidTutorPayout: mock(async (tutorId: string) =>
-          tutorId === "tutor2" ? { cutoffAt, paidAt: cutoffAt } : null,
+        findTutorSessionFeesByTutor: mock(
+          async (_conn: unknown, tutorId: string) =>
+            tutorId === "tutor1"
+              ? [
+                  {
+                    id: "fee-report",
+                    bookingId: completed.id,
+                    eventKey: "fee:report",
+                    scheduledStartAt: completed.scheduledStartAt,
+                    earnedAt: completed.scheduledEndAt,
+                    grossHonorariumIdr: 200_000,
+                    priceSnapshot: { engine: "v3", collectedMarks: 50 },
+                  },
+                ]
+              : [],
         ),
       },
     });
@@ -8184,13 +10359,23 @@ describe("BookingService additional coverage paths", () => {
       dateFrom: new Date("2026-08-15T00:00:00Z"),
       dateTo: new Date("2026-08-31T23:59:59Z"),
     });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows).toContainEqual(
       expect.objectContaining({
         id: "paid-1",
         status: "paid",
         bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
         netHonorariumIdr: 297_500,
+      }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: "paid-without-account-snapshot",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        payoutAccountComplete: false,
       }),
     );
     expect(rows).toContainEqual(
@@ -8202,84 +10387,185 @@ describe("BookingService additional coverage paths", () => {
         payoutAccountComplete: true,
       }),
     );
-    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
-      expect.anything(),
-      "tutor1",
-      undefined,
-      expect.any(Date),
-      "completedAt",
-    );
+    expect(findCompletedBookingsByTutor).not.toHaveBeenCalled();
   });
 
-  test("marks a bank-ready pending tutor payout paid", async () => {
-    const completed = makeBooking({
-      priceSnapshot: {
-        baseline: 50,
-        cogitoTake: 10,
-        tutorShare: 40,
-        tutorHonorariumIdr: 200000,
-      },
-    });
-    const paidAt = new Date();
-    const row = {
-      id: "pay1",
-      tutorId: "tutor1",
-      grossHonorariumIdr: 200000,
-      transferFeeIdr: 0,
-      netHonorariumIdr: 200000,
+  test("prepares a versioned batch with fee, tax, and bank snapshots", async () => {
+    const profile = {
       bankName: "BCA",
-      paidAt,
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: "000123456789000",
+      taxRateOverrideBps: null,
+      version: 3,
     };
-    const insertTutorPayout = mock(async () => row);
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const insertTutorPayout = mock(async (_tx: unknown, values: any) => ({
+      id: "pay1",
+      ...values,
+      actualAmountIdr: null,
+      actualReference: null,
+      actualProofUrl: null,
+      transferRecordedAt: null,
+      paidAt: null,
+      paidBy: null,
+      voidedAt: null,
+      voidedBy: null,
+      voidReason: null,
+      reconciliationResolvedAt: null,
+      reconciliationResolvedBy: null,
+      reconciliationReason: null,
+      createdAt: new Date("2026-08-01T12:00:00.000Z"),
+    }));
+    const insertTutorPayoutAllocations = mock(async () => []);
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [completed]),
-        findTutorProfile: mock(async () => ({
-          bankName: " BCA ",
-          bankAccountNumber: "123",
-          bankAccountHolderName: "Tutor",
-          bankAccountOpeningCity: "Jakarta",
-          bankAccountOwnership: "personal",
-          bankTransferDisclaimerAccepted: true,
-        })),
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
         insertTutorPayout,
+        insertTutorPayoutAllocations,
       },
     });
-    await expect(
-      service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toMatchObject({ id: "pay1", netHonorariumIdr: 200000 });
+
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    expect(preview).toMatchObject({
+      grossHonorariumIdr: 10_000,
+      taxStatus: "nik_npwp",
+      taxRateBps: 250,
+      taxHonorariumIdr: 250,
+      transferFeeIdr: 0,
+      netHonorariumIdr: 9_750,
+      nik: "0012345678901234",
+      npwp: "000123456789000",
+    });
+
+    const prepared = await service.prepareTutorPayout("admin1", {
+      tutorId: "tutor1",
+      sourceKeys: preview.sourceKeys,
+      previewVersion: preview.previewVersion,
+      operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+    });
+
+    expect(prepared).toMatchObject({ id: "pay1", status: "prepared" });
     expect(insertTutorPayout).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        tutorId: "tutor1",
-        paidBy: "admin1",
-        status: "paid",
+        status: "prepared",
+        grossHonorariumIdr: 10_000,
+        taxRateBps: 250,
+        taxHonorariumIdr: 250,
+        transferFeeIdr: 0,
+        netHonorariumIdr: 9_750,
+        bankAccountNumber: "001234567890",
+        taxNik: "0012345678901234",
+        taxNpwp: "000123456789000",
       }),
+    );
+    expect(insertTutorPayoutAllocations).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          payoutId: "pay1",
+          sourceKey: fee.eventKey,
+          tutorSessionFeeId: fee.id,
+          grossHonorariumIdr: fee.grossHonorariumIdr,
+        }),
+      ],
     );
   });
 
-  test("does not settle empty or bank-incomplete tutor payouts", async () => {
-    const empty = createService();
-    await expect(
-      empty.service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toBeNull();
-    const completed = makeBooking({
-      priceSnapshot: {
-        baseline: 50,
-        cogitoTake: 10,
-        tutorShare: 40,
-        tutorHonorariumIdr: 200000,
-      },
-    });
-    const incomplete = createService({
+  test("rejects stale previews and prevents preparation without legal name and NIK", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    let profile: {
+      bankName: string;
+      bankAccountNumber: string;
+      bankAccountHolderName: string;
+      bankAccountOpeningCity: string;
+      bankAccountOwnership: string;
+      bankTransferDisclaimerAccepted: boolean;
+      taxLegalName: string | null;
+      nik: string | null;
+      npwp: string | null;
+      taxRateOverrideBps: number | null;
+      version: number;
+    } = {
+      bankName: "Mandiri",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null as string | null,
+      taxRateOverrideBps: null,
+      version: 1,
+    };
+    const insertTutorPayout = mock(async () => ({}));
+    const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [completed]),
-        findTutorProfile: mock(async () => ({ bankName: "BCA" })),
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        insertTutorPayout,
       },
     });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    profile = { ...profile, bankAccountNumber: "009876543210", version: 2 };
     await expect(
-      incomplete.service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toBeNull();
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: preview.sourceKeys,
+        previewVersion: preview.previewVersion,
+        operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      }),
+    ).rejects.toThrow(TutorPayoutPreviewStaleError);
+    expect(insertTutorPayout).not.toHaveBeenCalled();
+
+    profile = {
+      ...profile,
+      taxLegalName: null,
+      nik: null,
+      version: 3,
+    };
+    const latestPreview = await service.previewTutorPayout("tutor1", [
+      fee.eventKey,
+    ]);
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: latestPreview.sourceKeys,
+        previewVersion: latestPreview.previewVersion,
+        operationId: "4d30c664-94c6-4dca-9b91-08a7c0876ef1",
+      }),
+    ).rejects.toThrow(TutorPayoutTaxProfileIncompleteError);
+    expect(insertTutorPayout).not.toHaveBeenCalled();
   });
 
   test("cancels sessions for an expiring series booking", async () => {
@@ -8486,7 +10772,791 @@ describe("cancelOfflineBooking (M6)", () => {
   });
 });
 
+describe("Booking ownership and locked-record guards", () => {
+  test("report history is admin-only and requires an existing booking", async () => {
+    const { service } = createService();
+    await expect(
+      service.listCompletionFeedbackHistory("b1", "student1", "student"),
+    ).rejects.toBeInstanceOf(BookingNotOwnedError);
+    await expect(
+      service.listCompletionFeedbackHistory("b1", "admin1", "admin"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+  });
+
+  test.each(["completion", "no-show"] as const)(
+    "%s rechecks tutor ownership after acquiring the booking lock",
+    async (operation) => {
+      await Promise.all(
+        ["missing", "reassigned"].map(async (scenario) => {
+          const original = makeBooking({
+            type: "series",
+            currentState: "scheduled",
+          });
+          const records = [
+            original,
+            scenario === "missing"
+              ? null
+              : { ...original, tutorId: "other-tutor" },
+          ];
+          const { service, wallet } = createService({
+            repo: { findBookingById: mock(async () => records.shift()) },
+          });
+          const pending =
+            operation === "completion"
+              ? service.completeSession(
+                  "b1",
+                  "tutor1",
+                  "session1",
+                  TEST_COMPLETION_FEEDBACK,
+                )
+              : service.markParticipantNoShow(
+                  "b1",
+                  "tutor1",
+                  "student1",
+                  "session1",
+                );
+          await expect(pending).rejects.toBeInstanceOf(
+            scenario === "missing"
+              ? BookingNotFoundError
+              : BookingNotOwnedError,
+          );
+          expect(wallet.deduct).not.toHaveBeenCalled();
+        }),
+      );
+    },
+  );
+
+  test("completion rejects an invalid request key before opening a transaction", async () => {
+    const { service, db } = createService();
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        "invalid",
+      ),
+    ).rejects.toThrow("valid request key");
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  test.each(["missing-id", "missing-session", "other-booking"] as const)(
+    "series no-show rejects an invalid session: %s",
+    async (scenario) => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking({ type: "series" })),
+          findSessionById: mock(async () =>
+            scenario === "other-booking"
+              ? { id: "session1", seriesBookingId: "other-booking" }
+              : null,
+          ),
+        },
+      });
+      await expect(
+        service.markParticipantNoShow(
+          "b1",
+          "tutor1",
+          "student1",
+          scenario === "missing-id" ? undefined : "session1",
+        ),
+      ).rejects.toBeInstanceOf(BookingSessionNotFoundError);
+      expect(repo.findParticipant).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["missing-booking", "missing-session", "other-booking"] as const)(
+    "session cancellation validates its locked records: %s",
+    async (scenario) => {
+      const discovered = { id: "session1", seriesBookingId: "b1" };
+      const sessions = [
+        discovered,
+        scenario === "other-booking"
+          ? { ...discovered, seriesBookingId: "other-booking" }
+          : null,
+      ];
+      const { service, repo, wallet } = createService({
+        repo: {
+          findSessionById: mock(async () => sessions.shift()),
+          findBookingById: mock(async () =>
+            scenario === "missing-booking"
+              ? null
+              : makeBooking({ type: "series" }),
+          ),
+        },
+      });
+      await expect(
+        service.cancelSession("student1", "session1"),
+      ).rejects.toBeInstanceOf(
+        scenario === "missing-booking"
+          ? BookingNotFoundError
+          : BookingSessionNotFoundError,
+      );
+      expect(repo.cancelSession).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+    },
+  );
+
+  test("an invitee cannot reschedule the group and a missing invite cannot be withdrawn", async () => {
+    const invitee = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "group", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () =>
+          makeParticipant({ userId: "invitee1", role: "invitee" }),
+        ),
+      },
+    });
+    await expect(
+      invitee.service.proposeReschedule(
+        "invitee1",
+        "b1",
+        new Date(Date.now() + 86400000),
+        new Date(Date.now() + 90000000),
+      ),
+    ).rejects.toBeInstanceOf(BookingNotOwnedError);
+    const missing = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            type: "group",
+            currentState: "awaiting_participant_confirmation",
+          }),
+        ),
+      },
+    });
+    await expect(
+      missing.service.withdrawInvite("student1", "b1", "invitee1"),
+    ).rejects.toBeInstanceOf(BookingParticipantNotFoundError);
+  });
+});
+
+describe("Tutor payout safety guards", () => {
+  test.each([
+    "bankName",
+    "bankAccountNumber",
+    "bankAccountHolderName",
+    "bankAccountOpeningCity",
+    "bankAccountOwnership",
+    "bankTransferDisclaimerAccepted",
+  ] as const)("payout preparation identifies missing %s", async (field) => {
+    const profile = {
+      bankName: "BCA",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null,
+      taxRateOverrideBps: null,
+      version: 1,
+      [field]:
+        field === "bankTransferDisclaimerAccepted"
+          ? false
+          : field === "bankAccountOwnership"
+            ? ""
+            : "  ",
+    };
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const { service, repo } = createService({
+      repo: {
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+      },
+    });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: preview.sourceKeys,
+        previewVersion: preview.previewVersion,
+        operationId: crypto.randomUUID(),
+      }),
+    ).rejects.toMatchObject({
+      code: "PAYOUT_PROFILE_INCOMPLETE",
+      details: { missingFields: [field] },
+    });
+    expect(repo.insertTutorPayout).not.toHaveBeenCalled();
+  });
+
+  test("a payout preview requires a tutor profile and a unique non-empty session selection", async () => {
+    const missing = createService();
+    await expect(
+      missing.service.previewTutorPayout("tutor1", ["fee1"]),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+    await expect(
+      missing.service.getTutorPayoutFinance("tutor1"),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+    const { service } = createService({
+      repo: { findTutorProfile: mock(async () => ({})) },
+    });
+    await expect(
+      service.previewTutorPayout("tutor1", []),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+    await expect(
+      service.previewTutorPayout("tutor1", ["fee1", "fee1"]),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  });
+
+  test("transfer recording rejects a payout whose source preview has changed", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const { service } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          taxLegalName: "Tutor Legal",
+          nik: "0012345678901234",
+          npwp: null,
+          taxRateOverrideBps: null,
+          version: 1,
+        })),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        listTutorPayoutAllocationsByPayoutId: mock(async () => [
+          { sourceKey: fee.eventKey, active: true },
+        ]),
+        findTutorPayoutById: mock(async () => ({
+          id: "payout1",
+          tutorId: "tutor1",
+          status: "prepared",
+          sourceKeys: [fee.eventKey],
+          previewVersion: "stale-preview",
+        })),
+      },
+    });
+
+    await expect(
+      service.recordTutorPayoutTransfer("admin1", {
+        payoutId: "payout1",
+        previewVersion: "stale-preview",
+        actualAmountIdr: 9_750,
+        paidAt: new Date("2026-10-28T00:00:00Z"),
+      }),
+    ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  });
+
+  test("transfer recording reports a concurrent payout state change", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    let payout: Record<string, unknown>;
+    const { service, db } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          taxLegalName: "Tutor Legal",
+          nik: "0012345678901234",
+          npwp: null,
+          taxRateOverrideBps: null,
+          version: 1,
+        })),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        listTutorPayoutAllocationsByPayoutId: mock(async () => [
+          { sourceKey: fee.eventKey, active: true },
+        ]),
+        findTutorPayoutById: mock(async () => payout),
+      },
+    });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    payout = {
+      id: "payout1",
+      tutorId: "tutor1",
+      status: "prepared",
+      sourceKeys: [fee.eventKey],
+      previewVersion: preview.previewVersion,
+      netHonorariumIdr: preview.netHonorariumIdr,
+    };
+    const set = mock(() => ({ where: () => ({ returning: async () => [] }) }));
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({ execute: mock(async () => undefined), update: () => ({ set }) }),
+    );
+
+    await expect(
+      service.recordTutorPayoutTransfer("admin1", {
+        payoutId: payout.id,
+        previewVersion: preview.previewVersion,
+        actualAmountIdr: preview.netHonorariumIdr,
+        paidAt: new Date("2026-10-28T00:00:00Z"),
+      }),
+    ).rejects.toThrow("Payout state changed; reload and retry");
+    expect(set).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["initial", "locked"] as const)(
+    "transfer recording rejects a missing %s payout without side effects",
+    async (missingLookup) => {
+      const findTutorPayoutById = mock(
+        async (_tx: unknown, _id: string, locked?: boolean) =>
+          missingLookup === "initial" || locked
+            ? null
+            : { id: "payout1", tutorId: "tutor1" },
+      );
+      const { service, audit, notification, db } = createService({
+        repo: { findTutorPayoutById },
+      });
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", {
+          payoutId: "payout1",
+          previewVersion: "v1",
+          actualAmountIdr: 10000,
+          paidAt: new Date("2026-10-28T00:00:00Z"),
+        }),
+      ).rejects.toBeInstanceOf(TutorPayoutNotFoundError);
+      expect(findTutorPayoutById).toHaveBeenCalledTimes(
+        missingLookup === "initial" ? 1 : 2,
+      );
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(notification.write).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
+    },
+  );
+
+  test("void rejects blank reason and missing initial or locked payout without side effects", async () => {
+    const blank = createService();
+    await expect(
+      blank.service.voidTutorPayout("admin1", {
+        payoutId: "payout1",
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Void reason is required");
+    expect(blank.db.transaction).not.toHaveBeenCalled();
+    expect(blank.audit.record).not.toHaveBeenCalled();
+    expect(blank.notification.write).not.toHaveBeenCalled();
+    expect(blank.notification.writeBestEffort).not.toHaveBeenCalled();
+
+    for (const missingLookup of ["initial", "locked"] as const) {
+      const findTutorPayoutById = mock(
+        async (_tx: unknown, _id: string, locked?: boolean) =>
+          missingLookup === "initial" || locked
+            ? null
+            : { id: "payout1", tutorId: "tutor1" },
+      );
+      const { service, audit, notification } = createService({
+        repo: { findTutorPayoutById },
+      });
+      await expect(
+        service.voidTutorPayout("admin1", {
+          payoutId: "payout1",
+          reason: "Duplicate",
+        }),
+      ).rejects.toBeInstanceOf(TutorPayoutNotFoundError);
+      expect(findTutorPayoutById).toHaveBeenCalledTimes(
+        missingLookup === "initial" ? 1 : 2,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(notification.write).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
+    }
+  });
+
+  test.each(["identical", "different-tutor", "different-preview"] as const)(
+    "payout preparation handles an operation replay: %s",
+    async (scenario) => {
+      const prior = {
+        id: "payout1",
+        tutorId: scenario === "different-tutor" ? "other-tutor" : "tutor1",
+        previewVersion: scenario === "different-preview" ? "v2" : "v1",
+        status: "prepared",
+        sourceKeys: null,
+      };
+      const { service, repo } = createService({
+        repo: { findTutorPayoutByIdempotencyKey: mock(async () => prior) },
+      });
+      const pending = service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        previewVersion: "v1",
+        operationId: "operation1",
+        sourceKeys: ["fee1"],
+      });
+      if (scenario === "identical")
+        await expect(pending).resolves.toMatchObject({
+          id: "payout1",
+          status: "prepared",
+          sourceKeys: [],
+        });
+      else
+        await expect(pending).rejects.toBeInstanceOf(
+          TutorPayoutPreviewStaleError,
+        );
+      expect(repo.findTutorProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["invalid-date", "void-payout"] as const)(
+    "transfer recording rejects %s before writing",
+    async (scenario) => {
+      const { service } = createService({
+        repo: {
+          findTutorPayoutById: mock(async () => ({
+            id: "payout1",
+            tutorId: "tutor1",
+            status: scenario === "void-payout" ? "void" : "prepared",
+          })),
+        },
+      });
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", {
+          payoutId: "payout1",
+          previewVersion: "v1",
+          actualAmountIdr: 10000,
+          paidAt:
+            scenario === "invalid-date"
+              ? new Date("invalid")
+              : new Date("2026-10-28T00:00:00Z"),
+        }),
+      ).rejects.toThrow(
+        scenario === "invalid-date"
+          ? "Transfer date must be valid"
+          : "Only a prepared payout",
+      );
+    },
+  );
+
+  test("a void payout cannot be voided again or reconciled without an outstanding transfer", async () => {
+    const { service, audit } = createService({
+      repo: {
+        findTutorPayoutById: mock(async () => ({
+          id: "payout1",
+          tutorId: "tutor1",
+          status: "void",
+          reconciliationStatus: "resolved",
+        })),
+      },
+    });
+    await expect(
+      service.voidTutorPayout("admin1", {
+        payoutId: "payout1",
+        reason: "Void duplicate",
+      }),
+    ).rejects.toThrow("already void");
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", {
+        payoutId: "payout1",
+        reason: "Resolved transfer",
+      }),
+    ).rejects.toThrow("no outstanding transfer reconciliation");
+    await expect(
+      service.resolveTutorPayoutReconciliation("admin1", {
+        payoutId: "payout1",
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Resolution reason is required");
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+});
+
+describe("Tutor payout tax configuration", () => {
+  test("finance preview treats a missing or malformed NIK as an incomplete tax profile", async () => {
+    const f = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          taxLegalName: "Tutor Legal",
+          nik: null,
+        })),
+        findTutorTaxConfig: mock(async () => null),
+        listTutorPayoutsByTutorId: mock(async () => []),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => []),
+        findTutorSessionFeesByTutor: mock(async () => []),
+      },
+    });
+
+    const result = await f.service.getTutorPayoutFinance("tutor1");
+    expect(result.pending.taxProfileComplete).toBe(false);
+  });
+
+  test("finance preview recognizes a complete saved tax identity", async () => {
+    const f = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({
+          bankName: "BCA",
+          taxLegalName: "Tutor Legal",
+          nik: "0012345678901234",
+          npwp: null,
+        })),
+        findTutorTaxConfig: mock(async () => null),
+        listTutorPayoutsByTutorId: mock(async () => []),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => []),
+        findTutorSessionFeesByTutor: mock(async () => []),
+      },
+    });
+
+    const result = await f.service.getTutorPayoutFinance("tutor1");
+    expect(result.pending.taxProfileComplete).toBe(true);
+  });
+
+  test("finance preview includes non-BCA transfer fee and negative-net handling", async () => {
+    const { service } = createService({
+      repo: {
+        findTutorProfile: mock(async () => ({ bankName: "Mandiri" })),
+        findTutorTaxConfig: mock(async () => null),
+        listTutorPayoutsByTutorId: mock(async () => []),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => []),
+        findTutorSessionFeesByTutor: mock(async () => [
+          {
+            id: "fee-small",
+            eventKey: "fee:small",
+            scheduledStartAt: new Date("2026-10-01T10:00:00Z"),
+            earnedAt: new Date("2026-10-01T11:00:00Z"),
+            grossHonorariumIdr: 1_000,
+            priceSnapshot: { engine: "v3", collectedMarks: 1 },
+          },
+        ]),
+      },
+    });
+
+    const result = await service.getTutorPayoutFinance("tutor1");
+
+    expect(result.pending).toMatchObject({
+      grossHonorariumIdr: 1_000,
+      transferFeeIdr: 2_500,
+      netHonorariumIdr: null,
+      taxProfileComplete: false,
+    });
+  });
+
+  test("reads the configured rates and the default configuration", async () => {
+    const { service, repo } = createService();
+    expect(await service.getTutorTaxConfig()).toMatchObject({
+      id: "default",
+      version: 0,
+    });
+    const configured = {
+      version: 3,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+    };
+    repo.findTutorTaxConfig.mockResolvedValue(configured);
+    expect(await service.getTutorTaxConfig()).toEqual({
+      id: "default",
+      ...configured,
+    });
+  });
+
+  test("rejects invalid rates and empty audit reasons before starting a transaction", async () => {
+    const { service, db } = createService();
+    await Promise.all(
+      [-1, 10001, 1.5, Number.NaN].map(async (rate) => {
+        await expect(
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "tutor1",
+            rateBps: rate,
+            reason: "Update tax profile",
+          }),
+        ).rejects.toThrow("whole basis points");
+        await expect(
+          service.updateTutorTaxConfig("admin1", {
+            expectedVersion: 0,
+            nikNpwpRateBps: rate,
+            nikOnlyRateBps: 0,
+            missingRateBps: 0,
+            reason: "Update tax policy",
+          }),
+        ).rejects.toThrow("whole basis points");
+      }),
+    );
+    await expect(
+      service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: null,
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Override reason is required");
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  test("sets and clears a tutor override with an audit record", async () => {
+    await Promise.all(
+      [0, 10000, null].map(async (rateBps) => {
+        const { service, db, audit } = createService({
+          repo: {
+            findTutorProfile: mock(async () => ({
+              version: 2,
+              taxRateOverrideBps: 500,
+            })),
+          },
+        });
+        const returning = mock(async () => [{ taxRateOverrideBps: rateBps }]);
+        const set = mock(() => ({ where: () => ({ returning }) }));
+        const tx = { execute: mock(async () => {}), update: () => ({ set }) };
+        db.transaction.mockImplementation(async (fn: any) => fn(tx));
+        await expect(
+          service.setTutorTaxRateOverride("admin1", {
+            tutorId: "tutor1",
+            rateBps,
+            reason: "  Verified tax profile  ",
+          }),
+        ).resolves.toEqual({ tutorId: "tutor1", taxRateOverrideBps: rateBps });
+        expect(set).toHaveBeenCalledWith(
+          expect.objectContaining({ taxRateOverrideBps: rateBps, version: 3 }),
+        );
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: "tutor_tax_rate_override_updated",
+            beforeState: { taxRateOverrideBps: 500 },
+            afterState: { taxRateOverrideBps: rateBps },
+            details: { reason: "Verified tax profile" },
+          }),
+        );
+      }),
+    );
+  });
+
+  test("rejects missing or concurrently changed tutor profiles", async () => {
+    const missing = createService();
+    await expect(
+      missing.service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: 100,
+        reason: "Verified tax profile",
+      }),
+    ).rejects.toMatchObject({ code: "PAYOUT_PROFILE_INCOMPLETE" });
+
+    const changed = createService({
+      repo: { findTutorProfile: mock(async () => ({ version: 2 })) },
+    });
+    const tx = {
+      execute: mock(async () => {}),
+      update: () => ({
+        set: () => ({ where: () => ({ returning: async () => [] }) }),
+      }),
+    };
+    changed.db.transaction.mockImplementation(async (fn: any) => fn(tx));
+    await expect(
+      changed.service.setTutorTaxRateOverride("admin1", {
+        tutorId: "tutor1",
+        rateBps: 100,
+        reason: "Verified tax profile",
+      }),
+    ).rejects.toThrow("Tutor profile changed");
+    expect(changed.audit.record).not.toHaveBeenCalled();
+  });
+
+  test("updates an existing tax policy and audits its new version", async () => {
+    const before = {
+      version: 1,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+    };
+    const after = { ...before, version: 2, missingRateBps: 400 };
+    const findTutorTaxConfig = mock(async () => before)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+    const { service, db, audit } = createService({
+      repo: { findTutorTaxConfig },
+    });
+    const set = mock(() => ({
+      where: () => ({ returning: async () => [{ id: "default" }] }),
+    }));
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({
+        execute: mock(async () => {}),
+        update: () => ({ set }),
+      }),
+    );
+    await expect(
+      service.updateTutorTaxConfig("admin1", {
+        expectedVersion: 1,
+        nikNpwpRateBps: 100,
+        nikOnlyRateBps: 200,
+        missingRateBps: 400,
+        reason: "  Updated policy  ",
+      }),
+    ).resolves.toEqual({ id: "default", ...after });
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 2, missingRateBps: 400 }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "tutor_tax_config_updated",
+        details: { reason: "Updated policy" },
+        beforeState: { id: "default", ...before },
+        afterState: { id: "default", ...after },
+      }),
+    );
+  });
+
+  test("rejects stale tax policy versions and a lost update", async () => {
+    const { service, db, audit } = createService({
+      repo: { findTutorTaxConfig: mock(async () => ({ version: 2 })) },
+    });
+    const input = {
+      expectedVersion: 1,
+      nikNpwpRateBps: 100,
+      nikOnlyRateBps: 200,
+      missingRateBps: 300,
+      reason: "Updated policy",
+    };
+    await expect(
+      service.updateTutorTaxConfig("admin1", input),
+    ).rejects.toMatchObject({ code: "TUTOR_TAX_CONFIG_CONFLICT" });
+    db.transaction.mockImplementation(async (fn: any) =>
+      fn({
+        execute: mock(async () => {}),
+        update: () => ({
+          set: () => ({ where: () => ({ returning: async () => [] }) }),
+        }),
+      }),
+    );
+    await expect(
+      service.updateTutorTaxConfig("admin1", { ...input, expectedVersion: 2 }),
+    ).rejects.toMatchObject({ code: "TUTOR_TAX_CONFIG_CONFLICT" });
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+});
+
 describe("BookingService coverage paths", () => {
+  test("listForTutor applies its default page when options are omitted", async () => {
+    const listBookingsByTutor = mock(async () => []);
+    const { service } = createService({
+      repo: { listBookingsByTutor },
+    });
+
+    await expect(service.listForTutor("tutor1")).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(listBookingsByTutor).toHaveBeenCalledWith("tutor1", {
+      states: undefined,
+      limit: expect.any(Number),
+      cursor: undefined,
+    });
+  });
+
   test("listForTutor applies the page limit and returns a composite cursor", async () => {
     const rows = [
       { id: "b1", scheduledStartAt: new Date("2026-08-24T10:00:00.000Z") },
@@ -8512,8 +11582,9 @@ describe("BookingService coverage paths", () => {
     });
   });
 
-  test("rejects an IDR booking when the economy pricing port is unavailable", async () => {
+  test("rejects new bookings when active V3 pricing is unavailable", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -8524,6 +11595,7 @@ describe("BookingService coverage paths", () => {
       timezone: "Asia/Jakarta",
     };
     const { service } = createService({
+      pricing: { getActiveV3Config: mock(async () => null) },
       repo: {
         findTutorProfile: mock(async () =>
           makeTutorProfile({ baseRatesIdr: { online: 125_000 } }),
@@ -8534,11 +11606,11 @@ describe("BookingService coverage paths", () => {
     });
 
     await expect(service.createSolo("student1", input)).rejects.toThrow(
-      "IDR pricing is not configured",
+      BookingV3PricingRevisionUnavailableError,
     );
   });
 
-  test("preserves IDR snapshot economics while repricing online and offline groups", async () => {
+  test("rejects retired IDR snapshots while repricing online and offline groups", async () => {
     const previousSnapshot = {
       perStudent: 100,
       baseline: 100,
@@ -8603,34 +11675,17 @@ describe("BookingService coverage paths", () => {
         },
       });
 
-      await service.withdraw("student1", "b1");
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
+        BookingV3PricingRevisionUnavailableError,
+      );
     }
 
-    expect(computeEconomics).toHaveBeenCalledTimes(2);
-    expect(computeEconomics.mock.calls[0]?.[1]).toBe(125_000);
-    expect(computeEconomics.mock.calls[1]?.[1]).toBe(125_000);
-    expect(computeEconomics.mock.calls[0]?.[3]).toEqual(
-      expect.objectContaining({
-        version: 7,
-        markValueIdr: 1_000,
-        onlineTutorIncrementIdr: 5_000,
-        onlineCogitoBaseIdr: 20_000,
-        onlineCogitoIncrementIdr: 2_000,
-      }),
-    );
-    expect(computeEconomics.mock.calls[1]?.[3]).toEqual(
-      expect.objectContaining({
-        version: 7,
-        markValueIdr: 1_000,
-        offlineTutorIncrementIdr: 5_000,
-        offlineCogitoBaseIdr: 20_000,
-        offlineCogitoIncrementIdr: 2_000,
-      }),
-    );
+    expect(computeEconomics).not.toHaveBeenCalled();
   });
 
   test("rejects a group booking when the tutor slot overlaps an existing booking", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -8661,6 +11716,7 @@ describe("BookingService coverage paths", () => {
 
   test("requests a room when creating an offline group booking", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "offline" as const,
@@ -8856,6 +11912,7 @@ describe("BookingService coverage paths", () => {
 
   test("rejects a series when the proposer cannot fund all sessions", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -8905,6 +11962,7 @@ describe("BookingService coverage paths", () => {
       ),
     });
     const baseInput = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -8991,8 +12049,9 @@ describe("BookingService coverage paths", () => {
     ).rejects.toThrow(BookingConflictError);
   });
 
-  test("uses the IDR economy pricing snapshot when creating a solo booking", async () => {
+  test("creates a V3 snapshot without consulting retired IDR economics", async () => {
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -9054,22 +12113,25 @@ describe("BookingService coverage paths", () => {
 
     await service.createSolo("student1", input);
 
-    expect(getEconomyConfig).toHaveBeenCalledTimes(1);
-    expect(computeEconomics).toHaveBeenCalledWith(
-      "online",
-      125_000,
-      1,
-      expect.objectContaining({ version: 3, markValueIdr: 1_000 }),
-    );
+    expect(getEconomyConfig).not.toHaveBeenCalled();
+    expect(computeEconomics).not.toHaveBeenCalled();
     expect(repo.insertBooking).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ priceSnapshot: snapshot }),
+      expect.objectContaining({
+        priceSnapshot: expect.objectContaining({
+          engine: "v3",
+          v3Revision: 1,
+          perStudentMarks: 50,
+          tutorHonorariumIdr: 200_000,
+        }),
+      }),
     );
   });
 
   test("rejects a solo booking that does not fit the tutor availability window", async () => {
     const start = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const input = {
+      subjectId: "mun-speech",
       tutorId: "tutor1",
       availabilitySlotId: "slot1",
       modality: "online" as const,
@@ -9245,4 +12307,2271 @@ describe("BookingService coverage paths", () => {
       service.syncOfflineCalendarAfterRoomRemoval("b1"),
     ).resolves.toBeUndefined();
   });
+});
+
+describe("V3-only booking and payout", () => {
+  test("V3 rejects missing active pricing before holding Marks", async () => {
+    const { service, wallet } = createService({
+      repo: {
+        findTutorProfile: mock(async () => makeTutorProfile()),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+        findTutorSubjectTopic: mock(async () => ({
+          categoryId: "mun",
+          categorySlug: "competition-model-united-nations",
+          categoryName: "MUN",
+          subcategoryId: "speech",
+          subcategorySlug: "speech",
+          subcategoryName: "Speech",
+        })),
+      },
+      pricing: { getActiveV3Config: mock(async () => null) },
+    });
+    await expect(
+      service.createSolo("student1", {
+        tutorId: "tutor1",
+        subjectId: "speech",
+        availabilitySlotId: "slot1",
+        modality: "online",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        timezone: "Asia/Jakarta",
+      }),
+    ).rejects.toThrow("V3 price revision");
+    expect(wallet.hold).not.toHaveBeenCalled();
+  });
+
+  test("V3 payout excludes snapshot-only legacy booking sources", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [
+          makeBooking({ currentState: "completed" }),
+        ]),
+        findTutorSessionFeesByTutor: mock(async () => []),
+      },
+    });
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    expect(result.completedSessions).toBe(0);
+    expect(result.tutorPayoutIdr).toBe(0);
+    expect(repo.findCompletedBookingsByTutor).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking report listing authorization", () => {
+  test("rejects report access for roles outside admin and tutor", async () => {
+    const { service } = createService();
+    await expect(
+      service.listReportSessions("student1", "student"),
+    ).rejects.toThrow(BookingNotOwnedError);
+  });
+});
+
+describe("Booking defensive lookup and transaction guards", () => {
+  test.each(["initial", "locked"] as const)(
+    "reconciliation rejects a payout missing at %s lookup without auditing",
+    async (missing) => {
+      const findTutorPayoutById = mock(
+        async (_tx: unknown, _id: string, locked?: boolean) =>
+          missing === "initial" || locked
+            ? null
+            : { id: "payout1", tutorId: "tutor1" },
+      );
+      const { service, audit } = createService({
+        repo: { findTutorPayoutById },
+      });
+      await expect(
+        service.resolveTutorPayoutReconciliation("admin1", {
+          payoutId: "payout1",
+          reason: "Transfer reconciled",
+        }),
+      ).rejects.toBeInstanceOf(TutorPayoutNotFoundError);
+      expect(findTutorPayoutById).toHaveBeenCalledTimes(
+        missing === "initial" ? 1 : 2,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+    },
+  );
+
+  test("session note reads and writes reject a deleted booking", async () => {
+    const { service, repo } = createService();
+    await expect(
+      service.addSessionNote("student1", "missing", "A note"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    await expect(
+      service.getSessionNotes("student1", "missing"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(repo.insertSessionNote).not.toHaveBeenCalled();
+  });
+
+  test("session notes reject content emptied by HTML sanitization", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "completed" }),
+        ),
+      },
+    });
+    await expect(
+      service.addSessionNote("student1", "b1", "<script>alert(1)</script>  "),
+    ).rejects.toBeInstanceOf(BookingNotEditableError);
+    expect(repo.insertSessionNote).not.toHaveBeenCalled();
+  });
+
+  test("room callbacks and notification recipients reject a deleted booking", async () => {
+    const { service, repo, wallet } = createService();
+    const tx = makeDb();
+    await expect(
+      service.transitionBookingToScheduled(tx, "missing", "admin1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    await expect(
+      service.cancelOfflineBooking(tx, "missing", "admin1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    await expect(
+      service.getBookingRecipients(tx, "missing"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(repo.updateBookingDeadline).not.toHaveBeenCalled();
+    expect(wallet.release).not.toHaveBeenCalled();
+  });
+
+  test("room recipient lookup returns confirmed students with the tutor", async () => {
+    const { service } = createService({
+      repo: {
+        findBookingById: mock(async () => makeBooking()),
+        findConfirmedParticipants: mock(async () => [
+          { userId: "student1" },
+          { userId: "student2" },
+        ]),
+      },
+    });
+    await expect(service.getBookingRecipients(makeDb(), "b1")).resolves.toEqual(
+      { tutorId: "tutor1", participantUserIds: ["student1", "student2"] },
+    );
+  });
+
+  test("reconfirmation rejects a deleted booking and a removed participant", async () => {
+    const missing = createService();
+    await expect(
+      missing.service.reconfirm("student1", "missing", true),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    const unowned = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "awaiting_reconfirmation" }),
+        ),
+      },
+    });
+    await expect(
+      unowned.service.reconfirm("student1", "b1", true),
+    ).rejects.toBeInstanceOf(BookingNotOwnedError);
+    expect(unowned.wallet.hold).not.toHaveBeenCalled();
+  });
+
+  test("withdraw invitation rejects a booking removed before locking", async () => {
+    const { service, notification } = createService();
+    await expect(
+      service.withdrawInvite("student1", "missing", "student2"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(notification.writeBestEffort).not.toHaveBeenCalled();
+  });
+
+  test("preparing a payout rejects a missing tutor profile", async () => {
+    const { service, audit } = createService();
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "missing",
+        previewVersion: "v1",
+        operationId: "operation1",
+        sourceKeys: ["fee1"],
+      }),
+    ).rejects.toThrow("Complete the tutor bank details");
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+});
+
+const makeCoverageSeriesSessions = () =>
+  [2, 4].map((days) => ({
+    scheduledStartAt: new Date(Date.now() + days * 86400000),
+    scheduledEndAt: new Date(Date.now() + days * 86400000 + 90 * 60000),
+  }));
+
+describe("Booking reschedule and create lookup guards", () => {
+  test.each(["acceptReschedule", "rejectReschedule"] as const)(
+    "%s rejects a booking removed before its transaction",
+    async (method) => {
+      const { service, repo } = createService();
+      await expect(
+        service[method]("student1", "missing"),
+      ).rejects.toBeInstanceOf(BookingNotFoundError);
+      expect(repo.updateRescheduleProposal).not.toHaveBeenCalled();
+    },
+  );
+  test("rejectReschedule rejects a missing proposal before any decision write", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "reschedule_proposed" }),
+        ),
+      },
+    });
+    await expect(
+      service.rejectReschedule("student1", "b1"),
+    ).rejects.toBeInstanceOf(BookingRescheduleNotFoundError);
+    expect(repo.updateRescheduleProposal).not.toHaveBeenCalled();
+  });
+
+  test.each(["createSeries", "createGroupSeries"] as const)(
+    "%s rejects unavailable tutor, slot, and wallet without holding funds",
+    async (method) => {
+      const input = {
+        subjectId: "mun-speech",
+        tutorId: "tutor1",
+        availabilitySlotId: "slot1",
+        modality: "online" as const,
+        targetGroupSize: 3,
+        inviteeUserIds: ["student2", "student3"],
+        sessions: makeCoverageSeriesSessions(),
+        timezone: "Asia/Jakarta",
+      };
+      await Promise.all(
+        (["tutor", "slot", "wallet"] as const).map(async (missing) => {
+          const { service, wallet, repo } = createService({
+            repo: {
+              findTutorProfile: mock(async () =>
+                missing === "tutor" ? null : makeTutorProfile(),
+              ),
+              findAvailabilitySlot: mock(async () =>
+                missing === "slot" ? null : makeSlot(),
+              ),
+              findUsersByIds: mock(async () => [
+                { id: "student2" },
+                { id: "student3" },
+              ]),
+            },
+            wallet: { getByUserId: mock(async () => null) },
+          });
+          const pending = service[method]("student1", input);
+          if (missing === "slot")
+            await expect(pending).rejects.toBeInstanceOf(
+              BookingNotEditableError,
+            );
+          else
+            await expect(pending).rejects.toBeInstanceOf(BookingNotFoundError);
+          expect(wallet.hold).not.toHaveBeenCalled();
+          expect(repo.insertBooking).not.toHaveBeenCalled();
+        }),
+      );
+    },
+  );
+});
+
+describe("Booking wallet disappearance and expiry races", () => {
+  test("reconfirmation decline and withdrawal abort when participant wallet disappeared", async () => {
+    await Promise.all(
+      (["reconfirm", "withdraw"] as const).map(async (method) => {
+        const { service, wallet, repo } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                type: "group",
+                currentState:
+                  method === "reconfirm"
+                    ? "awaiting_reconfirmation"
+                    : "awaiting_tutor_review",
+              }),
+            ),
+            findParticipant: mock(async () =>
+              makeParticipant({ heldAmount: 42 }),
+            ),
+          },
+          wallet: { getByUserId: mock(async () => null) },
+        });
+        const pending =
+          method === "reconfirm"
+            ? service.reconfirm("student1", "b1", false)
+            : service.withdraw("student1", "b1");
+        await expect(pending).rejects.toBeInstanceOf(BookingNotFoundError);
+        expect(wallet.release).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+        expect(repo.updateParticipantState).not.toHaveBeenCalled();
+      }),
+    );
+  });
+
+  test("expiry skips a candidate deleted between listing and transaction", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingsExpiringByDeadline: mock(async () => [makeBooking()]),
+      },
+    });
+    await expect(service.releaseExpiredHolds()).resolves.toEqual({
+      released: 0,
+    });
+    expect(wallet.release).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+  });
+
+  test("expiry forfeits only positive holds whose wallet still exists", async () => {
+    const booking = makeBooking({ currentState: "scheduled" });
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingsExpiringByDeadline: mock(async () => [booking]),
+        findBookingById: mock(async () => booking),
+        findConfirmedParticipants: mock(async () => [
+          makeParticipant({ id: "zero", userId: "zero-user", heldAmount: 0 }),
+          makeParticipant({
+            id: "missing-wallet",
+            userId: "missing-user",
+            heldAmount: 12,
+          }),
+          makeParticipant({
+            id: "funded",
+            userId: "funded-user",
+            heldAmount: 20,
+          }),
+        ]),
+      },
+      wallet: {
+        getByUserId: mock(async (_tx: unknown, userId: string) =>
+          userId === "funded-user" ? { id: "funded-wallet" } : null,
+        ),
+      },
+    });
+    await expect(service.releaseExpiredHolds()).resolves.toEqual({
+      released: 1,
+    });
+    expect(wallet.getByUserId).toHaveBeenCalledTimes(2);
+    expect(wallet.deduct).toHaveBeenCalledTimes(1);
+    expect(wallet.deduct).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        walletId: "funded-wallet",
+        amount: 20,
+        eventKey: "booking.b1.no_show.funded-user",
+      }),
+    );
+    expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+    expect(repo.updateParticipantState).toHaveBeenCalledWith(
+      expect.anything(),
+      "funded",
+      { heldAmount: 0 },
+    );
+  });
+});
+
+describe("Booking cancellation financial guards", () => {
+  test("late cancellation skips empty holds and rejects a missing funded wallet", async () => {
+    const booking = makeBooking({
+      scheduledStartAt: new Date(Date.now() + 3600000),
+    });
+    await Promise.all(
+      [false, true].map(async (missingWallet) => {
+        const { service, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () => booking),
+            findParticipant: mock(async () => makeParticipant()),
+            findConfirmedParticipants: mock(async () => [
+              makeParticipant({ heldAmount: 0 }),
+              makeParticipant({
+                id: "funded",
+                userId: "student2",
+                heldAmount: 42,
+              }),
+            ]),
+          },
+          wallet: {
+            getByUserId: mock(async () =>
+              missingWallet ? null : { id: "w2" },
+            ),
+          },
+        });
+        const pending = service.cancel("student1", "b1", "Changed plans");
+        if (missingWallet) {
+          await expect(pending).rejects.toBeInstanceOf(BookingNotFoundError);
+          expect(wallet.deduct).not.toHaveBeenCalled();
+        } else {
+          await pending;
+          expect(wallet.deduct).toHaveBeenCalledTimes(1);
+        }
+        expect(wallet.getByUserId).toHaveBeenCalledTimes(1);
+      }),
+    );
+  });
+
+  test("session cancellation rejects missing wallet and a lost cancellation update", async () => {
+    const booking = makeBooking({ type: "series", currentState: "scheduled" });
+    const session = {
+      id: "s1",
+      seriesBookingId: "b1",
+      scheduledStartAt: new Date(Date.now() + 86400000),
+      scheduledEndAt: new Date(Date.now() + 90000000),
+      currentState: "scheduled",
+      holdAmount: 42,
+    };
+    await Promise.all(
+      [true, false].map(async (missingWallet) => {
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () => booking),
+            findSessionById: mock(async () => session),
+            findParticipant: mock(async () =>
+              makeParticipant({ heldAmount: 42 }),
+            ),
+            cancelSession: mock(async () => null),
+          },
+          wallet: {
+            getByUserId: mock(async () =>
+              missingWallet ? null : { id: "w1" },
+            ),
+          },
+        });
+        const pending = service.cancelSession("student1", "s1");
+        if (missingWallet) {
+          await expect(pending).rejects.toBeInstanceOf(BookingNotFoundError);
+          expect(wallet.release).not.toHaveBeenCalled();
+          expect(repo.cancelSession).not.toHaveBeenCalled();
+        } else {
+          await expect(pending).rejects.toBeInstanceOf(
+            BookingStateTransitionError,
+          );
+          expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+        }
+      }),
+    );
+  });
+
+  test("new group rejects a deleted availability slot or proposer wallet before holding", async () => {
+    await Promise.all(
+      (["slot", "wallet"] as const).map(async (missing) => {
+        const { service, wallet } = createService({
+          repo: {
+            findTutorProfile: mock(async () => makeTutorProfile()),
+            findUsersByIds: mock(async () => [{ id: "student2" }]),
+            findAvailabilitySlot: mock(async () =>
+              missing === "slot" ? null : makeSlot(),
+            ),
+          },
+          wallet: { getByUserId: mock(async () => null) },
+        });
+        const pending = service.createGroup("student1", {
+          subjectId: "mun-speech",
+          tutorId: "tutor1",
+          availabilitySlotId: "slot1",
+          modality: "online",
+          targetGroupSize: 2,
+          inviteeUserIds: ["student2"],
+          scheduledStartAt: new Date(Date.now() + 2 * 86400000),
+          scheduledEndAt: new Date(Date.now() + 2 * 86400000 + 90 * 60000),
+          timezone: "Asia/Jakarta",
+        });
+        if (missing === "slot")
+          await expect(pending).rejects.toBeInstanceOf(BookingNotEditableError);
+        else await expect(pending).rejects.toBeInstanceOf(BookingNotFoundError);
+        expect(wallet.hold).not.toHaveBeenCalled();
+      }),
+    );
+  });
+
+  test("tax configuration rejects a blank audit reason before the transaction", async () => {
+    const { service, db } = createService();
+    await expect(
+      service.updateTutorTaxConfig("admin1", {
+        expectedVersion: 0,
+        nikNpwpRateBps: 250,
+        nikOnlyRateBps: 300,
+        missingRateBps: 500,
+        reason: "  ",
+      }),
+    ).rejects.toThrow("Change reason is required");
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking pinned pricing and payout preparation races", () => {
+  test("invite confirmation rejects a missing V3 price snapshot before wallet movement", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            type: "group",
+            currentState: "awaiting_participant_confirmation",
+            priceSnapshot: null,
+          }),
+        ),
+        findParticipant: mock(async () =>
+          makeParticipant({ role: "invitee", confirmationState: "pending" }),
+        ),
+      },
+    });
+    await expect(
+      service.confirmInvite("student1", "b1"),
+    ).rejects.toBeInstanceOf(BookingV3PricingRevisionUnavailableError);
+    expect(wallet.hold).not.toHaveBeenCalled();
+    expect(repo.updateParticipantState).not.toHaveBeenCalled();
+  });
+
+  test("payout preparation rechecks tutor presence after calculating its preview", async () => {
+    const profile = {
+      bankName: "BCA",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null,
+      taxRateOverrideBps: null,
+      version: 1,
+    };
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00Z"),
+      earnedAt: new Date("2026-08-01T11:00:00Z"),
+      grossHonorariumIdr: 10000,
+      priceSnapshot: null,
+    };
+    let reads = 0;
+    const { service, repo } = createService({
+      repo: {
+        findTutorProfile: mock(async () => (++reads === 3 ? null : profile)),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+      },
+    });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: preview.sourceKeys,
+        previewVersion: preview.previewVersion,
+        operationId: "operation1",
+      }),
+    ).rejects.toMatchObject({
+      code: "PAYOUT_PROFILE_INCOMPLETE",
+      details: { missingFields: ["tutorProfile"] },
+    });
+    expect(reads).toBe(3);
+    expect(repo.insertTutorPayout).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking completion report visibility", () => {
+  test("report listing rejects a deleted booking", async () => {
+    const { service } = createService();
+    await expect(
+      service.listCompletionFeedback("missing", "student1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+  });
+
+  test("staff see all reports while students see only delivered chargeable reports", async () => {
+    const feedbacks = [
+      { id: "solo-report", sessionId: null },
+      { id: "invalid-session-report", sessionId: "s1" },
+    ];
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "solo", currentState: "completed" }),
+        ),
+        listCompletionFeedbackByBooking: mock(async () => feedbacks),
+        hasChargeableFeedbackEntitlement: mock(async () => true),
+      },
+    });
+    await expect(
+      service.listCompletionFeedback("b1", "admin1", "admin"),
+    ).resolves.toEqual(feedbacks);
+    await expect(
+      service.listCompletionFeedback("b1", "tutor1"),
+    ).resolves.toEqual(feedbacks);
+    expect(repo.hasChargeableFeedbackEntitlement).not.toHaveBeenCalled();
+    await expect(
+      service.listCompletionFeedback("b1", "student1"),
+    ).resolves.toEqual([feedbacks[0]!]);
+    expect(repo.hasChargeableFeedbackEntitlement).toHaveBeenCalledTimes(1);
+  });
+
+  test("students cannot read undelivered reports or reports without a charge entitlement", async () => {
+    await Promise.all(
+      (["scheduled", "completed"] as const).map(async (state) => {
+        const { service, repo } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({ type: "group", currentState: state }),
+            ),
+            listCompletionFeedbackByBooking: mock(async () => [
+              { id: "report", sessionId: null },
+            ]),
+            hasChargeableFeedbackEntitlement: mock(async () => false),
+          },
+        });
+        await expect(
+          service.listCompletionFeedback("b1", "student1"),
+        ).resolves.toEqual([]);
+        expect(repo.hasChargeableFeedbackEntitlement).toHaveBeenCalledTimes(
+          state === "completed" ? 1 : 0,
+        );
+      }),
+    );
+  });
+
+  test("series student reports require a completed session belonging to the booking", async () => {
+    const reports = [
+      { id: "parent-report", sessionId: null },
+      { id: "missing-report", sessionId: "missing" },
+      { id: "foreign-report", sessionId: "foreign" },
+      { id: "scheduled-report", sessionId: "scheduled" },
+      { id: "completed-report", sessionId: "completed" },
+    ];
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", targetGroupSize: 3 }),
+        ),
+        listCompletionFeedbackByBooking: mock(async () => reports),
+        findSessionById: mock(async (_db: unknown, id: string) =>
+          id === "missing"
+            ? null
+            : {
+                seriesBookingId: id === "foreign" ? "other-booking" : "b1",
+                currentState: id === "scheduled" ? "scheduled" : "completed",
+              },
+        ),
+        hasChargeableFeedbackEntitlement: mock(async () => true),
+      },
+    });
+    await expect(
+      service.listCompletionFeedback("b1", "student1"),
+    ).resolves.toEqual([reports[4]!]);
+    expect(repo.hasChargeableFeedbackEntitlement).toHaveBeenCalledTimes(1);
+  });
+
+  test("series no-show marking rejects a booking removed between initial and locked reads", async () => {
+    let reads = 0;
+    const { service, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          ++reads === 1 ? makeBooking({ type: "series" }) : null,
+        ),
+      },
+    });
+    await expect(
+      service.markParticipantNoShow("b1", "tutor1", "student1", "s1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
+  test("no-show marking rejects a participant whose wallet disappeared", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 3600000),
+          }),
+        ),
+        findParticipant: mock(async () => makeParticipant({ heldAmount: 42 })),
+      },
+      wallet: { getByUserId: mock(async () => null) },
+    });
+    await expect(
+      service.markParticipantNoShow("b1", "tutor1", "student1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.updateParticipantState).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking report transaction consistency", () => {
+  test("admin correction rejects a lost version update without writing history", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "completed" }),
+        ),
+        findCompletionFeedback: mock(async () => ({
+          id: "report1",
+          version: 1,
+        })),
+        listCompletionFeedbackHistoryByFeedback: mock(async () => [
+          { version: 1 },
+        ]),
+        updateCompletionFeedback: mock(async () => null),
+      },
+    });
+    await expect(
+      service.submitAdminCompletionReport({
+        bookingId: "b1",
+        adminId: "admin1",
+        feedback: TEST_COMPLETION_FEEDBACK,
+        deliveryConfirmed: true,
+        reason: "Correct report",
+        requestKey: crypto.randomUUID(),
+        expectedVersion: 1,
+      }),
+    ).rejects.toBeInstanceOf(BookingCompletionReportConflictError);
+    expect(repo.updateCompletionFeedback).toHaveBeenCalledTimes(1);
+    expect(repo.insertCompletionFeedbackHistory).not.toHaveBeenCalled();
+  });
+
+  test("admin historical submission rejects a missing persisted request event", async () => {
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "completed" }),
+        ),
+      },
+    });
+    await expect(
+      service.submitAdminCompletionReport({
+        bookingId: "b1",
+        adminId: "admin1",
+        feedback: TEST_COMPLETION_FEEDBACK,
+        deliveryConfirmed: true,
+        reason: "Restore delivered report",
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(repo.insertCompletionFeedback).toHaveBeenCalledTimes(1);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
+  test("tutor replay returns the prior booking without settlement or another report", async () => {
+    const booking = makeBooking({ currentState: "completed" });
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findCompletionFeedbackHistoryByRequestKey: mock(async () => ({
+          bookingId: "b1",
+          sessionId: null,
+          requestPayload: {
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: null,
+            expectedVersion: null,
+          },
+        })),
+      },
+    });
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        crypto.randomUUID(),
+      ),
+    ).resolves.toBe(booking);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+  });
+
+  test("tutor replay normalizes unsupported prior request values", async () => {
+    const booking = makeBooking({ currentState: "completed" });
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findCompletionFeedbackHistoryByRequestKey: mock(async () => ({
+          bookingId: "b1",
+          sessionId: null,
+          requestPayload: {
+            feedback: TEST_COMPLETION_FEEDBACK,
+            deliveryConfirmed: true,
+            reason: Symbol("unsupported JSON value"),
+            expectedVersion: null,
+          },
+        })),
+      },
+    });
+
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        crypto.randomUUID(),
+      ),
+    ).resolves.toBe(booking);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+  });
+
+  test("completion refuses a missing proposer wallet before settlement", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 3600000),
+          }),
+        ),
+      },
+      wallet: { getByUserId: mock(async () => null) },
+    });
+    await expect(
+      service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+      ),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+  });
+
+  test("admin no-show delivery requires an existing chargeable forfeit", async () => {
+    const { service, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "no_show",
+            scheduledStartAt: new Date(Date.now() - 7200000),
+            scheduledEndAt: new Date(Date.now() - 3600000),
+          }),
+        ),
+      },
+    });
+    await expect(
+      service.submitAdminCompletionReport({
+        bookingId: "b1",
+        adminId: "admin1",
+        feedback: TEST_COMPLETION_FEEDBACK,
+        deliveryConfirmed: true,
+        reason: "Confirm delivery",
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toBeInstanceOf(BookingNotEditableError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking completion reuses no-show charges", () => {
+  test.each(["group", "series"] as const)(
+    "%s completion charges only remaining funded participants",
+    async (type) => {
+      const booking = makeBooking({
+        type,
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 3600000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 3600000),
+        scheduledEndAt: new Date(Date.now() + 3600000),
+        holdAmount: 20,
+        priceSnapshot: booking.priceSnapshot,
+      };
+      const noShowKey = `booking.b1.no_show.student2.${type === "series" ? "s1" : "solo"}`;
+      const { service, wallet, referralPort } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => [session]),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({
+              id: "empty",
+              userId: "empty-user",
+              heldAmount: 0,
+            }),
+            makeParticipant({
+              id: "no-show",
+              userId: "student2",
+              heldAmount: 0,
+            }),
+            makeParticipant({
+              id: "funded",
+              userId: "student3",
+              heldAmount: 20,
+            }),
+          ]),
+          findLedgerEventAmounts: mock(async () => new Map([[noShowKey, 20]])),
+        },
+      });
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        type === "series" ? "s1" : undefined,
+        TEST_COMPLETION_FEEDBACK,
+      );
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amount: 20 }),
+      );
+      expect(referralPort.recordEligibleFirstCompletion).toHaveBeenCalledTimes(
+        2,
+      );
+      expect(referralPort.recordEligibleFirstCompletion).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ studentId: "student2", chargedMarks: 20 }),
+      );
+    },
+  );
+
+  test.each(["group", "series"] as const)(
+    "%s completion refuses a participant with a missing funded wallet",
+    async (type) => {
+      const booking = makeBooking({
+        type,
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 3600000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 3600000),
+        scheduledEndAt: new Date(Date.now() + 3600000),
+        holdAmount: 20,
+        priceSnapshot: booking.priceSnapshot,
+      };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findSessionById: mock(async () => session),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 20 }),
+          ]),
+        },
+        wallet: { getByUserId: mock(async () => null) },
+      });
+      await expect(
+        service.completeSession(
+          "b1",
+          "tutor1",
+          type === "series" ? "s1" : undefined,
+          TEST_COMPLETION_FEEDBACK,
+        ),
+      ).rejects.toBeInstanceOf(BookingNotFoundError);
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+    },
+  );
+
+  test("solo series refuses a missing proposer wallet before completing a session", async () => {
+    const booking = makeBooking({ type: "series", currentState: "scheduled" });
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          scheduledStartAt: new Date(Date.now() - 3600000),
+          holdAmount: 20,
+        })),
+      },
+      wallet: { getByUserId: mock(async () => null) },
+    });
+    await expect(
+      service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(repo.completeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking series completion refresh guards", () => {
+  test.each([false, true])(
+    "rejects a missing booking at final refresh when allSettled=%s",
+    async (allSettled) => {
+      const booking = makeBooking({
+        type: "series",
+        currentState: "scheduled",
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 3600000),
+        holdAmount: 20,
+      };
+      let reads = 0;
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            ++reads === (allSettled ? 4 : 3) ? null : booking,
+          ),
+          findSessionById: mock(async () => session),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 20 }),
+          ),
+          listSessionsBySeriesId: mock(async () => [
+            {
+              ...session,
+              currentState: allSettled ? "completed" : "scheduled",
+            },
+          ]),
+        },
+      });
+      await expect(
+        service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+      ).rejects.toBeInstanceOf(BookingNotFoundError);
+      expect(repo.completeSession).toHaveBeenCalledTimes(1);
+      expect(reads).toBe(allSettled ? 4 : 3);
+    },
+  );
+
+  test("group-series completion rejects a missing wallet before releasing a residual hold", async () => {
+    const booking = makeBooking({
+      type: "series",
+      targetGroupSize: 3,
+      currentState: "scheduled",
+    });
+    const session = {
+      id: "s1",
+      seriesBookingId: "b1",
+      currentState: "scheduled",
+      scheduledStartAt: new Date(Date.now() - 3600000),
+      holdAmount: 20,
+    };
+    let walletReads = 0;
+    const { service, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findSessionById: mock(async () => session),
+        findConfirmedParticipants: mock(async () => [
+          makeParticipant({ heldAmount: 40 }),
+        ]),
+        listSessionsBySeriesId: mock(async () => [
+          { ...session, currentState: "completed" },
+        ]),
+      },
+      wallet: {
+        getByUserId: mock(async () =>
+          ++walletReads === 1 ? { id: "w1" } : null,
+        ),
+      },
+    });
+    await expect(
+      service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(walletReads).toBe(2);
+    expect(wallet.deduct).toHaveBeenCalledTimes(1);
+    expect(wallet.release).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking repricing wallet guards", () => {
+  test("group repricing rejects a remaining participant whose wallet disappeared", async () => {
+    const booking = makeBooking({
+      type: "group",
+      targetGroupSize: 3,
+      confirmedHeadcount: 3,
+      holdAmount: 84,
+    });
+    const { service, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(async () => makeParticipant({ heldAmount: 28 })),
+        findConfirmedParticipants: mock(async () => [
+          makeParticipant({ id: "p2", userId: "student2", heldAmount: 28 }),
+          makeParticipant({ id: "p3", userId: "student3", heldAmount: 28 }),
+        ]),
+      },
+      wallet: {
+        getByUserId: mock(async (_tx: unknown, userId: string) =>
+          userId === "student1" ? { id: "w1" } : null,
+        ),
+      },
+    });
+    await expect(service.withdraw("student1", "b1")).rejects.toBeInstanceOf(
+      BookingNotFoundError,
+    );
+    expect(wallet.release).toHaveBeenCalledTimes(1);
+    expect(wallet.hold).not.toHaveBeenCalled();
+  });
+
+  test("no-show marking rejects a booking missing at its initial lookup", async () => {
+    const { service, wallet } = createService();
+    await expect(
+      service.markParticipantNoShow("missing", "tutor1", "student1"),
+    ).rejects.toBeInstanceOf(BookingNotFoundError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+});
+
+describe("Booking repricing ignores incompatible persisted shapes", () => {
+  test.each(["solo", "undersized-group"] as const)(
+    "reconfirmation does not reprice %s",
+    async (scenario) => {
+      const booking = makeBooking({
+        type: scenario === "solo" ? "solo" : "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 1,
+        holdAmount: 42,
+      });
+      const participant = makeParticipant({
+        heldAmount: 42,
+        confirmationState: "confirmed",
+      });
+      const { service, pricing, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [participant]),
+          findReconfirmedParticipants: mock(async () => [participant]),
+        },
+      });
+      await expect(service.reconfirm("student1", "b1", true)).resolves.toEqual({
+        reconfirmed: true,
+      });
+      expect(pricing.getV3ConfigByVersion).not.toHaveBeenCalled();
+      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("Admin Google Meet retry transaction", () => {
+  test.each(["missing", "scheduled", "offline", "no-failure"] as const)(
+    "rejects %s before contacting provider",
+    async (scenario) => {
+      const booking = makeBooking({
+        currentState: scenario === "scheduled" ? "scheduled" : "confirmed",
+        modality: scenario === "offline" ? "offline" : "online",
+      });
+      const f = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            scenario === "missing" ? null : booking,
+          ),
+          hasFailedGoogleMeeting: mock(async () => false),
+        },
+      });
+      await expect(
+        f.service.retryMeetingByAdmin("admin1", "b1"),
+      ).rejects.toBeInstanceOf(
+        scenario === "missing" ? BookingNotFoundError : BookingNotEditableError,
+      );
+      expect(f.meeting.createEvent).not.toHaveBeenCalled();
+      expect(f.repo.insertStateHistory).not.toHaveBeenCalled();
+    },
+  );
+  test.each([false, true])(
+    "returns scheduled result and attributes successful retry to admin: %s",
+    async (succeeds) => {
+      const booking = makeBooking({ currentState: "confirmed" });
+      const findBookingById = mock(async () => booking);
+      const f = createService({
+        repo: {
+          findBookingById,
+          hasFailedGoogleMeeting: mock(async () => true),
+        },
+        meeting: {
+          createEvent: mock(async () => ({
+            provider: "google_meet",
+            status: succeeds ? "created" : "failed",
+            meetingUrl: succeeds ? "https://meet.google.com/abc" : null,
+          })),
+        },
+      });
+      expect(await f.service.retryMeetingByAdmin("admin1", "b1")).toEqual({
+        bookingId: "b1",
+        scheduled: succeeds,
+      });
+      expect(f.meeting.createEvent).toHaveBeenCalledTimes(1);
+      expect(f.repo.findBookingById).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        { forUpdate: true },
+      );
+      if (succeeds)
+        expect(f.repo.insertStateHistory).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            actorId: "admin1",
+            actorType: "admin",
+            reason: "Admin retried Google Meet creation",
+          }),
+        );
+      else expect(f.repo.insertStateHistory).not.toHaveBeenCalled();
+    },
+  );
+});
+
+test("admin completion correction requires an explicit existing version", async () => {
+  const f = createService({
+    repo: {
+      findBookingById: mock(async () =>
+        makeBooking({ currentState: "completed" }),
+      ),
+      findCompletionFeedback: mock(async () => ({ id: "report1", version: 1 })),
+    },
+  });
+  await expect(
+    f.service.submitAdminCompletionReport({
+      bookingId: "b1",
+      adminId: "admin1",
+      feedback: TEST_COMPLETION_FEEDBACK,
+      deliveryConfirmed: true,
+      reason: "Correct delivered report",
+      requestKey: crypto.randomUUID(),
+    }),
+  ).rejects.toBeInstanceOf(BookingCompletionReportConflictError);
+  expect(f.repo.updateCompletionFeedback).not.toHaveBeenCalled();
+  expect(f.repo.insertCompletionFeedbackHistory).not.toHaveBeenCalled();
+});
+
+describe("Payout report tax snapshots", () => {
+  test.each([
+    "npwp",
+    "nik",
+    "missing-nik",
+    "missing-name",
+    "override",
+    "negative-net",
+  ] as const)("uses correct saved tax settings for %s", async (scenario) => {
+    const profile = {
+      tutorId: "tutor1",
+      tutorName: "Tutor",
+      bankName: scenario === "negative-net" ? "BRI" : "BCA",
+      taxLegalName: scenario === "missing-name" ? null : "Tutor Legal",
+      nik: scenario === "missing-nik" ? null : "0012345678901234",
+      npwp: scenario === "npwp" ? "123456789" : null,
+      taxRateOverrideBps: scenario === "override" ? 123 : null,
+    };
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "b1",
+      bookingNumber: 1,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01"),
+      earnedAt: new Date("2026-08-01T01:00:00Z"),
+      grossHonorariumIdr: scenario === "negative-net" ? 100 : 10000,
+      priceSnapshot: null,
+    };
+    const f = createService({
+      repo: {
+        listTutorPayoutProfiles: mock(async () => [profile]),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+      },
+    });
+    const rows = await f.service.getTutorPayoutReport({});
+    expect(rows).toHaveLength(1);
+    const taxStatus =
+      scenario === "npwp"
+        ? "nik_npwp"
+        : scenario.startsWith("missing-")
+          ? "missing"
+          : "nik_only";
+    expect(rows[0]).toMatchObject({
+      taxStatus,
+      taxRateSource:
+        scenario === "override" ? "tutor_override" : `default_${taxStatus}`,
+      taxProfileComplete: !scenario.startsWith("missing-"),
+    });
+    if (scenario === "negative-net")
+      expect(rows[0]?.netHonorariumIdr).toBeNull();
+  });
+});
+
+test("admin can list series sessions without a participant record", async () => {
+  const f = createService({
+    repo: {
+      findBookingById: mock(async () => makeBooking({ type: "series" })),
+      listSessionsBySeriesId: mock(async () => [{ id: "session1" }]),
+    },
+  });
+  expect(await f.service.listSessions("b1", "admin1", "admin")).toEqual([
+    { id: "session1" },
+  ]);
+  expect(f.repo.findParticipant).not.toHaveBeenCalled();
+});
+
+test("offline room removal skips a still-confirmed booking", async () => {
+  const f = createService({
+    repo: {
+      findBookingById: mock(async () =>
+        makeBooking({ modality: "offline", currentState: "confirmed" }),
+      ),
+    },
+  });
+  await f.service.syncOfflineCalendarAfterRoomRemoval("b1");
+  expect(f.meeting.updateEvent).not.toHaveBeenCalled();
+  expect(f.meeting.cancelEvent).not.toHaveBeenCalled();
+});
+
+test("transfer rejects changed prepared allocations before recording payment", async () => {
+  const fee = {
+    id: "fee1",
+    eventKey: "fee:event-1",
+    bookingId: "b1",
+    bookingNumber: 1,
+    bookingSessionId: null,
+    bookingType: "solo",
+    scheduledStartAt: new Date("2026-08-01"),
+    earnedAt: new Date("2026-08-01T01:00:00Z"),
+    grossHonorariumIdr: 10000,
+    priceSnapshot: null,
+  };
+  const f = createService({
+    repo: {
+      findTutorProfile: mock(async () => ({
+        taxLegalName: "Tutor Legal",
+        nik: "0012345678901234",
+        bankName: "BCA",
+      })),
+      findTutorSessionFeesByTutor: mock(async () => [fee]),
+      listTutorPayoutAllocationsByPayoutId: mock(async () => []),
+      findTutorPayoutById: mock(async () => ({
+        id: "payout1",
+        tutorId: "tutor1",
+        status: "prepared",
+        sourceKeys: [fee.eventKey],
+        previewVersion: "v1",
+      })),
+    },
+  });
+  await expect(
+    f.service.recordTutorPayoutTransfer("admin1", {
+      payoutId: "payout1",
+      previewVersion: "v1",
+      actualAmountIdr: 10000,
+      paidAt: new Date("2026-10-28"),
+    }),
+  ).rejects.toThrow("Prepared session allocations changed");
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
+test.each(["class", "missing-class-id", "label", "legacy"] as const)(
+  "records a prepared payout and renders the %s session and tax snapshots",
+  async (allocationCase) => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "b1",
+      bookingNumber: null,
+      bookingSessionId: null,
+      bookingType: "series",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const profile = {
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null,
+      taxRateOverrideBps: null,
+      version: 1,
+    };
+    let payout: any;
+    let allocationLookups = 0;
+    const allocation = {
+      sourceKey: fee.eventKey,
+      active: true,
+      deliveryLabel: allocationCase === "label" ? "Workshop session" : null,
+      bookingNumber:
+        allocationCase === "class" || allocationCase === "missing-class-id"
+          ? null
+          : 17,
+      classSessionId: allocationCase === "class" ? "class-session-1" : null,
+      bookingType: "series",
+      scheduledStartAt: fee.scheduledStartAt,
+    };
+    const f = createService({
+      repo: {
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        findTutorPayoutById: mock(async () => payout),
+        listTutorPayoutAllocationsByPayoutId: mock(async () => {
+          allocationLookups++;
+          return allocationCase === "legacy" && allocationLookups >= 3
+            ? []
+            : [allocation];
+        }),
+      },
+    });
+    const preview = await f.service.previewTutorPayout("tutor1", [
+      fee.eventKey,
+    ]);
+    payout = {
+      id: "payout1",
+      tutorId: "tutor1",
+      status: "prepared",
+      sourceKeys: [fee.eventKey],
+      previewVersion: preview.previewVersion,
+      netHonorariumIdr: preview.netHonorariumIdr,
+      grossHonorariumIdr: preview.grossHonorariumIdr,
+      transferFeeIdr: preview.transferFeeIdr,
+      taxRateBps: null,
+      taxHonorariumIdr: null,
+      actualAmountIdr: null,
+      paidAt: null,
+    };
+    const tx: any = {
+      execute: mock(async () => undefined),
+      update: () => ({
+        set: (values: any) => ({
+          where: () => ({
+            returning: async () => [
+              {
+                ...payout,
+                ...values,
+                ...(allocationCase === "legacy"
+                  ? { paidAt: null, actualAmountIdr: null }
+                  : {}),
+              },
+            ],
+          }),
+        }),
+      }),
+    };
+    f.db.transaction.mockImplementation(async (fn: any) => fn(tx));
+
+    const transfer = f.service.recordTutorPayoutTransfer("admin1", {
+      payoutId: "payout1",
+      previewVersion: preview.previewVersion,
+      actualAmountIdr: preview.netHonorariumIdr,
+      paidAt: new Date("2026-10-28T00:00:00.000Z"),
+    });
+    await expect(transfer).resolves.toMatchObject({
+      id: "payout1",
+      status: "paid",
+    });
+    const body = f.notification.write.mock.calls[0]![0].body as string;
+    expect(body).toContain(
+      allocationCase === "class"
+        ? "Class session class-session-1"
+        : allocationCase === "missing-class-id"
+          ? "Class session  ·"
+          : allocationCase === "label"
+            ? "Workshop session"
+            : "Legacy aggregate (session details unavailable)",
+    );
+    expect(body).toContain("Tax snapshot unavailable.");
+    if (allocationCase === "legacy") {
+      expect(body).toContain("Net Rp0.");
+      expect(f.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          afterState: expect.objectContaining({ paidAt: null }),
+        }),
+      );
+    }
+  },
+);
+
+test("legacy prepared payouts without source keys are rejected before transfer", async () => {
+  const f = createService({
+    repo: {
+      findTutorProfile: mock(async () => ({
+        taxLegalName: "Tutor Legal",
+        nik: "0012345678901234",
+        version: 1,
+      })),
+      findTutorPayoutById: mock(async () => ({
+        id: "payout-legacy",
+        tutorId: "tutor1",
+        status: "prepared",
+        sourceKeys: null,
+        previewVersion: "legacy-preview",
+      })),
+    },
+  });
+
+  await expect(
+    f.service.recordTutorPayoutTransfer("admin1", {
+      payoutId: "payout-legacy",
+      previewVersion: "legacy-preview",
+      actualAmountIdr: 0,
+      paidAt: new Date("2026-10-28T00:00:00.000Z"),
+    }),
+  ).rejects.toBeInstanceOf(TutorPayoutPreviewStaleError);
+  expect(f.audit.record).not.toHaveBeenCalled();
+  expect(f.notification.write).not.toHaveBeenCalled();
+});
+
+test("payout preview resolves equal-time fees by source key and uses a tutor tax override", async () => {
+  const date = new Date("2026-08-01T10:00:00.000Z");
+  const f = createService({
+    repo: {
+      findTutorProfile: mock(async () => ({
+        taxLegalName: "Tutor Legal",
+        nik: "0012345678901234",
+        taxRateOverrideBps: 123,
+        version: 1,
+      })),
+      findTutorSessionFeesByTutor: mock(async () => [
+        {
+          id: "fee-z",
+          eventKey: "fee:z",
+          bookingId: "b1",
+          bookingNumber: 2,
+          bookingSessionId: null,
+          bookingType: "solo",
+          scheduledStartAt: date,
+          earnedAt: date,
+          grossHonorariumIdr: 10000,
+          priceSnapshot: null,
+        },
+        {
+          id: "fee-a",
+          eventKey: "fee:a",
+          bookingId: "b1",
+          bookingNumber: 1,
+          bookingSessionId: null,
+          bookingType: "solo",
+          scheduledStartAt: date,
+          earnedAt: date,
+          grossHonorariumIdr: 10000,
+          priceSnapshot: null,
+        },
+      ]),
+    },
+  });
+
+  const result = await f.service.previewTutorPayout("tutor1", [
+    "fee:z",
+    "fee:a",
+  ]);
+  expect(result.items.map((item) => item.sourceKey)).toEqual([
+    "fee:a",
+    "fee:z",
+  ]);
+  expect(result.taxRateSource).toBe("tutor_override");
+});
+
+test("payout reconciliation errors identify the blocked source when legacy payout id is absent", async () => {
+  const fee = {
+    id: "fee1",
+    eventKey: "fee:event-1",
+    bookingId: "b1",
+    bookingNumber: 1,
+    bookingSessionId: null,
+    bookingType: "solo",
+    scheduledStartAt: new Date("2026-08-01"),
+    earnedAt: new Date("2026-08-01T01:00:00Z"),
+    grossHonorariumIdr: 10000,
+    priceSnapshot: null,
+  };
+  const f = createService({
+    repo: {
+      findTutorProfile: mock(async () => ({
+        taxLegalName: "Tutor Legal",
+        nik: "0012345678901234",
+        version: 1,
+      })),
+      findTutorSessionFeesByTutor: mock(async () => [fee]),
+      listTutorPayoutReconciliationSourceKeys: mock(async () => [
+        { sourceKey: fee.eventKey, payoutId: null },
+      ]),
+    },
+  });
+
+  await expect(
+    f.service.previewTutorPayout("tutor1", [fee.eventKey]),
+  ).rejects.toThrow("Reconcile the recorded external transfer");
+});
+
+test.each([true, false])(
+  "void sets reconciliation required only when transfer evidence exists (%s)",
+  async (hasTransferEvidence) => {
+    const payout = {
+      id: "payout1",
+      tutorId: "tutor1",
+      status: "prepared",
+      actualAmountIdr: hasTransferEvidence ? 10 : null,
+      sourceKeys: ["fee:event-1"],
+      previewVersion: "v1",
+      reconciliationStatus: "not_required",
+    };
+    const f = createService({
+      repo: { findTutorPayoutById: mock(async () => payout) },
+    });
+    const tx: any = {
+      execute: mock(async () => undefined),
+      update: () => ({
+        set: (values: any) => ({
+          where: () => ({ returning: async () => [{ ...payout, ...values }] }),
+        }),
+      }),
+    };
+    f.db.transaction.mockImplementation(async (fn: any) => fn(tx));
+
+    await expect(
+      f.service.voidTutorPayout("admin1", {
+        payoutId: "payout1",
+        reason: "Duplicate",
+      }),
+    ).resolves.toMatchObject({ id: "payout1", status: "void" });
+    expect(f.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        afterState: expect.objectContaining({
+          reconciliationStatus: hasTransferEvidence
+            ? "required"
+            : "not_required",
+        }),
+      }),
+    );
+  },
+);
+
+describe("remaining booking coverage boundaries", () => {
+  test("legacy V3 group snapshot without per-student price uses the freshly computed value", async () => {
+    const booking = makeBooking({
+      type: "group",
+      currentState: "awaiting_tutor_review",
+      targetGroupSize: 3,
+      holdAmount: 112,
+      priceSnapshot: {
+        engine: "v3",
+        v3Revision: 1,
+        competition: "competition-model-united-nations",
+        modality: "online",
+        headcount: 3,
+        collectedMarks: 112,
+        tutorHonorariumIdr: 200000,
+      },
+    });
+    const remaining = [
+      makeParticipant({
+        id: "p2",
+        userId: "student2",
+        role: "invitee",
+        heldAmount: 28,
+      }),
+      makeParticipant({
+        id: "p3",
+        userId: "student3",
+        role: "invitee",
+        heldAmount: 28,
+      }),
+    ];
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(async () => makeParticipant({ heldAmount: 28 })),
+        findConfirmedParticipants: mock(async () => remaining),
+        updateBookingVersioned: mock(
+          async (_tx: unknown, _id: string, version: number, updates: any) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+    });
+
+    await f.service.withdraw("student1", "b1");
+    expect(f.repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      56,
+    );
+    expect(f.wallet.hold).not.toHaveBeenCalled();
+    expect(f.wallet.release.mock.calls.slice(1)).toHaveLength(0);
+  });
+
+  test("headcount repricing releases the excess from each remaining participant", async () => {
+    const booking = makeBooking({
+      type: "group",
+      currentState: "awaiting_tutor_review",
+      targetGroupSize: 4,
+      confirmedHeadcount: 4,
+      holdAmount: 112,
+      priceSnapshot: {
+        engine: "v3",
+        v3Revision: 1,
+        competition: "competition-model-united-nations",
+        modality: "online",
+        headcount: 3,
+        perStudentMarks: 28,
+        collectedMarks: 112,
+        tutorHonorariumIdr: 200000,
+      },
+    });
+    const remaining = [
+      makeParticipant({
+        id: "p2",
+        userId: "student2",
+        role: "invitee",
+        heldAmount: 28,
+      }),
+      makeParticipant({
+        id: "p3",
+        userId: "student3",
+        role: "invitee",
+        heldAmount: 28,
+      }),
+    ];
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(async () => makeParticipant({ heldAmount: 112 })),
+        findConfirmedParticipants: mock(async () => remaining),
+        findTutorProfile: mock(async () => makeTutorProfile()),
+        updateBookingVersioned: mock(
+          async (_tx: unknown, _id: string, version: number, updates: any) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+      pricing: {
+        calculateV3SessionPrice: mock((input: any) => ({
+          competition: input.competition,
+          modality: input.modality,
+          headcount: input.headcount,
+          perStudentMarks: 10,
+          collectedMarks: 10 * input.headcount,
+          tutorFeeIdr: 200000,
+        })),
+      },
+    });
+
+    await f.service.withdraw("student1", "b1");
+    const repriceReleases = f.wallet.release.mock.calls.slice(1);
+    expect(repriceReleases).toHaveLength(2);
+    expect(repriceReleases.map((call) => call[1].amount)).toEqual([18, 18]);
+  });
+
+  test("invite confirmation tolerates a proposer wallet removed before excess release", async () => {
+    const booking = makeBooking({
+      type: "group",
+      currentState: "awaiting_participant_confirmation",
+      targetGroupSize: 3,
+      confirmedHeadcount: 1,
+      priceSnapshot: {
+        engine: "v3",
+        v3Revision: 1,
+        competition: "competition-model-united-nations",
+        modality: "online",
+        headcount: 3,
+        perStudentMarks: 42,
+        collectedMarks: 126,
+        tutorHonorariumIdr: 200000,
+      },
+    });
+    const invitee = makeParticipant({
+      id: "invite1",
+      userId: "student2",
+      role: "invitee",
+      confirmationState: "pending",
+      heldAmount: 0,
+    });
+    const proposer = makeParticipant({
+      id: "proposer1",
+      userId: "student1",
+      role: "proposer",
+      heldAmount: 84,
+    });
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(
+          async (_tx: unknown, _bookingId: string, userId: string) =>
+            userId === "student2" ? invitee : proposer,
+        ),
+        incrementBookingConfirmedHeadcount: mock(async () => ({
+          confirmedHeadcount: 2,
+        })),
+      },
+      wallet: {
+        getByUserId: mock(async (_tx: unknown, userId: string) =>
+          userId === "student1"
+            ? null
+            : { id: "invitee-wallet", availableBalance: 100 },
+        ),
+      },
+    });
+
+    await expect(f.service.confirmInvite("student2", "b1")).resolves.toEqual({
+      confirmedHeadcount: 2,
+      targetGroupSize: 3,
+    });
+    expect(f.wallet.hold).toHaveBeenCalledTimes(1);
+    expect(f.wallet.release).not.toHaveBeenCalled();
+    expect(f.repo.updateParticipantState).toHaveBeenCalledWith(
+      expect.anything(),
+      "invite1",
+      expect.objectContaining({ confirmationState: "confirmed" }),
+    );
+  });
+
+  test("declining a zero-hold reconfirmation skips wallet lookup", async () => {
+    const participant = makeParticipant({
+      heldAmount: 0,
+      confirmationState: "confirmed",
+    });
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            type: "group",
+            currentState: "awaiting_reconfirmation",
+            targetGroupSize: 3,
+          }),
+        ),
+        findParticipant: mock(async () => participant),
+        findConfirmedParticipants: mock(async () => []),
+      },
+    });
+
+    await expect(f.service.reconfirm("student1", "b1", false)).resolves.toEqual(
+      { reconfirmed: false },
+    );
+    expect(f.wallet.getByUserId).not.toHaveBeenCalled();
+    expect(f.wallet.release).not.toHaveBeenCalled();
+  });
+
+  test("zero-hold solo completion records delivery without creating a referral charge", async () => {
+    const booking = makeBooking({
+      currentState: "scheduled",
+      holdAmount: 0,
+      scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        updateBookingVersioned: mock(async () => ({
+          updated: { ...booking, currentState: "completed" },
+          newVersion: 2,
+        })),
+      },
+      referralPort: null,
+    });
+
+    await f.service.completeSession(
+      "b1",
+      "tutor1",
+      undefined,
+      TEST_COMPLETION_FEEDBACK,
+    );
+    expect(f.wallet.deduct).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ amount: 0 }),
+    );
+    expect(f.referralPort).toBeUndefined();
+  });
+
+  test.each([0, 35])(
+    "series completion tolerates a withdrawn proposer row with wallet hold %s",
+    async (heldBalance) => {
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+        currentState: "completed",
+        holdAmount: 50,
+      };
+      const booking = makeBooking({
+        type: "series",
+        currentState: "scheduled",
+        holdAmount: 50,
+      });
+      const f = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findSessionById: mock(async () => ({
+            ...session,
+            currentState: "scheduled",
+          })),
+          listSessionsBySeriesId: mock(async () => [session]),
+          findParticipant: mock(async () => null),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "completed" },
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: heldBalance,
+            heldBalance,
+            availableBalance: 0,
+          })),
+        },
+        referralPort: null,
+      });
+
+      await f.service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
+      expect(f.wallet.deduct).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amount: Math.min(50, heldBalance) }),
+      );
+      expect(f.repo.updateParticipantState).not.toHaveBeenCalled();
+    },
+  );
+
+  test("cancellation clears zero or orphaned participant holds without wallet movement", async () => {
+    const booking = makeBooking({ currentState: "awaiting_tutor_review" });
+    const participants = [
+      makeParticipant({ id: "zero", userId: "student2", heldAmount: 0 }),
+      makeParticipant({ id: "orphan", userId: "student3", heldAmount: 12 }),
+    ];
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(async () => makeParticipant()),
+        findConfirmedParticipants: mock(async () => participants),
+      },
+      wallet: {
+        getByUserId: mock(async () => null),
+      },
+    });
+
+    await f.service.cancel("student1", "b1", "Student changed plans");
+    expect(f.wallet.getByUserId).toHaveBeenCalledTimes(1);
+    expect(f.wallet.release).not.toHaveBeenCalled();
+    expect(f.repo.updateParticipantState).toHaveBeenCalledTimes(2);
+    expect(f.repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      0,
+    );
+  });
+
+  test("series session cancellation with an already released hold skips wallet movement", async () => {
+    const session = {
+      id: "s1",
+      seriesBookingId: "b1",
+      scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+      currentState: "scheduled",
+      holdAmount: 42,
+    };
+    const f = createService({
+      repo: {
+        findSessionById: mock(async () => session),
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => makeParticipant({ heldAmount: 0 })),
+      },
+    });
+
+    await expect(
+      f.service.cancelSession("student1", "s1"),
+    ).resolves.toMatchObject({ cancelled: true });
+    expect(f.wallet.getByUserId).not.toHaveBeenCalled();
+    expect(f.wallet.release).not.toHaveBeenCalled();
+    expect(f.repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      42,
+    );
+  });
+
+  test("series no-show with a fully released hold still recomputes the remaining package", async () => {
+    const session = {
+      id: "s1",
+      seriesBookingId: "b1",
+      currentState: "scheduled",
+      scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+      holdAmount: 42,
+    };
+    const participant = makeParticipant({ heldAmount: 0 });
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => participant),
+        findSessionById: mock(async () => session),
+        findConfirmedParticipants: mock(async () => [participant]),
+      },
+    });
+
+    await f.service.markParticipantNoShow("b1", "tutor1", "student1", "s1");
+    expect(f.wallet.getByUserId).not.toHaveBeenCalled();
+    expect(f.wallet.deduct).not.toHaveBeenCalled();
+    expect(f.repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      0,
+    );
+  });
+
+  test("series no-show accepts a session that belongs to its requested booking", async () => {
+    const participant = makeParticipant({ heldAmount: 42 });
+    const session = {
+      id: "s1",
+      seriesBookingId: "b1",
+      currentState: "scheduled",
+      scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+      holdAmount: 42,
+    };
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => participant),
+        findSessionById: mock(async () => session),
+        findConfirmedParticipants: mock(async () => [participant]),
+      },
+    });
+
+    await f.service.markParticipantNoShow("b1", "tutor1", "student1", "s1");
+    expect(f.wallet.deduct).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ amount: 42 }),
+    );
+    expect(f.repo.findSessionById).toHaveBeenCalledWith(
+      expect.anything(),
+      "s1",
+      { forUpdate: true },
+    );
+  });
+
+  test("tutor can reject a pending reschedule and the transition records tutor attribution", async () => {
+    const booking = makeBooking({
+      currentState: "reschedule_proposed",
+      previousState: "confirmed",
+    });
+    const proposal = {
+      id: "r1",
+      bookingId: "b1",
+      proposedBy: "student1",
+      proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      proposedEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+      status: "pending",
+      decisions: { tutor1: "pending", student1: "accepted" },
+    };
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+        findPendingRescheduleProposal: mock(async () => proposal),
+        updateBookingVersioned: mock(
+          async (
+            _conn: unknown,
+            _id: string,
+            version: number,
+            updates: any,
+          ) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+    });
+
+    await f.service.rejectReschedule("tutor1", "b1");
+    expect(f.repo.updateBookingVersioned).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      1,
+      expect.objectContaining({ currentState: "confirmed" }),
+    );
+    expect(f.repo.insertStateHistory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorId: "tutor1", actorType: "tutor" }),
+    );
+  });
+
+  test("accepting a proposal from confirmed restores the valid previous state", async () => {
+    const booking = makeBooking({
+      currentState: "reschedule_proposed",
+      previousState: "confirmed",
+    });
+    const proposal = {
+      id: "r1",
+      bookingId: "b1",
+      proposedBy: "tutor1",
+      proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      proposedEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+      status: "pending",
+    };
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+        findPendingRescheduleProposal: mock(async () => proposal),
+        updateBookingVersioned: mock(
+          async (_tx: unknown, _id: string, version: number, updates: any) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+    });
+
+    const result = await f.service.acceptReschedule("student1", "b1");
+    expect(result.currentState).toBe("confirmed");
+  });
+
+  test("accepting a reschedule with missing previous state uses the tutor-review fallback", async () => {
+    const booking = makeBooking({
+      currentState: "reschedule_proposed",
+      previousState: null,
+    });
+    const proposal = {
+      id: "r1",
+      bookingId: "b1",
+      proposedBy: "tutor1",
+      proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      proposedEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+      status: "pending",
+    };
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+        findPendingRescheduleProposal: mock(async () => proposal),
+        updateBookingVersioned: mock(
+          async (_tx: unknown, _id: string, version: number, updates: any) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+    });
+
+    const result = await f.service.acceptReschedule("student1", "b1");
+    expect(result.currentState).toBe("awaiting_tutor_review");
+  });
+
+  test("rejecting a reschedule with missing previous state uses the defensive reconfirmation fallback", async () => {
+    const booking = makeBooking({
+      currentState: "reschedule_proposed",
+      previousState: null,
+    });
+    const proposal = {
+      id: "r1",
+      bookingId: "b1",
+      proposedBy: "tutor1",
+      proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      proposedEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+      status: "pending",
+    };
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+        findPendingRescheduleProposal: mock(async () => proposal),
+        updateBookingVersioned: mock(
+          async (_tx: unknown, _id: string, version: number, updates: any) => ({
+            updated: { ...booking, ...updates, version: version + 1 },
+            newVersion: version + 1,
+          }),
+        ),
+      },
+    });
+
+    const result = await f.service.rejectReschedule("student1", "b1");
+    expect(result.currentState).toBe("awaiting_reconfirmation");
+  });
+
+  test("withdrawing a pending group-series invite accepts the supported series group type", async () => {
+    const participant = makeParticipant({
+      id: "invite1",
+      userId: "student2",
+      role: "invitee",
+      confirmationState: "pending",
+      heldAmount: 0,
+    });
+    const f = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            type: "series",
+            targetGroupSize: 3,
+            currentState: "awaiting_participant_confirmation",
+          }),
+        ),
+        findParticipant: mock(async () => participant),
+        findPendingInvitees: mock(async () => [participant]),
+      },
+    });
+
+    await expect(
+      f.service.withdrawInvite("student1", "b1", "student2"),
+    ).resolves.toMatchObject({
+      withdrawn: true,
+      inviteeUserId: "student2",
+    });
+    expect(f.repo.updateParticipantState).toHaveBeenCalledWith(
+      expect.anything(),
+      "invite1",
+      expect.objectContaining({ confirmationState: "withdrawn_pre_h2" }),
+    );
+  });
+
+  test("offline group creation reports a requested room conflict", async () => {
+    const f = createService({
+      repo: {
+        findTutorProfile: mock(async () => makeTutorProfile()),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+        findOverlappingBookings: mock(async () => []),
+        findUsersByIds: mock(async () => [
+          { id: "student2" },
+          { id: "student3" },
+        ]),
+        insertBooking: mock(async () =>
+          makeBooking({ type: "group", modality: "offline" }),
+        ),
+      },
+      roomPort: {
+        requestRoomForBooking: mock(async () => ({
+          available: false,
+          reason: "taken",
+        })),
+      },
+    });
+
+    const result = await f.service.createGroup("student1", {
+      subjectId: "mun-speech",
+      tutorId: "tutor1",
+      availabilitySlotId: "slot1",
+      modality: "offline",
+      requestedRoomId: "room1",
+      targetGroupSize: 3,
+      inviteeUserIds: ["student2", "student3"],
+      scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() + 49 * 60 * 60 * 1000),
+      timezone: "Asia/Jakarta",
+    });
+
+    expect(result).toMatchObject({ roomRequested: false, roomConflict: true });
+    expect(f.roomPort.requestRoomForBooking).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["failed-result", "provider-error"] as const)(
+    "admin meeting retry falls back to its locked booking when the final refresh disappears (%s)",
+    async (scenario) => {
+      const booking = makeBooking({ currentState: "confirmed" });
+      let reads = 0;
+      const f = createService({
+        repo: {
+          findBookingById: mock(async () => (++reads === 1 ? booking : null)),
+          hasFailedGoogleMeeting: mock(async () => true),
+        },
+        meeting: {
+          createEvent: mock(async () => {
+            if (scenario === "provider-error") throw new Error("provider down");
+            return {
+              provider: "google_meet",
+              status: "failed",
+              meetingUrl: null,
+            };
+          }),
+        },
+      });
+
+      await expect(
+        f.service.retryMeetingByAdmin("admin1", "b1"),
+      ).resolves.toEqual({
+        bookingId: "b1",
+        scheduled: false,
+      });
+      expect(reads).toBe(2);
+      if (scenario === "provider-error")
+        expect(f.meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    },
+  );
 });

@@ -55,6 +55,10 @@ describe("webhook idempotency claim TTL (R7)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(claimMock).toHaveBeenCalledWith("stub:evt_claim_ttl:PAID", 120);
+    expect(claimMock).toHaveBeenCalledTimes(1);
+    const [key, ttl] = claimMock.mock.calls[0]!;
+    expect(key).toMatch(/^payment-webhook:[a-f0-9]{64}$/);
+    expect(ttl).toBe(120);
+    expect(markProcessedMock).toHaveBeenCalledWith(key, { ok: true });
   });
 });

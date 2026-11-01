@@ -35,6 +35,53 @@ function offlineCalendarEventId(bookingId: string): string {
   return `cogito${createHash("sha256").update(bookingId).digest("hex")}`;
 }
 
+function academyClassCreationKey(sessionId: string, generation: number) {
+  return generation === 1
+    ? `academy-class-session:${sessionId}`
+    : `academy-class-session:${sessionId}:generation:${generation}`;
+}
+
+function isMissingCalendarEventError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as {
+    code?: number | string;
+    response?: { status?: number | string };
+  };
+  const status = Number(value.response?.status ?? value.code);
+  return status === 404 || status === 410;
+}
+
+function missingClassEventError(eventId: string) {
+  return Object.assign(
+    new Error(`Google Calendar event ${eventId} is cancelled`),
+    { code: 410, missingClassEvent: true as const },
+  );
+}
+
+function isMissingClassEvent(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "missingClassEvent" in error &&
+    error.missingClassEvent === true,
+  );
+}
+
+function isDuplicateCalendarEventError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as {
+    code?: number | string;
+    message?: string;
+    response?: { status?: number };
+  };
+  return (
+    value.code === 409 ||
+    value.code === "409" ||
+    value.response?.status === 409 ||
+    /already exists|409/i.test(value.message ?? "")
+  );
+}
+
 interface GoogleOAuthTokenResponse {
   access_token?: string;
   error?: string;
@@ -55,7 +102,8 @@ export function createGoogleMeetingProvider(
     redis: redis ?? undefined,
     monitor: (state, error) => {
       log({
-        level: state === "open" ? "error" : "info",
+        // The breaker reports a failure before opening; retries enter half-open first.
+        level: "info",
         action: "circuit_breaker_state_change",
         service: "google_meet",
         state,
@@ -133,7 +181,7 @@ export function createGoogleMeetingProvider(
           body?.error?.message ??
           body?.error_description ??
           `Google Calendar API request failed with ${response.status}`;
-        throw new Error(errorMessage);
+        throw Object.assign(new Error(errorMessage), { code: response.status });
       }
 
       return body as T;
@@ -270,6 +318,7 @@ export function createGoogleMeetingProvider(
     attendees: MeetingAttendee[] | undefined,
     details: MeetingEventDetails | undefined,
     timeoutMs: number,
+    idempotencyKey?: string,
   ): Promise<GoogleCalendarEvent> {
     const calendarId = encodeURIComponent(config.calendarId);
     const summary = details?.title?.trim() || `Cogito Booking ${bookingId}`;
@@ -283,8 +332,10 @@ export function createGoogleMeetingProvider(
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          ...(details?.createConference === false
-            ? { id: offlineCalendarEventId(bookingId) }
+          ...(idempotencyKey || details?.createConference === false
+            ? {
+                id: offlineCalendarEventId(idempotencyKey ?? bookingId),
+              }
             : {}),
           summary,
           ...(description ? { description } : {}),
@@ -306,7 +357,7 @@ export function createGoogleMeetingProvider(
             : {
                 conferenceData: {
                   createRequest: {
-                    requestId: bookingId,
+                    requestId: idempotencyKey ?? bookingId,
                     conferenceSolutionKey: { type: "hangoutsMeet" },
                   },
                 },
@@ -373,6 +424,129 @@ export function createGoogleMeetingProvider(
     return row;
   }
 
+  async function updateProviderEvent(
+    eventId: string,
+    changes: {
+      startAt?: Date;
+      endAt?: Date;
+      location?: string;
+      description?: string;
+      attendee?: MeetingAttendee;
+    },
+    classEvent = false,
+  ): Promise<void> {
+    await googleMeetBreaker.execute(async () => {
+      const TIMEOUT_MS = 30_000;
+      const oauthAccessToken =
+        config.authType === "oauth_refresh_token"
+          ? await refreshOAuthAccessToken(TIMEOUT_MS)
+          : null;
+      if (config.authType === "oauth_refresh_token") {
+        const current = await getEventWithOauth(
+          oauthAccessToken!,
+          eventId,
+          TIMEOUT_MS,
+        );
+        if (classEvent && current.status === "cancelled")
+          throw missingClassEventError(eventId);
+        const calendarId = encodeURIComponent(config.calendarId);
+        const encodedEventId = encodeURIComponent(eventId);
+        await fetchJson<GoogleCalendarEvent>(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}&conferenceDataVersion=1`,
+          {
+            method: "PUT",
+            headers: {
+              authorization: `Bearer ${oauthAccessToken}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              ...current,
+              ...(changes.startAt
+                ? { start: { dateTime: changes.startAt.toISOString() } }
+                : {}),
+              ...(changes.endAt
+                ? { end: { dateTime: changes.endAt.toISOString() } }
+                : {}),
+              ...(changes.location !== undefined
+                ? { location: changes.location }
+                : {}),
+              ...(changes.description !== undefined
+                ? { description: changes.description }
+                : {}),
+              ...(changes.attendee
+                ? {
+                    attendees: [
+                      {
+                        email: changes.attendee.email,
+                        ...(changes.attendee.name
+                          ? { displayName: changes.attendee.name }
+                          : {}),
+                      },
+                    ],
+                  }
+                : {}),
+            }),
+          },
+          TIMEOUT_MS,
+        );
+      } else {
+        // `events.update` replaces the full resource; fetch first to retain
+        // the current title, attendees, and Meet conference.
+        const current = await withTimeout(
+          Promise.resolve(
+            calendar!.events.get({
+              calendarId: config.calendarId,
+              eventId,
+            }),
+          ).then((response) => response.data as GoogleCalendarEvent),
+          TIMEOUT_MS,
+          "Google Meet API timeout after 30s",
+        );
+        if (classEvent && current.status === "cancelled")
+          throw missingClassEventError(eventId);
+        await withTimeout(
+          Promise.resolve(
+            calendar!.events.update({
+              calendarId: config.calendarId,
+              eventId,
+              sendUpdates,
+              conferenceDataVersion: 1,
+              requestBody: {
+                ...current,
+                ...(changes.startAt
+                  ? { start: { dateTime: changes.startAt.toISOString() } }
+                  : {}),
+                ...(changes.endAt
+                  ? { end: { dateTime: changes.endAt.toISOString() } }
+                  : {}),
+                ...(changes.location !== undefined
+                  ? { location: changes.location }
+                  : {}),
+                ...(changes.description !== undefined
+                  ? { description: changes.description }
+                  : {}),
+                ...(changes.attendee
+                  ? {
+                      attendees: [
+                        {
+                          email: changes.attendee.email,
+                          ...(changes.attendee.name
+                            ? { displayName: changes.attendee.name }
+                            : {}),
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+            }),
+          ).then(() => undefined),
+          TIMEOUT_MS,
+          "Google Meet API timeout after 30s",
+        );
+      }
+    });
+  }
+
   async function updateEvent(
     bookingId: string,
     changes: {
@@ -394,89 +568,7 @@ export function createGoogleMeetingProvider(
     if (!row) return;
 
     try {
-      await googleMeetBreaker.execute(async () => {
-        const TIMEOUT_MS = 30_000;
-        const oauthAccessToken =
-          config.authType === "oauth_refresh_token"
-            ? await refreshOAuthAccessToken(TIMEOUT_MS)
-            : null;
-        if (config.authType === "oauth_refresh_token") {
-          const current = await getEventWithOauth(
-            oauthAccessToken!,
-            row.externalEventId!,
-            TIMEOUT_MS,
-          );
-          const calendarId = encodeURIComponent(config.calendarId);
-          const encodedEventId = encodeURIComponent(row.externalEventId!);
-          await fetchJson<GoogleCalendarEvent>(
-            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}&conferenceDataVersion=1`,
-            {
-              method: "PUT",
-              headers: {
-                authorization: `Bearer ${oauthAccessToken}`,
-                "content-type": "application/json",
-              },
-              body: JSON.stringify({
-                ...current,
-                ...(changes.startAt
-                  ? { start: { dateTime: changes.startAt.toISOString() } }
-                  : {}),
-                ...(changes.endAt
-                  ? { end: { dateTime: changes.endAt.toISOString() } }
-                  : {}),
-                ...(changes.location !== undefined
-                  ? { location: changes.location }
-                  : {}),
-                ...(changes.description !== undefined
-                  ? { description: changes.description }
-                  : {}),
-              }),
-            },
-            TIMEOUT_MS,
-          );
-        } else {
-          // `events.update` replaces the entire event resource. Fetch the
-          // current event first so the human-readable title, description,
-          // attendees, and Meet conference are preserved on reschedule.
-          const current = await withTimeout(
-            Promise.resolve(
-              calendar!.events.get({
-                calendarId: config.calendarId,
-                eventId: row.externalEventId!,
-              }),
-            ).then((response) => response.data as GoogleCalendarEvent),
-            TIMEOUT_MS,
-            "Google Meet API timeout after 30s",
-          );
-          await withTimeout(
-            Promise.resolve(
-              calendar!.events.update({
-                calendarId: config.calendarId,
-                eventId: row.externalEventId!,
-                sendUpdates,
-                conferenceDataVersion: 1,
-                requestBody: {
-                  ...current,
-                  ...(changes.startAt
-                    ? { start: { dateTime: changes.startAt.toISOString() } }
-                    : {}),
-                  ...(changes.endAt
-                    ? { end: { dateTime: changes.endAt.toISOString() } }
-                    : {}),
-                  ...(changes.location !== undefined
-                    ? { location: changes.location }
-                    : {}),
-                  ...(changes.description !== undefined
-                    ? { description: changes.description }
-                    : {}),
-                },
-              }),
-            ).then(() => undefined),
-            TIMEOUT_MS,
-            "Google Meet API timeout after 30s",
-          );
-        }
-      });
+      await updateProviderEvent(row.externalEventId!, changes);
       log({
         level: "info",
         action: "google_meet_event_updated",
@@ -634,7 +726,7 @@ export function createGoogleMeetingProvider(
     attendees?: MeetingAttendee[],
     conn?: DbOrTx,
     details?: MeetingEventDetails,
-  ): Promise<MeetingEvent> {
+  ): Promise<MeetingEvent & { missingEvent?: true }> {
     const startedAt = Date.now();
     // L2: when called inside a booking transaction, the local meetingEvent row
     // must join that transaction so it rolls back with the booking — a failed
@@ -673,9 +765,42 @@ export function createGoogleMeetingProvider(
         scheduledStartAt ?? new Date(now.getTime() + 60 * 60 * 1000);
       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
 
-      const event = await googleMeetBreaker.execute(() =>
-        config.authType === "oauth_refresh_token"
-          ? insertEventWithOauth(
+      const providerEventId = details?.idempotencyKey
+        ? offlineCalendarEventId(details.idempotencyKey)
+        : details?.createConference === false
+          ? offlineCalendarEventId(bookingId)
+          : null;
+      const event = await googleMeetBreaker.execute(async () => {
+        if (details?.externalEventId) {
+          let resumed: GoogleCalendarEvent;
+          if (config.authType === "oauth_refresh_token") {
+            resumed = await getEventWithOauth(
+              oauthAccessToken!,
+              details.externalEventId,
+              TIMEOUT_MS,
+            );
+          } else {
+            resumed = await withTimeout(
+              Promise.resolve(
+                calendar!.events.get({
+                  calendarId: config.calendarId,
+                  eventId: details.externalEventId,
+                }),
+              ).then((response) => response.data as GoogleCalendarEvent),
+              TIMEOUT_MS,
+              "Google Meet API timeout after 30s (resume event)",
+            );
+          }
+          if (
+            details.creationGeneration !== undefined &&
+            resumed.status === "cancelled"
+          )
+            throw missingClassEventError(details.externalEventId);
+          return resumed;
+        }
+        try {
+          if (config.authType === "oauth_refresh_token") {
+            return await insertEventWithOauth(
               oauthAccessToken!,
               bookingId,
               start,
@@ -683,56 +808,102 @@ export function createGoogleMeetingProvider(
               attendees,
               details,
               TIMEOUT_MS,
-            )
-          : withTimeout(
-              Promise.resolve(
-                calendar!.events.insert({
-                  calendarId: config.calendarId,
-                  sendUpdates,
-                  requestBody: {
-                    ...(details?.createConference === false
-                      ? { id: offlineCalendarEventId(bookingId) }
-                      : {}),
-                    summary:
-                      details?.title?.trim() || `Cogito Booking ${bookingId}`,
-                    ...(details?.description?.trim()
-                      ? { description: details.description.trim() }
-                      : {}),
-                    ...(details?.location?.trim()
-                      ? { location: details.location.trim() }
-                      : {}),
-                    start: { dateTime: start.toISOString() },
-                    end: { dateTime: end.toISOString() },
-                    ...(attendees?.length
-                      ? {
-                          attendees: attendees.map((attendee) => ({
-                            email: attendee.email,
-                            ...(attendee.name
-                              ? { displayName: attendee.name }
-                              : {}),
-                          })),
-                        }
-                      : {}),
-                    ...(details?.createConference === false
-                      ? {}
-                      : {
-                          conferenceData: {
-                            createRequest: {
-                              requestId: bookingId,
-                              conferenceSolutionKey: { type: "hangoutsMeet" },
-                            },
-                          },
-                        }),
-                  },
+              details?.idempotencyKey,
+            );
+          }
+          return await withTimeout(
+            Promise.resolve(
+              calendar!.events.insert({
+                calendarId: config.calendarId,
+                sendUpdates,
+                requestBody: {
+                  ...(details?.idempotencyKey ||
+                  details?.createConference === false
+                    ? {
+                        id: offlineCalendarEventId(
+                          details.idempotencyKey ?? bookingId,
+                        ),
+                      }
+                    : {}),
+                  summary:
+                    details?.title?.trim() || `Cogito Booking ${bookingId}`,
+                  ...(details?.description?.trim()
+                    ? { description: details.description.trim() }
+                    : {}),
+                  ...(details?.location?.trim()
+                    ? { location: details.location.trim() }
+                    : {}),
+                  start: { dateTime: start.toISOString() },
+                  end: { dateTime: end.toISOString() },
+                  ...(attendees?.length
+                    ? {
+                        attendees: attendees.map((attendee) => ({
+                          email: attendee.email,
+                          ...(attendee.name
+                            ? { displayName: attendee.name }
+                            : {}),
+                        })),
+                      }
+                    : {}),
                   ...(details?.createConference === false
                     ? {}
-                    : { conferenceDataVersion: 1 }),
-                }),
-              ).then((response) => response.data as GoogleCalendarEvent),
-              TIMEOUT_MS,
-              "Google Meet API timeout after 30s",
-            ),
-      );
+                    : {
+                        conferenceData: {
+                          createRequest: {
+                            requestId: details?.idempotencyKey ?? bookingId,
+                            conferenceSolutionKey: { type: "hangoutsMeet" },
+                          },
+                        },
+                      }),
+                },
+                ...(details?.createConference === false
+                  ? {}
+                  : { conferenceDataVersion: 1 }),
+              }),
+            ).then((response) => response.data as GoogleCalendarEvent),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s",
+          );
+        } catch (error) {
+          if (!providerEventId || !isDuplicateCalendarEventError(error)) {
+            throw error;
+          }
+          try {
+            let existing: GoogleCalendarEvent;
+            if (config.authType === "oauth_refresh_token") {
+              existing = await getEventWithOauth(
+                oauthAccessToken!,
+                providerEventId,
+                TIMEOUT_MS,
+              );
+            } else {
+              existing = await withTimeout(
+                Promise.resolve(
+                  calendar!.events.get({
+                    calendarId: config.calendarId,
+                    eventId: providerEventId,
+                  }),
+                ).then((response) => response.data as GoogleCalendarEvent),
+                TIMEOUT_MS,
+                "Google Meet API timeout after 30s (get idempotent event)",
+              );
+            }
+            if (
+              details?.creationGeneration !== undefined &&
+              existing.status === "cancelled"
+            )
+              throw missingClassEventError(providerEventId);
+            return existing;
+          } catch (lookupError) {
+            if (
+              details?.creationGeneration !== undefined &&
+              isMissingCalendarEventError(lookupError)
+            )
+              throw missingClassEventError(providerEventId);
+            throw lookupError;
+          }
+        }
+      });
 
       const externalEventId = event.id ?? null;
       const immediateMeetingUrl = getMeetUrl(event);
@@ -760,20 +931,25 @@ export function createGoogleMeetingProvider(
         }
       }
 
-      const [row] = await write
-        .insert(meetingEvent)
-        .values({
-          bookingId,
-          provider: "google_meet",
-          externalEventId,
-          meetingUrl,
-          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
-          status: "created",
-        })
-        .returning();
+      const row = details?.idempotencyKey
+        ? undefined
+        : (
+            await write
+              .insert(meetingEvent)
+              .values({
+                bookingId,
+                provider: "google_meet",
+                externalEventId,
+                meetingUrl,
+                attendeeEmails:
+                  attendees?.map((attendee) => attendee.email) ?? null,
+                status: "created",
+              })
+              .returning()
+          )[0];
 
       return {
-        id: row!.id,
+        id: row?.id ?? details?.idempotencyKey ?? externalEventId ?? "",
         bookingId,
         provider: "google_meet",
         externalEventId,
@@ -790,32 +966,177 @@ export function createGoogleMeetingProvider(
         error: { message: String(error) },
       });
 
-      const [row] = await write
-        .insert(meetingEvent)
-        .values({
-          bookingId,
-          provider: "google_meet",
-          status: "failed",
-          errorReason: String(error),
-          meetingUrl: null,
-          externalEventId: null,
-          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
-        })
-        .returning();
+      const row = details?.idempotencyKey
+        ? undefined
+        : (
+            await write
+              .insert(meetingEvent)
+              .values({
+                bookingId,
+                provider: "google_meet",
+                status: "failed",
+                errorReason: String(error),
+                meetingUrl: null,
+                externalEventId: null,
+                attendeeEmails:
+                  attendees?.map((attendee) => attendee.email) ?? null,
+              })
+              .returning()
+          )[0];
 
       return {
-        id: row!.id,
+        id: row?.id ?? details?.idempotencyKey ?? "",
         bookingId,
         provider: "google_meet",
-        externalEventId: null,
+        externalEventId: details?.externalEventId ?? null,
         meetingUrl: null,
         status: "failed" as const,
         errorReason: String(error),
+        ...(details?.creationGeneration !== undefined &&
+        (isMissingClassEvent(error) ||
+          (details.externalEventId && isMissingCalendarEventError(error)))
+          ? { missingEvent: true as const, externalEventId: null }
+          : {}),
       };
     }
   }
 
-  return { createEvent, updateEvent, cancelEvent, setManualLink, probe };
+  async function cancelAcademyClassEvent(
+    externalEventId: string | null,
+    sessionId?: string,
+    creationGeneration = 1,
+  ): Promise<void> {
+    if (!externalEventId && !sessionId)
+      throw new Error(
+        "Class event cancellation requires a provider or session identity",
+      );
+    const eventId =
+      externalEventId ??
+      offlineCalendarEventId(
+        academyClassCreationKey(sessionId!, creationGeneration),
+      );
+    await googleMeetBreaker.execute(async () => {
+      try {
+        const timeoutMs = 30_000;
+        if (config.authType === "oauth_refresh_token") {
+          const token = await refreshOAuthAccessToken(timeoutMs);
+          await deleteEventWithOauth(token, eventId, timeoutMs);
+        } else {
+          await withTimeout(
+            Promise.resolve(
+              calendar!.events.delete({
+                calendarId: config.calendarId,
+                eventId,
+                sendUpdates,
+              }),
+            ).then(() => undefined),
+            timeoutMs,
+            "Google Meet cancellation timed out",
+          );
+        }
+      } catch (error) {
+        const value = error as {
+          code?: number | string;
+          response?: { status?: number };
+        };
+        const code = Number(value?.response?.status ?? value?.code);
+        // Already absent is success, including after a lost DELETE response.
+        if (code !== 404 && code !== 410) throw error;
+      }
+    });
+  }
+
+  async function createAcademyClassEvent(
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
+    details?: MeetingEventDetails,
+  ) {
+    const result = await createEvent(
+      `academy-class-session:${sessionId}`,
+      scheduledStartAt,
+      scheduledEndAt,
+      attendee ? [attendee] : undefined,
+      undefined,
+      {
+        ...details,
+        title: details?.title ?? "Cogito class session",
+        createConference: true,
+        creationGeneration: details?.creationGeneration ?? 1,
+        idempotencyKey:
+          details?.idempotencyKey ??
+          academyClassCreationKey(sessionId, details?.creationGeneration ?? 1),
+      },
+    );
+    return {
+      provider: "google_meet" as const,
+      status:
+        result.status === "created" && result.meetingUrl
+          ? ("created" as const)
+          : ("failed" as const),
+      externalEventId: result.externalEventId,
+      meetingUrl: result.meetingUrl,
+      errorReason:
+        result.errorReason ??
+        (result.meetingUrl
+          ? null
+          : "Google accepted the event, but its Meet link is still pending"),
+      ...(result.missingEvent ? { missingEvent: true as const } : {}),
+    };
+  }
+
+  async function updateAcademyClassEvent(
+    externalEventId: string | null,
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
+  ) {
+    const startedAt = Date.now();
+    const eventId =
+      externalEventId ??
+      offlineCalendarEventId(`academy-class-session:${sessionId}`);
+    try {
+      await updateProviderEvent(
+        eventId,
+        {
+          startAt: scheduledStartAt,
+          endAt: scheduledEndAt,
+          attendee,
+        },
+        true,
+      );
+      log({
+        level: "info",
+        action: "google_meet_class_event_updated",
+        sessionId,
+        eventId,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      log({
+        level: "error",
+        action: "google_meet_class_update_failed",
+        sessionId,
+        eventId,
+        durationMs: Date.now() - startedAt,
+        error: { message: String(error) },
+      });
+      throw error;
+    }
+  }
+
+  return {
+    createEvent,
+    createAcademyClassEvent,
+    updateAcademyClassEvent,
+    cancelAcademyClassEvent,
+    updateEvent,
+    cancelEvent,
+    setManualLink,
+    probe,
+  };
 }
 
 export function createGoogleMeetingProviderWithFallback(
@@ -897,6 +1218,16 @@ export function createGoogleMeetingProviderWithFallback(
 
   return {
     createEvent,
+    createAcademyClassEvent: (sessionId, startAt, endAt, attendee, details) =>
+      googleProvider.createAcademyClassEvent!(
+        sessionId,
+        startAt,
+        endAt,
+        attendee,
+        details,
+      ),
+    updateAcademyClassEvent: googleProvider.updateAcademyClassEvent,
+    cancelAcademyClassEvent: googleProvider.cancelAcademyClassEvent,
     updateEvent: googleProvider.updateEvent,
     cancelEvent: googleProvider.cancelEvent,
     setManualLink: googleProvider.setManualLink,

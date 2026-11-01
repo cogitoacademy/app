@@ -1,0 +1,2 @@
+ALTER TABLE "academy_class_meeting" DROP CONSTRAINT "academy_class_meeting_status_check";--> statement-breakpoint
+ALTER TABLE "academy_class_meeting" ADD CONSTRAINT "academy_class_meeting_status_check" CHECK ("academy_class_meeting"."status" IN ('pending', 'processing', 'created', 'failed', 'cancelled'));

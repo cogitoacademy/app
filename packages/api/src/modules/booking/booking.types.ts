@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { externalHttpUrl } from "../../lib/url-schema";
+import {
+  normalizeFeedbackBullets,
+  countFeedbackCharacters,
+  MAX_FEEDBACK_CHARACTERS,
+  FEEDBACK_LENGTH_ERROR,
+} from "./feedback-rules";
 
 const futureStart = z.coerce
   .date()
   .refine((date) => date > new Date(), "Must be in the future");
 
 const learningGoal = z.string().trim().max(2000).default("");
-const subjectId = z.string().min(1).max(100).optional();
+const subjectId = z.string().min(1).max(100);
 
 export const createSoloInput = z
   .object({
@@ -131,13 +137,18 @@ export const proposeRescheduleInput = z.object({
 });
 
 const feedbackBullets = z
-  .array(z.string().trim().min(1).max(1000))
-  .min(1)
-  .max(30)
-  .transform((items) => items.map((s) => s.trim()).filter(Boolean))
+  .array(z.string().max(10000))
+  .max(600)
+  .transform(normalizeFeedbackBullets)
   .refine((items) => items.length > 0, {
     message: "At least one bullet required",
-  });
+  })
+  .refine(
+    (items) => countFeedbackCharacters(items) <= MAX_FEEDBACK_CHARACTERS,
+    {
+      message: FEEDBACK_LENGTH_ERROR,
+    },
+  );
 
 export const completionFeedbackInput = z.object({
   discussion: feedbackBullets,
@@ -149,6 +160,24 @@ export const completeSessionInput = z.object({
   bookingId: z.string().max(100),
   sessionId: z.string().max(100).optional(),
   feedback: completionFeedbackInput,
+  requestKey: z.string().uuid().optional(),
+});
+
+export const adminSubmitCompletionReportInput = z.object({
+  bookingId: z.string().max(100),
+  sessionId: z.string().max(100).optional(),
+  feedback: completionFeedbackInput,
+  deliveryConfirmed: z.literal(true),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "An audit reason is required")
+    .max(6000)
+    .refine((reason) => Array.from(reason).length <= 600, {
+      message: "The audit reason must be at most 600 characters",
+    }),
+  expectedVersion: z.number().int().positive().optional(),
+  requestKey: z.string().uuid(),
 });
 
 export const listCompletionFeedbackInput = z.object({

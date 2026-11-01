@@ -118,15 +118,15 @@ describe("seed guards", () => {
   });
 });
 
-describe("seed package prices (PRD OQ-01)", () => {
+describe("seed package prices (Release V3 PRD)", () => {
   const PRD_PACKAGES = [
-    { code: "starter", marks: 50, priceIdr: 312500 },
-    { code: "learner", marks: 120, priceIdr: 690000 },
-    { code: "explorer", marks: 200, priceIdr: 1070000 },
-    { code: "pioneer", marks: 400, priceIdr: 2000000 },
+    { code: "starter", marks: 50, priceIdr: 350000 },
+    { code: "learner", marks: 150, priceIdr: 975000 },
+    { code: "explorer", marks: 250, priceIdr: 1500000 },
+    { code: "pioneer", marks: 500, priceIdr: 2750000 },
   ];
 
-  test("PACKAGES table matches PRD OQ-01 values", () => {
+  test("PACKAGES table matches Release V3 PRD values", () => {
     const byCode = new Map(PACKAGES.map((p) => [p.code, p]));
     for (const expected of PRD_PACKAGES) {
       expect(byCode.get(expected.code)).toMatchObject({
@@ -136,7 +136,7 @@ describe("seed package prices (PRD OQ-01)", () => {
     }
   });
 
-  test("seeded markPackage rows match PRD OQ-01 values", async () => {
+  test("seeded markPackage rows match Release V3 PRD values", async () => {
     await db.delete(markPackage);
     await seedPackages();
     const rows = await db.select().from(markPackage);

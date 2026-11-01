@@ -3,9 +3,54 @@ import {
   createProviderRefundDelegate,
   resolveGoogleMeetConfig,
   resolveMidtransConfig,
+  services,
 } from "../../services";
+import { env } from "@cogito-app/env/server";
 
 describe("Services conditional logic", () => {
+  test("test meeting wiring refuses cancellation of a real provider event", async () => {
+    await expect(
+      services.meeting.cancelAcademyClassEvent!(
+        "test-class-event-owned",
+        "owned",
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      services.meeting.cancelAcademyClassEvent!(null, "owned"),
+    ).resolves.toBeUndefined();
+    await expect(
+      services.meeting.cancelAcademyClassEvent!("real-provider-event", "owned"),
+    ).rejects.toThrow("Refusing non-synthetic class event");
+  });
+
+  test("content wiring enforces activation and rejects public/private storage overlap before writes", async () => {
+    const original = {
+      CONTENT_ADMIN_ENABLED: env.CONTENT_ADMIN_ENABLED,
+      KB_PRIVATE_DIR: env.KB_PRIVATE_DIR,
+      KB_PRIVATE_BUCKET: env.KB_PRIVATE_BUCKET,
+    };
+    try {
+      Object.assign(env, { CONTENT_ADMIN_ENABLED: false });
+      await expect(services.contentAdmin.categories()).rejects.toThrow(
+        "authoring is not activated",
+      );
+      Object.assign(env, {
+        CONTENT_ADMIN_ENABLED: true,
+        KB_PRIVATE_BUCKET: undefined,
+        KB_PRIVATE_DIR: env.UPLOAD_DIR,
+      });
+      await expect(
+        services.contentAdmin.uploadPdf({
+          fileName: "private.pdf",
+          base64: Buffer.from("%PDF-test").toString("base64"),
+        }),
+      ).rejects.toThrow(
+        "KB private directory must be separate from public uploads",
+      );
+    } finally {
+      Object.assign(env, original);
+    }
+  });
   test("resolves OAuth Google Meet configuration", () => {
     expect(
       resolveGoogleMeetConfig({
@@ -175,4 +220,43 @@ describe("Services conditional logic", () => {
 
     expect(useGoogleMeet).toBe(false);
   });
+});
+
+test("service-account configuration defaults the primary calendar", () => {
+  expect(
+    resolveGoogleMeetConfig({
+      clientEmail: "service@example.test",
+      privateKey: "key",
+    }),
+  ).toMatchObject({
+    calendarId: "primary",
+    sendUpdates: "none",
+  });
+});
+
+test("production service wiring tolerates enabled Meet without credentials", async () => {
+  const keys = [
+    "NODE_ENV",
+    "GOOGLE_MEET_ENABLED",
+    "GOOGLE_MEET_CLIENT_ID",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_MEET_CLIENT_SECRET",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_MEET_REFRESH_TOKEN",
+    "GOOGLE_CLIENT_EMAIL",
+    "GOOGLE_PRIVATE_KEY",
+  ] as const;
+  const original = Object.fromEntries(keys.map((key) => [key, env[key]]));
+  try {
+    Object.assign(
+      env,
+      Object.fromEntries(keys.map((key) => [key, undefined])),
+      { NODE_ENV: "production", GOOGLE_MEET_ENABLED: true },
+    );
+    const fresh = await import("../../services?production-no-meet-credentials");
+    expect(fresh.services.meeting).toBeDefined();
+    expect(fresh.resolveGoogleMeetConfig({})).toBeUndefined();
+  } finally {
+    Object.assign(env, original);
+  }
 });

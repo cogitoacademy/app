@@ -157,7 +157,7 @@ describe("U5: per-participant no-show marking (FR-20/TC-30)", () => {
       bookingId: b.id,
       participantUserId: studentId,
     });
-    expect(result.forfeitedMarks).toBe(50);
+    expect(result.forfeitedMarks).toBe(44);
 
     const fetched = await studentClient.booking.get({ bookingId: b.id });
     expect(fetched.currentState).toBe("no_show");
@@ -167,7 +167,7 @@ describe("U5: per-participant no-show marking (FR-20/TC-30)", () => {
       .from(wallet)
       .where(eq(wallet.userId, studentId))
       .limit(1);
-    expect(w[0]!.availableBalance).toBe(150);
+    expect(w[0]!.availableBalance).toBe(156);
 
     const entries = await db
       .select()
