@@ -1,6 +1,6 @@
 # Bilingual Blog — App-Managed Content Plan
 
-Status: App slice implemented (database, API, admin UI); marketing renderer and release verification pending
+Status: App slice and marketing renderer implemented; content pilot and release verification pending
 Date: 2026-11-02
 Primary repository: `cogito-app` (DB, API, admin, media)
 Renderer repository: `cogito-acad` (public blog pages, metadata, sitemap)
@@ -9,7 +9,7 @@ Source: Cogito Blog Section Developer Spec & Site Re-check (2026-11-01)
 
 ## Implementation checkpoint (2026-11-02)
 
-Branch `feat/bilingual-blog` now contains the app slice:
+Branch `feat/bilingual-blog` in `cogito-app` contains the app slice:
 
 - Migration `0085_fresh_spirit.sql` creates the six blog tables and their constraints on top of `main` `b5e5ee58`.
 - Modules `packages/api/src/modules/blog/` expose `adminBlog.*` and `publicContent.blog.*`, including publish gating, slug locking, archive, gallery and related replacement, media registration, and audit writes.
@@ -17,12 +17,23 @@ Branch `feat/bilingual-blog` now contains the app slice:
 - `packages/api/src/tests/integration/blog.test.ts` covers the publish gate, slug lock, independent locale publishing, public projection, and archive. It passes against the local `cogito-test` database after applying 0085.
 - Web and API typechecks pass for the blog files; the API project still reports its pre-existing test and JSON-module errors.
 
+Branch `feat/bilingual-blog` in `cogito-acad` contains the renderer and the Phase 0 fixes:
+
+- Routes `/[locale]/blog`, `/[locale]/blog/[slug]`, the Indonesian and English category hubs, and `/blog-sitemap.xml`.
+- Zod-validated API client, article cards, structured block renderer, click-to-load Instagram/TikTok facades, table of contents, FAQ, related articles, sticky consultation, `BlogPosting` and `BreadcrumbList` JSON-LD, and a generated 1200x630 OG card.
+- Article metadata emits self and sibling `hreflang`, with Indonesian `x-default` only when a sibling is published. Single-language articles emit only their self alternate.
+- The category hub returns 404 when fewer than two published articles exist in that locale, and mixed locale/segment pairs return 404.
+- Marketing tests cover payload rejection, 404/500 mapping, metadata alternates, and sitemap alternates. `next build` completes with zero published articles.
+- Phase 0 landed in the same branch: canonical `www` host, apex 308 redirect, real 404s, robots cleanup, sitemap dates, homepage `h1` and metadata, and hidden landing FAQ on API failure.
+
 Deviations from the original Phase 3 sketch:
 
 - The body editor is a structured block editor built from Selia fields, not TipTap. It stores the same block JSON and avoids a new rich-text dependency.
 - The shared panel, version panel, and publish panel are composed inside `blog-editor-page.tsx`; separate panel files were not needed.
 - F.A.Q. and related-article editing are supported by the API but have no admin controls yet.
-- The marketing Phase 0 fixes and public pages remain in `cogito-acad` and are not part of this branch.
+- The marketing renderer lives in its own branch and PR because it is a separate repository and deployment.
+
+Open work: the content pilot, editorial checklist, admin E2E, and release verification remain for Phases 5 and 6.
 
 ## Goal
 
@@ -141,15 +152,15 @@ These are prerequisites because every blog URL inherits the current site head.
 
 Tasks in `cogito-acad`:
 
-- [ ] Fix the canonical host. `apps/web/src/lib/constants.ts` defaults to the apex domain while the site serves `www`. Set one constant to `https://www.cogitoacademy.id` and read it from a single environment variable.
-- [ ] Align the environment variable. The code reads `NEXT_PUBLIC_SITE_URL`; the local `.env` defines `BASE_URL`. Rename and set it in Vercel, then delete the unused name.
-- [ ] Make the apex redirect permanent (308), preserving path and query.
-- [ ] Return real 404s. `apps/web/src/app/[locale]/[...rest]/page.tsx` renders the NotFound component without calling `notFound()`. Call `notFound()`.
-- [ ] Remove `/_next/` from `apps/web/src/app/robots.ts`.
-- [ ] Fix `apps/web/src/app/sitemap.ts`: replace `lastModified: new Date()` with real dates or omit it. Add `/faq` and `/activities` if they remain indexable.
-- [ ] Add an H1 and page-specific title to the homepage. The live page currently has zero `<h1>` elements. Fix the `transformation` typo in the Indonesian description.
-- [ ] Fix or hide the home FAQ section. Production currently renders its error state because the app request fails.
-- [ ] Add `"test": "bun test"` to `apps/web/package.json`; `apps/web/tests` already uses `bun:test`.
+- [x] Fix the canonical host. `apps/web/src/lib/constants.ts` defaults to `https://www.cogitoacademy.id` and accepts `NEXT_PUBLIC_SITE_URL`, then `BASE_URL`.
+- [x] Align the environment variable. The code reads `NEXT_PUBLIC_SITE_URL` first and falls back to the existing `BASE_URL`. Setting the new name in Vercel remains an operator step.
+- [x] Make the apex redirect permanent (308), preserving path and query.
+- [x] Return real 404s. `apps/web/src/app/[locale]/[...rest]/page.tsx` now calls `notFound()`.
+- [x] Remove `/_next/` from `apps/web/src/app/robots.ts`.
+- [x] Fix `apps/web/src/app/sitemap.ts`: `lastModified: new Date()` is removed, and `/faq` and `/activities` are listed.
+- [x] Add an H1 and page-specific title to the homepage. The homepage now has one `<h1>`, its own metadata, and the `transformation` typo is fixed.
+- [x] Fix or hide the home FAQ section. The landing section now renders nothing when the API request fails; the full `/faq` page keeps its error state.
+- [x] Add `"test": "bun test"` to `apps/web/package.json`.
 
 Exit gate: `/id` returns one `<h1>` and a `www` canonical; `/id/blog/xyz` returns 404; robots has no `_next` disallow.
 
@@ -452,6 +463,14 @@ Components:
 - `blog-faq.tsx`: visible questions and answers, no JavaScript-only content.
 
 Exit gate: `next build` succeeds with zero published articles. Every blog URL returns 404 until the first version is published.
+
+Implementation note (2 November 2026): the renderer is complete on `cogito-acad` branch `feat/bilingual-blog` (PR `cogitoacademy/website#18`). The implementation adds `article-card`, `article-body`, `social-embed`, `table-of-contents`, `blog-faq`, `article-json-ld`, `sticky-consultation`, and `blog-error-state` under `apps/web/src/components/blog/`. `blog-api.ts`, `blog-metadata.ts`, `blog-paths.ts`, `blog-category.ts`, and `blog-sitemap.ts` hold the shared logic. Tests live in `apps/web/tests/blog-api.test.mjs` and `apps/web/tests/blog-metadata.test.mjs`.
+
+Deviations from the sketch above:
+
+- The category hub fetches the list with `limit: 24` and filters cards by root or subcategory slug; the public list endpoint has no category filter yet. Articles beyond the 24 newest in a locale can be missing from a hub.
+- `BlogPosting` uses the stored hero image once rather than emitting resized 16:9, 4:3, and 1:1 variants, because there is no image transformation service. The generated OG card is 1200x630.
+- Category `hreflang` needs the sibling slug. The metadata builder reads both locale category lists by shared category ID.
 
 ## Phase 5 — Content and editorial rules
 

@@ -6,7 +6,9 @@ The bilingual blog now has an app-managed data and API path on branch `feat/bili
 
 Admins manage content at `/admin-blog` and `/admin-blog/$articleId`. The editor uses structured blocks rather than HTML; images are normalized to WebP in the browser before upload and registered under the admin's upload prefix. New RPC surfaces are `adminBlog.*` and unauthenticated `publicContent.blog.list/get/categories/sitemap`, with separate public rate limits of 120 requests per minute for reads and 12 for the sitemap.
 
-The marketing renderer in `cogito-acad` is not implemented yet, so public blog pages, metadata, and sitemap output remain a separate branch and PR. Full Sanity removal also remains separate; competitions and student resources are unchanged. See `docs/plans/active/BILINGUAL-BLOG.md` for the remaining phases.
+The marketing renderer in `cogito-acad` is implemented on branch `feat/bilingual-blog` (PR `cogitoacademy/website#18`): public blog index, article pages, Indonesian and English category hubs, generated OG cards, JSON-LD, click-to-load social embeds, and a hand-built `/blog-sitemap.xml` with `xhtml:link` alternates. Marketing tests pass 10/10 and `next build` completes with zero published articles. The renderer depends on the app public procedures, so deploy it after the app change.
+
+Phase 5 content and the Phase 6 admin E2E suite are not implemented. Full Sanity removal also remains separate; competitions and student resources are unchanged. See `docs/plans/active/BILINGUAL-BLOG.md` for the remaining phases.
 
 ## Integrated release branch validation (30 October 2026)
 
