@@ -16,6 +16,15 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
@@ -41,13 +50,16 @@ const date = (value: Date | string) =>
 
 export function KolCampaignsSection({
   actionsContainer,
+  enabled = true,
 }: {
   actionsContainer: HTMLElement | null;
+  enabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const query = useQuery({
     ...orpc.adminReferral.listKolCampaigns.queryOptions(),
     retry: false,
+    enabled,
   });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ ...emptyCampaignDraft });
@@ -241,41 +253,41 @@ export function KolCampaignsSection({
               }
             />
           ) : (
-            <ul className="space-y-4" aria-label="Saved KOL campaigns">
-              {query.data.map((campaign) => (
-                <li
-                  key={campaign.id}
-                  className="space-y-2 rounded border border-border p-4"
-                >
-                  <h3 className="font-semibold">
-                    {campaign.name} ·{" "}
-                    <span className="font-mono">{campaign.code}</span>
-                  </h3>
-                  <dl className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Activation", date(campaign.activationAt)],
-                      ["Expiry", date(campaign.expiresAt)],
-                      [
-                        "Attribution window",
-                        `${campaign.attributionWindowDays} days`,
-                      ],
-                      [
-                        "Commission",
-                        `Rp${campaign.flatAmountIdr.toLocaleString("id-ID")} + ${campaign.percentBps / 100}%`,
-                      ],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <dt className="text-sm text-muted">{label}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <Text className="text-sm text-muted">
-                    Saved terms · immutable
-                  </Text>
-                </li>
-              ))}
-            </ul>
+            <TableContainer>
+              <Table aria-label="Saved KOL campaigns" className="min-w-max">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Activation (WIB)</TableHead>
+                    <TableHead>Expiry (WIB)</TableHead>
+                    <TableHead>Attribution window</TableHead>
+                    <TableHead>Commission</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {query.data.map((campaign) => (
+                    <TableRow key={campaign.id}>
+                      <TableCell className="font-medium">
+                        {campaign.name}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {campaign.code}
+                      </TableCell>
+                      <TableCell>{date(campaign.activationAt)}</TableCell>
+                      <TableCell>{date(campaign.expiresAt)}</TableCell>
+                      <TableCell>
+                        {campaign.attributionWindowDays} days
+                      </TableCell>
+                      <TableCell>
+                        Rp{campaign.flatAmountIdr.toLocaleString("id-ID")} +{" "}
+                        {campaign.percentBps / 100}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </div>
       </CardBody>

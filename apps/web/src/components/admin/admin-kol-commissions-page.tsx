@@ -5,7 +5,6 @@ import { EmptyState } from "@/components/empty-state";
 import Loader from "@/components/loader";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { KolSettlementPanel } from "./kol-settlement-panel";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -15,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import { Heading } from "@cogito-app/ui/components/selia/heading";
 import {
   Table,
   TableBody,
@@ -103,57 +101,36 @@ export function AdminKolCommissionsPage() {
 
   return (
     <div id="admin-kol-commissions" className="space-y-6">
-      <div>
-        <Heading level={1} size="md">
-          KOL commission decisions
-        </Heading>
-        <Text className="max-w-full text-muted">
-          First eligible top-up decisions use the terms saved at signup. Amounts
-          below are calculated commissions. Open settlement history to record
-          actual transfers or explicit obligation adjustments.
+      <div className="flex flex-wrap items-end gap-3">
+        <label
+          htmlFor="commission-activity-month"
+          className="grid gap-1 text-sm text-muted"
+        >
+          Activity month (WIB)
+          <Input
+            id="commission-activity-month"
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="w-auto"
+          />
+        </label>
+        <Button
+          className="h-auto min-h-9.5 max-w-full py-2"
+          disabled={!month || exporter.isPending}
+          onClick={() => exporter.mutate()}
+        >
+          Export monthly CSV
+        </Button>
+        <Text className="pb-2 text-sm text-muted">
+          Summary rows contain totals; detail rows repeat them.
         </Text>
+        {exporter.isError ? (
+          <Text role="alert" className="text-danger">
+            {exporter.error.message}
+          </Text>
+        ) : null}
       </div>
-
-      <Card>
-        <CardBody>
-          <Text>
-            Partial refunds retain their historical calculation and require
-            manual reconciliation; no proration is calculated. Full reversals
-            void the obligation while preserving external transfers. No
-            automatic recovery or future offset is made.
-          </Text>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardBody className="space-y-3">
-          <Field>
-            <FieldLabel>Activity month (WIB)</FieldLabel>
-            <Input
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </Field>
-          <Text>
-            CSV includes purchases and settlement activity in this month, with
-            current lifetime balances. Summary amounts repeat on detail rows;
-            sum summary rows only.
-          </Text>
-          <Button
-            className="h-auto min-h-9.5 max-w-full py-2"
-            disabled={!month || exporter.isPending}
-            onClick={() => exporter.mutate()}
-          >
-            Export monthly reconciliation CSV
-          </Button>
-          {exporter.isError ? (
-            <Text role="alert" className="text-danger">
-              {exporter.error.message}
-            </Text>
-          ) : null}
-        </CardBody>
-      </Card>
       {selected ? (
         <div className="space-y-2">
           <Button variant="plain" onClick={() => setSelected(null)}>
@@ -186,7 +163,7 @@ export function AdminKolCommissionsPage() {
             />
           ) : (
             <TableContainer>
-              <Table>
+              <Table className="min-w-max">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Campaign / student</TableHead>

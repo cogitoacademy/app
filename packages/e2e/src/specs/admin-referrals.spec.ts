@@ -312,7 +312,7 @@ for (const width of [390, 1440]) {
     });
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(page.getByText("REF970", { exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "KOL campaigns", exact: true }).click();
+    await page.getByRole("tab", { name: "Campaigns", exact: true }).click();
     await page
       .getByRole("button", { name: "Create your first campaign" })
       .click();

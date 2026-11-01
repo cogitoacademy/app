@@ -438,3 +438,7 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+### Unified admin Referrals (2026-11-01)
+
+Implemented: single Referrals sidebar entry; URL-backed Activity, Campaigns and Commissions tabs; compact campaign table; existing KOL decision, CSV and settlement UI composed under Commissions; previous commission URL redirects. Activity/campaign requests are deferred to their tab. Financial RPC contracts and student friend-code ownership are unchanged. Campaign promotion support and campaign-level commission aggregation are outside this navigation change.

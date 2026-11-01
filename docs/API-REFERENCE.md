@@ -2740,3 +2740,5 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 `POST /rpc/adminBooking/retryMeeting` accepts `{"json":{"bookingId":"..."}}`. Admin only. It retries Google Meet creation for one confirmed online booking with a recorded failed Google Meet attempt, audits the action, and returns `{bookingId, scheduled}`. A failed retry leaves the booking confirmed for another attempt or manual-link setup.
 
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
+
+Admin Referrals tabs (2026-11-01): this navigation change adds no RPC inputs or outputs. Activity uses `/rpc/adminReferral/listUsage`, Campaigns uses `listKolCampaigns` / `createKolCampaign`, and Commissions uses the existing KOL decisions, monthly CSV and settlement procedures under `/rpc/adminReferral/`. Request/response envelopes and financial rules are unchanged. `view` is a web route search parameter, not an RPC field.

@@ -146,7 +146,7 @@ async function setup(page: Page) {
     },
   );
   await page.goto("/admin-referrals");
-  await page.getByRole("tab", { name: "KOL campaigns", exact: true }).click();
+  await page.getByRole("tab", { name: "Campaigns", exact: true }).click();
   return {
     payloads,
     conflict: () => {
@@ -191,7 +191,7 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
     page.getByRole("button", { name: "Creating KOL campaign…" }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("heading", { name: "Demo KOL · DEMO2026" }),
+    page.getByRole("row").filter({ hasText: "DEMO2026" }),
   ).toBeVisible();
   expect(state.payloads).toHaveLength(1);
   expect(state.payloads[0].json).toEqual({
@@ -203,7 +203,9 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
     flatAmountIdr: 25000,
     percentBps: 1234,
   });
-  await expect(page.getByText("Saved terms · immutable")).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Saved KOL campaigns" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Campaign name", { exact: true })).toHaveValue(
     "",
   );
@@ -251,7 +253,9 @@ for (const width of [320, 390, 768, 1440])
     await setup(page);
     await fill(page);
     await page.getByRole("button", { name: "Save KOL campaign" }).click();
-    await expect(page.getByText("Saved terms · immutable")).toBeVisible();
+    await expect(
+      page.getByRole("table", { name: "Saved KOL campaigns" }),
+    ).toBeVisible();
     const panel = page
       .getByRole("heading", { name: "KOL campaigns", exact: true })
       .locator('xpath=ancestor::*[@data-slot="card"]');

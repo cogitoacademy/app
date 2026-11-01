@@ -20,7 +20,7 @@ const routeTitles: Record<string, string> = {
   "/class-reports": "Session reports",
   "/achievements": "Achievements",
   "/referrals": "My referrals",
-  "/admin-referrals": "Referral usage",
+  "/admin-referrals": "Referrals",
   "/tutors": "Tutors",
   "/profile": "Profile",
   "/availability": "Availability",
