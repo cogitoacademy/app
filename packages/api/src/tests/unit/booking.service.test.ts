@@ -1112,7 +1112,7 @@ describe("BookingService", () => {
           ...soloInput,
           subjectId: "archived-specialization",
         }),
-      ).rejects.toThrow(BookingNotEditableError);
+      ).rejects.toThrow(BookingV3CompetitionRequiredError);
 
       expect(wallet.hold).not.toHaveBeenCalled();
       expect(repo.insertBooking).not.toHaveBeenCalled();
@@ -1368,7 +1368,7 @@ describe("BookingService", () => {
 
       await expect(
         service.createSolo("student1", { ...soloInput, subjectId: "topic" }),
-      ).rejects.toBeInstanceOf(BookingNotEditableError);
+      ).rejects.toBeInstanceOf(BookingV3CompetitionUnavailableError);
     });
 
     test("rejects active V3 pricing when the selected competition has no rate", async () => {

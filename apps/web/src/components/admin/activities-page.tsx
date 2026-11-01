@@ -21,6 +21,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { FaqRichTextEditor } from "./faq-rich-text-editor";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { formatPublicationState } from "./activity-form-utils";
 import type { FaqRichTextDocument } from "@cogito-app/api/modules/faq/faq.types";
 import { orpc } from "@/utils/orpc";
@@ -44,6 +45,11 @@ export function ActivitiesPage() {
   const qc = useQueryClient();
   const list = useQuery(orpc.adminActivities.list.queryOptions());
   const [form, setForm] = useState(empty);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    version: number;
+    title: string;
+  } | null>(null);
   const [editing, setEditing] = useState<{
     id: string;
     version: number;
@@ -130,13 +136,13 @@ export function ActivitiesPage() {
                     <Button
                       variant="danger"
                       disabled={remove.isPending}
-                      onClick={() => {
-                        if (confirm(`Delete ${row.titleEn}?`))
-                          remove.mutate({
-                            id: row.id,
-                            expectedVersion: row.version,
-                          });
-                      }}
+                      onClick={() =>
+                        setDeleteTarget({
+                          id: row.id,
+                          version: row.version,
+                          title: row.titleEn,
+                        })
+                      }
                     >
                       Delete
                     </Button>
@@ -305,6 +311,24 @@ export function ActivitiesPage() {
           </CardBody>
         </Card>
       </div>
+      <ConfirmationDialog
+        open={deleteTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setDeleteTarget(null);
+        }}
+        title={`Delete ${deleteTarget?.title ?? "this article"}?`}
+        description="The article is removed from the main website. This action cannot be undone."
+        confirmLabel="Delete article"
+        confirmVariant="danger"
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          remove.mutate(
+            { id: deleteTarget.id, expectedVersion: deleteTarget.version },
+            { onSettled: () => setDeleteTarget(null) },
+          );
+        }}
+      />
     </div>
   );
 }

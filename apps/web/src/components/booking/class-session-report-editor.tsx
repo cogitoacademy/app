@@ -486,7 +486,7 @@ export function ClassSessionReportEditor({
           </Card>
 
           {!isStudent && selectedRow.settlement ? (
-            <Card className="border-l-4 border-l-primary">
+            <Card>
               <CardBody className="space-y-2 py-4">
                 <Text className="font-medium">
                   {selectedRow.settlement.settled

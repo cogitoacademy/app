@@ -41,6 +41,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppFaqRouteImport } from './routes/_app.faq'
 import { Route as AppGuideRouteImport } from './routes/_app.guide'
 import { Route as AppKnowledgeBankRouteImport } from './routes/_app.knowledge-bank'
+import { Route as AppMyClassesRouteImport } from './routes/_app.my-classes'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppReferralsRouteImport } from './routes/_app.referrals'
@@ -49,6 +50,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppAdminTutorsProfileIdRouteImport } from './routes/_app.admin-tutors_.$profileId'
 import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
 import { Route as AppClassesClassIdRouteImport } from './routes/_app.classes_.$classId'
+import { Route as AppMyClassesClassIdRouteImport } from './routes/_app.my-classes_.$classId'
 import { Route as AppAdminOperationsBookingsBookingIdRouteImport } from './routes/_app.admin-operations_.bookings.$bookingId'
 import { Route as AppTutorsTutorIdBookRouteImport } from './routes/_app.tutors_.$tutorId.book'
 
@@ -211,6 +213,11 @@ const AppKnowledgeBankRoute = AppKnowledgeBankRouteImport.update({
   path: '/knowledge-bank',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMyClassesRoute = AppMyClassesRouteImport.update({
+  id: '/my-classes',
+  path: '/my-classes',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
@@ -249,6 +256,11 @@ const AppBookingsBookingIdRoute = AppBookingsBookingIdRouteImport.update({
 const AppClassesClassIdRoute = AppClassesClassIdRouteImport.update({
   id: '/classes_/$classId',
   path: '/classes/$classId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyClassesClassIdRoute = AppMyClassesClassIdRouteImport.update({
+  id: '/my-classes_/$classId',
+  path: '/my-classes/$classId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminOperationsBookingsBookingIdRoute =
@@ -295,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
+  '/my-classes': typeof AppMyClassesRoute
   '/notifications': typeof AppNotificationsRoute
   '/profile': typeof AppProfileRoute
   '/referrals': typeof AppReferralsRoute
@@ -303,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
   '/classes/$classId': typeof AppClassesClassIdRoute
+  '/my-classes/$classId': typeof AppMyClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -338,6 +352,7 @@ export interface FileRoutesByTo {
   '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
+  '/my-classes': typeof AppMyClassesRoute
   '/notifications': typeof AppNotificationsRoute
   '/profile': typeof AppProfileRoute
   '/referrals': typeof AppReferralsRoute
@@ -346,6 +361,7 @@ export interface FileRoutesByTo {
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
   '/classes/$classId': typeof AppClassesClassIdRoute
+  '/my-classes/$classId': typeof AppMyClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -383,6 +399,7 @@ export interface FileRoutesById {
   '/_app/faq': typeof AppFaqRoute
   '/_app/guide': typeof AppGuideRoute
   '/_app/knowledge-bank': typeof AppKnowledgeBankRoute
+  '/_app/my-classes': typeof AppMyClassesRoute
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/referrals': typeof AppReferralsRoute
@@ -391,6 +408,7 @@ export interface FileRoutesById {
   '/_app/admin-tutors_/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/_app/bookings_/$bookingId': typeof AppBookingsBookingIdRoute
   '/_app/classes_/$classId': typeof AppClassesClassIdRoute
+  '/_app/my-classes_/$classId': typeof AppMyClassesClassIdRoute
   '/_app/admin-operations_/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/_app/tutors_/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -428,6 +446,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/guide'
     | '/knowledge-bank'
+    | '/my-classes'
     | '/notifications'
     | '/profile'
     | '/referrals'
@@ -436,6 +455,7 @@ export interface FileRouteTypes {
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
     | '/classes/$classId'
+    | '/my-classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   fileRoutesByTo: FileRoutesByTo
@@ -471,6 +491,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/guide'
     | '/knowledge-bank'
+    | '/my-classes'
     | '/notifications'
     | '/profile'
     | '/referrals'
@@ -479,6 +500,7 @@ export interface FileRouteTypes {
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
     | '/classes/$classId'
+    | '/my-classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   id:
@@ -515,6 +537,7 @@ export interface FileRouteTypes {
     | '/_app/faq'
     | '/_app/guide'
     | '/_app/knowledge-bank'
+    | '/_app/my-classes'
     | '/_app/notifications'
     | '/_app/profile'
     | '/_app/referrals'
@@ -523,6 +546,7 @@ export interface FileRouteTypes {
     | '/_app/admin-tutors_/$profileId'
     | '/_app/bookings_/$bookingId'
     | '/_app/classes_/$classId'
+    | '/_app/my-classes_/$classId'
     | '/_app/admin-operations_/bookings/$bookingId'
     | '/_app/tutors_/$tutorId/book'
   fileRoutesById: FileRoutesById
@@ -765,6 +789,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppKnowledgeBankRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/my-classes': {
+      id: '/_app/my-classes'
+      path: '/my-classes'
+      fullPath: '/my-classes'
+      preLoaderRoute: typeof AppMyClassesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/notifications': {
       id: '/_app/notifications'
       path: '/notifications'
@@ -821,6 +852,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClassesClassIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/my-classes_/$classId': {
+      id: '/_app/my-classes_/$classId'
+      path: '/my-classes/$classId'
+      fullPath: '/my-classes/$classId'
+      preLoaderRoute: typeof AppMyClassesClassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-operations_/bookings/$bookingId': {
       id: '/_app/admin-operations_/bookings/$bookingId'
       path: '/admin-operations/bookings/$bookingId'
@@ -863,6 +901,7 @@ interface AppRouteChildren {
   AppFaqRoute: typeof AppFaqRoute
   AppGuideRoute: typeof AppGuideRoute
   AppKnowledgeBankRoute: typeof AppKnowledgeBankRoute
+  AppMyClassesRoute: typeof AppMyClassesRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppReferralsRoute: typeof AppReferralsRoute
@@ -870,6 +909,7 @@ interface AppRouteChildren {
   AppAdminTutorsProfileIdRoute: typeof AppAdminTutorsProfileIdRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
   AppClassesClassIdRoute: typeof AppClassesClassIdRoute
+  AppMyClassesClassIdRoute: typeof AppMyClassesClassIdRoute
   AppAdminOperationsBookingsBookingIdRoute: typeof AppAdminOperationsBookingsBookingIdRoute
   AppTutorsTutorIdBookRoute: typeof AppTutorsTutorIdBookRoute
 }
@@ -899,6 +939,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppFaqRoute: AppFaqRoute,
   AppGuideRoute: AppGuideRoute,
   AppKnowledgeBankRoute: AppKnowledgeBankRoute,
+  AppMyClassesRoute: AppMyClassesRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppProfileRoute: AppProfileRoute,
   AppReferralsRoute: AppReferralsRoute,
@@ -906,6 +947,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminTutorsProfileIdRoute: AppAdminTutorsProfileIdRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,
   AppClassesClassIdRoute: AppClassesClassIdRoute,
+  AppMyClassesClassIdRoute: AppMyClassesClassIdRoute,
   AppAdminOperationsBookingsBookingIdRoute:
     AppAdminOperationsBookingsBookingIdRoute,
   AppTutorsTutorIdBookRoute: AppTutorsTutorIdBookRoute,

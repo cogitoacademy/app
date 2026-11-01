@@ -1,5 +1,21 @@
 # UI controls and Card/Table audit (22 October 2026)
 
+## Native control sweep (1 November 2026)
+
+- Replaced the remaining browser dialogs with the shared Selia `ConfirmationDialog`: article deletion in Activities · Others and the unsaved-report discard prompt in the session reporting workspace. Both keep the previous action semantics; a failed article delete now closes the dialog and reports through the existing inline error.
+- Replaced every `<details>/<summary>` disclosure with Selia `Accordion`. Covered surfaces: referral technical details, competition catalog descriptions, display colors and move-specialization panels, and session report history. The display-colors panel keeps its forced-open state for parent competitions through a default value and a mode-scoped key.
+- Renamed the local `confirm` helper in the complete-session dialog to `submitFeedback` so it no longer shadows the browser dialog name.
+- Source scan after the change finds no `alert`, `confirm` or `prompt` calls and no `details`, `summary`, `dialog`, `select` or `textarea` elements in `apps/web/src`. Remaining native elements are intentional: hidden inputs for form submission, the hidden profile-image file chooser, native `progress` for the semester meter (no Selia equivalent), and native buttons used as custom widgets (calendar event cells, guide and diff row toggles, time-suggestion options, sidebar backdrop, badge removal).
+- `FilterTabBar` keeps its hand-rolled tab strip because the booking layout E2E asserts the scroll container and the shared strip intentionally omits Selia's sliding indicator.
+- Verification: web typecheck (`tsgo --noEmit --checkers 1`) passed, focused oxlint reported no findings, and changed files pass `oxfmt --check`. A new bun test asserts the admin report history renders through the Selia accordion instead of `details`/`summary`. Synthetic Edge/Chromium runs passed for the referral technical-details disclosure, the competition catalog palette and move panels (including the forced-open display-colors state for a new parent), and both catalog palette workflows. The DB-backed booking report spec was not run because no database was available, so the report-history accordion has only the unit-level check. No API, database, environment or dependency change.
+
+## Academy class draft reason dialog (1 November 2026)
+
+- [x] Remove the inline "Reason for this change" field from the Academy class draft editor.
+- [x] Collect the required audit reason in a confirmation dialog opened by Save draft or Publish class, matching the booking cancellation pattern.
+- [x] Keep native form validation ahead of the prompt; publishing a dirty draft still saves it first and reuses the same reason.
+- [x] Web and E2E typechecks passed; focused lint reported only the existing array-sort warning. Live API/provider acceptance remains separate.
+
 ## Single-language Academy classes (1 November 2026)
 
 - [x] Remove alternate-language editor fields and API draft/read properties.

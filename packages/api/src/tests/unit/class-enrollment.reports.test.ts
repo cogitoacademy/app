@@ -491,3 +491,122 @@ test("zero residual funded seats do not make a session chargeable", () => {
     ]),
   ).toEqual([]);
 });
+
+test("list reports expose join details to enrolled students, tutors and admins", async () => {
+  const rows = [
+    {
+      classId: reportClass.id,
+      classTitle: reportClass.titleEn,
+      classNumber: 12,
+      classKind: "cohort",
+      classDescription: "Class description",
+      sessionId: "session-online",
+      tutorId: "tutor-1",
+      sequenceNumber: 1,
+      sessionTitle: "Online session",
+      curriculumEn: "Session curriculum",
+      startAt: reportSession.startAt,
+      endAt: reportSession.endAt,
+      mode: "online",
+      state: "scheduled",
+      meetingStatus: "created",
+      meetingUrl: "https://meet.example.test/session-online",
+      roomName: null,
+      roomLocation: null,
+      absenceReportedAt: null,
+      absenceLate: null,
+      tutorFeeIdr: reportSession.tutorFeeIdr,
+      reportId: null,
+      reportVersion: null,
+      discussion: null,
+      strengths: null,
+      improvements: null,
+      reportCreatedAt: null,
+      reportUpdatedAt: null,
+    },
+    {
+      classId: reportClass.id,
+      classTitle: reportClass.titleEn,
+      classNumber: 12,
+      classKind: "cohort",
+      classDescription: "Class description",
+      sessionId: "session-room",
+      tutorId: "tutor-1",
+      sequenceNumber: 2,
+      sessionTitle: "Room session",
+      curriculumEn: "Session curriculum",
+      startAt: new Date("2040-01-02T10:00:00.000Z"),
+      endAt: new Date("2040-01-02T11:00:00.000Z"),
+      mode: "in_person",
+      state: "scheduled",
+      meetingStatus: null,
+      meetingUrl: null,
+      roomName: "Room A",
+      roomLocation: "Jakarta",
+      absenceReportedAt: null,
+      absenceLate: null,
+      tutorFeeIdr: reportSession.tutorFeeIdr,
+      reportId: null,
+      reportVersion: null,
+      discussion: null,
+      strengths: null,
+      improvements: null,
+      reportCreatedAt: null,
+      reportUpdatedAt: null,
+    },
+  ];
+  function dbForList(skippedSelects = 0) {
+    const results: unknown[][] = [
+      ...Array.from({ length: skippedSelects }, () => []),
+      rows,
+      [],
+      [],
+    ];
+    return {
+      select: () => {
+        const result = results.shift() ?? [];
+        const query = {
+          from: () => query,
+          innerJoin: () => query,
+          leftJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          // eslint-disable-next-line unicorn/no-thenable -- Drizzle query builders are PromiseLike.
+          then: (resolve: (result: unknown[]) => unknown) =>
+            Promise.resolve(result).then(resolve),
+        };
+        return query;
+      },
+    };
+  }
+  function createService(skippedSelects = 0) {
+    return createClassSessionReportService({
+      db: dbForList(skippedSelects) as never,
+      wallet: { deduct: async () => undefined },
+      notification: { write: async () => undefined },
+    });
+  }
+
+  const tutorRows = await createService().listSessionReports(
+    "tutor-1",
+    "tutor",
+    {},
+  );
+  expect(tutorRows[0]?.meeting).toEqual({
+    status: "created",
+    meetingUrl: "https://meet.example.test/session-online",
+  });
+  expect(tutorRows[1]?.room).toEqual({ name: "Room A", location: "Jakarta" });
+
+  const studentRows = await createService(2).listSessionReports(
+    "student-1",
+    "student",
+    {},
+  );
+  expect(studentRows[0]?.meeting).toEqual({
+    status: "created",
+    meetingUrl: "https://meet.example.test/session-online",
+  });
+  expect(studentRows[0]?.curriculumEn).toBe("Session curriculum");
+  expect(studentRows[1]?.room).toEqual({ name: "Room A", location: "Jakarta" });
+});

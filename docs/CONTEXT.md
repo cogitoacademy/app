@@ -1,5 +1,48 @@
 # Cogito App — Codebase Context
 
+## Public class session status badges (1 November 2026)
+
+The public class detail page shows one status badge per session in **Curriculum and schedule**: `Upcoming` (info), `In progress` (primary), `Completed` (secondary), or `Cancelled` (danger). The badge sits at the end of the accordion trigger row, immediately before the expand indicator, and moves below the title on narrow screens so a long title keeps the full row width. Sessions sort in three groups: live session first, then upcoming sessions by start time, then completed and cancelled sessions by sequence number. A completed session never sits above the next session a student should prepare for. Public `classes/list` and `classes/get` now expose session `endAt` and `state` for this label; no meeting, room, tutor-fee, or roster data is added. The label and order come from `apps/web/src/lib/class-session-presentation.ts`.
+
+## Tutor class assignments (1 November 2026)
+
+Tutors now have a **Classes** sidebar item at `/my-classes`. It lists cohort and masterclass sessions assigned to the signed-in tutor, with class/session title, `CLS-{classNumber}-S{sequenceNumber}` reference, Jakarta date and time, format, and status. Upcoming sessions sort first; each class title opens `/my-classes/$classId` for the class description, assigned sessions, curriculum, format, and join details. Online sessions show a **Join meeting** action once the stored Meet link is ready; in-person sessions show the assigned room name and location. The tutor remains an attendee on the Google Calendar event, so the provider invitation also remains available outside the app. Started sessions link to `/class-reports` to record or view the report. Both pages use the existing `classes.listSessionReports` procedure; its tutor/admin rows now include `classDescription`, `curriculumEn`, `meeting` (`status`, `meetingUrl` once created), and `room` (`name`, `location`). Student rows include the same meeting and room fields only for sessions where the student holds a funded allocation; `includeUnreported: true` returns those scheduled sessions even before a report exists. The student class detail uses this protected read to show **Join meeting** only to enrolled students. Tutor results exclude draft sessions so an unpublished class assignment cannot appear or break the response. Notification clicks for class updates now open `/my-classes` for tutors, class details for students, and the Classes studio for admins instead of the Competition Calendar; whole-class cancellation tutor notifications include `classId` metadata for this routing.
+
+## Offline room capacity and assignment (2 November 2026)
+
+Offline room requests, admin assignment, and relocation now require the room
+capacity to cover the booking target group size. `room.service.ts` checks this
+inside the room lock; `room.errors.ts` maps failure to
+`ROOM_CAPACITY_EXCEEDED` (400) and booking creation reports it as
+`roomConflict`. Admin assignment marks any prior requested room row relocated
+before inserting the confirmed row. Unit coverage is in `room.service.test.ts`;
+live acceptance used a capacity-1 room and a 2-person group, and a 5-seat class
+session against the same room.
+
+## Class join, KB labels and absence entry (1 November 2026)
+
+Student class detail now uses the protected class-session read with
+`includeUnreported: true` and shows **Join meeting** only when the signed-in
+student has a funded allocation for that session. The API returns meeting and
+room data only for rows the caller may access; a cancelled or non-enrolled
+student receives no session row. Completed sessions show "Session completed"
+instead of a join action. `classes.listSessionReports` gained the optional
+`includeUnreported` input; the report workspace keeps its existing past-session
+behavior.
+
+Knowledge Bank student metadata now includes `categoryName` resolved from the
+parent competition, so cards, filter options and the viewer do not render a raw
+category ID. `category` remains the stable ID. Valid-competition failures now
+return the specific "A supported competition topic must be selected" or
+"not available for V3 pricing" message instead of the generic booking edit
+error. Tutors can report a scheduled absence before the session starts from
+`/my-classes/$classId`; the notice timestamp and late flag remain server-owned.
+Non-admin direct access to `/activities` redirects to the dashboard.
+
+## Academy class draft reason dialog (1 November 2026)
+
+The Academy class draft editor no longer shows an inline "Reason for this change" field. Save draft and Publish class validate the form first, then open a confirmation dialog that collects the required audit reason before submitting, matching the booking cancellation pattern. Publishing an edited draft still saves pending changes first and reuses the same reason for both the draft-save and publication audits.
+
 ## Single-language Academy classes (1 November 2026)
 
 Academy class title/description and session title/curriculum now each have one input. API contracts retain the canonical `titleEn`, `descriptionEn`, `curriculumEn` names; these fields can contain the authored language and have no alternate-language partner. Schema and migration 0085 remove `academy_class.title_id/description_id` and `academy_class_session.title_id/curriculum_id`. Admin and public reads use the real reduced schema, with no filtering mapper. Other modules' localized content is outside this change.
@@ -3526,6 +3569,8 @@ Academy class capacity is set by Cogito per session and is independent of tutor 
 Classes catalog cards on mobile and desktop follow My Bookings: date tile and session metadata, class title, competition and rate, class type/session count, and a compact Details action aligned to the right. The same card composition is used across the responsive catalog grid. Prices use Start from with the lowest positive configured cohort plan rate or the masterclass rate; missing rates show Price unavailable.
 
 Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
+
+Native control sweep (1 November 2026): browser `confirm` dialogs are replaced by the shared `ConfirmationDialog`, and every disclosure uses the Selia Accordion. Article deletion (Activities · Others) and the unsaved-report discard prompt are the changed confirmations; referral technical details, competition catalog descriptions, display colors, move specialization and session report history are the changed disclosures. The web source has no remaining `alert`, `confirm`, `prompt`, `details`, `summary`, `dialog`, `select` or `textarea` elements. Hidden form inputs, the profile-image file chooser, the semester `progress` meter and custom widget buttons stay native on purpose. See `docs/plans/active/UI-CONTROLS-AND-LAYOUT-AUDIT.md`.
 
 Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
 

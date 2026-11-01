@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   IconArrowLeft,
+  IconArrowUpRight,
   IconCalendarEvent,
+  IconDeviceLaptop,
   IconSchool,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -24,11 +26,16 @@ import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { ClassEnrollmentPanel } from "@/components/content/class-enrollment-panel";
 import Loader from "@/components/loader";
+import { useNow } from "@/hooks/use-now";
 import {
   competitionPaletteClassName,
   getCompetitionPalette,
   getCompetitionPaletteStyle,
 } from "@/lib/competition-colors";
+import {
+  getClassSessionScheduleStatus,
+  sortClassSessions,
+} from "@/lib/class-session-presentation";
 import { client, orpc } from "@/utils/orpc";
 
 function formatDate(date: Date | string) {
@@ -51,6 +58,27 @@ export function ClassDetailPage({ classId }: { classId: string }) {
   const academyClass = useQuery(
     orpc.classes.get.queryOptions({ input: { id: classId } }),
   );
+  const sessionAccess = useQuery(
+    orpc.classes.listSessionReports.queryOptions({
+      input: { classId, includeUnreported: true },
+    }),
+  );
+
+  const sessionDetails = new Map<string, ReactNode>();
+  for (const session of sessionAccess.data ?? []) {
+    sessionDetails.set(
+      session.sessionId,
+      <SessionJoinDetails
+        mode={session.mode}
+        state={session.state}
+        meetingUrl={session.meeting?.meetingUrl ?? null}
+        meetingStatus={session.meeting?.status ?? null}
+        roomName={session.room?.name ?? null}
+        roomLocation={session.room?.location ?? null}
+      />,
+    );
+  }
+
   if (academyClass.isPending)
     return (
       <Stack direction="column" spacing="md" aria-busy="true">
@@ -78,13 +106,82 @@ export function ClassDetailPage({ classId }: { classId: string }) {
       />
     );
   }
-  return <ClassDetailView item={academyClass.data} />;
+  return (
+    <ClassDetailView item={academyClass.data} sessionDetails={sessionDetails} />
+  );
+}
+
+function SessionJoinDetails({
+  mode,
+  state,
+  meetingUrl,
+  meetingStatus,
+  roomName,
+  roomLocation,
+}: {
+  mode: "online" | "in_person";
+  state: "scheduled" | "completed" | "cancelled";
+  meetingUrl: string | null;
+  meetingStatus: string | null;
+  roomName: string | null;
+  roomLocation: string | null;
+}) {
+  if (state === "cancelled") {
+    return <Text className="text-sm text-muted">Session cancelled.</Text>;
+  }
+  if (state === "completed") {
+    return <Text className="text-sm text-muted">Session completed.</Text>;
+  }
+  if (mode === "in_person") {
+    return roomName ? (
+      <>
+        <Text className="font-medium">{roomName}</Text>
+        {roomLocation ? (
+          <Text className="text-sm text-muted">{roomLocation}</Text>
+        ) : null}
+      </>
+    ) : (
+      <Text className="text-sm text-muted">Room to be announced.</Text>
+    );
+  }
+  if (meetingUrl) {
+    return (
+      <Button
+        variant="tertiary"
+        size="xs"
+        nativeButton={false}
+        render={
+          <a
+            href={meetingUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Join class meeting"
+          />
+        }
+      >
+        <IconDeviceLaptop aria-hidden="true" />
+        Join meeting
+        <IconArrowUpRight aria-hidden="true" />
+      </Button>
+    );
+  }
+  if (meetingStatus === "failed") {
+    return (
+      <Text className="text-sm text-warning">
+        Meeting link unavailable. Cogito is retrying.
+      </Text>
+    );
+  }
+  return (
+    <Text className="text-sm text-muted">Meeting link is being prepared.</Text>
+  );
 }
 
 type ClassDetailRecord = Awaited<ReturnType<typeof client.classes.get>>;
 
 export function ClassDetailView({
   item,
+  adminTutorFeeIdr,
   adminSummary,
   adminControls,
   sessionDetails,
@@ -92,6 +189,7 @@ export function ClassDetailView({
   badgeActions,
 }: {
   item: ClassDetailRecord;
+  adminTutorFeeIdr?: number;
   adminSummary?: ReactNode;
   adminControls?: ReactNode;
   sessionActions?: ReadonlyMap<string, ReactNode>;
@@ -99,13 +197,12 @@ export function ClassDetailView({
   sessionDetails?: ReadonlyMap<string, ReactNode>;
 }) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const now = useNow();
   const isAdmin = Boolean(adminControls);
   const palette = getCompetitionPalette(
     item.competition.parent ?? item.competition,
   );
-  const orderedSessions = item.sessions.toSorted(
-    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-  );
+  const orderedSessions = sortClassSessions(item.sessions, now);
   const rates = (
     item.kind === "cohort"
       ? [
@@ -152,7 +249,13 @@ export function ClassDetailView({
           <Badge variant="info">Admin view</Badge>
         )}
       </div>
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:grid-rows-[auto_1fr]">
+      <div
+        className={`grid min-w-0 items-start gap-6 ${
+          isAdmin
+            ? ""
+            : "xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:grid-rows-[auto_1fr]"
+        }`}
+      >
         <section
           aria-labelledby="class-title"
           className="min-w-0 space-y-5 wrap-anywhere xl:col-start-1 xl:row-start-1"
@@ -210,55 +313,95 @@ export function ClassDetailView({
               <div className="ml-auto">{badgeActions}</div>
             ) : null}
           </div>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-2 border-y border-border py-4 text-sm">
-            <dt className="text-muted">
-              {item.kind === "cohort" ? "Course dates" : "Date & time"}
-            </dt>
-            <dd>
-              {orderedSessions.length
-                ? item.kind === "cohort"
-                  ? `${formatDate(orderedSessions[0]!.startAt)} – ${formatDate(orderedSessions[orderedSessions.length - 1]!.startAt)}`
-                  : `${formatDate(orderedSessions[0]!.startAt)} · ${formatTime(orderedSessions[0]!.startAt)} WIB`
-                : "To be announced"}
-            </dd>
+          <dl className="flex flex-col gap-3 border-y border-border py-4 text-sm">
+            {isAdmin ? (
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <dt className="text-muted">Status</dt>
+                <dd>
+                  <Badge
+                    variant={
+                      item.state === "published" ? "success" : "secondary"
+                    }
+                  >
+                    {item.state}
+                  </Badge>
+                </dd>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <dt className="text-muted">
+                {item.kind === "cohort" ? "Course dates" : "Date & time"}
+              </dt>
+              <dd className="text-right">
+                {orderedSessions.length
+                  ? item.kind === "cohort"
+                    ? `${formatDate(orderedSessions[0]!.startAt)} – ${formatDate(orderedSessions[orderedSessions.length - 1]!.startAt)}`
+                    : `${formatDate(orderedSessions[0]!.startAt)} · ${formatTime(orderedSessions[0]!.startAt)} WIB`
+                  : "To be announced"}
+              </dd>
+            </div>
             {item.kind === "masterclass" ? (
               <>
-                <dt className="text-muted">Tutor</dt>
-                <dd>
-                  {orderedSessions[0]?.tutor?.name ?? "Tutor to be announced"}
-                </dd>
-                <dt className="text-muted">Mode</dt>
-                <dd>
-                  {orderedSessions[0]
-                    ? orderedSessions[0].mode === "online"
-                      ? "Online"
-                      : "In person"
-                    : "To be announced"}
-                </dd>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <dt className="text-muted">Tutor</dt>
+                  <dd className="text-right">
+                    {orderedSessions[0]?.tutor?.name ?? "Tutor to be announced"}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <dt className="text-muted">Mode</dt>
+                  <dd className="text-right">
+                    {orderedSessions[0]
+                      ? orderedSessions[0].mode === "online"
+                        ? "Online"
+                        : "In person"
+                      : "To be announced"}
+                  </dd>
+                </div>
               </>
             ) : (
-              <>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <dt className="text-muted">Enrollment</dt>
-                <dd>
+                <dd className="text-right">
                   Before your selected session starts, subject to availability.
                 </dd>
-              </>
+              </div>
             )}
-            <dt className="text-muted">Price</dt>
-            <dd className="flex flex-wrap items-center gap-1">
-              {startingRate !== null ? (
-                <>
-                  Start from <CogitoMarks value={startingRate} />
-                  {item.kind === "cohort" ? (
-                    <span className="text-muted">per session</span>
-                  ) : (
-                    <span className="text-muted">per student</span>
-                  )}
-                </>
-              ) : (
-                "Price unavailable"
-              )}
-            </dd>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <dt className="text-muted">Price</dt>
+              <dd className="flex flex-wrap items-center justify-end gap-1 text-right">
+                {startingRate !== null ? (
+                  <>
+                    Start from <CogitoMarks value={startingRate} />
+                    {item.kind === "cohort" ? (
+                      <span className="text-muted">per session</span>
+                    ) : (
+                      <span className="text-muted">per student</span>
+                    )}
+                  </>
+                ) : (
+                  "Price unavailable"
+                )}
+              </dd>
+            </div>
+            {isAdmin && adminTutorFeeIdr !== undefined ? (
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <dt className="text-muted">Tutor fee per session</dt>
+                <dd className="text-right">
+                  {new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    maximumFractionDigits: 0,
+                  }).format(adminTutorFeeIdr)}
+                </dd>
+              </div>
+            ) : null}
+            {isAdmin ? (
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <dt className="text-muted">Sessions</dt>
+                <dd className="text-right">{item.sessions.length}</dd>
+              </div>
+            ) : null}
           </dl>
           {item.state === "postponed" ? (
             <Text className="rounded border border-warning-border bg-warning/10 p-3 text-sm">
@@ -268,14 +411,15 @@ export function ClassDetailView({
             </Text>
           ) : null}
         </section>
-        {isAdmin ? (
+        {isAdmin && adminSummary ? (
           <aside
             aria-label="Class administration"
             className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2"
           >
             {adminSummary}
           </aside>
-        ) : enrollmentKind ? (
+        ) : null}
+        {!isAdmin && enrollmentKind ? (
           <aside
             aria-label="Class enrollment"
             className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2"
@@ -326,54 +470,60 @@ export function ClassDetailView({
               />
             ) : (
               <Accordion multiple className="gap-3">
-                {orderedSessions.map((session) => (
-                  <AccordionItem
-                    key={session.id}
-                    value={session.id}
-                    className="rounded-lg border border-card-border bg-card px-3 last:border-b"
-                  >
-                    <AccordionHeader render={<h3 />}>
-                      <AccordionTrigger className="py-2">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded bg-accent tabular-nums">
-                          <span className="sr-only">Session </span>
-                          {session.sequenceNumber}
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="wrap-anywhere font-semibold">
-                            {session.titleEn}
+                {orderedSessions.map((session) => {
+                  const status = getClassSessionScheduleStatus(session, now);
+                  return (
+                    <AccordionItem
+                      key={session.id}
+                      value={session.id}
+                      className="rounded-lg border border-card-border bg-card px-2 last:border-b"
+                    >
+                      <AccordionHeader render={<h3 />}>
+                        <AccordionTrigger className="py-2">
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded bg-accent tabular-nums">
+                            <span className="sr-only">Session </span>
+                            {session.sequenceNumber}
                           </span>
-                          <span className="text-sm font-normal text-muted">
-                            {formatDate(session.startAt)} ·{" "}
-                            {formatTime(session.startAt)} WIB
+                          <span className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
+                            <span className="wrap-anywhere min-w-0 flex-1 font-semibold">
+                              {session.titleEn}
+                            </span>
+                            <Badge
+                              variant={status.variant}
+                              size="sm"
+                              className="shrink-0"
+                            >
+                              {status.label}
+                            </Badge>
                           </span>
-                        </span>
-                      </AccordionTrigger>
-                    </AccordionHeader>
-                    <AccordionPanel>
-                      <div className="space-y-3 wrap-anywhere pb-3 sm:pl-12">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Text className="text-sm text-muted">
-                            {session.mode === "online" ? "Online" : "In person"}{" "}
-                            {!isAdmin
-                              ? ` | Tutor: ${session.tutor?.name ?? "Tutor to be announced"}`
-                              : null}
+                        </AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <div className="space-y-3 wrap-anywhere sm:pl-12">
+                          {!isAdmin ? (
+                            <Text className="text-sm text-muted">
+                              Tutor:{" "}
+                              {session.tutor?.name ?? "Tutor to be announced"}
+                            </Text>
+                          ) : null}
+                          <Text className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {session.curriculumEn ||
+                              "Curriculum to be announced."}
                           </Text>
+                          {sessionDetails?.get(session.id)}
+                          {sessionActions?.get(session.id)}
+                          {!isAdmin &&
+                          session.mode === "online" &&
+                          !sessionDetails?.has(session.id) ? (
+                            <Text className="text-xs text-muted">
+                              Enroll to see meeting details.
+                            </Text>
+                          ) : null}
                         </div>
-                        <Text className="whitespace-pre-wrap text-sm leading-relaxed">
-                          {session.curriculumEn ||
-                            "Curriculum to be announced."}
-                        </Text>
-                        {sessionDetails?.get(session.id)}
-                        {sessionActions?.get(session.id)}
-                        {!isAdmin && session.mode === "online" ? (
-                          <Text className="text-xs text-muted">
-                            Meeting details are available to enrolled students.
-                          </Text>
-                        ) : null}
-                      </div>
-                    </AccordionPanel>
-                  </AccordionItem>
-                ))}
+                      </AccordionPanel>
+                    </AccordionItem>
+                  );
+                })}
               </Accordion>
             )}
           </section>

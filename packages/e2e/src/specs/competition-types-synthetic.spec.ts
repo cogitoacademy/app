@@ -231,8 +231,8 @@ test("edit keeps version/reason and conflicting drafts, dirty close asks before 
   await expect(
     page.getByLabel("Name (English) *", { exact: true }),
   ).toHaveValue("Debate revised");
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByLabel("Close catalog editor").click();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Debate", exact: true }),
   ).toBeVisible();
@@ -287,7 +287,6 @@ test("creation and lifecycle retain guarded impact and reason workflow", async (
   });
   await page.getByLabel("Close catalog editor").click();
   await edit(page);
-  await page.getByText("Availability and deletion", { exact: true }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   const deletion = page.getByRole("dialog", {
     name: "Delete unused entry",
@@ -421,8 +420,8 @@ test("palette previews follow unsaved edits and moving a type retains reason and
   await expect(
     page.getByText("Background: oklch(0.8 0.05 120)", { exact: true }),
   ).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByLabel("Close catalog editor").click();
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
   await page.locator('[aria-controls="types-debate"]').click();
   await page
     .getByRole("button", { name: /Edit specialization Parliamentary/ })
@@ -431,8 +430,8 @@ test("palette previews follow unsaved edits and moving a type retains reason and
   await page.getByLabel("Destination", { exact: true }).click();
   await page.getByRole("option", { name: "Science", exact: true }).click();
   await page.locator("#move-reason").fill("Reclassify unused specialization");
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByLabel("Close catalog editor").click();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(page.getByLabel("Destination", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Move", exact: true }).click();
   await expect(

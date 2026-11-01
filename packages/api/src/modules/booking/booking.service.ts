@@ -1028,7 +1028,7 @@ export function createBookingService(deps: {
     if (!subjectId) throw new BookingV3CompetitionRequiredError();
     const topic = await repo.findTutorSubjectTopic(conn, tutorId, subjectId);
     if (!topic) {
-      throw new BookingNotEditableError(subjectId);
+      throw new BookingV3CompetitionRequiredError();
     }
     if (
       topic &&
@@ -1038,7 +1038,7 @@ export function createBookingService(deps: {
         topic.subcategoryId,
       ))
     ) {
-      throw new BookingNotEditableError(topic.subcategoryId);
+      throw new BookingV3CompetitionUnavailableError(topic.subcategoryId);
     }
     return topic;
   }
@@ -1505,7 +1505,8 @@ export function createBookingService(deps: {
         });
         roomRequested = request.available;
         roomConflict =
-          request.available === false && request.reason === "taken";
+          request.available === false &&
+          (request.reason === "taken" || request.reason === "capacity");
       }
 
       return { ...b, roomRequested, roomConflict };
@@ -3909,7 +3910,8 @@ export function createBookingService(deps: {
         });
         roomRequested = request.available;
         roomConflict =
-          request.available === false && request.reason === "taken";
+          request.available === false &&
+          (request.reason === "taken" || request.reason === "capacity");
       }
 
       return { ...b, roomRequested, roomConflict };

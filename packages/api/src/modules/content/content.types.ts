@@ -30,6 +30,7 @@ export type StudentResourceContent = {
   title: string;
   description: string | null;
   category: string;
+  categoryName?: string | null;
 };
 
 export type StudentResourceFile = {

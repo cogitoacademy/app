@@ -34,6 +34,8 @@ export type PublicAcademyClassSource = {
     id: string;
     sequenceNumber: number;
     startAt: Date;
+    endAt: Date;
+    state: string;
     titleEn: string;
     curriculumEn: string | null;
     mode: string;
@@ -68,6 +70,8 @@ export function toPublicAcademyClass(record: PublicAcademyClassSource) {
       id: session.id,
       sequenceNumber: session.sequenceNumber,
       startAt: session.startAt,
+      endAt: session.endAt,
+      state: session.state,
       titleEn: session.titleEn,
       curriculumEn: session.curriculumEn,
       mode: session.mode,

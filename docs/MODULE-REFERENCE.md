@@ -1030,8 +1030,16 @@ unverified.
 `classes.listSessionReports`. The shared booking feedback schema normalizes the
 three bullet fields and enforces the 600-code-point per-field limit. Only the
 assigned tutor or an admin can submit/correct; admin writes require a reason.
-Student reads require a funded seat and an existing report, and the read DTO
-does not expose student identities or private meeting links.
+Student reads require a funded seat; by default they also require an existing
+report, while `includeUnreported: true` returns the student's funded scheduled
+sessions for enrollment-guarded meeting access. The read DTO does not expose
+student identities. Tutor reads return only scheduled, completed, or cancelled
+sessions; draft session assignments are excluded until publication. Every role
+receives the class description, session curriculum, meeting status/URL once
+created, and assigned room name/location for sessions the caller may access.
+The class detail uses the same protected read to render a Join meeting action
+only when the student holds a funded allocation; cancelled or non-enrolled
+students receive no meeting or room data.
 
 Settlement locks class, session, report, allocations sorted by ID, then wallets
 sorted by ID, and reads the current time only after those locks. Initial report,
@@ -1088,7 +1096,7 @@ coverage were pending; see the current Report Export Module status below.
 
 `academy-class` owns the admin-only draft boundary. Migration `0061_academy_class_drafts.sql` adds `academy_class` and `academy_class_session`; session capacity, tutor, mode, room, dates, and tutor-fee snapshot are session-level. Class rows retain localized metadata, active competition identity, cohort minimum/check date and plan-rate defaults, masterclass seat-rate default, state, postponement count, and optimistic version.
 
-`admin.listAcademyClasses`, `admin.getAcademyClass`, and `admin.saveAcademyClassDraft` expose the current slice. Save creates or version-checks a draft and requires an audit reason. Audit actions are `academy_class.draft_created` and `academy_class.draft_updated`; snapshots include class/session terms but exclude tutor account data. Existing session IDs survive draft edits and sequence changes. Only draft classes are editable. The admin view combines its published and postponed reads by class ID and keeps the highest-version snapshot during refresh, preserving one current class card for its existing lifecycle actions.
+`admin.listAcademyClasses`, `admin.getAcademyClass`, and `admin.saveAcademyClassDraft` expose the current slice. Save creates or version-checks a draft and requires an audit reason. The editor collects that reason in a confirmation dialog opened by Save draft or Publish class; browser form validation runs before the prompt. Audit actions are `academy_class.draft_created` and `academy_class.draft_updated`; snapshots include class/session terms but exclude tutor account data. Existing session IDs survive draft edits and sequence changes. Only draft classes are editable. The admin view combines its published and postponed reads by class ID and keeps the highest-version snapshot during refresh, preserving one current class card for its existing lifecycle actions.
 
 Server validation requires an active competition (including an active parent for a specialization), a published tutor profile supporting the mode, an active managed room with sufficient capacity for in-person sessions, valid non-overlapping session times, English cohort curriculum, and a minimum-check date before the first cohort session. Masterclasses contain exactly one session. Approved draft defaults are cohort 20/22/25 Marks for full/half/single sessions and Rp400,000 tutor fee per session; masterclass 5 Marks and Rp300,000 tutor fee. Admin can edit draft values.
 
@@ -2373,7 +2381,7 @@ contracts.
 **Files:**
 
 - `room.types.ts` — Zod schemas for list/pending-approval/create/update/deactivate/assign/check-availability/relocate/cancel inputs
-- `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
+- `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`, `RoomCapacityError`
 - `room.repo.ts` — room queries, pending approval lookup, room-booking insert/update/find
 - `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `updateRoom`, `deactivateRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`, `syncRoomBookingScheduleForBooking`, `resyncRoomBookingToSchedule`
 - `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `update`, `deactivate`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
@@ -2386,9 +2394,9 @@ contracts.
 - `createRoom({ name, location, capacity })` — Creates a room
 - `updateRoom({ id, name, location, capacity })` — Updates an active or inactive room's editable catalog details
 - `deactivateRoom(id)` — Soft-deactivates a room so it cannot be selected for new offline bookings while historical assignments remain intact; repeated deactivation is a no-op
-- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, including the `Site: {location}` / `Room: {name}` description heading, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict and capacity checks; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, marks any prior requested row relocated, then best-effort creates/refreshes its non-Meet Calendar event after commit, including the `Site: {location}` / `Room: {name}` description heading, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows). A room smaller than the booking target group throws `ROOM_CAPACITY_EXCEEDED`.
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location and Site/Room description heading after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; destination room capacity must cover the booking target group size and the slot must be free; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location and Site/Room description heading after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
 - `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
 - `syncRoomBookingScheduleForBooking(bookingId, startAt, endAt)` — Updates the active confirmed room assignment when the target window is free; returns `missing` without an active assignment or `conflict` after cancelling the assignment when another confirmed room booking overlaps
 - `resyncRoomBookingToSchedule(conn, bookingId, { startAt, endAt })` — **N3:** moves a booking's confirmed roomBooking row back to a schedule (no-op when the times already match or no confirmed row exists). Called by the booking module when a reschedule proposal is rejected or expires so a pre-assigned room cannot remain blocked for the cancelled proposal window
@@ -2402,8 +2410,10 @@ contracts.
 - The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
 - Room catalog and pending-approval tables use ordered `limit`/`offset` queries and a one-row sentinel in the web UI; room selectors intentionally use the unpaginated compatibility path.
 - G14 (assign → scheduled + notifications) fixed in #46
+- Room capacity must cover the booking target group size at creation request, admin assign, and relocation; an undersized room is not reserved.
+- Booking creation checks the requested room's capacity and time overlap; a failed request leaves the booking for admin room approval instead of inserting a room row.
 - Offline booking-level reschedules keep the room assignment aligned with the booking schedule; conflict/missing results remain in the admin room-approval queue rather than reserving a room at a stale time
-- Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- `checkAvailability` remains the read-only room availability check used by admin room controls; booking creation performs its own capacity and overlap check inside the creation transaction.
 
 ---
 

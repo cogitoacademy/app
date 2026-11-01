@@ -61,6 +61,7 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { getUserFacingError } from "@/lib/error-message";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
@@ -107,7 +108,6 @@ type DraftForm = {
   halfRateMarks: string;
   singleRateMarks: string;
   masterclassRateMarks: string;
-  reason: string;
   sessions: SessionForm[];
 };
 
@@ -135,7 +135,6 @@ const emptyDraft = (kind: ClassKind = "cohort"): DraftForm => ({
   halfRateMarks: "22",
   singleRateMarks: "25",
   masterclassRateMarks: "5",
-  reason: "",
   sessions: [emptySession()],
 });
 
@@ -163,7 +162,6 @@ function draftFromRecord(record: ClassRecord): DraftForm {
     halfRateMarks: String(record.cohortHalfRateMarks ?? ""),
     singleRateMarks: String(record.cohortSingleRateMarks ?? ""),
     masterclassRateMarks: String(record.masterclassRateMarks ?? ""),
-    reason: "",
     sessions: record.sessions.map((session) => ({
       id: session.id,
       capacity: String(session.capacity),
@@ -304,6 +302,11 @@ export function AcademyClassPage() {
   const [showDrafts, setShowDrafts] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const [reasonAction, setReasonAction] = useState<"save" | "publish" | null>(
+    null,
+  );
+  const [actionReason, setActionReason] = useState("");
+  const [reasonSubmitting, setReasonSubmitting] = useState(false);
   const classesQuery = useQuery(
     orpc.admin.listAcademyClasses.queryOptions({ input: { state: "draft" } }),
   );
@@ -508,7 +511,7 @@ export function AcademyClassPage() {
     }
   }
 
-  function draftInputFromForm() {
+  function draftInputFromForm(reason: string) {
     const sessions = form.sessions.map((session) => ({
       ...(session.id ? { id: session.id } : {}),
       capacity: Number(session.capacity),
@@ -532,7 +535,7 @@ export function AcademyClassPage() {
       descriptionEn: form.descriptionEn,
       coverKey: form.coverKey,
       tutorFeeIdr: Number(form.tutorFeeIdr),
-      reason: form.reason,
+      reason,
       sessions,
     };
     const input =
@@ -558,16 +561,13 @@ export function AcademyClassPage() {
     if (!form.id) return true;
     const saved = classes.find((record) => record.id === form.id);
     if (!saved) return true;
-    return (
-      JSON.stringify({ ...form, reason: "" }) !==
-      JSON.stringify({ ...draftFromRecord(saved), reason: "" })
-    );
+    return JSON.stringify(form) !== JSON.stringify(draftFromRecord(saved));
   }
 
   async function publishCurrentDraft(
     input: ReturnType<typeof draftInputFromForm>,
   ) {
-    if (!form.id) return;
+    if (!form.id) return false;
     try {
       const saved = hasUnsavedDraftChanges()
         ? await saveDraft.mutateAsync(input)
@@ -577,24 +577,47 @@ export function AcademyClassPage() {
         expectedVersion: saved.version,
         reason: input.reason,
       });
+      return true;
     } catch {
       // Each mutation displays its own actionable error toast.
+      return false;
     }
   }
 
   function submitDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const input = draftInputFromForm();
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    if (
+    const action =
       submitter instanceof HTMLButtonElement &&
       submitter.name === "class-action" &&
       submitter.value === "publish"
-    ) {
-      void publishCurrentDraft(input);
-      return;
+        ? "publish"
+        : "save";
+    setActionReason("");
+    setReasonAction(action);
+  }
+
+  async function confirmReasonAction() {
+    if (!reasonAction || reasonSubmitting) return;
+    const reason = actionReason.trim();
+    if (reason.length < 3) return;
+    const input = draftInputFromForm(reason);
+    setReasonSubmitting(true);
+    try {
+      const success =
+        reasonAction === "publish"
+          ? await publishCurrentDraft(input)
+          : await saveDraft
+              .mutateAsync(input)
+              .then(() => true)
+              .catch(() => false);
+      if (success) {
+        setReasonAction(null);
+        setActionReason("");
+      }
+    } finally {
+      setReasonSubmitting(false);
     }
-    saveDraft.mutate(input);
   }
 
   return (
@@ -617,7 +640,7 @@ export function AcademyClassPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList
             aria-label="Class studio workspace"
-            className="w-full sm:w-fit"
+            className="w-full sm:w-80"
           >
             <TabsItem value="published" className="whitespace-nowrap">
               Published classes
@@ -875,7 +898,7 @@ export function AcademyClassPage() {
                   </CardHeader>
                   <CardBody>
                     <div className="flex min-w-0 flex-col gap-5">
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         <Field>
                           <FieldLabel htmlFor="class-kind">
                             Class type
@@ -936,9 +959,6 @@ export function AcademyClassPage() {
                             </SelectPopup>
                           </Select>
                         </Field>
-                      </div>
-
-                      <div className="grid gap-4">
                         <TextField
                           id="class-title-en"
                           label="Title"
@@ -947,8 +967,6 @@ export function AcademyClassPage() {
                           required
                           maxLength={200}
                         />
-                      </div>
-                      <div className="grid gap-4">
                         <TextareaField
                           id="class-description-en"
                           label="Description"
@@ -959,36 +977,36 @@ export function AcademyClassPage() {
                           required
                           maxLength={5_000}
                         />
-                      </div>
-                      <Field>
-                        <FieldLabel htmlFor="class-cover">
-                          Cover image
-                        </FieldLabel>
-                        <Input
-                          id="class-cover"
-                          type="file"
-                          accept={COVER_IMAGE_TYPES.join(",")}
-                          disabled={coverUploading}
-                          onChange={(event) => void uploadCover(event)}
-                        />
-                        <FieldDescription>
-                          {coverUploading
-                            ? "Uploading cover image…"
-                            : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
-                        </FieldDescription>
-                        <Text className="text-muted text-sm">
-                          {form.coverKey
-                            ? "A cover image is attached to this draft. Save to keep it."
-                            : "No cover image is attached yet."}
-                        </Text>
-                        {coverPreviewUrl ? (
-                          <img
-                            src={coverPreviewUrl}
-                            alt=""
-                            className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
+                        <Field>
+                          <FieldLabel htmlFor="class-cover">
+                            Cover image
+                          </FieldLabel>
+                          <Input
+                            id="class-cover"
+                            type="file"
+                            accept={COVER_IMAGE_TYPES.join(",")}
+                            disabled={coverUploading}
+                            onChange={(event) => void uploadCover(event)}
                           />
-                        ) : null}
-                      </Field>
+                          <FieldDescription>
+                            {coverUploading
+                              ? "Uploading cover image…"
+                              : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
+                          </FieldDescription>
+                          <Text className="text-muted text-sm">
+                            {form.coverKey
+                              ? "A cover image is attached to this draft. Save to keep it."
+                              : "No cover image is attached yet."}
+                          </Text>
+                          {coverPreviewUrl ? (
+                            <img
+                              src={coverPreviewUrl}
+                              alt=""
+                              className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
+                            />
+                          ) : null}
+                        </Field>
+                      </div>
                     </div>
                   </CardBody>
                 </Card>
@@ -1000,7 +1018,7 @@ export function AcademyClassPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardBody className="flex min-w-0 flex-col gap-5">
-                    <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       <NumberField
                         id="class-tutor-fee"
                         label="Flat tutor fee per session (IDR)"
@@ -1034,20 +1052,22 @@ export function AcademyClassPage() {
                           description="Default: 5 Marks for the single session."
                         />
                       )}
+                      {form.kind === "cohort" ? (
+                        <TextField
+                          id="class-minimum-check-at"
+                          label="Minimum-enrollment check date"
+                          type="datetime-local"
+                          value={form.minimumCheckAt}
+                          onChange={(value) =>
+                            updateForm("minimumCheckAt", value)
+                          }
+                          required
+                        />
+                      ) : null}
                     </div>
                     {form.kind === "cohort" ? (
                       <div className="flex flex-col gap-4">
                         <div className="grid items-start gap-4">
-                          <TextField
-                            id="class-minimum-check-at"
-                            label="Minimum-enrollment check date"
-                            type="datetime-local"
-                            value={form.minimumCheckAt}
-                            onChange={(value) =>
-                              updateForm("minimumCheckAt", value)
-                            }
-                            required
-                          />
                           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
                             <NumberField
                               id="class-full-rate"
@@ -1128,7 +1148,7 @@ export function AcademyClassPage() {
                           </AccordionHeader>
                           <AccordionPanel keepMounted>
                             <div className="space-y-4 px-0.5 pt-0.5 pb-3">
-                              <div className="grid gap-4">
+                              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                 <TextField
                                   id={`session-${index}-title-en`}
                                   label="Session title"
@@ -1139,24 +1159,22 @@ export function AcademyClassPage() {
                                   required
                                   maxLength={200}
                                 />
-                              </div>
-                              {form.kind === "cohort" ? (
-                                <div className="grid gap-4">
-                                  <TextareaField
-                                    id={`session-${index}-curriculum-en`}
-                                    label="Curriculum description"
-                                    value={session.curriculumEn}
-                                    onChange={(value) =>
-                                      updateSession(index, {
-                                        curriculumEn: value,
-                                      })
-                                    }
-                                    required
-                                    maxLength={5_000}
-                                  />
-                                </div>
-                              ) : null}
-                              <div className="grid gap-4 sm:grid-cols-2">
+                                {form.kind === "cohort" ? (
+                                  <div className="grid gap-4">
+                                    <TextareaField
+                                      id={`session-${index}-curriculum-en`}
+                                      label="Curriculum description"
+                                      value={session.curriculumEn}
+                                      onChange={(value) =>
+                                        updateSession(index, {
+                                          curriculumEn: value,
+                                        })
+                                      }
+                                      required
+                                      maxLength={5_000}
+                                    />
+                                  </div>
+                                ) : null}
                                 <TextField
                                   id={`session-${index}-start`}
                                   label="Start"
@@ -1179,8 +1197,6 @@ export function AcademyClassPage() {
                                   }
                                   required
                                 />
-                              </div>
-                              <div className="grid gap-4 sm:grid-cols-2">
                                 <NumberField
                                   id={`session-${index}-capacity`}
                                   label="Session capacity"
@@ -1227,8 +1243,6 @@ export function AcademyClassPage() {
                                     </SelectPopup>
                                   </Select>
                                 </Field>
-                              </div>
-                              <div className="grid gap-4 sm:grid-cols-2">
                                 <Field>
                                   <FieldLabel
                                     htmlFor={`session-${index}-tutor`}
@@ -1358,27 +1372,6 @@ export function AcademyClassPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-
-                    <Field>
-                      <FieldLabel htmlFor="class-audit-reason" required>
-                        Reason for this change
-                      </FieldLabel>
-                      <Textarea
-                        id="class-audit-reason"
-                        required
-                        minLength={3}
-                        maxLength={500}
-                        value={form.reason}
-                        onChange={(event) =>
-                          updateForm("reason", event.target.value)
-                        }
-                        rows={2}
-                        aria-required="true"
-                      />
-                      <FieldDescription>
-                        Saved with the admin actor and before/after snapshot.
-                      </FieldDescription>
-                    </Field>
                   </CardBody>
                   <CardFooter className="flex-wrap justify-end gap-3">
                     {form.id ? (
@@ -1427,6 +1420,57 @@ export function AcademyClassPage() {
                     </Button>
                   </CardFooter>
                 </Card>
+                <ConfirmationDialog
+                  open={reasonAction !== null}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setReasonAction(null);
+                      setActionReason("");
+                    }
+                  }}
+                  title={
+                    reasonAction === "publish"
+                      ? "Publish this class?"
+                      : "Save this draft?"
+                  }
+                  description={
+                    reasonAction === "publish"
+                      ? "Publishing makes this class visible in the student catalog."
+                      : "This draft is not public and does not reserve a room."
+                  }
+                  confirmLabel={
+                    reasonAction === "publish" ? "Publish class" : "Save draft"
+                  }
+                  pending={
+                    reasonSubmitting ||
+                    saveDraft.isPending ||
+                    publishClass.isPending
+                  }
+                  confirmDisabled={
+                    actionReason.trim().length < 3 || coverUploading
+                  }
+                  onConfirm={() => void confirmReasonAction()}
+                >
+                  <Field>
+                    <FieldLabel htmlFor="class-audit-reason" required>
+                      Reason for this change
+                    </FieldLabel>
+                    <Textarea
+                      id="class-audit-reason"
+                      required
+                      minLength={3}
+                      maxLength={500}
+                      value={actionReason}
+                      onChange={(event) => setActionReason(event.target.value)}
+                      rows={4}
+                      aria-required="true"
+                      placeholder="Explain what changed and why."
+                    />
+                    <FieldDescription>
+                      Saved with the admin actor and before/after snapshot.
+                    </FieldDescription>
+                  </Field>
+                </ConfirmationDialog>
               </form>
             )}
           </div>

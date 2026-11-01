@@ -5,6 +5,7 @@ import {
   RoomBookingConflictError,
   RoomBookingNotFoundError,
   RoomBookingStateError,
+  RoomCapacityError,
 } from "./room.errors";
 import type { RoomRepo } from "./room.repo";
 import type { CreateRoomInput, UpdateRoomInput } from "./room.types";
@@ -149,6 +150,15 @@ export function createRoomService(
     const roomRow = await repo.findRoomById(conn, params.roomId);
     if (!roomRow) return { available: false, reason: "room_not_found" };
 
+    const requirement = await repo.findBookingRoomRequirementById(
+      conn,
+      params.bookingId,
+    );
+    if (!requirement) return { available: false, reason: "booking_not_found" };
+    if (roomRow.capacity < requirement.targetGroupSize) {
+      return { available: false, reason: "capacity" };
+    }
+
     await lockRoomForBooking(conn, params.roomId);
 
     const conflicting = await repo.findRoomBookings(
@@ -198,12 +208,37 @@ export function createRoomService(
         throw new RoomBookingStateError(bookingId, currentState ?? "unknown");
       }
 
+      const requirement = await repo.findBookingRoomRequirementById(
+        tx,
+        bookingId,
+      );
+      if (!requirement) throw new RoomBookingNotFoundError(bookingId);
+      if (roomRow.capacity < requirement.targetGroupSize) {
+        throw new RoomCapacityError(
+          roomId,
+          roomRow.capacity,
+          requirement.targetGroupSize,
+        );
+      }
+
       const activeRoom = await repo.findActiveRoomBookingByBookingId(
         tx,
         bookingId,
       );
       if (activeRoom) {
         throw new RoomBookingStateError(bookingId, currentState);
+      }
+
+      const requestedRoom = await repo.findRequestedRoomBookingByBookingId(
+        tx,
+        bookingId,
+      );
+      if (requestedRoom) {
+        await repo.updateRoomBookingStatus(
+          tx,
+          requestedRoom.id,
+          ROOM_BOOKING_STATUS.RELOCATED,
+        );
       }
 
       const conflicting = await repo.findRoomBookingsForUpdate(
@@ -281,6 +316,19 @@ export function createRoomService(
         currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED
       ) {
         throw new RoomBookingStateError(bookingId, currentState ?? "unknown");
+      }
+
+      const requirement = await repo.findBookingRoomRequirementById(
+        tx,
+        bookingId,
+      );
+      if (!requirement) throw new RoomBookingNotFoundError(bookingId);
+      if (roomRow.capacity < requirement.targetGroupSize) {
+        throw new RoomCapacityError(
+          roomId,
+          roomRow.capacity,
+          requirement.targetGroupSize,
+        );
       }
 
       const conflicting = await repo.findRoomBookingsForUpdate(

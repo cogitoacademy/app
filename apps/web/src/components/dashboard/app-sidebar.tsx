@@ -100,6 +100,7 @@ const tutorNavGroups = [
   {
     label: "Teaching",
     items: [
+      { to: "/my-classes", label: "Classes", icon: IconSchool },
       { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
       {
         to: "/class-reports",

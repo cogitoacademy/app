@@ -258,10 +258,14 @@ test("admin publishes both class modes; students see only the published DTO", as
     await adminPage.getByRole("option").first().click();
     await adminPage.locator("#session-1-room").click();
     await adminPage.getByRole("option").first().click();
-    await adminPage
+    await adminPage.getByRole("button", { name: "Save draft" }).click();
+    const createReasonDialog = adminPage.getByRole("dialog");
+    await createReasonDialog
       .getByLabel("Reason for this change")
       .fill("Create a synthetic class E2E fixture");
-    await adminPage.getByRole("button", { name: "Save draft" }).click();
+    await createReasonDialog
+      .getByRole("button", { name: "Save draft" })
+      .click();
     await expect(adminPage.getByText("Class draft saved")).toBeVisible();
 
     const drafts = await rpc<AdminClass[]>(
@@ -324,10 +328,12 @@ test("admin publishes both class modes; students see only the published DTO", as
       })),
     });
     await adminPage.getByLabel("Title", { exact: true }).fill(`${title} stale`);
-    await adminPage
+    await adminPage.getByRole("button", { name: "Save draft" }).click();
+    const staleReasonDialog = adminPage.getByRole("dialog");
+    await staleReasonDialog
       .getByLabel("Reason for this change")
       .fill("Attempt a stale save after a concurrent admin update");
-    await adminPage.getByRole("button", { name: "Save draft" }).click();
+    await staleReasonDialog.getByRole("button", { name: "Save draft" }).click();
     await expect(
       adminPage.getByText(/changed in another admin session/),
     ).toBeVisible();
@@ -344,10 +350,14 @@ test("admin publishes both class modes; students see only the published DTO", as
     await adminPage.reload();
     await adminPage.getByRole("tab", { name: "Drafts & editor" }).click();
     await adminPage.getByRole("button", { name: `Edit ${title}` }).click();
-    await adminPage
+    await adminPage.getByRole("button", { name: "Publish class" }).click();
+    const publishReasonDialog = adminPage.getByRole("dialog");
+    await publishReasonDialog
       .getByLabel("Reason for this change")
       .fill("Publish the reviewed synthetic class fixture");
-    await adminPage.getByRole("button", { name: "Publish class" }).click();
+    await publishReasonDialog
+      .getByRole("button", { name: "Publish class" })
+      .click();
     await expect(adminPage.getByText("Class published")).toBeVisible();
     const publishedCard = adminPage
       .getByText(title, { exact: true })

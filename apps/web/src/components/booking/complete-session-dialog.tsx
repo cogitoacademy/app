@@ -126,7 +126,7 @@ export function CompleteSessionDialog({
     setLastSubmission(null);
   }
 
-  function confirm() {
+  function submitFeedback() {
     const feedback = {
       discussion: cleanDiscussion,
       strengths: cleanStrengths,
@@ -264,7 +264,7 @@ export function CompleteSessionDialog({
             type="button"
             disabled={!valid || pending}
             progress={pending}
-            onClick={() => confirm()}
+            onClick={() => submitFeedback()}
             className="w-full sm:w-auto"
           >
             {adminMode

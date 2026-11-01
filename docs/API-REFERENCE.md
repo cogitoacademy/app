@@ -16,6 +16,10 @@ Class/session cancellation still use their existing preview and confirm RPCs, qu
 
 `admin/getAcademyClass` remains admin-only with `{json: {id}}` input. Its sessions now include `tutorAbsence` (matching current tutor and assignment version, or null) and `tutorLateNoticeCount` on each absence history entry, using the same enrichment as `admin/listAcademyClasses`. The count covers the tutor's late notices across classes. Public `classes/get` remains a redacted catalog response; no admin fields or management procedures are exposed to students. Booking detail consolidation adds no RPC or input changes.
 
+## Public class session status (1 November 2026)
+
+Public `classes/list` and `classes/get` responses now include `endAt` and `state` on each session. The class detail page uses these fields to show an `Upcoming`, `In progress`, `Completed`, or `Cancelled` badge in the curriculum and schedule accordion. The badge sits at the end of the trigger row, directly before the expand indicator. No new procedure or input is added.
+
 ## Reason entry UI (1 November 2026)
 
 Request/response contracts and reason requirements are unchanged. UI markers reflect existing validation: required reasons show a red asterisk; optional reasons show `(optional)`. In particular, `adminContent/create`, `update` and `remove` still require a reason for `resource` entries in the service even though their shared input schema permits omission for calendar entries. Invite-decline/withdrawal reasons remain optional. Moving inline input into a dialog/drawer does not submit an RPC; the existing action submits the saved reason in the normal `{json: input}` envelope.
@@ -271,7 +275,9 @@ links must be HTTP(S) without credentials. New categories must be active catalog
 parents; existing archived categories may be retained on edits.
 
 `content.listCompetitions` remains authenticated. `content.listStudentResources`
-retains its wallet gate and metadata-only projection. File route/IDs are unchanged:
+retains its wallet gate and metadata-only projection. DB mode returns the stable
+`category` ID plus `categoryName` resolved from the parent competition, so the
+student card and filter show a readable label. File route/IDs are unchanged:
 `/content/knowledge-bank/:resourceId/file` independently authenticates, checks
 role + 35-Mark/admin-grant eligibility, and returns private/no-store PDF bytes.
 DB mode includes no Sanity URL, storage key or raw source fields in these DTOs.
@@ -1528,7 +1534,7 @@ used to retrieve production OTPs.
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
+- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, session lifecycle state, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
 - **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment data is never included in this public read contract.
 
 ### `classes.getMyEnrollments`, `classes.createEnrollment`
@@ -1576,11 +1582,11 @@ used to retrieve production OTPs.
 
 - **RPC path:** `/rpc/classes/listSessionReports` (oRPC procedure key `classes.listSessionReports`)
 - **OpenAPI route:** `/classes/sessions/reports/list`
-- **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat and a report exists; admins can list all class sessions.
-- **Input:** `{ classId? }`.
-- **Output:** Ordered session rows containing class/session titles and IDs, class kind, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields.
+- **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat; admins can list all class sessions. Tutor results exclude draft sessions, so pre-publication assignments stay hidden until the class is published.
+- **Input:** `{ classId?, includeUnreported? }`. Students normally receive only sessions with a report; `includeUnreported: true` also returns their funded scheduled sessions for enrollment-guarded meeting access. The class detail uses this flag; the report workspace does not.
+- **Output:** Ordered session rows containing class/session titles and IDs, class kind, class description, curriculum, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields. `meeting` (`{ status, meetingUrl }`, URL only once created) and `room` (`{ name, location }`) are returned to every role for sessions the caller may access, including a funded student seat. A student without a funded allocation receives no row.
   `settlement` is `{ deductedMarks, tutorFeeIdr, settled }` for tutors/admins and `null` for students; before submission it previews the remaining funded-Mark deduction and fee, and after settlement it reflects persisted values.
-- **Privacy:** The DTO contains no student identity/roster or private meeting URL. A released/unfunded seat does not grant report access; funded students retain access to a report after settlement spends the allocation.
+- **Privacy:** The DTO contains no student identity/roster. A released/unfunded seat does not grant session or meeting access; funded students retain access to a report after settlement spends the allocation. Admins can read all sessions.
 - **Reminder behavior:** For an ended, still-scheduled cohort or masterclass session with no report, the existing scheduler sends a deduplicated action notification and email to the assigned tutor at `endAt` and once per 24 elapsed hours while the report remains pending. Catch-up queues only the current due period. A cancelled parent class remains eligible for a retained past session while that session is still scheduled; a cancelled/completed session, completed class, or submitted report stops reminders. The private action link opens `/class-reports`; the reminder does not change delivery or financial state, and no-show expiry alone does not complete a session. The same one-minute scheduler also runs the solo/group/series report-reminder worker: one identity per solo/group booking or series child, assigned-tutor-only notification and email, due at session end and every 24 elapsed hours, with current-period catch-up and a 100-candidate pass limit. Booking and child locks recheck tutor, schedule, report and state before the atomic notification/outbox write. A volatile keyset cursor rotates past failed candidates and resets on process restart; only the pagination key normalizes timestamps to milliseconds; SQL eligibility, current-period selection, and locked schedule fingerprints retain full stored timestamp precision. Separate scheduler counters are `bookingReportRemindersQueued` and `bookingReportRemindersFailed`. The existing global report scan runs in the shared one-minute job alongside second-installment reminders; its `reportRemindersQueued`/`reportRemindersFailed` counters remain separate from installment `remindersQueued`.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
@@ -2436,14 +2442,14 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. The room must be active and its capacity must cover the booking's target group size; an undersized room returns a validation error. Any prior requested room row is marked relocated before the confirmed row is inserted. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
 - **Auth:** Protected
 - **Input:** `{ roomId, startAt, endAt }`
 - **Output:** `{ available: boolean }`
-- **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation (tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+- **Description:** Returns whether a room is free for a time slot. Booking creation performs its own capacity/overlap request inside the booking transaction; this read-only check remains available for admin room controls.
 
 ### `room.relocate`
 
@@ -2452,7 +2458,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Moves a booking to a different room, freeing the previous one. The admin UI invokes this from the booking detail Offline room card after the operator selects the booking contextually.
+- **Description:** Moves a booking to a different room, freeing the previous one. The destination room must be active, at least as large as the booking's target group size, and free for the slot; otherwise the move is rejected. The admin UI invokes this from the booking detail Offline room card after the operator selects the booking contextually.
 
 ### `room.cancelBooking`
 

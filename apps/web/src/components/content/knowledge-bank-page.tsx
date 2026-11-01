@@ -50,7 +50,12 @@ type Resource = {
   title: string;
   description: string | null;
   category: string;
+  categoryName?: string | null;
 };
+
+function resourceCategoryLabel(resource: Resource) {
+  return resource.categoryName?.trim() || getCategoryLabel(resource.category);
+}
 
 function resourceFileUrl(resourceId: string) {
   return `${serverUrl}/content/knowledge-bank/${encodeURIComponent(resourceId)}/file`;
@@ -73,10 +78,15 @@ export function KnowledgeBankPage({
     [resourceItems],
   );
   const access = resources.data?.access;
-  const categories = useMemo(
-    () => [...new Set(items.map((item) => item.category))].toSorted(),
-    [items],
-  );
+  const categories = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const item of items) {
+      labels.set(item.category, resourceCategoryLabel(item));
+    }
+    return [...labels.entries()].toSorted((left, right) =>
+      left[1].localeCompare(right[1]),
+    );
+  }, [items]);
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -193,9 +203,9 @@ export function KnowledgeBankPage({
             <SelectPopup>
               <SelectList>
                 <SelectItem value="all">All categories</SelectItem>
-                {categories.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {getCategoryLabel(item)}
+                {categories.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectList>
@@ -235,7 +245,7 @@ export function KnowledgeBankPage({
                 </CardHeader>
                 <CardBody className="flex items-center justify-between gap-3">
                   <Badge variant="secondary" size="sm">
-                    {getCategoryLabel(resource.category)}
+                    {resourceCategoryLabel(resource)}
                   </Badge>
                   <Button
                     size="sm"
@@ -273,7 +283,7 @@ export function KnowledgeBankPage({
                 <div className="min-w-0">
                   <DrawerTitle>{selectedResource.title}</DrawerTitle>
                   <DrawerDescription>
-                    {getCategoryLabel(selectedResource.category)} resource
+                    {resourceCategoryLabel(selectedResource)} resource
                   </DrawerDescription>
                 </div>
               </DrawerHeader>

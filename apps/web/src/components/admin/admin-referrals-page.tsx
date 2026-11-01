@@ -13,6 +13,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -507,71 +514,93 @@ export function AdminReferralsPage() {
                               ))}
                             </dl>
                           </section>
-                          <details>
-                            <summary className="mb-4 cursor-pointer font-medium">
-                              Technical details and saved terms
-                            </summary>
-                            <dl className="divide-y divide-border">
-                              {[
-                                ["Choice ID", selected.id],
-                                ["Student ID", selected.studentId],
-                                ["Settings version", selected.settingsVersion],
-                                [
-                                  "Welcome terms",
-                                  `${selected.welcomeMarksSnapshot} Marks`,
-                                ],
-                                ["Welcome ledger", selected.welcomeLedgerId],
-                                ["Friend decision", selected.friendDecisionId],
-                                [
-                                  "Friend reward ledger",
-                                  selected.friendLedgerId,
-                                ],
-                                [
-                                  "First eligible completion",
-                                  selected.completionId
-                                    ? `${selected.completionType} · ${selected.completionId}`
-                                    : null,
-                                ],
-                                ["Completed at", date(selected.completedAt)],
-                                ["Reward semester", selected.semesterKey],
-                                [
-                                  "Semester cap at decision",
-                                  selected.semesterCapMarks === null
-                                    ? null
-                                    : `${selected.semesterCapMarks} Marks`,
-                                ],
-                                ["KOL decision", selected.kolDecisionId],
-                                ["Payment ID", selected.paymentId],
-                                ["Payment state", selected.paymentStatus],
-                                [
-                                  "Provider time state",
-                                  selected.providerTimeState,
-                                ],
-                                ["Refund review", selected.refundState],
-                                [
-                                  "Attribution expires",
-                                  date(selected.attributionExpiresAt),
-                                ],
-                              ]
-                                .filter(
-                                  ([, value]) =>
-                                    value != null && value !== "Not provided",
-                                )
-                                .map(([label, value]) => (
-                                  <div
-                                    key={label}
-                                    className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 py-3"
-                                  >
-                                    <dt className="text-sm text-muted">
-                                      {label}
-                                    </dt>
-                                    <dd className="break-all font-mono text-sm">
-                                      {value ?? "Not provided"}
-                                    </dd>
-                                  </div>
-                                ))}
-                            </dl>
-                          </details>
+                          <Accordion>
+                            <AccordionItem className="border-0">
+                              <AccordionHeader>
+                                <AccordionTrigger
+                                  type="button"
+                                  className="font-medium"
+                                >
+                                  Technical details and saved terms
+                                </AccordionTrigger>
+                              </AccordionHeader>
+                              <AccordionPanel>
+                                <dl className="divide-y divide-border">
+                                  {[
+                                    ["Choice ID", selected.id],
+                                    ["Student ID", selected.studentId],
+                                    [
+                                      "Settings version",
+                                      selected.settingsVersion,
+                                    ],
+                                    [
+                                      "Welcome terms",
+                                      `${selected.welcomeMarksSnapshot} Marks`,
+                                    ],
+                                    [
+                                      "Welcome ledger",
+                                      selected.welcomeLedgerId,
+                                    ],
+                                    [
+                                      "Friend decision",
+                                      selected.friendDecisionId,
+                                    ],
+                                    [
+                                      "Friend reward ledger",
+                                      selected.friendLedgerId,
+                                    ],
+                                    [
+                                      "First eligible completion",
+                                      selected.completionId
+                                        ? `${selected.completionType} · ${selected.completionId}`
+                                        : null,
+                                    ],
+                                    [
+                                      "Completed at",
+                                      date(selected.completedAt),
+                                    ],
+                                    ["Reward semester", selected.semesterKey],
+                                    [
+                                      "Semester cap at decision",
+                                      selected.semesterCapMarks === null
+                                        ? null
+                                        : `${selected.semesterCapMarks} Marks`,
+                                    ],
+                                    ["KOL decision", selected.kolDecisionId],
+                                    ["Payment ID", selected.paymentId],
+                                    ["Payment state", selected.paymentStatus],
+                                    [
+                                      "Provider time state",
+                                      selected.providerTimeState,
+                                    ],
+                                    ["Refund review", selected.refundState],
+                                    [
+                                      "Attribution expires",
+                                      date(selected.attributionExpiresAt),
+                                    ],
+                                  ]
+                                    .filter(
+                                      ([, value]) =>
+                                        value != null &&
+                                        value !== "Not provided",
+                                    )
+                                    .map(([label, value]) => (
+                                      <div
+                                        key={label}
+                                        className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 py-3"
+                                      >
+                                        <dt className="text-sm text-muted">
+                                          {label}
+                                        </dt>
+                                        <dd className="break-all font-mono text-sm">
+                                          {value ?? "Not provided"}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                </dl>
+                              </AccordionPanel>
+                            </AccordionItem>
+                          </Accordion>
                           {selected.kind === "kol" ? (
                             <Button
                               className="mt-5"
