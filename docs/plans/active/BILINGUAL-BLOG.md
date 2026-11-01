@@ -554,35 +554,35 @@ Monitoring:
 
 ## Risks and mitigations
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| App becomes a second CMS with no editorial discipline | Content quality drops and slugs drift | Publish gate, slug lock, audit log, two-person review |
-| Marketing caches stale content | Unpublish stays visible | 60-second ISR, verified in acceptance check 9 |
-| Admin uploads an image from another user | Media ownership bypass | Key prefix check against the session user ID |
-| Rich text injection | Stored XSS on the public site | JSON-only blocks, allowlisted link protocols, React rendering |
-| Large body payload slows the article page | Poor LCP | Body size limits, single request per article, ISR |
-| Third-party embed scripts slow the page or track visitors before consent | Poor CWV and privacy exposure | Click-to-load facade, optional poster, no oEmbed fetch, CSP allowlist when CSP ships |
-| Browser-side image normalization fails on an unusual file | Upload blocked | Show a clear error, allow retry, keep the 5 MiB cap as the hard limit; no server-side `sharp` in Phase 1 |
-| Draft content leaks through the public API | Confidential or unapproved content is indexed | Public queries filter `status = 'published'`; integration tests assert it |
-| Sanity and app both claim to own content | Editors edit the wrong system | Blog is app-only; Sanity docs state blog is out of scope until full migration |
-| Schema change breaks existing content modules | Migration risk | Separate migration, scratch restore, no changes to existing tables |
-| Full Sanity removal assumed | Scope explosion | Explicit non-goal; separate plan if requested |
+| Risk                                                                     | Impact                                        | Mitigation                                                                                               |
+| ------------------------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| App becomes a second CMS with no editorial discipline                    | Content quality drops and slugs drift         | Publish gate, slug lock, audit log, two-person review                                                    |
+| Marketing caches stale content                                           | Unpublish stays visible                       | 60-second ISR, verified in acceptance check 9                                                            |
+| Admin uploads an image from another user                                 | Media ownership bypass                        | Key prefix check against the session user ID                                                             |
+| Rich text injection                                                      | Stored XSS on the public site                 | JSON-only blocks, allowlisted link protocols, React rendering                                            |
+| Large body payload slows the article page                                | Poor LCP                                      | Body size limits, single request per article, ISR                                                        |
+| Third-party embed scripts slow the page or track visitors before consent | Poor CWV and privacy exposure                 | Click-to-load facade, optional poster, no oEmbed fetch, CSP allowlist when CSP ships                     |
+| Browser-side image normalization fails on an unusual file                | Upload blocked                                | Show a clear error, allow retry, keep the 5 MiB cap as the hard limit; no server-side `sharp` in Phase 1 |
+| Draft content leaks through the public API                               | Confidential or unapproved content is indexed | Public queries filter `status = 'published'`; integration tests assert it                                |
+| Sanity and app both claim to own content                                 | Editors edit the wrong system                 | Blog is app-only; Sanity docs state blog is out of scope until full migration                            |
+| Schema change breaks existing content modules                            | Migration risk                                | Separate migration, scratch restore, no changes to existing tables                                       |
+| Full Sanity removal assumed                                              | Scope explosion                               | Explicit non-goal; separate plan if requested                                                            |
 
 ## Deferred
 
-| Item | Reason | Revisit when |
-| --- | --- | --- |
-| Student stories | No consent model or student entity | Legal review and offline consent process exist |
-| Public tutor profiles | Decision D2 unresolved | Profile route ships |
-| Program pages and program CTA | No public program routes | Program pages ship |
-| Subcategory hubs | Thin pages | A subcategory has two published articles |
-| Tag pages | Thin pages | A tag has five published articles |
-| RSS | No indexing need for the pilot | Cadence is stable |
-| `VideoObject` | No valid video source | Self-hosted or YouTube video with transcript exists |
-| Custom analytics events | No analytics product or consent flow | Analytics owner exists |
-| Non-admin editor role | Needs authorization design | More than one editor is hired |
-| Cross-service publish webhook | 60-second ISR is sufficient | Freshness requirement tightens |
-| Full Sanity removal | Competitions and resources still depend on it | Separate migration approved |
+| Item                          | Reason                                        | Revisit when                                        |
+| ----------------------------- | --------------------------------------------- | --------------------------------------------------- |
+| Student stories               | No consent model or student entity            | Legal review and offline consent process exist      |
+| Public tutor profiles         | Decision D2 unresolved                        | Profile route ships                                 |
+| Program pages and program CTA | No public program routes                      | Program pages ship                                  |
+| Subcategory hubs              | Thin pages                                    | A subcategory has two published articles            |
+| Tag pages                     | Thin pages                                    | A tag has five published articles                   |
+| RSS                           | No indexing need for the pilot                | Cadence is stable                                   |
+| `VideoObject`                 | No valid video source                         | Self-hosted or YouTube video with transcript exists |
+| Custom analytics events       | No analytics product or consent flow          | Analytics owner exists                              |
+| Non-admin editor role         | Needs authorization design                    | More than one editor is hired                       |
+| Cross-service publish webhook | 60-second ISR is sufficient                   | Freshness requirement tightens                      |
+| Full Sanity removal           | Competitions and resources still depend on it | Separate migration approved                         |
 
 ## Estimate
 
