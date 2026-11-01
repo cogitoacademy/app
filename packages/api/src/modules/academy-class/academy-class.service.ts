@@ -956,10 +956,7 @@ export function createAcademyClassService(deps: {
       kind: input.kind,
       competitionId: input.competitionId,
       titleEn: input.titleEn,
-
       descriptionEn: input.descriptionEn,
-
-      coverKey: input.coverKey ?? null,
       minimumEnrollment:
         input.kind === "cohort" ? input.minimumEnrollment : null,
       minimumCheckAt: input.kind === "cohort" ? input.minimumCheckAt : null,
@@ -1122,10 +1119,7 @@ export function createAcademyClassService(deps: {
       kind: record.kind,
       competitionId: record.competitionId,
       titleEn: record.titleEn,
-
       descriptionEn: record.descriptionEn,
-
-      coverKey: record.coverKey,
       minimumEnrollment: record.minimumEnrollment,
       minimumCheckAt: record.minimumCheckAt,
       cohortFullRateMarks: record.cohortFullRateMarks,

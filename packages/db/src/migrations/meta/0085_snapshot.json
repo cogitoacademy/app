@@ -1415,12 +1415,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "cover_key": {
-          "name": "cover_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "minimum_enrollment": {
           "name": "minimum_enrollment",
           "type": "integer",
@@ -10049,6 +10043,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "paused_at": {
+          "name": "paused_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "attribution_window_days": {
           "name": "attribution_window_days",

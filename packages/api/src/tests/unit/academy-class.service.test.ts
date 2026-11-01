@@ -13,7 +13,6 @@ const published = {
   kind: "cohort",
   titleEn: "Class",
   descriptionEn: "Description",
-  coverKey: null,
   cohortFullRateMarks: 20,
   cohortHalfRateMarks: 22,
   cohortSingleRateMarks: 25,
@@ -1035,7 +1034,6 @@ describe("academy class service reads and meeting recovery", () => {
       createdAt: new Date("2026-10-03"),
       titleId: undefined,
       descriptionId: null,
-      coverKey: "cover/key",
       cohortFullRateMarks: null,
       cohortHalfRateMarks: 0,
       cohortSingleRateMarks: null,
@@ -1047,7 +1045,6 @@ describe("academy class service reads and meeting recovery", () => {
     const rows = await f.service.listPublished();
     expect(rows[0]).toMatchObject({
       id: "optional",
-      coverKey: "cover/key",
       cohortFullRateMarks: null,
       cohortHalfRateMarks: 0,
       cohortSingleRateMarks: null,

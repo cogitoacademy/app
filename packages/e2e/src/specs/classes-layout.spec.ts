@@ -33,7 +33,6 @@ const cohort = {
     "Build a confident approach to challenging competition problems with guided practice, discussion, and feedback.",
   competition,
   competitionId: competition.id,
-  coverKey: null,
   cohortFullRateMarks: 20,
   cohortHalfRateMarks: 22,
   cohortSingleRateMarks: 25,

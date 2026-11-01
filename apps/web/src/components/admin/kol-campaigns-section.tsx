@@ -3,10 +3,16 @@
 import Loader from "@/components/loader";
 
 import { createPortal } from "react-dom";
-import { IconRefresh, IconSpeakerphone } from "@tabler/icons-react";
+import {
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconRefresh,
+  IconSpeakerphone,
+} from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -26,7 +32,9 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 import { orpc } from "@/utils/orpc";
 import {
@@ -66,6 +74,35 @@ export function KolCampaignsSection({
   const [errors, setErrors] = useState<
     Partial<Record<keyof CampaignDraft, string>>
   >({});
+  const [pauseTarget, setPauseTarget] = useState<{
+    id: string;
+    name: string;
+    paused: boolean;
+  } | null>(null);
+  const [pauseReason, setPauseReason] = useState("");
+  const [pauseError, setPauseError] = useState<string | null>(null);
+  const pauseMutation = useMutation(
+    orpc.adminReferral.setKolCampaignPaused.mutationOptions({
+      retry: false,
+      onSuccess: () => {
+        const wasPaused = pauseTarget?.paused;
+        setPauseTarget(null);
+        setPauseReason("");
+        setPauseError(null);
+        toastManager.add({
+          title: wasPaused ? "KOL campaign resumed" : "KOL campaign paused",
+          description: wasPaused
+            ? "New signups can use this code again."
+            : "Existing signups keep their earned commission window.",
+          type: "success",
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminReferral.listKolCampaigns.key(),
+        });
+      },
+      onError: (error) => setPauseError(error.message),
+    }),
+  );
   const create = useMutation(
     orpc.adminReferral.createKolCampaign.mutationOptions({
       retry: false,
@@ -263,6 +300,8 @@ export function KolCampaignsSection({
                     <TableHead>Expiry (WIB)</TableHead>
                     <TableHead>Attribution window</TableHead>
                     <TableHead>Commission</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -283,6 +322,36 @@ export function KolCampaignsSection({
                         Rp{campaign.flatAmountIdr.toLocaleString("id-ID")} +{" "}
                         {campaign.percentBps / 100}%
                       </TableCell>
+                      <TableCell>
+                        {campaign.pausedAt ? (
+                          <Badge variant="warning">Paused</Badge>
+                        ) : (
+                          <Badge variant="success">Active</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="sm"
+                          onClick={() => {
+                            setPauseTarget({
+                              id: campaign.id,
+                              name: campaign.name,
+                              paused: Boolean(campaign.pausedAt),
+                            });
+                            setPauseReason("");
+                            setPauseError(null);
+                          }}
+                        >
+                          {campaign.pausedAt ? (
+                            <IconPlayerPlay />
+                          ) : (
+                            <IconPlayerPause />
+                          )}
+                          {campaign.pausedAt ? "Resume" : "Pause"}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -291,6 +360,57 @@ export function KolCampaignsSection({
           )}
         </div>
       </CardBody>
+      <ConfirmationDialog
+        open={pauseTarget !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && pauseMutation.isPending) return;
+          if (!nextOpen) {
+            setPauseTarget(null);
+            setPauseReason("");
+            setPauseError(null);
+          }
+        }}
+        title={
+          pauseTarget?.paused
+            ? `Resume ${pauseTarget.name}?`
+            : `Pause ${pauseTarget?.name ?? "campaign"}?`
+        }
+        description={
+          pauseTarget?.paused
+            ? "New signups can use this code again. Existing referral choices are unchanged."
+            : "Only new signups stop. Students already signed up keep their commission window."
+        }
+        confirmLabel={
+          pauseTarget?.paused ? "Resume campaign" : "Pause campaign"
+        }
+        pending={pauseMutation.isPending}
+        confirmDisabled={pauseReason.trim().length < 3}
+        onConfirm={() => {
+          if (!pauseTarget) return;
+          pauseMutation.mutate({
+            id: pauseTarget.id,
+            paused: !pauseTarget.paused,
+            reason: pauseReason.trim(),
+          });
+        }}
+      >
+        <Field>
+          <FieldLabel htmlFor="kol-pause-reason">Reason</FieldLabel>
+          <Textarea
+            id="kol-pause-reason"
+            value={pauseReason}
+            minLength={3}
+            maxLength={600}
+            required
+            onChange={(event) => setPauseReason(event.target.value)}
+          />
+        </Field>
+        {pauseError ? (
+          <Text className="mt-2 text-sm text-danger-foreground" role="alert">
+            {pauseError}
+          </Text>
+        ) : null}
+      </ConfirmationDialog>
     </Card>
   );
 }

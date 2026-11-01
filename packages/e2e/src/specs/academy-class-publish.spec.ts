@@ -37,7 +37,6 @@ type AdminClass = {
   competitionId: string;
   titleEn: string;
   descriptionEn: string;
-  coverKey: string | null;
   minimumEnrollment: number | null;
   minimumCheckAt: string | null;
   cohortFullRateMarks: number | null;
@@ -307,7 +306,6 @@ test("admin publishes both class modes; students see only the published DTO", as
       competitionId: draft.competitionId,
       titleEn: draft.titleEn,
       descriptionEn: "External reviewer update to the synthetic fixture.",
-      coverKey: draft.coverKey,
       tutorFeeIdr: draft.tutorFeeIdr,
       minimumEnrollment: draft.minimumEnrollment,
       minimumCheckAt: draft.minimumCheckAt,

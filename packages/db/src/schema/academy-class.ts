@@ -25,7 +25,6 @@ export const academyClass = pgTable(
       .references(() => subjectCategory.id, { onDelete: "restrict" }),
     titleEn: text("title_en").notNull(),
     descriptionEn: text("description_en").notNull(),
-    coverKey: text("cover_key"),
     minimumEnrollment: integer("minimum_enrollment"),
     minimumCheckAt: timestamp("minimum_check_at", { withTimezone: true }),
     minimumCheckResolvedAt: timestamp("minimum_check_resolved_at", {

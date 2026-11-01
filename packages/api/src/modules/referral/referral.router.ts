@@ -15,6 +15,7 @@ import {
   createKolCampaignInput,
   listKolCommissionsInput,
   saveGoogleChoiceInput,
+  setKolCampaignPausedInput,
   updateReferralSettingsInput,
 } from "./referral.types";
 
@@ -128,6 +129,16 @@ export function createReferralRouter(handler: ReferralHandler) {
         })
         .input(z.void())
         .handler(handler.listKolCampaigns),
+
+      setKolCampaignPaused: adminProcedure
+        .route({
+          method: "POST",
+          path: "/admin/referral/kol-campaigns/pause",
+          tags: ["Admin", "Referral"],
+          summary: "Pause or resume new signups for a KOL campaign",
+        })
+        .input(setKolCampaignPausedInput)
+        .handler(handler.setKolCampaignPaused),
 
       listKolCommissions: adminProcedure
         .route({

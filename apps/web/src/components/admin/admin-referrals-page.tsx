@@ -55,6 +55,7 @@ import {
 import { orpc } from "@/utils/orpc";
 import { AdminKolCommissionsPage } from "./admin-kol-commissions-page";
 import { KolCampaignsSection } from "./kol-campaigns-section";
+import { ReferralSettingsCard } from "./referral-settings-card";
 import { referralUsageStatus } from "./referral-usage-status";
 
 function date(value: string | Date | null) {
@@ -131,6 +132,7 @@ export function AdminReferralsPage() {
       </div>
       {view === "commissions" ? <AdminKolCommissionsPage /> : null}
       <div hidden={view !== "activity"} className="min-w-0 space-y-6">
+        <ReferralSettingsCard />
         <aside className="space-y-4" aria-label="Referral summary">
           {data ? (
             <>

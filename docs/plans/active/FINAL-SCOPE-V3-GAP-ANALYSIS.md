@@ -64,29 +64,30 @@ The biggest product gaps are:
 
 ## Missing items
 
-| ID  | Missing item                                                                                                                           | Why it matters                                                                                           | Current evidence                                                                                                  |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| M01 | **Upcoming classes** list with every masterclass and every available cohort session, each cohort session tagged with its parent cohort | Final scope requires a second list in date order; current catalog only shows whole class cards           | No `Upcoming classes` text or component in app or website; cohort sessions are only visible after opening a class |
-| M02 | Class cover image display on app cards, class detail, and website activities                                                           | Cover is uploaded and stored but never shown                                                             | `coverKey` exists in schema/API; only admin editor references it; no image renders from it                        |
-| M03 | Website Activities as three sections: Masterclasses, Cohorts, Other                                                                    | Current page is one Classes section with a filter plus Other                                             | `activities-content.tsx` renders one Classes section and `OtherActivities`                                        |
-| M04 | Individual cohort sessions in website Activities and the cohort-session parent tag                                                     | Current website shows class cards, not joinable cohort sessions                                          | `activities-api.ts` maps class records only                                                                       |
-| M05 | Admin UI for welcome Marks, friend reward, and semester cap settings                                                                   | Final scope calls these admin settings; API exists but no screen uses it                                 | `adminReferral.getSettings/updateSettings` exist; no web caller                                                   |
-| M06 | KOL campaign pause action                                                                                                              | Final scope says pausing or expiring stops new sign-ups only                                             | Campaigns have activation/expiry; no pause control or API                                                         |
-| M07 | Manual bank-transfer top-up credited by admin counts for KOL                                                                           | Final scope explicitly includes this trigger; app excludes manual top-ups and has no admin wallet credit | No admin wallet credit/adjust procedure; only wallet read and ledger                                              |
-| M08 | Legal name and NIK required when tutor completes profile                                                                               | Final scope says required on profile completion; app only blocks payout preparation                      | Tax profile fields are optional in `tutorTaxProfileInput`; Diego's profile happens to be complete                 |
+| ID  | Item                                                   | Status                                                                                                                                     |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| M01 | Upcoming classes list with cohort-session parent badge | **Done.** App classes page lists future sessions sorted by date, with a parent badge.                                                      |
+| M02 | Class cover display                                    | **Removed by decision.** Cover storage, upload, schema column, and API field are gone.                                                     |
+| M03 | Website Activities split into three sections           | **Kept as-is by decision.** Single Classes section plus Other.                                                                             |
+| M04 | Individual cohort sessions on website Activities       | **Done.** Upcoming cohort sessions list with parent badge and app handoff.                                                                 |
+| M05 | Admin referral settings UI                             | **Done.** Edit dialog with welcome Marks, friend reward, semester cap, reason, and version check.                                          |
+| M06 | KOL campaign pause                                     | **Done.** Pause/resume action stores `pausedAt`; new signups stop, existing choices keep their window.                                     |
+| M07 | Manual bank-transfer top-up credited by admin          | **Open decision.** PDF says the admin-credited top-up counts for KOL commission. Tutor and KOL payout recording already exists separately. |
+| M08 | Legal name/NIK required at profile completion          | **Kept as-is by decision.** Tax fields stay optional until payout preparation.                                                             |
 
 ## Behavior mismatches
 
-| ID  | Final-scope rule                                                                                    | Current app                                                                    |
-| --- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| D01 | If exact top-up costs at least the next package, checkout offers the package **and not** the top-up | Balance page keeps both custom amount and recommended package visible          |
-| D02 | Class creation includes a supplied cover image                                                      | Cover upload is allowed but optional; no public display exists                 |
-| D03 | Website Activities has three named sections                                                         | Website has one Classes section with a Cohorts/Masterclasses filter plus Other |
-| D04 | Admin economy page shows the 1-to-6 table for each competition before saving                        | Preview selects one competition at a time                                      |
+| ID  | Final-scope rule                                                                                    | Current app                                                           |
+| --- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| D01 | If exact top-up costs at least the next package, checkout offers the package **and not** the top-up | Balance page keeps both custom amount and recommended package visible |
+| D02 | Class creation includes a supplied cover image                                                      | **Removed by decision.** No cover field or asset.                     |
+| D03 | Website Activities has three named sections                                                         | **Kept as-is by decision.** One Classes section plus Other.           |
+| D04 | Admin economy page shows the 1-to-6 table for each competition before saving                        | Preview selects one competition at a time                             |
 
-D01 and D02 need an explicit product decision before changing behavior, because
-the earlier PRD kept both custom and recommended choices. The newer final scope
-should win if it is the approved baseline.
+D01 and D04 still need an explicit product decision before changing behavior,
+because the earlier PRD kept both custom and recommended choices and a
+single-competition preview. The newer final scope should win if it is the
+approved baseline.
 
 ## Partially verified
 

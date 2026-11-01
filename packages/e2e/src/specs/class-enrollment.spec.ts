@@ -162,7 +162,6 @@ async function createPublishedCohort(
     titleId: null,
     descriptionEn: "Synthetic cohort for T05 enrollment browser coverage.",
     descriptionId: null,
-    coverKey: null,
     tutorFeeIdr: 400_000,
     reason: "Create a dedicated enrollment browser-test fixture",
     minimumEnrollment: options.minimumEnrollment ?? 1,

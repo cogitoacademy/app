@@ -87,6 +87,15 @@ export function createReferralHandler(service: ReferralService) {
       run(() => service.adjustKolCommission(context.session!.user.id, input)),
     listKolCampaigns: () => run(() => service.listKolCampaigns()),
 
+    setKolCampaignPaused: ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: Parameters<ReferralService["setKolCampaignPaused"]>[1];
+    }) =>
+      run(() => service.setKolCampaignPaused(context.session!.user.id, input)),
+
     listKolCommissions: ({
       input,
     }: {

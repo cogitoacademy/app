@@ -10,7 +10,7 @@ import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia
 
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconDeviceFloppy,
@@ -63,7 +63,6 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { getUserFacingError } from "@/lib/error-message";
-import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 
 import { mergeAcademyClassQueryResults } from "./academy-class-page-utils";
@@ -84,14 +83,6 @@ type SessionForm = {
   roomId: string;
   tutorId: string;
 };
-const COVER_IMAGE_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-] as const;
-const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024;
-type CoverImageType = (typeof COVER_IMAGE_TYPES)[number];
 
 type DraftForm = {
   id?: string;
@@ -100,7 +91,6 @@ type DraftForm = {
   competitionId: string;
   titleEn: string;
   descriptionEn: string;
-  coverKey: string;
   tutorFeeIdr: string;
   minimumEnrollment: string;
   minimumCheckAt: string;
@@ -127,7 +117,6 @@ const emptyDraft = (kind: ClassKind = "cohort"): DraftForm => ({
   competitionId: "",
   titleEn: "",
   descriptionEn: "",
-  coverKey: "",
   tutorFeeIdr: kind === "cohort" ? "400000" : "300000",
   minimumEnrollment: "",
   minimumCheckAt: "",
@@ -154,7 +143,6 @@ function draftFromRecord(record: ClassRecord): DraftForm {
     competitionId: record.competitionId,
     titleEn: record.titleEn,
     descriptionEn: record.descriptionEn,
-    coverKey: record.coverKey ?? "",
     tutorFeeIdr: String(record.tutorFeeIdr),
     minimumEnrollment: String(record.minimumEnrollment ?? ""),
     minimumCheckAt: toLocalDateTime(record.minimumCheckAt),
@@ -300,8 +288,6 @@ export function AcademyClassPage() {
   const [openSessions, setOpenSessions] = useState<number[]>([0]);
   const [workspace, setWorkspace] = useState("published");
   const [showDrafts, setShowDrafts] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [reasonAction, setReasonAction] = useState<"save" | "publish" | null>(
     null,
   );
@@ -435,82 +421,6 @@ export function AcademyClassPage() {
     }));
   }
 
-  async function uploadCover(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    if (!COVER_IMAGE_TYPES.includes(file.type as CoverImageType)) {
-      toastManager.add({
-        title: "Unsupported cover image",
-        description: "Choose a PNG, JPEG, WebP, or GIF image.",
-        type: "error",
-      });
-      input.value = "";
-      return;
-    }
-    if (file.size > MAX_COVER_IMAGE_BYTES) {
-      toastManager.add({
-        title: "Cover image is too large",
-        description: "Choose an image up to 5 MB.",
-        type: "error",
-      });
-      input.value = "";
-      return;
-    }
-
-    setCoverUploading(true);
-    try {
-      const signed = await client.upload.createUploadUrl({
-        filename: file.name,
-        contentType: file.type as CoverImageType,
-        contentLength: file.size,
-      });
-      const uploadUrl =
-        resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
-      const isLocalUpload = signed.uploadUrl.startsWith("/");
-      const fields = signed.fields ?? {};
-      let response: Response;
-
-      if (Object.keys(fields).length > 0) {
-        const body = new FormData();
-        Object.entries(fields).forEach(([key, value]) =>
-          body.append(key, value),
-        );
-        body.append("file", file, file.name);
-        response = await fetch(uploadUrl, {
-          method: signed.method,
-          body,
-        });
-      } else {
-        response = await fetch(uploadUrl, {
-          method: signed.method,
-          credentials: isLocalUpload ? "include" : "omit",
-          headers: { "content-type": file.type },
-          body: file,
-        });
-      }
-
-      if (!response.ok) throw new Error("Cover image upload failed.");
-      setForm((current) => ({ ...current, coverKey: signed.key }));
-      setCoverPreviewUrl(resolveProfileImageUrl(signed.publicUrl) ?? null);
-      toastManager.add({
-        title: "Cover image uploaded",
-        description: "Save the draft to attach this cover image.",
-        type: "success",
-      });
-    } catch (error) {
-      toastManager.add({
-        title: "Cover image could not be uploaded",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    } finally {
-      setCoverUploading(false);
-      input.value = "";
-    }
-  }
-
   function draftInputFromForm(reason: string) {
     const sessions = form.sessions.map((session) => ({
       ...(session.id ? { id: session.id } : {}),
@@ -533,7 +443,6 @@ export function AcademyClassPage() {
       competitionId: form.competitionId,
       titleEn: form.titleEn,
       descriptionEn: form.descriptionEn,
-      coverKey: form.coverKey,
       tutorFeeIdr: Number(form.tutorFeeIdr),
       reason,
       sessions,
@@ -665,10 +574,8 @@ export function AcademyClassPage() {
               type="button"
               size="icon"
               aria-label="New class"
-              disabled={coverUploading}
               onClick={() => {
                 setForm(emptyDraft());
-                setCoverPreviewUrl(null);
                 setWorkspace("drafts");
                 setShowDrafts(false);
               }}
@@ -872,12 +779,10 @@ export function AcademyClassPage() {
                             type="button"
                             variant="plain"
                             size="sm"
-                            disabled={coverUploading}
                             aria-label={`Edit ${record.titleEn}`}
                             onClick={() => {
                               setForm(draftFromRecord(record));
                               setShowDrafts(false);
-                              setCoverPreviewUrl(null);
                             }}
                           >
                             <IconEdit />
@@ -977,35 +882,6 @@ export function AcademyClassPage() {
                           required
                           maxLength={5_000}
                         />
-                        <Field>
-                          <FieldLabel htmlFor="class-cover">
-                            Cover image
-                          </FieldLabel>
-                          <Input
-                            id="class-cover"
-                            type="file"
-                            accept={COVER_IMAGE_TYPES.join(",")}
-                            disabled={coverUploading}
-                            onChange={(event) => void uploadCover(event)}
-                          />
-                          <FieldDescription>
-                            {coverUploading
-                              ? "Uploading cover image…"
-                              : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
-                          </FieldDescription>
-                          <Text className="text-muted text-sm">
-                            {form.coverKey
-                              ? "A cover image is attached to this draft. Save to keep it."
-                              : "No cover image is attached yet."}
-                          </Text>
-                          {coverPreviewUrl ? (
-                            <img
-                              src={coverPreviewUrl}
-                              alt=""
-                              className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
-                            />
-                          ) : null}
-                        </Field>
                       </div>
                     </div>
                   </CardBody>
@@ -1379,11 +1255,7 @@ export function AcademyClassPage() {
                         type="submit"
                         name="class-action"
                         value="publish"
-                        disabled={
-                          saveDraft.isPending ||
-                          publishClass.isPending ||
-                          coverUploading
-                        }
+                        disabled={saveDraft.isPending || publishClass.isPending}
                       >
                         {publishClass.isPending
                           ? "Publishing…"
@@ -1394,14 +1266,9 @@ export function AcademyClassPage() {
                       <Button
                         type="button"
                         variant="secondary"
-                        disabled={
-                          coverUploading ||
-                          saveDraft.isPending ||
-                          publishClass.isPending
-                        }
+                        disabled={saveDraft.isPending || publishClass.isPending}
                         onClick={() => {
                           setForm(emptyDraft());
-                          setCoverPreviewUrl(null);
                         }}
                       >
                         Cancel edit
@@ -1409,11 +1276,7 @@ export function AcademyClassPage() {
                     ) : null}
                     <Button
                       type="submit"
-                      disabled={
-                        saveDraft.isPending ||
-                        publishClass.isPending ||
-                        coverUploading
-                      }
+                      disabled={saveDraft.isPending || publishClass.isPending}
                     >
                       <IconDeviceFloppy />
                       {saveDraft.isPending ? "Saving…" : "Save draft"}
@@ -1446,9 +1309,7 @@ export function AcademyClassPage() {
                     saveDraft.isPending ||
                     publishClass.isPending
                   }
-                  confirmDisabled={
-                    actionReason.trim().length < 3 || coverUploading
-                  }
+                  confirmDisabled={actionReason.trim().length < 3}
                   onConfirm={() => void confirmReasonAction()}
                 >
                   <Field>

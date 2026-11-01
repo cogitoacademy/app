@@ -380,7 +380,11 @@ reason }`; creates an audited settings revision.
 flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
   globally unique, and at least one commission term is positive.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
-  campaign dates, code, attribution window, and saved terms.
+  campaign dates, code, attribution window, saved terms, and `pausedAt`.
+- `POST /rpc/adminReferral/setKolCampaignPaused` — admin; input
+  `{ id, paused, reason }`. Pausing stores `pausedAt` and stops new sign-ups
+  only; existing referral choices keep their attribution window. Resuming
+  clears `pausedAt`. The action is audited and idempotent.
 
 `POST /rpc/adminReferral/listKolCommissions` — admin; input
 `{ limit?: 1..100 (default 50), cursor?: string }`; returns
@@ -1497,10 +1501,10 @@ used to retrieve production OTPs.
 
 - **RPC paths:** `/rpc/admin/listAcademyClasses`, `/rpc/admin/getAcademyClass`, `/rpc/admin/saveAcademyClassDraft`
 - **Auth:** Admin
-- **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, optional Indonesian fields, optional `coverKey`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
+- **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
 - **Output:** Admin class/session rows with competition, tutor, and managed-room labels. Save returns the saved class and ordered sessions.
 - **Admin view refresh:** The page combines separate published and postponed list results by class ID and keeps the highest-version record while those query snapshots refresh. This client-side rule does not change either RPC's input or output.
-- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; approved class assets remain pending. Drafts are not public and do not reserve rooms.
+- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. Drafts are not public and do not reserve rooms.
 - **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session; tutor fee defaults to Rp400,000 per session in either delivery mode and is editable per class. Masterclasses default to 5 Marks and Rp300,000 tutor fee, also editable per class. Publication requires each session's fee snapshot to match the class fee; reassignment does not change it.
 - **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
 

@@ -1,5 +1,27 @@
 # Cogito App — Codebase Context
 
+## Class catalog and referral controls (2 November 2026)
+
+The student class page now has an **Upcoming classes** section above the class
+catalog. It lists every future session from the filtered classes, sorted by
+start time, with a badge naming the parent cohort or masterclass. Cancelled and
+past sessions are excluded. The class catalog cards remain unchanged.
+
+Class cover storage and upload were removed from the schema, API, admin editor
+and public projection. Class cards and details render text only. Migration 0085
+drops `academy_class.cover_key`.
+
+Admin Referrals now exposes a referral settings card with an edit dialog for
+welcome Marks, friend reward and semester cap. The dialog sends the loaded
+settings version and a required reason, and surfaces stale-version errors.
+KOL campaigns can be paused or resumed with a reason. Pausing stores `pausedAt`
+and stops new sign-ups only; existing referral choices keep their attribution
+window. Migration 0085 also adds `referral_campaign.paused_at`.
+
+The website Activities page keeps its single Classes section and adds an
+**Upcoming cohort sessions** list. Each row is tagged with its parent cohort
+and opens the same app handoff modal.
+
 ## Public class session status badges (1 November 2026)
 
 The public class detail page shows one status badge per session in **Curriculum and schedule**: `Upcoming` (info), `In progress` (primary), `Completed` (secondary), or `Cancelled` (danger). The badge sits at the end of the accordion trigger row, immediately before the expand indicator, and moves below the title on narrow screens so a long title keeps the full row width. Sessions sort in three groups: live session first, then upcoming sessions by start time, then completed and cancelled sessions by sequence number. A completed session never sits above the next session a student should prepare for. Public `classes/list` and `classes/get` now expose session `endAt` and `state` for this label; no meeting, room, tutor-fee, or roster data is added. The label and order come from `apps/web/src/lib/class-session-presentation.ts`.

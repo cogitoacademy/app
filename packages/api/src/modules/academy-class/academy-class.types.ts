@@ -33,7 +33,6 @@ const commonDraftFields = {
   competitionId: z.string().trim().min(1).max(128),
   titleEn: z.string().trim().min(1).max(200),
   descriptionEn: z.string().trim().min(1).max(5_000),
-  coverKey: nullableText(1_000),
   tutorFeeIdr: z.number().int().min(1).max(2_000_000_000),
   reason: z.string().trim().min(3).max(500),
 };

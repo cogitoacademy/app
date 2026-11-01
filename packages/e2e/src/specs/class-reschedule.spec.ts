@@ -28,7 +28,6 @@ function classRecord() {
     descriptionId: null,
     competition,
     competitionId: competition.id,
-    coverKey: null,
     cohortFullRateMarks: 20,
     cohortHalfRateMarks: 22,
     cohortSingleRateMarks: 25,

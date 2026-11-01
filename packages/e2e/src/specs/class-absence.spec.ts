@@ -235,7 +235,6 @@ test("admin sees absence history and replaces the tutor without changing the ses
     titleId: null,
     descriptionEn: "A synthetic class for browser acceptance.",
     descriptionId: null,
-    coverKey: null,
     tutorFeeIdr: 400_000,
     minimumEnrollment: 1,
     minimumCheckAt: null,
