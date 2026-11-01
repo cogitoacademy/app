@@ -13,6 +13,7 @@ type DashboardInsightRoute =
   | "/admin-achievements"
   | "/admin-operations"
   | "/admin-tutors"
+  | "/admin-tutor-payouts"
   | "/availability"
   | "/bookings"
   | "/profile";
