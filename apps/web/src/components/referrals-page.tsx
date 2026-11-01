@@ -105,7 +105,7 @@ export function ReferralsPage() {
         <Heading id="referral-flow" level={2} size="sm">
           How referrals work
         </Heading>
-        <ol className="grid gap-5 sm:grid-cols-3">
+        <ol className="grid gap-5 sm:grid-cols-3 sm:gap-0">
           {[
             [
               "Share your code",
@@ -120,11 +120,21 @@ export function ReferralsPage() {
               `After their first completed paid session, you receive up to ${data.settings.friendRewardMarks} Marks, within your semester cap.`,
             ],
           ].map(([title, description], index) => (
-            <li
-              key={title}
-              className="space-y-2 border-t-2 border-primary pt-3"
-            >
-              <Text className="text-sm text-muted">Step {index + 1}</Text>
+            <li key={title} className="relative space-y-2 sm:pr-5">
+              <div className="relative flex items-center pb-2">
+                <span
+                  className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground"
+                  aria-label={`Step ${index + 1}`}
+                >
+                  {index + 1}
+                </span>
+                {index < 2 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-8 hidden h-0.5 w-full bg-primary sm:block"
+                  />
+                )}
+              </div>
               <Text className="font-semibold">{title}</Text>
               <Text className="text-muted">{description}</Text>
             </li>
