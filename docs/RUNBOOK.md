@@ -362,7 +362,8 @@ No provider send or real Gmail/Outlook rendering is part of these checks.
 No migration is needed. Restart the API after loading the new adminReferral
 listUsage procedure, then open `/admin-referrals` as admin. Filters are literal
 search and choice type; totals cover matching saved choices. KOL settlement
-payments remain on `/admin-kol-commissions`. Do not interpret pending/zero rewards
+payments are available on `/admin-referrals?view=commissions` (the old
+`/admin-kol-commissions` URL redirects there). Do not interpret pending/zero rewards
 as paid or decision commission as cash settlement.
 Focused unit checks: `bun test packages/api/src/tests/unit/referral-usage.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`.
 From packages/e2e: `bunx playwright test --config playwright.admin-referrals.config.ts`.
@@ -4772,3 +4773,5 @@ Selected runs replace only their own `coverage/<group>/counters.json`, print PAS
 Coverage collections must run one at a time against the same test databases. Concurrent resets invalidate fixture isolation and can cause duplicate revision or foreign-key failures. A server restart cancels running collectors; verify both test containers are running before restarting collection. Source changes, including formatting, require recollecting any profiles with stale source hashes. Partial group runs leave the canonical merged report unchanged.
 
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
+
+Admin Referrals navigation verification (2026-11-01): no migration or new environment variables. As admin, check `/admin-referrals`, switch through Activity, Campaigns and Commissions, reload each URL, and use browser Back. Check `/admin-kol-commissions` redirects to the Commissions tab. Student access must redirect to the dashboard before admin RPCs. Synthetic Edge suites use mocked session/RPC traffic and do not establish live DB, provider or financial acceptance.

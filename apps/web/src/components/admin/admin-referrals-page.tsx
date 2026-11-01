@@ -11,7 +11,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
@@ -46,6 +46,7 @@ import {
   DrawerClose,
 } from "@cogito-app/ui/components/selia/drawer";
 import { orpc } from "@/utils/orpc";
+import { AdminKolCommissionsPage } from "./admin-kol-commissions-page";
 import { KolCampaignsSection } from "./kol-campaigns-section";
 import { referralUsageStatus } from "./referral-usage-status";
 
@@ -59,22 +60,30 @@ function date(value: string | Date | null) {
     : "Not provided";
 }
 
+const route = getRouteApi("/_app/admin-referrals");
+
 export function AdminReferralsPage() {
   const [campaignActions, setCampaignActions] = useState<HTMLDivElement | null>(
     null,
   );
-  const [view, setView] = useState<"activity" | "campaigns">("activity");
+  const { view } = route.useSearch();
+  const navigate = route.useNavigate();
+  function setView(value: "activity" | "campaigns" | "commissions") {
+    setDrawerOpen(false);
+    void navigate({ search: { view: value } });
+  }
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | "friend" | "kol" | "none">("all");
   const [page, setPage] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const query = useQuery(
-    orpc.adminReferral.listUsage.queryOptions({
+  const query = useQuery({
+    ...orpc.adminReferral.listUsage.queryOptions({
       input: { search, kind, page, limit: 25 },
     }),
-  );
+    enabled: view === "activity",
+  });
   const data = query.data;
   const selected = data?.items.find((row) => row.id === selectedId);
   return (
@@ -94,7 +103,8 @@ export function AdminReferralsPage() {
             label="Referral sections"
             tabs={[
               { value: "activity", label: "Activity" },
-              { value: "campaigns", label: "KOL campaigns" },
+              { value: "campaigns", label: "Campaigns" },
+              { value: "commissions", label: "Commissions" },
             ]}
             activeTab={view}
             onChange={setView}
@@ -107,8 +117,12 @@ export function AdminReferralsPage() {
         />
       </div>
       <div hidden={view !== "campaigns"} className="min-w-0">
-        <KolCampaignsSection actionsContainer={campaignActions} />
+        <KolCampaignsSection
+          actionsContainer={campaignActions}
+          enabled={view === "campaigns"}
+        />
       </div>
+      {view === "commissions" ? <AdminKolCommissionsPage /> : null}
       <div hidden={view !== "activity"} className="min-w-0 space-y-6">
         <aside className="space-y-4" aria-label="Referral summary">
           {data ? (
@@ -224,7 +238,7 @@ export function AdminReferralsPage() {
               <>
                 {data.items.length ? (
                   <TableContainer>
-                    <Table>
+                    <Table className="min-w-max">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Student</TableHead>
@@ -562,9 +576,11 @@ export function AdminReferralsPage() {
                             <Button
                               className="mt-5"
                               variant="secondary"
+                              onClick={() => setDrawerOpen(false)}
                               render={
                                 <Link
-                                  to="/admin-kol-commissions"
+                                  to="/admin-referrals"
+                                  search={{ view: "commissions" }}
                                   aria-label="Open KOL reconciliation"
                                 />
                               }

@@ -75,6 +75,14 @@ async function mockApp(page: Page, role = "admin") {
     let result: unknown = [];
     if (pathname.endsWith("/listKolCommissions"))
       result = { items: [decision], nextCursor: null };
+    else if (pathname.endsWith("/listKolCampaigns")) result = [];
+    else if (pathname.endsWith("/listUsage"))
+      result = {
+        items: [],
+        summary: { signups: 0, codesUsed: 0, welcomeMarks: 0, friendMarks: 0 },
+        page: 0,
+        limit: 25,
+      };
     else if (pathname.endsWith("/getKolSettlement")) {
       expect(input(route.request())).toEqual({
         json: { decisionId: decision.id },
@@ -442,4 +450,49 @@ test("settlement retry actions wrap and remain keyboard reachable at 320px", asy
   await expect(
     page.getByLabel("Transfer reference", { exact: true }),
   ).toBeEnabled();
+});
+
+test("unified referrals tabs survive refresh and history; old commissions URL redirects", async ({
+  page,
+}) => {
+  const state = await mockApp(page);
+  await page.goto("/admin-referrals");
+  await expect(
+    page.getByRole("tab", { name: "Activity", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  expect(state.calls.some((path) => path.endsWith("/listKolCommissions"))).toBe(
+    false,
+  );
+  expect(state.calls.some((path) => path.endsWith("/listKolCampaigns"))).toBe(
+    false,
+  );
+  await page.getByRole("tab", { name: "Campaigns", exact: true }).click();
+  await expect(page).toHaveURL(/view=campaigns/);
+  await expect(
+    page.getByRole("button", { name: "Create KOL campaign", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Commissions", exact: true }).click();
+  await expect(page).toHaveURL(/view=commissions/);
+  await expect(
+    page.getByRole("heading", { name: "KOL commission decisions" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create KOL campaign", exact: true }),
+  ).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Referrals");
+  await page.reload();
+  await expect(
+    page.getByRole("tab", { name: "Commissions", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.goBack();
+  await expect(
+    page.getByRole("tab", { name: "Campaigns", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.goto("/admin-referrals?view=invalid");
+  await expect(
+    page.getByRole("tab", { name: "Activity", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page.goto("/admin-kol-commissions");
+  await expect(page).toHaveURL(/\/admin-referrals\?view=commissions$/);
+  expect(state.errors).toEqual([]);
 });

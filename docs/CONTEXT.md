@@ -3694,3 +3694,5 @@ Admin referral summary (saved choices, codes used, welcome Marks and friend Mark
 KOL campaign create and icon-only refresh controls sit beside the referral tabs when the campaign tab is active; the campaign empty state uses a dashed border. Refresh remains available for uncertain creation outcomes.
 
 Admin dashboard greeting uses plain title and description above the operations metric strip; Tutor payouts is a linked metric in that strip.
+
+Admin referrals navigation (2026-11-01): one Finance sidebar entry, Referrals, opens `/admin-referrals`. Activity (default), Campaigns and Commissions are URL-backed tabs (`?view=activity|campaigns|commissions`); invalid views fall back to Activity. Campaign records use a compact table. Commissions reuses the existing per-student KOL decision table, CSV export and settlement controls; it is not a campaign-level aggregate. `/admin-kol-commissions` redirects admins to the Commissions tab; non-admin access remains rejected. Activity tracks saved student referral choices; Campaigns currently supports admin-created KOL codes only. Cogito promotion campaigns remain unimplemented in this checkout.
