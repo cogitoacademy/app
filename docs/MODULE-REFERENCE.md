@@ -1554,6 +1554,51 @@ existing headings, public projection, and loading/error/empty states.
 
 English question and answer documents are required; Indonesian documents are optional and fall back independently to English. Rich documents support paragraphs, bold/italic text, safe links (`http:`, `https:`, `mailto:`, same-origin paths, and anchors), and ordered/unordered lists. Raw HTML is rejected. Migration 0059 backfills the rich JSONB columns while keeping the legacy question/answer columns for existing consumers. Public entries retain `{ id, question, answer, sortOrder }` and add locale-selected `questionRich` and `answerRich`; the marketing adapter accepts their absence from older APIs and falls back to legacy rendering. Public entries are alphabetized by the displayed localized question. Admin entries are alphabetized by English question and include `modifiedAt`. The landing projection includes active rows marked `showOnLanding`; create/update serialize selection changes with a transaction advisory lock and reject more than six active selections. Deactivating an entry clears its landing selection and hides it publicly while retaining it for editing. The marketing site fetches both surfaces server-side with no-store caching, requires the response `json` field, accepts omitted or array-valued `meta`, and validates rich documents and safe links; question links remain non-interactive inside button triggers, and FAQ JSON-LD continues to use the plain projection. Migrations 0058/0059 are applied to local `cogito-test`; 0059 is also applied to local development `cogito-app`. Shared/production migration remains a release operation.
 
+## Blog Module
+
+**Purpose:** Manage bilingual blog content inside the app and serve published versions to the marketing site. PostgreSQL is the only source; Sanity is not used for blog content.
+
+**Files:**
+
+- `packages/db/src/schema/blog.ts` — `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`
+- `packages/db/src/migrations/0085_fresh_spirit.sql` — additive blog tables, constraints, and indexes
+- `blog.types.ts` — Zod input contracts, block/run/F.A.Q. shapes, embed URL validation, and admin/public DTOs
+- `blog.errors.ts` — domain errors and their oRPC mapping
+- `blog.repo.ts` — Drizzle reads and compare-and-swap writes
+- `blog.service.ts` — publish gate, slug lock, media resolution, public projection, and audit writes
+- `blog.handler.ts` and `blog.router.ts` — `adminBlog.*` and `publicContent.blog.*` procedures
+- `apps/web/src/components/admin/blog/` and `/admin-blog` — admin list, category creation, and bilingual editor
+- `apps/web/src/lib/blog-image.ts` — browser-side WebP normalization before upload
+
+**Data rules:**
+
+- `blog_article` stores shared editorial fields: category, optional subcategory, hero media, optional featured and reviewing tutors, internal notes, archive timestamp, and optimistic version.
+- `blog_article_version` stores one row per locale (`id`, `en`) with slug, titles, body, F.A.Q., key facts, reading time, status, and `publishedAt`. A unique index on `(articleId, locale)` caps each article at two versions; `(locale, slug)` is unique.
+- Body is structured JSON, never HTML: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, and `embed`. Paragraph-like blocks hold runs with optional bold, italic, and safe `http`/`https` links.
+- Embeds store `{ provider, url, posterMediaId? }`. Instagram reels/posts/TV and TikTok `/@user/video/<id>` URLs are accepted and normalized; no oEmbed request is made.
+- Media rows store the storage key, content type, dimensions, and byte size. Uploads are normalized in the browser to WebP, max 2000 px on the long edge, which strips EXIF. Registration requires the storage key to start with the caller's user ID.
+
+**Lifecycle rules:**
+
+- Each locale publishes independently. `publishedAt` is stamped once and retained across later publishes and unpublishes.
+- The publish gate requires title, SEO title, slug, meta description, lead, non-empty body, hero media, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image.
+- A slug is immutable after the version has ever been published; `saveVersion` rejects a rename with `CONFLICT`.
+- Archive stamps `archivedAt` and moves every version to `archived`. Archived articles disappear from public reads, related lists, and the sitemap, and reject edits.
+- Public reads filter `status = 'published'` and `archivedAt is null` in SQL. Draft content, internal notes, editor IDs, tutor profile IDs, and media IDs stay out of the public DTO.
+- Reading time is computed on save from title, lead, body text, and F.A.Q. at 220 words per minute, with a floor of one minute.
+
+**API surface:**
+
+- Admin: `adminBlog.list`, `get`, `createArticle`, `updateArticle`, `saveVersion`, `publishVersion`, `unpublishVersion`, `archiveArticle`, `replaceRelated`, `replaceGallery`, `registerMedia`, `tutors`, and `categories.list/create/update/reorder`. All use `adminProcedure`.
+- Public: `publicContent.blog.list/get/categories/sitemap`. These are unauthenticated and rate-limited separately: 120 requests per minute for list/get/categories, 12 per minute for the sitemap.
+- Marketing consumption is request-time or ISR; there is no publish webhook in Phase 1.
+
+**Admin UI:**
+
+- `/admin-blog` lists articles with status filters, creates articles, and creates root categories.
+- `/admin-blog/$articleId` edits shared fields plus Indonesian and English versions in tabs. The body editor manipulates structured blocks; there is no rich-text HTML editor.
+- Publishing from the editor saves the current draft first, then publishes the saved version. Unpublish and archive are explicit actions.
+
 ## Content Module
 
 **Purpose:** Deliver published Competition Calendar and Knowledge Bank content from Sanity to authenticated app users without duplicating editorial documents into PostgreSQL.

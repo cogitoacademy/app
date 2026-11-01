@@ -23,6 +23,7 @@ export * from "./tutor-tax-config";
 export * from "./referral";
 export * from "./knowledge-bank-access";
 export * from "./faq";
+export * from "./blog";
 export * from "./academy-class";
 export * from "./academy-class-enrollment";
 export * from "./academy-class-session-report";

@@ -1877,6 +1877,85 @@ families. No RPC input, output, or authorization contract changed.
 - **Errors:** Wire codes are `NOT_FOUND` (404) when the ID does not exist, `CONFLICT` (409) when `expectedVersion` is stale, and `BAD_REQUEST` when selecting the entry would exceed the six-active-FAQ landing limit. The underlying FAQ domain error names are not exposed as the oRPC error code.
 - **Description:** Updates are compare-and-swap writes. Deactivation hides the entry publicly and clears landing selection while retaining it for admin editing; there is no destructive delete procedure. Create uses the same six-active-entry landing limit.
 
+## Blog (`publicContent.blog.*` and `adminBlog.*`)
+
+Blog content is app-managed. PostgreSQL is the only source; Sanity is not involved. Each article stores shared fields once and one version per locale, and each version publishes independently. Slugs are immutable after the first publish.
+
+### `publicContent.blog.list`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/public-content/blog/list` with `{"json":{"locale":"id","limit":12}}`
+- **Input:** `{ locale: "id" | "en", cursor?: string, limit?: 1..24 }`; `limit` defaults to 12
+- **Output:** `{ rows: PublicBlogCardDto[], nextCursor: string | null }`
+- **Description:** Returns published, non-archived versions for the locale ordered by `publishedAt` descending, then version ID. Cursor is opaque base64url. Cards contain `id`, `slug`, `title`, `excerpt` (meta description), `hero`, localized `category` and nullable `subcategory`, `tutorName`, `publishedAt`, `updatedAt`, and `readingMinutes`. Hero is `{ url, width, height, alt }` or `null`. Drafts and archived articles never appear.
+
+### `publicContent.blog.get`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/public-content/blog/get` with `{"json":{"locale":"id","slug":"..."}}`
+- **Output:** A `PublicBlogArticleDto`: the card fields plus `lead`, `seoTitle`, `metaDescription`, `keyFacts`, `body`, `faq`, `gallery`, `media`, `related`, and `alternate`.
+- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
+- **Errors:** `NOT_FOUND` when no published version matches.
+
+### `publicContent.blog.categories`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/public-content/blog/categories` with `{"json":{"locale":"id"}}`
+- **Output:** `PublicBlogCategoryDto[]`, each `{ id, parentId, slug, title, intro, articleCount }`
+- **Description:** Returns active categories ordered by `sortOrder`. `articleCount` counts published versions in the requested locale for articles whose root category matches; it does not count subcategory-only matches. Titles, slugs, and intros are locale-selected.
+
+### `publicContent.blog.sitemap`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/public-content/blog/sitemap` with `{"json":{}}`
+- **Output:** `PublicBlogSitemapEntry[]`, each `{ articleId, locale, slug, updatedAt, alternate }`, capped at 5,000 rows
+- **Description:** Lists every published, non-archived version ordered by `updatedAt` descending. `alternate` is populated only when the sibling locale version is also published. Rate limits: 120 requests per minute for list/get/categories and 12 per minute for the sitemap.
+
+### `adminBlog.list` and `adminBlog.get`
+
+- **Auth:** Admin
+- **HTTP requests:** `POST /rpc/adminBlog/list` and `POST /rpc/adminBlog/get` with the standard `{"json": <input>}` envelope
+- **Input:** `list` takes `{ status?, locale?, cursor?, limit? }`; `get` takes `{ articleId }`
+- **Output:** `list` returns `{ rows: AdminBlogListRowDto[], nextCursor }` with both locale titles and statuses. `get` returns `AdminBlogArticleDto`, including shared fields, hero, gallery with alt text, tutor references, related IDs, internal notes, article version, both versions, and archive state.
+- **Description:** Admin reads include drafts. Internal notes and media identifiers never appear in public responses.
+
+### `adminBlog.createArticle` and `adminBlog.updateArticle`
+
+- **Auth:** Admin
+- **Input:** `createArticle` takes `{ categoryId, subcategoryId?, heroMediaId?, featuredTutorId?, reviewedByTutorId?, internalNotes? }`. `updateArticle` adds `{ articleId, expectedVersion }`.
+- **Output:** `{ articleId, version }` with the shared version incremented by updates
+- **Errors:** `NOT_FOUND` for unknown category or tutor, `BAD_REQUEST` when the subcategory does not belong to the category or a media ID is unregistered, `CONFLICT` for a stale `expectedVersion` or an archived article.
+
+### `adminBlog.saveVersion`
+
+- **Auth:** Admin
+- **Input:** `{ articleId, locale, expectedVersion, slug, title, seoTitle, metaDescription, lead, mainKeyword?, secondaryKeywords?, keyFacts, body, faq, heroAlt? }`
+- **Output:** `AdminBlogVersionDto` with computed `readingMinutes` and the incremented version
+- **Description:** Creates the locale version when it does not exist (`expectedVersion` must be 0) or updates it with compare-and-swap. Body embeds must be public Instagram reel/post/TV or TikTok video URLs; the URL is normalized to the `www` host. Links must use `http` or `https`.
+- **Errors:** `CONFLICT` for a duplicate slug, a stale version, or an attempt to rename a slug after the first publish; `BAD_REQUEST` for an unregistered body image.
+
+### `adminBlog.publishVersion` and `adminBlog.unpublishVersion`
+
+- **Auth:** Admin
+- **Input:** `{ articleId, locale, expectedVersion }`
+- **Output:** The updated `AdminBlogVersionDto`
+- **Errors:** `BAD_REQUEST` with the missing field list when publish requirements are not met; `NOT_FOUND` when the version does not exist; `CONFLICT` when `expectedVersion` is stale or the article is archived.
+- **Description:** Publish requires title, SEO title, slug, meta description, lead, a non-empty body, a hero media ID, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image. The first publish stamps `publishedAt`; later publishes keep it. Both transitions write an audit record.
+
+### `adminBlog.archiveArticle`, `adminBlog.replaceRelated`, and `adminBlog.replaceGallery`
+
+- **Auth:** Admin
+- **Input:** `archiveArticle` takes `{ articleId, expectedVersion }`. `replaceRelated` takes `{ articleId, expectedVersion, relatedArticleIds }`, up to 3 unique IDs. `replaceGallery` takes `{ articleId, expectedVersion, images: [{ mediaId, altId, altEn }] }`.
+- **Output:** `{ articleId }`
+- **Description:** Archive stamps `archivedAt` and sets every locale version to `archived`; archived articles stop serving publicly and reject edits. Related and gallery replacement are transactional and replace the full ordered set. Gallery alt text is required per locale at publish time, not at save time.
+
+### `adminBlog.registerMedia`, `adminBlog.tutors`, and `adminBlog.categories.*`
+
+- **Auth:** Admin
+- **Input:** `registerMedia` takes `{ storageKey, filename, contentType, width?, height?, byteSize? }`. `tutors` takes `{}`. `categories.list` takes `{}`; `categories.create` and `categories.update` take bilingual titles, slugs, optional intros, parent ID, and active state; `categories.reorder` takes `{ ids }`.
+- **Output:** `registerMedia` returns `BlogMediaDto` with the resolved public URL. `tutors` returns `{ id, name }[]`. Category procedures return `AdminBlogCategoryDto[]` or `{ id, version }`.
+- **Description:** Media must be uploaded through the caller's own upload prefix (`<userId>/...`), which prevents registering another admin's object. Categories support one nesting level. Deactivating a category is rejected while any published article still uses it as root or subcategory. Optimistic versions guard category updates.
+
 ## Tutor Discovery (`tutors.*`)
 
 ### `tutors.listSubjects`

@@ -169,6 +169,7 @@ const adminNavGroups = [
         icon: IconShieldCheck,
       },
       { to: "/faq", label: "FAQ", icon: IconHelp },
+      { to: "/admin-blog", label: "Blog", icon: IconArticle },
       { to: "/activities", label: "Activities", icon: IconArticle },
     ],
   },

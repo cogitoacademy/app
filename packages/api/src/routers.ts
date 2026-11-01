@@ -34,6 +34,7 @@ import { createContentRouter } from "./modules/content/content.router";
 import { createContactRouter } from "./modules/contact/contact.router";
 import { createPublicContentRouter } from "./modules/public-content/public-content.router";
 import { createFaqRouter } from "./modules/faq";
+import { createBlogRouter } from "./modules/blog";
 import { createReferralRouter } from "./modules/referral/referral.router";
 import { handlers } from "./services";
 
@@ -67,11 +68,13 @@ const uploadRouter = createUploadRouter(handlers.upload);
 const contentRouter = createContentRouter(handlers.content);
 const contactRouter = createContactRouter(handlers.contact);
 const faqRouter = createFaqRouter(handlers.faq);
+const blogRouter = createBlogRouter(handlers.blog);
 const referralRouter = createReferralRouter(handlers.referral);
 const publicContentRouter = {
   activities: { list: activityRouter.list },
   ...createPublicContentRouter(handlers.publicContent),
   ...faqRouter.publicContent,
+  ...blogRouter.publicContent,
 };
 
 export const appRouter = {
@@ -98,6 +101,7 @@ export const appRouter = {
   adminKnowledgeBank: adminKnowledgeBankRouter,
   adminContent: createContentAdminRouter(handlers.contentAdmin),
   adminFaq: faqRouter.adminFaq,
+  adminBlog: blogRouter.adminBlog,
   adminActivities: activityRouter.admin,
   tutor: tutorRouter,
   tutors: discoveryRouter,

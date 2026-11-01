@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+## Bilingual blog app slice (2 November 2026)
+
+The bilingual blog now has an app-managed data and API path on branch `feat/bilingual-blog`. PostgreSQL stores `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`; migration `0085_fresh_spirit.sql` is additive. Each article has shared fields and at most two locale versions, and each version publishes independently. A slug locks after its first publish. The publish gate checks required editorial fields, hero media and alt text, key facts, and locale gallery alt text.
+
+Admins manage content at `/admin-blog` and `/admin-blog/$articleId`. The editor uses structured blocks rather than HTML; images are normalized to WebP in the browser before upload and registered under the admin's upload prefix. New RPC surfaces are `adminBlog.*` and unauthenticated `publicContent.blog.list/get/categories/sitemap`, with separate public rate limits of 120 requests per minute for reads and 12 for the sitemap.
+
+The marketing renderer in `cogito-acad` is not implemented yet, so public blog pages, metadata, and sitemap output remain a separate branch and PR. Full Sanity removal also remains separate; competitions and student resources are unchanged. See `docs/plans/active/BILINGUAL-BLOG.md` for the remaining phases.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.

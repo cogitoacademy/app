@@ -1,5 +1,24 @@
 # Cogito Runbook
 
+## Bilingual blog migration and verification (2 November 2026)
+
+Migration `0085_fresh_spirit.sql` is additive. It creates `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`. Apply it with the normal forward runner (`bun run db:migrate`) against the authorized target. Do not reset or reseed; the blog starts with no categories or articles.
+
+The migration needs the existing `user` and `tutor_profile` tables because media creators and featured tutors are foreign keys. Review those targets first. After migration, verify that the six tables exist and that the application starts with the new module.
+
+Verification steps:
+
+1. Confirm `DATABASE_URL` points to the intended database.
+2. Run `bun run db:migrate`.
+3. Run the blog integration test against the local `cogito-test` database: `bun test --env-file apps/server/.env.test packages/api/src/tests/integration/blog.test.ts`.
+4. Sign in as admin, open `/admin-blog`, create a category, then create an article.
+5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time.
+6. Confirm `POST /rpc/public-content/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
+
+Public blog reads are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
+
+No environment variable is specific to the blog. Media reuse the existing R2 or local upload configuration, and public image URLs come from `R2_PUBLIC_URL` (or the local upload base URL).
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
