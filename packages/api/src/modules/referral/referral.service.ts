@@ -647,12 +647,13 @@ export function createReferralService(deps: {
       if (input.paused && campaign.pausedAt) return campaign;
       if (!input.paused && !campaign.pausedAt) return campaign;
       const pausedAt = input.paused ? now() : null;
-      const [updated] = await tx
-        .update(referralCampaign)
-        .set({ pausedAt })
-        .where(eq(referralCampaign.id, campaign.id))
-        .returning();
-      if (!updated) throw new Error("KOL campaign pause was not saved.");
+      const updated = (
+        await tx
+          .update(referralCampaign)
+          .set({ pausedAt })
+          .where(eq(referralCampaign.id, campaign.id))
+          .returning()
+      )[0]!;
       await audit.record({
         db: tx,
         actorId: adminId,
