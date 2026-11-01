@@ -3692,3 +3692,5 @@ Admin referral empty and filtered-empty states use the same dashed-border EmptyS
 Admin referral summary (saved choices, codes used, welcome Marks and friend Marks) uses the unified Pulse metric wrapper with responsive dividers. Summary calculations are unchanged.
 
 KOL campaign create and icon-only refresh controls sit beside the referral tabs when the campaign tab is active; the campaign empty state uses a dashed border. Refresh remains available for uncertain creation outcomes.
+
+Admin dashboard greeting uses plain title and description above the operations metric strip; Tutor payouts is a linked metric in that strip.
