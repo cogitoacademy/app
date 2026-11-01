@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { ReasonField } from "@/components/reason-field";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -52,21 +51,19 @@ export function ClassAdminCancellationPanel({
   const busy = preview.isPending || confirm.isPending;
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-4">
-      <Field>
-        <FieldLabel htmlFor={`class-cancel-reason-${classId}`}>
-          Class cancellation reason
-        </FieldLabel>
-        <Input
-          id={`class-cancel-reason-${classId}`}
-          value={reason}
-          maxLength={500}
-          disabled={busy}
-          onChange={(event) => {
-            setReason(event.target.value);
-            preview.reset();
-          }}
-        />
-      </Field>
+      <ReasonField
+        label="Class cancellation reason"
+        id={`class-cancel-reason-${classId}`}
+        value={reason}
+        required
+        minLength={3}
+        maxLength={500}
+        disabled={busy}
+        onChange={(value) => {
+          setReason(value);
+          preview.reset();
+        }}
+      />
       <Button
         variant="secondary"
         disabled={busy || reason.trim().length < 3}

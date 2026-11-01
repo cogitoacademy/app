@@ -1,5 +1,7 @@
 "use client";
 
+import { ReasonField } from "@/components/reason-field";
+
 import Loader from "@/components/loader";
 
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
@@ -15,7 +17,6 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import {
   Select,
   SelectTrigger,
@@ -256,15 +257,15 @@ export function V3EconomySettings() {
           </Text>
           {!draft && !viewingActive && settings.data.version > 0 ? (
             <Field>
-              <FieldLabel htmlFor="v3-activation-reason">
-                Reason for activating pricing
-              </FieldLabel>
-              <Input
+              <ReasonField
+                label="Reason for activating pricing"
+                required
                 id="v3-activation-reason"
                 value={reason}
                 maxLength={2000}
                 disabled={activate.isPending}
-                onChange={(event) => setReason(event.target.value)}
+                onChange={(value) => setReason(value)}
+                minLength={1}
               />
               <Text>
                 Activation applies this saved revision to new purchases and
@@ -456,15 +457,15 @@ export function V3EconomySettings() {
           {draft ? (
             <>
               <Field>
-                <FieldLabel htmlFor="v3-revision-reason">
-                  Reason for this revision
-                </FieldLabel>
-                <Input
+                <ReasonField
+                  label="Reason for this revision"
+                  required
                   id="v3-revision-reason"
                   value={reason}
                   maxLength={2000}
                   disabled={save.isPending}
-                  onChange={(event) => setReason(event.target.value)}
+                  onChange={(value) => setReason(value)}
+                  minLength={1}
                 />
               </Field>
               <div className="flex flex-wrap gap-2">

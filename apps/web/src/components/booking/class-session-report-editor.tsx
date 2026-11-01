@@ -407,6 +407,7 @@ export function ClassSessionReportEditor({
                   <Field>
                     <FieldLabel
                       htmlFor={`absence-reason-${selectedRow.sessionId}`}
+                      required
                     >
                       Reason
                     </FieldLabel>
@@ -416,6 +417,7 @@ export function ClassSessionReportEditor({
                       onChange={(event) => setAbsenceReason(event.target.value)}
                       maxLength={1000}
                       required
+                      aria-required="true"
                     />
                     <FieldDescription>
                       Submitted notices include the server time. Notices within
@@ -587,6 +589,7 @@ export function ClassSessionReportEditor({
                         <FieldLabel
                           htmlFor={`class-report-admin-reason-${selectedRow.sessionId}`}
                           className="font-semibold"
+                          required
                         >
                           Correction reason
                         </FieldLabel>
@@ -596,6 +599,7 @@ export function ClassSessionReportEditor({
                         </FieldDescription>
                         <Input
                           id={`class-report-admin-reason-${selectedRow.sessionId}`}
+                          aria-required="true"
                           value={activeDraft.adminReason}
                           onChange={(event) =>
                             updateDraft(selectedRow, {

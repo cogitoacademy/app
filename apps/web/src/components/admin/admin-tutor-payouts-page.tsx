@@ -1,5 +1,7 @@
 "use client";
 
+import { ReasonField } from "@/components/reason-field";
+
 import Loader from "@/components/loader";
 
 import { percentToBasisPoints } from "./tax-rate-input";
@@ -634,15 +636,14 @@ export function AdminTutorPayoutsPage() {
             </div>
             <div className="flex flex-wrap items-end gap-3">
               <Field className="min-w-64 flex-1">
-                <FieldLabel htmlFor="tax-config-reason">
-                  Change reason
-                </FieldLabel>
-                <Input
+                <ReasonField
+                  label="Change reason"
+                  required
                   id="tax-config-reason"
                   maxLength={2000}
                   value={taxConfigReason}
-                  onChange={(event) => setTaxConfigReason(event.target.value)}
-                  placeholder="Why are these defaults changing?"
+                  onChange={(value) => setTaxConfigReason(value)}
+                  minLength={1}
                 />
               </Field>
               <Button
@@ -1392,7 +1393,10 @@ export function AdminTutorPayoutsPage() {
                       admin records how the external transfer was reconciled.
                     </Text>
                     <Field>
-                      <FieldLabel htmlFor="payout-reconciliation-reason">
+                      <FieldLabel
+                        htmlFor="payout-reconciliation-reason"
+                        required
+                      >
                         Resolution details
                       </FieldLabel>
                       <Input
@@ -1402,6 +1406,7 @@ export function AdminTutorPayoutsPage() {
                         onChange={(event) =>
                           setReconciliationReason(event.target.value)
                         }
+                        aria-required="true"
                       />
                     </Field>
                     <Button
@@ -1432,7 +1437,7 @@ export function AdminTutorPayoutsPage() {
                       reconciliation is resolved.
                     </Text>
                     <Field>
-                      <FieldLabel htmlFor="payout-void-reason">
+                      <FieldLabel htmlFor="payout-void-reason" required>
                         Void reason
                       </FieldLabel>
                       <Input
@@ -1440,6 +1445,7 @@ export function AdminTutorPayoutsPage() {
                         maxLength={2000}
                         value={voidReason}
                         onChange={(event) => setVoidReason(event.target.value)}
+                        aria-required="true"
                       />
                     </Field>
                     <Button
@@ -1496,7 +1502,10 @@ export function AdminTutorPayoutsPage() {
                         />
                       </Field>
                       <Field className="min-w-64 flex-1">
-                        <FieldLabel htmlFor="tutor-rate-override-reason">
+                        <FieldLabel
+                          htmlFor="tutor-rate-override-reason"
+                          required
+                        >
                           Reason
                         </FieldLabel>
                         <Input
@@ -1506,6 +1515,7 @@ export function AdminTutorPayoutsPage() {
                           onChange={(event) =>
                             setOverrideReason(event.target.value)
                           }
+                          aria-required="true"
                         />
                       </Field>
                       <Button

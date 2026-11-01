@@ -1,5 +1,9 @@
 # Cogito API Reference
 
+## Reason entry UI (1 November 2026)
+
+Request/response contracts and reason requirements are unchanged. UI markers reflect existing validation: required reasons show a red asterisk; optional reasons show `(optional)`. In particular, `adminContent/create`, `update` and `remove` still require a reason for `resource` entries in the service even though their shared input schema permits omission for calendar entries. Invite-decline/withdrawal reasons remain optional. Moving inline input into a dialog/drawer does not submit an RPC; the existing action submits the saved reason in the normal `{json: input}` envelope.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.

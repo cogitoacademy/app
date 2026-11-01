@@ -451,13 +451,16 @@ export function BookingRescheduleAction({
               </div>
             ) : null}
             <Field>
-              <FieldLabel htmlFor="reschedule-reason">Reason</FieldLabel>
+              <FieldLabel htmlFor="reschedule-reason" required>
+                Reason
+              </FieldLabel>
               <Textarea
                 id="reschedule-reason"
                 value={reason}
                 maxLength={2_000}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Explain why this session needs a new time."
+                aria-required="true"
               />
             </Field>
           </DrawerBody>

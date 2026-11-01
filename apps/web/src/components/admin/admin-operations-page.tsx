@@ -1463,8 +1463,8 @@ function OverrideDialog({
             </div>
           </div>
           <Field>
-            <FieldLabel htmlFor="override-reason">
-              Reason <span className="text-danger">*</span>
+            <FieldLabel htmlFor="override-reason" required>
+              Reason
             </FieldLabel>
             <Textarea
               id="override-reason"
@@ -1474,6 +1474,7 @@ function OverrideDialog({
                 setReason(event.target.value);
                 setPreview(null);
               }}
+              aria-required="true"
             />
           </Field>
           <Field>

@@ -1,5 +1,7 @@
 "use client";
 
+import { ReasonField } from "@/components/reason-field";
+
 import { IconInbox } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import Loader from "@/components/loader";
@@ -956,19 +958,19 @@ export function AcademyClassPage() {
                     {failedMeetings.length > 0 ? (
                       <div className="mt-4 flex flex-wrap items-end gap-3">
                         <Field className="w-full min-w-0 flex-1 sm:min-w-64">
-                          <FieldLabel htmlFor={`meeting-retry-${record.id}`}>
-                            Retry reason
-                          </FieldLabel>
-                          <Input
+                          <ReasonField
+                            label="Retry reason"
+                            required
                             id={`meeting-retry-${record.id}`}
                             maxLength={500}
                             value={retryReason}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setMeetingRetryReasons((current) => ({
                                 ...current,
-                                [record.id]: event.target.value,
+                                [record.id]: value,
                               }))
                             }
+                            minLength={3}
                           />
                         </Field>
                         <Button
@@ -1062,24 +1064,22 @@ export function AcademyClassPage() {
                                   </FieldDescription>
                                 </Field>
                                 <Field className="sm:col-span-2">
-                                  <FieldLabel
-                                    htmlFor={`reschedule-reason-${session.id}`}
-                                  >
-                                    Reason for students
-                                  </FieldLabel>
-                                  <Input
+                                  <ReasonField
+                                    label="Reason for students"
+                                    required
                                     id={`reschedule-reason-${session.id}`}
                                     maxLength={500}
                                     value={edit.reason}
-                                    onChange={(event) =>
+                                    onChange={(value) =>
                                       setRescheduleValues((current) => ({
                                         ...current,
                                         [session.id]: {
                                           ...edit,
-                                          reason: event.target.value,
+                                          reason: value,
                                         },
                                       }))
                                     }
+                                    minLength={3}
                                   />
                                 </Field>
                                 <Button
@@ -1188,21 +1188,19 @@ export function AcademyClassPage() {
                                 </Select>
                               </Field>
                               <Field>
-                                <FieldLabel
-                                  htmlFor={`replacement-reason-${session.id}`}
-                                >
-                                  Admin reason
-                                </FieldLabel>
-                                <Input
+                                <ReasonField
+                                  label="Admin reason"
+                                  required
                                   id={`replacement-reason-${session.id}`}
                                   maxLength={500}
                                   value={replacementReasons[session.id] ?? ""}
-                                  onChange={(event) =>
+                                  onChange={(value) =>
                                     setReplacementReasons((current) => ({
                                       ...current,
-                                      [session.id]: event.target.value,
+                                      [session.id]: value,
                                     }))
                                   }
+                                  minLength={3}
                                 />
                                 <FieldDescription>
                                   This keeps the session time, fee, and student
@@ -1945,7 +1943,7 @@ export function AcademyClassPage() {
                     </Accordion>
 
                     <Field>
-                      <FieldLabel htmlFor="class-audit-reason">
+                      <FieldLabel htmlFor="class-audit-reason" required>
                         Reason for this change
                       </FieldLabel>
                       <Textarea
@@ -1958,6 +1956,7 @@ export function AcademyClassPage() {
                           updateForm("reason", event.target.value)
                         }
                         rows={2}
+                        aria-required="true"
                       />
                       <FieldDescription>
                         Saved with the admin actor and before/after snapshot.

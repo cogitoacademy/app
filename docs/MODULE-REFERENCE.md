@@ -1,5 +1,11 @@
 # Cogito Module Reference
 
+## Shared reason controls (1 November 2026)
+
+Web `ReasonField` composes Selia controls to collect inline audit/action reasons on demand. It uses a dialog at widths >=640px and a bottom drawer below that breakpoint, with caller-supplied minimum/maximum lengths. A local draft is committed only by Use reason; Cancel, Escape and outside dismissal preserve the previously committed value. It never submits the enclosing action. Named controls retain a hidden form value for KOL adjustment FormData; the adjustment action stays disabled until its required reason is valid. Existing retry payload identity and service validation remain intact.
+
+Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. DrawerPopup accepts an optional `layerClassName` for the reason drawer's backdrop/viewport above an existing overlay. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.

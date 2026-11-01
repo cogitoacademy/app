@@ -223,7 +223,7 @@ test("edit keeps version/reason and conflicting drafts, dirty close asks before 
     .getByLabel("Name (English) *", { exact: true })
     .fill("Debate revised");
   await page
-    .getByLabel("Change reason *", { exact: true })
+    .getByRole("textbox", { name: "Change reason", exact: true })
     .fill("Rename for clarity");
   state.conflict();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -271,7 +271,7 @@ test("creation and lifecycle retain guarded impact and reason workflow", async (
     .fill("Public speaking");
   await page.getByLabel("Slug", { exact: true }).fill("public-speaking");
   await page
-    .getByLabel("Change reason *", { exact: true })
+    .getByRole("textbox", { name: "Change reason", exact: true })
     .fill("New specialization");
   await page.getByRole("button", { name: "Create entry", exact: true }).click();
   await expect(
@@ -302,7 +302,7 @@ test("creation and lifecycle retain guarded impact and reason workflow", async (
     name: "Archive catalog entry",
     exact: true,
   });
-  await archive.getByLabel("Reason *").fill("Retire old category");
+  await archive.getByLabel("Reason").fill("Retire old category");
   await archive
     .getByRole("button", { name: /Archive/ })
     .last()
@@ -386,7 +386,7 @@ test("new competition validates all palette values and drafts its existing creat
   await page.getByLabel("Name (English) *", { exact: true }).fill("Robotics");
   await page.getByLabel("Slug", { exact: true }).fill("robotics");
   await page
-    .getByLabel("Change reason *", { exact: true })
+    .getByRole("textbox", { name: "Change reason", exact: true })
     .fill("Add robotics catalog");
   await expect(
     page.getByRole("button", { name: "Create entry", exact: true }),
@@ -423,6 +423,7 @@ test("palette previews follow unsaved edits and moving a type retains reason and
   ).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByLabel("Close catalog editor").click();
+  await page.locator('[aria-controls="types-debate"]').click();
   await page
     .getByRole("button", { name: /Edit specialization Parliamentary/ })
     .click();

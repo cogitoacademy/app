@@ -193,6 +193,14 @@ Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, f
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
 
+### Reason markers and on-demand entry (1 November 2026)
+
+Implemented required red asterisks and explicit optional labels for reason inputs, following existing API/service validation. Inline operational/finance reasons now use Add/Edit to open a desktop dialog or mobile bottom drawer; reasons in existing editor overlays retain their location. Use reason commits locally without submitting the action, and dismissing the prompt preserves the previous committed reason. ConfirmationDialog enforces its disabled confirmation state while leaving Cancel usable.
+
+Verification complete for this slice: focused mocked Edge cases passed for desktop/mobile KOL reason entry (2), reschedule/changed-session flows (6), economy activation (1) and catalog reason/lifecycle flows (4, across bounded invocations). Initial catalog navigation timeouts cleared on isolated reruns; its move test now expands the collapsed group before selecting a specialization. Reviewed desktop/mobile reason prompt screenshots. Web/E2E/UI typechecks pass with constrained memory; focused formatting and lint pass with existing warnings, and the CRLF-aware diff check passes. A concurrent web typecheck exhausted memory before the bounded serial rerun passed.
+
+Live Academy/enrollment/economy/booking specs were updated for the new reason prompts/selectors but were not run. No API policy change, DB/storage/provider acceptance or broader release readiness is implied.
+
 ### Tutor honorarium in booking detail (2026-10-29)
 
 Implemented: admin booking tutor participant details use gross IDR session honorarium and payment status in place of student wallet/ledger controls. Live browser and persisted payout acceptance remain pending.

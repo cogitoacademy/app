@@ -1,5 +1,25 @@
 # Cogito Runbook
 
+## Reason control UI verification (1 November 2026)
+
+No deployment configuration, migration, database mutation or provider call is needed for this UI change. API reason requirements stay unchanged; deploy the web bundle with the shared UI package changes.
+
+Run web/E2E `check-types` and focused lint/formatting for the touched files. The mocked Edge suites exercise reason entry without API processes or database setup:
+
+```powershell
+$env:KOL_BROWSER_CHANNEL = 'msedge'
+$env:KOL_WEB_PORT = '3318'
+$env:KOL_API_PORT = '3319'
+bunx playwright test --config playwright.kol-settlement-synthetic.config.ts -g 'adjustment requires reason'
+bunx playwright test --config playwright.class-reschedule.config.ts
+bunx playwright test --config playwright.finance-layout.config.ts -g 'economy activation'
+bunx playwright test --config playwright.competition-types-synthetic.config.ts -g 'edit keeps|creation and lifecycle|new competition|palette previews' --timeout 90000
+```
+
+Run these commands from `packages/e2e`. KOL screenshots are under `packages/e2e/test-results/kol-settlement-synthetic/**/reason-prompt-*.png`. The desktop/mobile checks cover required markers, whitespace/minimum length, cancel/dismiss, editing, focus return and no premature financial submission. This is synthetic browser/wire verification, not live financial or provider acceptance.
+
+Final focused evidence: 2 KOL, 6 reschedule, 1 activation and 4 catalog cases passed; catalog cases were verified across bounded invocations after initial navigation timeouts and a test precondition fix to expand the collapsed group before choosing a specialization. Web/E2E/UI typechecks passed using `GOMAXPROCS=2`, `GOMEMLIMIT=1GiB`, `GOGC=50` serially after a concurrent web check exhausted memory. Focused formatting/lint passed with existing warnings. Live API/provider workflows were not exercised.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.

@@ -1505,12 +1505,15 @@ export function BookingDetailPage({
           ) : (
             <DialogBody className="space-y-4">
               <Field>
-                <FieldLabel htmlFor="decline-booking-reason">Reason</FieldLabel>
+                <FieldLabel htmlFor="decline-booking-reason" required>
+                  Reason
+                </FieldLabel>
                 <Input
                   id="decline-booking-reason"
                   value={declineReason}
                   onChange={(event) => setDeclineReason(event.target.value)}
                   placeholder="For example: I am unavailable at this time"
+                  aria-required="true"
                 />
                 <FieldDescription>
                   Give the student enough context to choose another tutor or
@@ -1573,13 +1576,16 @@ export function BookingDetailPage({
         onConfirm={confirmBookingAction}
       >
         <Field>
-          <FieldLabel htmlFor="booking-cancellation-reason">Reason</FieldLabel>
+          <FieldLabel htmlFor="booking-cancellation-reason" required>
+            Reason
+          </FieldLabel>
           <Textarea
             id="booking-cancellation-reason"
             value={cancellationReason}
             maxLength={500}
             onChange={(event) => setCancellationReason(event.target.value)}
             placeholder="Explain why you need to cancel this booking."
+            aria-required="true"
           />
           <FieldDescription>
             This reason will be shared with the tutor.

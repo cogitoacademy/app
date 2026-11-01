@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fillReasonPrompt } from "../helpers/reason-prompt";
 
 // Synthetic snapshot: keep the layout harness independent of API/DB imports.
 const DEFAULT_V3_ECONOMY_CONFIG = {
@@ -431,9 +432,11 @@ for (const width of [320, 390, 768, 1440]) {
       .toBe(width);
     await measure(page, `payout-drawer-${width}`);
     await page
-      .getByLabel("Void reason", { exact: true })
+      .getByRole("textbox", { name: "Void reason", exact: true })
       .fill("Synthetic review only");
-    await page.getByLabel("Void reason", { exact: true }).press("Tab");
+    await page
+      .getByRole("textbox", { name: "Void reason", exact: true })
+      .press("Tab");
     await expect(
       page.getByRole("button", { name: "Void with audit record", exact: true }),
     ).toBeFocused();
@@ -507,9 +510,11 @@ test("economy activation requires reason and refreshes active badge", async ({
     exact: true,
   });
   await expect(button).toBeDisabled();
-  await page
-    .getByLabel("Reason for activating pricing", { exact: true })
-    .fill("Approved new pricing");
+  await fillReasonPrompt(
+    page,
+    "Reason for activating pricing",
+    "Approved new pricing",
+  );
   await button.click();
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(button).toHaveCount(0);

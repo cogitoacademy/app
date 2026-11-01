@@ -365,7 +365,7 @@ test("accepted online reschedule keeps the booking scheduled until cancellation"
     await expect(availableTimes.nth(2)).toBeVisible({ timeout: 15_000 });
     await availableTimes.nth(2).click();
     await rescheduleDialog
-      .getByLabel("Reason", { exact: true })
+      .getByRole("textbox", { name: "Reason", exact: true })
       .fill("Move this session to the final available test slot.");
     await rescheduleDialog
       .getByRole("button", { name: "Send proposal", exact: true })
@@ -397,7 +397,7 @@ test("accepted online reschedule keeps the booking scheduled until cancellation"
     cancelDialog.getByText("Cancel this booking?", { exact: true }),
   ).toBeVisible();
   await cancelDialog
-    .getByLabel("Reason", { exact: true })
+    .getByRole("textbox", { name: "Reason", exact: true })
     .fill("Clean up the completed reschedule E2E scenario.");
   await cancelDialog
     .getByRole("button", { name: "Cancel booking", exact: true })
@@ -429,7 +429,7 @@ test("tutor can decline a request and the student sees the terminal state", asyn
     await expect(
       dialog.getByText("Decline booking request?", { exact: true }),
     ).toBeVisible();
-    const reason = dialog.getByLabel("Reason", { exact: true });
+    const reason = dialog.getByRole("textbox", { name: "Reason", exact: true });
     const decline = dialog.getByRole("button", {
       name: "Decline request",
       exact: true,

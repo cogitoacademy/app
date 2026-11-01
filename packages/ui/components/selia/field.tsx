@@ -37,14 +37,33 @@ export function FieldItem({
 
 export function FieldLabel({
   className,
+  children,
+  required,
+  optional,
   ...props
-}: React.ComponentProps<typeof BaseField.Label>) {
+}: React.ComponentProps<typeof BaseField.Label> & {
+  required?: boolean;
+  optional?: boolean;
+}) {
   return (
     <BaseField.Label
       data-slot="field-label"
-      className={cn("text-foreground flex items-center gap-3", className)}
+      className={cn(
+        "text-foreground flex items-center",
+        required || optional ? "gap-1" : "gap-3",
+        className,
+      )}
       {...props}
-    />
+    >
+      {children}
+      {required ? (
+        <span className="text-danger" aria-hidden="true">
+          *
+        </span>
+      ) : optional ? (
+        <span className="text-muted font-normal">(optional)</span>
+      ) : null}
+    </BaseField.Label>
   );
 }
 
