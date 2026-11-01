@@ -554,6 +554,36 @@ test("list reports expose join details to enrolled students, tutors and admins",
       reportCreatedAt: null,
       reportUpdatedAt: null,
     },
+    {
+      classId: reportClass.id,
+      classTitle: reportClass.titleEn,
+      classNumber: 12,
+      classKind: "cohort",
+      classDescription: "Class description",
+      sessionId: "session-pending",
+      tutorId: "tutor-1",
+      sequenceNumber: 3,
+      sessionTitle: "Pending session",
+      curriculumEn: "Session curriculum",
+      startAt: new Date("2040-01-03T10:00:00.000Z"),
+      endAt: new Date("2040-01-03T11:00:00.000Z"),
+      mode: "online",
+      state: "scheduled",
+      meetingStatus: "processing",
+      meetingUrl: "https://meet.example.test/pending",
+      roomName: null,
+      roomLocation: null,
+      absenceReportedAt: null,
+      absenceLate: null,
+      tutorFeeIdr: reportSession.tutorFeeIdr,
+      reportId: null,
+      reportVersion: null,
+      discussion: null,
+      strengths: null,
+      improvements: null,
+      reportCreatedAt: null,
+      reportUpdatedAt: null,
+    },
   ];
   function dbForList(skippedSelects = 0) {
     const results: unknown[][] = [
@@ -597,6 +627,15 @@ test("list reports expose join details to enrolled students, tutors and admins",
     meetingUrl: "https://meet.example.test/session-online",
   });
   expect(tutorRows[1]?.room).toEqual({ name: "Room A", location: "Jakarta" });
+  expect(tutorRows[2]?.meeting).toEqual({
+    status: "processing",
+    meetingUrl: null,
+  });
+  expect(tutorRows[2]?.room).toBeNull();
+
+  await createService().listSessionReports("tutor-1", "tutor", {
+    includeUnreported: true,
+  });
 
   const studentRows = await createService(2).listSessionReports(
     "student-1",

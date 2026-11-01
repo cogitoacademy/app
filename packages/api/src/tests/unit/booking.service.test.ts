@@ -914,6 +914,37 @@ describe("BookingService", () => {
       ).rejects.toThrow(BookingNotEditableError);
     });
 
+    test("marks a capacity room failure as a conflict", async () => {
+      const { service, roomPort } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          insertBooking: mock(async () =>
+            makeBooking({ type: "solo", modality: "offline" }),
+          ),
+        },
+        roomPort: {
+          requestRoomForBooking: mock(async () => ({
+            available: false,
+            reason: "capacity",
+          })),
+        },
+      });
+
+      const result = await service.createSolo("student1", {
+        ...soloInput,
+        modality: "offline",
+        requestedRoomId: "room1",
+      });
+
+      expect(result).toMatchObject({
+        roomRequested: false,
+        roomConflict: true,
+      });
+      expect(roomPort.requestRoomForBooking).toHaveBeenCalledTimes(1);
+    });
+
     test("throws BookingNotEditableError when tutor does not support online sessions", async () => {
       const { service } = createService({
         repo: {
@@ -14520,6 +14551,45 @@ describe("remaining booking coverage boundaries", () => {
         requestRoomForBooking: mock(async () => ({
           available: false,
           reason: "taken",
+        })),
+      },
+    });
+
+    const result = await f.service.createGroup("student1", {
+      subjectId: "mun-speech",
+      tutorId: "tutor1",
+      availabilitySlotId: "slot1",
+      modality: "offline",
+      requestedRoomId: "room1",
+      targetGroupSize: 3,
+      inviteeUserIds: ["student2", "student3"],
+      scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      scheduledEndAt: new Date(Date.now() + 49 * 60 * 60 * 1000),
+      timezone: "Asia/Jakarta",
+    });
+
+    expect(result).toMatchObject({ roomRequested: false, roomConflict: true });
+    expect(f.roomPort.requestRoomForBooking).toHaveBeenCalledTimes(1);
+  });
+
+  test("offline group creation reports a room capacity conflict", async () => {
+    const f = createService({
+      repo: {
+        findTutorProfile: mock(async () => makeTutorProfile()),
+        findAvailabilitySlot: mock(async () => makeSlot()),
+        findOverlappingBookings: mock(async () => []),
+        findUsersByIds: mock(async () => [
+          { id: "student2" },
+          { id: "student3" },
+        ]),
+        insertBooking: mock(async () =>
+          makeBooking({ type: "group", modality: "offline" }),
+        ),
+      },
+      roomPort: {
+        requestRoomForBooking: mock(async () => ({
+          available: false,
+          reason: "capacity",
         })),
       },
     });
