@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -36,6 +37,7 @@ export function KolSettlementPanel({
   const query = useQuery(
     orpc.adminReferral.getKolSettlement.queryOptions({ input: { decisionId } }),
   );
+  const [paidAt, setPaidAt] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [formVersion, setFormVersion] = useState(0);
   const [command, setCommand] = useState<Command | null>(null);
@@ -197,7 +199,13 @@ export function KolSettlementPanel({
           </Field>
           <Field>
             <FieldLabel>Actual payment date (WIB)</FieldLabel>
-            <Input name="paidAt" type="date" required disabled={locked} />
+            <DatePicker
+              value={paidAt}
+              onChange={setPaidAt}
+              required
+              disabled={locked}
+            />
+            <input type="hidden" name="paidAt" value={paidAt} />
           </Field>
           <Field>
             <FieldLabel>Transfer reference</FieldLabel>

@@ -54,8 +54,6 @@ describe("toPublicAcademyClass", () => {
       state: "published",
       titleEn: "Synthetic cohort",
       descriptionEn: "Test catalog description",
-      titleId: "Kelas contoh",
-      descriptionId: "Deskripsi kelas",
       coverKey: null,
       cohortFullRateMarks: 20,
       cohortHalfRateMarks: 22,

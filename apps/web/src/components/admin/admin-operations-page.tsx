@@ -676,7 +676,7 @@ function BookingQueue({
                                 variant="tertiary"
                                 render={
                                   <Link
-                                    to="/admin-operations/bookings/$bookingId"
+                                    to="/bookings/$bookingId"
                                     params={{ bookingId: item.id }}
                                     aria-label={`View booking #${item.bookingNumber} details`}
                                   />
@@ -1038,7 +1038,10 @@ function AdminReviewContextCard({ booking }: { booking: QueueItem }) {
         </CardTitle>
       </CardHeader>
       <CardBody className="grid gap-3 sm:grid-cols-2">
-        <AdminMetricRow label="Source" value="Admin override" />
+        <AdminMetricRow
+          label="Source"
+          value={booking.overrideMeta ? "Admin override" : "Booking"}
+        />
         <AdminMetricRow
           label="Urgency"
           value={getUrgencyLabel(booking.currentState)}
@@ -2903,7 +2906,7 @@ function PendingRoomApprovals({
                           variant="secondary"
                           render={
                             <Link
-                              to="/admin-operations/bookings/$bookingId"
+                              to="/bookings/$bookingId"
                               params={{ bookingId: item.bookingId }}
                               aria-label={
                                 item.requestedRoomId

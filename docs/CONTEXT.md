@@ -1,10 +1,32 @@
 # Cogito App — Codebase Context
 
+## Single-language Academy classes (1 November 2026)
+
+Academy class title/description and session title/curriculum now each have one input. API contracts retain the canonical `titleEn`, `descriptionEn`, `curriculumEn` names; these fields can contain the authored language and have no alternate-language partner. Schema and migration 0085 remove `academy_class.title_id/description_id` and `academy_class_session.title_id/curriculum_id`. Admin and public reads use the real reduced schema, with no filtering mapper. Other modules' localized content is outside this change.
+
+
+## Compact Academy class details (1 November 2026)
+
+The minimum enrollment check and its existing decision workflow sit in the Administration column. Each scheduled session shows compact date and tutor details with icon actions opening dialogs for date selection or tutor replacement plus the required reason. Cancellation is a single session button that opens the existing reason, return preview and final confirmation flow. Meeting retry appears in class management only when meeting work needs attention.
+
+
+## Academy class session controls (1 November 2026)
+
+Admin class details place cancellation of the whole class beside the class badges. Each session accordion contains its own schedule update, tutor replacement, absence history, and session cancellation. The change icon beside the tutor reveals replacement selection. Schedule updates, replacement, meeting retries, and minimum decisions collect a reason after the action is chosen; cancellation dialogs collect the reason and require review of the return before final confirmation. Student details do not expose these admin controls.
+
+
+## Shared class and booking details (1 November 2026)
+
+`/classes/$classId` now allows students and admins. Both roles use `ClassDetailView` for descriptions, prices, tutors, curriculum and schedules. Students retain enrollment; admins load `admin/getAcademyClass` and see administration, session capacity/room/meeting details and the existing reschedule, replacement, absence, meeting retry, cancellation and lifecycle controls. The admin class list links to details instead of mounting a management drawer. Detail/list/public class queries refresh after management actions.
+
+`/bookings/$bookingId` is the canonical detail for every role. Admins receive the full `AdminBookingDetailPage` wrapper, including override, room actions, financial context and state history. Operations remains the queue/wallet/room workspace and links to this route; its previous booking-detail URL redirects to the canonical route after the admin guard.
+
+
 ## Reason entry and requirement markers (1 November 2026)
 
 Reason labels show a red trailing asterisk when required and `(optional)` when optional. Required inputs also expose `aria-required`; markers follow the current API/service rules, including mandatory Knowledge Bank reasons and optional invite-decline/withdrawal reasons. This UI change does not relax API requirements.
 
-Inline reasons for Academy meeting retries, session rescheduling/tutor replacement, class cancellation/minimum decisions, tax configuration, economy draft/activation and KOL adjustments use the shared `ReasonField`: an explicit Add/Edit button opens a desktop dialog or a bottom drawer below 640px. Cancel/dismiss discards only the unsaved reason draft; Use reason applies it without submitting the surrounding action. Reasons already inside an editor dialog/drawer retain that flow. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
+Inline reasons for tax configuration, economy draft/activation and KOL adjustments use the shared `ReasonField`: an explicit Add/Edit button opens a desktop dialog or a bottom drawer below 640px. Cancel/dismiss discards only the unsaved reason draft; Use reason applies it without submitting the surrounding action. Reasons already inside an editor dialog/drawer retain that flow. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
 
 Verification and limits are recorded in RUNBOOK and the active UI controls audit. No schema, migration, environment or provider changes are needed.
 
@@ -679,9 +701,9 @@ non-students to dashboard before the panel mounts. Synthetic auth/layout checks
 passed on 23 October; the permanent catalog E2E locator still targets the old
 button and must be updated to the full-card link (see the UI audit plan).
 The app header identifies Class details and Class studio correctly.
-Admin `/admin-classes` starts with published/postponed classes. Drafts & editor
+Admin `/admin-classes` starts with published/postponed classes. Session rescheduling, same-time tutor replacement, and tutor absence history are available on the shared class detail page, keeping the published list focused on summaries. Drafts & editor
 keeps the editor mounted across tab changes; publishing returns to the published
-list. Manage class expands existing cancellation/minimum/schedule controls.
+list. Class details expose existing cancellation/minimum/schedule controls to admins.
 Student/tutor/admin report lists are bounded and scroll locally. Mobile session
 selection focuses and scrolls to the selected report. Existing route role guards,
 RPCs, quote math, settlement and audit rules are unchanged.
@@ -3677,9 +3699,9 @@ Referral page (1 November 2026): displays signup-to-reward flow with a connected
 
 Balance page (1 November 2026): custom top-up Marks label and input use a horizontal field layout on desktop. Payment unit-test quote fixtures expire in 2030 to remain valid for current test runs; production quote expiry is unchanged.
 
-Dashboard Pulse sections (student, tutor, admin) share `DashboardInsights`: a single rounded, bordered metric strip with column separators, prominent values, supporting descriptions, and accessible icon-only detail links at the top right of each metric. On mobile, metrics stack with horizontal separators. No Card surfaces are used for the section or metrics; data and destinations are unchanged.
+KOL commission settlement uses the shared Selia DatePicker for the required actual payment date; submission retains WIB midnight semantics.
 
-Referral empty states (30 October): reuse the shared EmptyState with contextual icons and copy. Student invites offer a copy-message action; filtered admin results offer Clear filters; unfiltered activity explains when records appear; an empty KOL list opens the existing create form. No new API or reward rules.
+Dashboard Pulse sections (student, tutor, admin) share `DashboardInsights`: a single rounded, bordered metric strip with column separators, prominent values, supporting descriptions, and accessible icon-only detail links at the top right of each metric. On mobile, metrics stack with horizontal separators. No Card surfaces are used for the section or metrics; data and destinations are unchanged.
 
 Exact Balance top-up previews price immediately from the loaded catalog using tier pricing, upward rounding and per-Mark surcharge. Top up creates a server quote and starts checkout when the price matches; changed prices require drawer confirmation. No API contract or payment validation changes.
 

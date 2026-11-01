@@ -19,9 +19,7 @@ type AdminClassSession = {
   id: string;
   capacity: number;
   titleEn: string;
-  titleId: string | null;
   curriculumEn: string | null;
-  curriculumId: string | null;
   startAt: string;
   endAt: string;
   mode: "online" | "in_person";
@@ -38,9 +36,7 @@ type AdminClass = {
   kind: "cohort" | "masterclass";
   competitionId: string;
   titleEn: string;
-  titleId: string | null;
   descriptionEn: string;
-  descriptionId: string | null;
   coverKey: string | null;
   minimumEnrollment: number | null;
   minimumCheckAt: string | null;
@@ -214,9 +210,9 @@ test("admin publishes both class modes; students see only the published DTO", as
 
     await adminPage.locator("#class-competition").click();
     await adminPage.getByRole("option").first().click();
-    await adminPage.getByLabel("Title (English)", { exact: true }).fill(title);
+    await adminPage.getByLabel("Title", { exact: true }).fill(title);
     await adminPage
-      .getByLabel("Description (English)", { exact: true })
+      .getByLabel("Description", { exact: true })
       .fill("Automated test fixture. Not approved class copy.");
     await expect(adminPage.locator("#class-tutor-fee")).toHaveValue("400000");
     await expect(adminPage.locator("#class-tutor-fee")).toHaveAttribute(
@@ -231,11 +227,11 @@ test("admin publishes both class modes; students see only the published DTO", as
     await adminPage.locator("#class-minimum-enrollment").fill("2");
 
     await adminPage
-      .getByLabel("Session title (English)")
+      .getByLabel("Session title")
       .nth(0)
       .fill("Online fixture session");
     await adminPage
-      .getByLabel("Curriculum description (English)")
+      .getByLabel("Curriculum description")
       .nth(0)
       .fill("Automated test curriculum fixture.");
     await fillDateTimeInput(adminPage, "session-0-start", firstStart);
@@ -246,11 +242,11 @@ test("admin publishes both class modes; students see only the published DTO", as
 
     await adminPage.getByRole("button", { name: "Add session" }).click();
     await adminPage
-      .getByLabel("Session title (English)")
+      .getByLabel("Session title")
       .nth(1)
       .fill("In-person fixture session");
     await adminPage
-      .getByLabel("Curriculum description (English)")
+      .getByLabel("Curriculum description")
       .nth(1)
       .fill("Automated test curriculum fixture.");
     await fillDateTimeInput(adminPage, "session-1-start", secondStart);
@@ -306,9 +302,7 @@ test("admin publishes both class modes; students see only the published DTO", as
       kind: "cohort",
       competitionId: draft.competitionId,
       titleEn: draft.titleEn,
-      titleId: draft.titleId,
       descriptionEn: "External reviewer update to the synthetic fixture.",
-      descriptionId: draft.descriptionId,
       coverKey: draft.coverKey,
       tutorFeeIdr: draft.tutorFeeIdr,
       minimumEnrollment: draft.minimumEnrollment,
@@ -321,9 +315,7 @@ test("admin publishes both class modes; students see only the published DTO", as
         id: session.id,
         capacity: session.capacity,
         titleEn: session.titleEn,
-        titleId: session.titleId,
         curriculumEn: session.curriculumEn,
-        curriculumId: session.curriculumId,
         startAt: session.startAt,
         endAt: session.endAt,
         mode: session.mode,
@@ -331,9 +323,7 @@ test("admin publishes both class modes; students see only the published DTO", as
         tutorId: session.tutorId,
       })),
     });
-    await adminPage
-      .getByLabel("Title (English)", { exact: true })
-      .fill(`${title} stale`);
+    await adminPage.getByLabel("Title", { exact: true }).fill(`${title} stale`);
     await adminPage
       .getByLabel("Reason for this change")
       .fill("Attempt a stale save after a concurrent admin update");

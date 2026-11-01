@@ -4,9 +4,9 @@ import { createAcademyClassHandler } from "../../modules/academy-class/academy-c
 import type { AcademyClassService } from "../../modules/academy-class/academy-class.service";
 
 test("academy handlers return service results and attribute mutations to the session actor", async () => {
-  const result = { id: "class-1" };
+  const result = { id: "class-1", sessions: [] };
   const methods = {
-    list: mock(async () => result),
+    list: mock(async () => [result]),
     get: mock(async () => result),
     listPublished: mock(async () => result),
     getPublished: mock(async () => result),
@@ -23,7 +23,7 @@ test("academy handlers return service results and attribute mutations to the ses
   const context = { session: { user: { id: "actor-1" } } } as Context;
   expect(
     await handler.listAcademyClasses({ input: { state: "published" } }),
-  ).toEqual(result);
+  ).toEqual([result]);
   expect(methods.list).toHaveBeenCalledWith({ state: "published" });
   expect(await handler.getAcademyClass({ input: { id: "class-1" } })).toEqual(
     result,

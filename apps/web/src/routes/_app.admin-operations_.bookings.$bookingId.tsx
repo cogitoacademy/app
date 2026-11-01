@@ -1,31 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import type { CogitoUser } from "@cogito-app/auth";
 
-import { AdminBookingDetailPage } from "@/components/admin/admin-operations-page";
-
 export const Route = createFileRoute(
   "/_app/admin-operations_/bookings/$bookingId",
 )({
-  head: () => ({
-    meta: [
-      {
-        title: "Booking detail · Cogito Academy",
-      },
-    ],
-  }),
-  component: AdminBookingDetailRoute,
-  beforeLoad: ({ context }) => {
+  beforeLoad: ({ context, params }) => {
     const user = context.session.data?.user as CogitoUser | undefined;
     if (user?.role !== "admin") throw redirect({ to: "/dashboard" });
+    throw redirect({
+      to: "/bookings/$bookingId",
+      params: { bookingId: params.bookingId },
+      replace: true,
+    });
   },
 });
-
-function AdminBookingDetailRoute() {
-  const { bookingId } = Route.useParams();
-  const { session } = Route.useRouteContext();
-  const viewer = session.data?.user as CogitoUser | undefined;
-
-  return (
-    <AdminBookingDetailPage bookingId={bookingId} viewerId={viewer?.id ?? ""} />
-  );
-}

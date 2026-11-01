@@ -665,14 +665,17 @@ export function createAcademyClassService(deps: {
   }
 
   async function list(input: z.infer<typeof listAcademyClassesInput>) {
-    const [classes, lateCounts] = await Promise.all([
-      repo.list(deps.db, input),
-      deps.db
-        .select({ tutorId: academyClassTutorAbsence.tutorId, count: count() })
-        .from(academyClassTutorAbsence)
-        .where(eq(academyClassTutorAbsence.late, true))
-        .groupBy(academyClassTutorAbsence.tutorId),
-    ]);
+    return withAbsenceHistory(await repo.list(deps.db, input));
+  }
+
+  async function withAbsenceHistory(
+    classes: Awaited<ReturnType<typeof repo.list>>,
+  ) {
+    const lateCounts = await deps.db
+      .select({ tutorId: academyClassTutorAbsence.tutorId, count: count() })
+      .from(academyClassTutorAbsence)
+      .where(eq(academyClassTutorAbsence.late, true))
+      .groupBy(academyClassTutorAbsence.tutorId);
     const countByTutor = new Map(
       lateCounts.map((row) => [row.tutorId, row.count]),
     );
@@ -705,7 +708,8 @@ export function createAcademyClassService(deps: {
   async function get(id: string) {
     const record = await repo.get(deps.db, id);
     if (!record) throw new AcademyClassNotFoundError(id);
-    return record;
+    const [detail] = await withAbsenceHistory([record]);
+    return detail!;
   }
 
   async function listPublished() {
@@ -952,9 +956,9 @@ export function createAcademyClassService(deps: {
       kind: input.kind,
       competitionId: input.competitionId,
       titleEn: input.titleEn,
-      titleId: input.titleId ?? null,
+
       descriptionEn: input.descriptionEn,
-      descriptionId: input.descriptionId ?? null,
+
       coverKey: input.coverKey ?? null,
       minimumEnrollment:
         input.kind === "cohort" ? input.minimumEnrollment : null,
@@ -982,9 +986,9 @@ export function createAcademyClassService(deps: {
       sequenceNumber: index + 1,
       capacity: session.capacity,
       titleEn: session.titleEn,
-      titleId: session.titleId ?? null,
+
       curriculumEn: session.curriculumEn ?? null,
-      curriculumId: session.curriculumId ?? null,
+
       startAt: session.startAt,
       endAt: session.endAt,
       mode: session.mode,
@@ -1118,9 +1122,9 @@ export function createAcademyClassService(deps: {
       kind: record.kind,
       competitionId: record.competitionId,
       titleEn: record.titleEn,
-      titleId: record.titleId,
+
       descriptionEn: record.descriptionEn,
-      descriptionId: record.descriptionId,
+
       coverKey: record.coverKey,
       minimumEnrollment: record.minimumEnrollment,
       minimumCheckAt: record.minimumCheckAt,
@@ -1136,9 +1140,9 @@ export function createAcademyClassService(deps: {
         sequenceNumber: session.sequenceNumber,
         capacity: session.capacity,
         titleEn: session.titleEn,
-        titleId: session.titleId,
+
         curriculumEn: session.curriculumEn,
-        curriculumId: session.curriculumId,
+
         startAt: session.startAt,
         endAt: session.endAt,
         mode: session.mode,

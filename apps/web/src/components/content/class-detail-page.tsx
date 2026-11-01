@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   IconArrowLeft,
   IconCalendarEvent,
@@ -16,7 +16,7 @@ import {
   AccordionTrigger,
   AccordionPanel,
 } from "@cogito-app/ui/components/selia/accordion";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -29,7 +29,7 @@ import {
   getCompetitionPalette,
   getCompetitionPaletteStyle,
 } from "@/lib/competition-colors";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 function formatDate(date: Date | string) {
   return new Intl.DateTimeFormat("en", {
@@ -47,9 +47,7 @@ function formatTime(date: Date | string) {
   }).format(new Date(date));
 }
 
-export function ClassDetailPage() {
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const { classId } = useParams({ from: "/_app/classes_/$classId" });
+export function ClassDetailPage({ classId }: { classId: string }) {
   const academyClass = useQuery(
     orpc.classes.get.queryOptions({ input: { id: classId } }),
   );
@@ -80,7 +78,28 @@ export function ClassDetailPage() {
       />
     );
   }
-  const item = academyClass.data;
+  return <ClassDetailView item={academyClass.data} />;
+}
+
+type ClassDetailRecord = Awaited<ReturnType<typeof client.classes.get>>;
+
+export function ClassDetailView({
+  item,
+  adminSummary,
+  adminControls,
+  sessionDetails,
+  sessionActions,
+  badgeActions,
+}: {
+  item: ClassDetailRecord;
+  adminSummary?: ReactNode;
+  adminControls?: ReactNode;
+  sessionActions?: ReadonlyMap<string, ReactNode>;
+  badgeActions?: ReactNode;
+  sessionDetails?: ReadonlyMap<string, ReactNode>;
+}) {
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const isAdmin = Boolean(adminControls);
   const palette = getCompetitionPalette(
     item.competition.parent ?? item.competition,
   );
@@ -109,19 +128,29 @@ export function ClassDetailPage() {
         <Button
           nativeButton={false}
           variant="underline"
-          render={<Link to="/classes" aria-label="Browse classes" />}
+          role="link"
+          render={
+            <Link
+              to={isAdmin ? "/admin-classes" : "/classes"}
+              aria-label="Browse classes"
+            />
+          }
           className="w-fit"
         >
           <IconArrowLeft /> All classes
         </Button>
-        <Button
-          variant="tertiary"
-          nativeButton={false}
-          size="sm"
-          render={<Link to="/class-reports" aria-label="My class reports" />}
-        >
-          <IconCalendarEvent /> My class reports
-        </Button>
+        {!isAdmin ? (
+          <Button
+            variant="tertiary"
+            nativeButton={false}
+            size="sm"
+            render={<Link to="/class-reports" aria-label="My class reports" />}
+          >
+            <IconCalendarEvent /> My class reports
+          </Button>
+        ) : (
+          <Badge variant="info">Admin view</Badge>
+        )}
       </div>
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:grid-rows-[auto_1fr]">
         <section
@@ -177,6 +206,9 @@ export function ClassDetailPage() {
             {item.state === "postponed" ? (
               <Badge variant="warning">Postponed once</Badge>
             ) : null}
+            {badgeActions ? (
+              <div className="ml-auto">{badgeActions}</div>
+            ) : null}
           </div>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-2 border-y border-border py-4 text-sm">
             <dt className="text-muted">
@@ -230,12 +262,20 @@ export function ClassDetailPage() {
           </dl>
           {item.state === "postponed" ? (
             <Text className="rounded border border-warning-border bg-warning/10 p-3 text-sm">
-              This class has a new schedule. Check your enrollment for the
-              deadline to withdraw without a fee.
+              {isAdmin
+                ? "This class has a new schedule. Enrolled students may have a fee-free withdrawal window."
+                : "This class has a new schedule. Check your enrollment for the deadline to withdraw without a fee."}
             </Text>
           ) : null}
         </section>
-        {enrollmentKind ? (
+        {isAdmin ? (
+          <aside
+            aria-label="Class administration"
+            className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2"
+          >
+            {adminSummary}
+          </aside>
+        ) : enrollmentKind ? (
           <aside
             aria-label="Class enrollment"
             className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2"
@@ -314,15 +354,18 @@ export function ClassDetailPage() {
                         <div className="flex flex-wrap items-center gap-3">
                           <Text className="text-sm text-muted">
                             {session.mode === "online" ? "Online" : "In person"}{" "}
-                            | Tutor:{" "}
-                            {session.tutor?.name ?? "Tutor to be announced"}
+                            {!isAdmin
+                              ? ` | Tutor: ${session.tutor?.name ?? "Tutor to be announced"}`
+                              : null}
                           </Text>
                         </div>
                         <Text className="whitespace-pre-wrap text-sm leading-relaxed">
                           {session.curriculumEn ||
                             "Curriculum to be announced."}
                         </Text>
-                        {session.mode === "online" ? (
+                        {sessionDetails?.get(session.id)}
+                        {sessionActions?.get(session.id)}
+                        {!isAdmin && session.mode === "online" ? (
                           <Text className="text-xs text-muted">
                             Meeting details are available to enrolled students.
                           </Text>
@@ -336,6 +379,7 @@ export function ClassDetailPage() {
           </section>
         </div>
       </div>
+      {adminControls}
     </Stack>
   );
 }

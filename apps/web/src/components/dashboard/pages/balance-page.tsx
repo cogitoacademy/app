@@ -361,7 +361,7 @@ export function BalancePage() {
             </div>
           )}
           {v3Active ? (
-            <div className="mt-5 flex flex-col gap-3 rounded-lg border border-card-border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mt-5 flex flex-col gap-3 rounded-lg border border-card-border bg-card p-4 md:flex-row md:items-end md:justify-between">
               <div className="space-y-1">
                 <Text className="font-semibold">Choose an exact amount</Text>
                 <Text className="text-sm text-muted">
@@ -369,11 +369,6 @@ export function BalancePage() {
                 </Text>
               </div>
               <div className="flex flex-col gap-2 sm:min-w-72">
-                <Text aria-live="polite" className="text-lg font-semibold">
-                  {customPrice !== null && customPrice <= 2_147_483_647
-                    ? formatIdr(customPrice)
-                    : "Enter a valid Marks amount"}
-                </Text>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <Field className="min-w-0 flex-1 sm:flex-row!">
                     <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
@@ -390,6 +385,11 @@ export function BalancePage() {
                       }
                     />
                   </Field>
+                  <Text aria-live="polite" className="text-lg font-semibold align-end sm:self-center">
+                    = {customPrice !== null && customPrice <= 2_147_483_647
+                      ? formatIdr(customPrice)
+                      : "Enter a valid Marks amount"}
+                  </Text>
                   <Button
                     variant="secondary"
                     disabled={

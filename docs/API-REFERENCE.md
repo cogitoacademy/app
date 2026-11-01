@@ -1,5 +1,25 @@
 # Cogito API Reference
 
+## Single-language class content (1 November 2026)
+
+Academy class draft inputs and admin/public outputs have one content value per field: class `titleEn`, `descriptionEn`; session `titleEn`, `curriculumEn`. Removed `titleId`, `descriptionId`, and session `curriculumId` are no longer part of these contracts or database tables. Existing Zod unknown-key stripping applies to obsolete input properties. No locale-specific class read fallback is used.
+
+
+## Compact class detail controls (1 November 2026)
+
+Moving the minimum check to Administration and opening session changes in dialogs changes no RPC contracts. Schedule and tutor updates still submit their expected session version and required reason; cancellation retains its preview, quote version, request key and confirmation.
+
+
+## Academy class action confirmation UI (1 November 2026)
+
+Class/session cancellation still use their existing preview and confirm RPCs, quote versions and request keys. Reschedule, tutor replacement, meeting retry and minimum decision RPC contracts are unchanged; reasons are collected after the admin chooses an action.
+
+
+## Shared detail data (1 November 2026)
+
+`admin/getAcademyClass` remains admin-only with `{json: {id}}` input. Its sessions now include `tutorAbsence` (matching current tutor and assignment version, or null) and `tutorLateNoticeCount` on each absence history entry, using the same enrichment as `admin/listAcademyClasses`. The count covers the tutor's late notices across classes. Public `classes/get` remains a redacted catalog response; no admin fields or management procedures are exposed to students. Booking detail consolidation adds no RPC or input changes.
+
+
 ## Reason entry UI (1 November 2026)
 
 Request/response contracts and reason requirements are unchanged. UI markers reflect existing validation: required reasons show a red asterisk; optional reasons show `(optional)`. In particular, `adminContent/create`, `update` and `remove` still require a reason for `resource` entries in the service even though their shared input schema permits omission for calendar entries. Invite-decline/withdrawal reasons remain optional. Moving inline input into a dialog/drawer does not submit an RPC; the existing action submits the saved reason in the normal `{json: input}` envelope.
