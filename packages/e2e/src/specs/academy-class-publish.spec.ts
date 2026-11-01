@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { fillReasonPrompt } from "../helpers/reason-prompt";
 import {
   expect,
   request,
@@ -365,8 +366,12 @@ test("admin publishes both class modes; students see only the published DTO", as
       publishedCard.getByText(/0 Meet\(s\) ready.*1 failed/),
     ).toBeVisible();
 
-    const retryReason = publishedCard.locator(`#meeting-retry-${draft.id}`);
-    await retryReason.fill("Retry the accepted event with a pending Meet link");
+    await fillReasonPrompt(
+      adminPage,
+      "Retry reason",
+      "Retry the accepted event with a pending Meet link",
+      publishedCard,
+    );
     await publishedCard
       .getByRole("button", { name: "Retry failed meeting setup" })
       .click();

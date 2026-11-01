@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fillReasonPrompt } from "../helpers/reason-prompt";
 
 const classId = "11111111-1111-4111-8111-111111111111";
 const sessionId = "22222222-2222-4222-8222-222222222222";
@@ -263,9 +264,12 @@ for (const width of [390, 1440]) {
       .getByRole("textbox", { name: "New date and start time" })
       .last()
       .fill("11:15");
-    await row
-      .getByRole("textbox", { name: "Reason for students" })
-      .fill("Tutor schedule conflict");
+    await fillReasonPrompt(
+      page,
+      "Reason for students",
+      "Tutor schedule conflict",
+      row,
+    );
     await row.getByRole("button", { name: "Update session time" }).click();
     await expect.poll(() => mock.requests.length).toBe(1);
     expect(mock.requests[0]).toMatchObject({

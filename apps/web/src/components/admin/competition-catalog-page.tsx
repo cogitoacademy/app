@@ -1361,11 +1361,14 @@ export function CompetitionCatalogPage() {
                       </Select>
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="move-reason">Reason</FieldLabel>
+                      <FieldLabel htmlFor="move-reason" required>
+                        Reason
+                      </FieldLabel>
                       <Input
                         id="move-reason"
                         value={moveReason}
                         onChange={(event) => setMoveReason(event.target.value)}
+                        aria-required="true"
                       />
                     </Field>
                     <Button
@@ -1386,8 +1389,8 @@ export function CompetitionCatalogPage() {
 
               <div className="mt-7 border-t border-border pt-6">
                 <Field>
-                  <FieldLabel htmlFor="catalog-reason">
-                    Change reason *
+                  <FieldLabel htmlFor="catalog-reason" required>
+                    Change reason
                   </FieldLabel>
                   <Textarea
                     id="catalog-reason"
@@ -1396,6 +1399,7 @@ export function CompetitionCatalogPage() {
                       updateDraft("reason", event.target.value)
                     }
                     placeholder="Required for the audit record"
+                    aria-required="true"
                   />
                   <FieldDescription>
                     Every catalog write is recorded with this reason.
@@ -1516,12 +1520,15 @@ export function CompetitionCatalogPage() {
               />
             ) : null}
             <Field className="mt-4">
-              <FieldLabel htmlFor="catalog-action-reason">Reason *</FieldLabel>
+              <FieldLabel htmlFor="catalog-action-reason" required>
+                Reason
+              </FieldLabel>
               <Textarea
                 id="catalog-action-reason"
                 value={actionReason}
                 onChange={(event) => setActionReason(event.target.value)}
                 placeholder="Required for the audit record"
+                aria-required="true"
               />
             </Field>
           </DialogBody>

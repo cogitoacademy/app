@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { Drawer as BaseDrawer } from "@base-ui/react/drawer";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -108,12 +110,14 @@ export function DrawerPopup({
   portalContainer,
   backdrop = true,
   backdropBlur = true,
+  layerClassName,
   ...props
 }: React.ComponentProps<typeof BaseDrawer.Popup> &
   VariantProps<typeof drawerPopupVariants> & {
     portalContainer?: HTMLElement | null;
     backdrop?: boolean;
     backdropBlur?: boolean;
+    layerClassName?: string;
   }) {
   const inlined = portalContainer !== undefined;
 
@@ -124,6 +128,7 @@ export function DrawerPopup({
           data-slot="drawer-backdrop"
           className={cn(
             "inset-0 min-h-dvh",
+            layerClassName,
             inlined ? "absolute" : "fixed",
             inlined
               ? ["bg-[rgb(0_0_0/calc(0.2*(1-var(--drawer-swipe-progress,0))))]"]
@@ -144,6 +149,7 @@ export function DrawerPopup({
       <BaseDrawer.Viewport
         className={cn(
           "inset-0",
+          layerClassName,
           inlined ? "absolute" : "fixed",
           direction === "bottom" && "flex items-end justify-center",
           !backdrop && "pointer-events-none",

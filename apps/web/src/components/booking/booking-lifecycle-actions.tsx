@@ -502,8 +502,8 @@ export function BookingLifecycleActions({
           </DialogHeader>
           <DialogBody>
             <Field>
-              <FieldLabel htmlFor="invite-decline-reason">
-                Reason (optional)
+              <FieldLabel htmlFor="invite-decline-reason" optional>
+                Reason
               </FieldLabel>
               <Textarea
                 id="invite-decline-reason"
@@ -601,8 +601,8 @@ export function BookingLifecycleActions({
           </DialogHeader>
           <DialogBody>
             <Field>
-              <FieldLabel htmlFor="invite-withdraw-reason">
-                Reason (optional)
+              <FieldLabel htmlFor="invite-withdraw-reason" optional>
+                Reason
               </FieldLabel>
               <Textarea
                 id="invite-withdraw-reason"

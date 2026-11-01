@@ -54,7 +54,7 @@ export function ConfirmationDialog({
             variant="secondary"
             type="button"
             onClick={() => onOpenChange(false)}
-            disabled={pending || confirmDisabled}
+            disabled={pending}
             className="w-full sm:w-auto"
           >
             Cancel
@@ -64,7 +64,7 @@ export function ConfirmationDialog({
             type="button"
             onClick={onConfirm}
             progress={pending}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             className="w-full sm:w-auto"
           >
             {confirmLabel}

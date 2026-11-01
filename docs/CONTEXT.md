@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+## Reason entry and requirement markers (1 November 2026)
+
+Reason labels show a red trailing asterisk when required and `(optional)` when optional. Required inputs also expose `aria-required`; markers follow the current API/service rules, including mandatory Knowledge Bank reasons and optional invite-decline/withdrawal reasons. This UI change does not relax API requirements.
+
+Inline reasons for Academy meeting retries, session rescheduling/tutor replacement, class cancellation/minimum decisions, tax configuration, economy draft/activation and KOL adjustments use the shared `ReasonField`: an explicit Add/Edit button opens a desktop dialog or a bottom drawer below 640px. Cancel/dismiss discards only the unsaved reason draft; Use reason applies it without submitting the surrounding action. Reasons already inside an editor dialog/drawer retain that flow. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
+
+Verification and limits are recorded in RUNBOOK and the active UI controls audit. No schema, migration, environment or provider changes are needed.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.

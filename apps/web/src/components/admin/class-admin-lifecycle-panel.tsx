@@ -1,5 +1,7 @@
 "use client";
 
+import { ReasonField } from "@/components/reason-field";
+
 import Loader from "@/components/loader";
 
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
@@ -20,7 +22,6 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -296,17 +297,17 @@ export function ClassAdminLifecyclePanel({
                       </Text>
                     ) : null}
                     <Field>
-                      <FieldLabel htmlFor={`minimum-reason-${classRecord.id}`}>
-                        Decision reason
-                      </FieldLabel>
-                      <Input
+                      <ReasonField
+                        label="Decision reason"
+                        required
                         id={`minimum-reason-${classRecord.id}`}
                         maxLength={500}
                         value={reason}
-                        onChange={(event) => {
-                          setReason(event.target.value);
+                        onChange={(value) => {
+                          setReason(value);
                           setDecisionReview(null);
                         }}
+                        minLength={3}
                       />
                       <FieldDescription>
                         Required for the audit record.
@@ -471,17 +472,17 @@ export function ClassAdminLifecyclePanel({
           {cancelSessionId ? (
             <div className="space-y-3 rounded border border-border p-4">
               <Field>
-                <FieldLabel htmlFor={`session-cancel-reason-${classRecord.id}`}>
-                  Cancellation reason
-                </FieldLabel>
-                <Input
+                <ReasonField
+                  label="Cancellation reason"
+                  required
                   id={`session-cancel-reason-${classRecord.id}`}
                   maxLength={500}
                   value={cancelReason}
-                  onChange={(event) => {
-                    setCancelReason(event.target.value);
+                  onChange={(value) => {
+                    setCancelReason(value);
                     setSessionReview(null);
                   }}
+                  minLength={3}
                 />
               </Field>
               <Button
