@@ -14,7 +14,7 @@ import {
   TableCell,
 } from "@cogito-app/ui/components/selia/table";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -72,58 +72,89 @@ export function ReferralsPage() {
         <Heading level={1} size="md">
           My referrals
         </Heading>
-        <Text className="max-w-full text-muted">
-          Share your friend code and track rewards earned from completed paid
-          sessions.
-        </Text>
       </div>
-
-      <Card>
-        <CardBody className="grid gap-6 py-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div className="space-y-3">
-            <Text className="text-sm font-medium text-muted">
-              LEARN TOGETHER
-            </Text>
-            <Heading level={2} size="lg">
-              Good things are better with friends.
-            </Heading>
-            <Text className="max-w-xl text-muted">
-              Your friends get {data.settings.welcomeMarks} welcome Marks when
-              they sign up with your code. You can earn rewards after their
-              first completed paid session, within your semester cap.
-            </Text>
-          </div>
-          <div className="flex min-w-0 flex-col items-start gap-3">
-            <Text className="text-sm text-muted">Your friend code</Text>
-            <div className="flex items-center gap-2">
-              <Text className="font-mono text-3xl font-semibold tracking-wider">
-                {data.code}
-              </Text>
-              <Button
-                variant="plain"
-                size="icon"
-                aria-label="Copy referral code"
-                onClick={() =>
-                  copyReferralText(data.code, "Referral code copied")
-                }
-              >
-                <IconCopy />
-              </Button>
-            </div>
-            <Button
-              onClick={() =>
-                copyReferralText(shareMessage, "Invite message copied")
-              }
+      <section
+        aria-label="Referral code"
+        className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6"
+      >
+        <div className="space-y-1">
+          <Text className="text-muted">Your referral code</Text>
+          <Text className="font-mono text-3xl font-semibold tracking-wider">
+            {data.code}
+          </Text>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => copyReferralText(data.code, "Referral code copied")}
+          >
+            <IconCopy />
+            Copy code
+          </Button>
+          <Button
+            onClick={() =>
+              copyReferralText(shareMessage, "Invite message copied")
+            }
+          >
+            <IconCopy />
+            Copy message
+          </Button>
+        </div>
+      </section>
+      <section aria-labelledby="referral-flow" className="space-y-4">
+        <Heading id="referral-flow" level={2} size="sm">
+          How referrals work
+        </Heading>
+        <ol className="grid gap-5 sm:grid-cols-3">
+          {[
+            [
+              "Share your code",
+              "Send your referral code or invite message to a friend.",
+            ],
+            [
+              "Your friend joins",
+              `They enter your code at signup and receive ${data.settings.welcomeMarks} welcome Marks.`,
+            ],
+            [
+              "Earn your reward",
+              `After their first completed paid session, you receive up to ${data.settings.friendRewardMarks} Marks, within your semester cap.`,
+            ],
+          ].map(([title, description], index) => (
+            <li
+              key={title}
+              className="space-y-2 border-t-2 border-primary pt-3"
             >
-              Copy invite message
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+              <Text className="text-sm text-muted">Step {index + 1}</Text>
+              <Text className="font-semibold">{title}</Text>
+              <Text className="text-muted">{description}</Text>
+            </li>
+          ))}
+        </ol>
+      </section>
       <section
         aria-label="Semester rewards"
         className="grid gap-5 border-b border-border pb-6 sm:grid-cols-3"
       >
+        <div className="space-y-3 sm:col-span-3">
+          <Heading level={2} size="sm">
+            Semester progress
+          </Heading>
+          <progress
+            className="h-3 w-full overflow-hidden rounded-full bg-accent accent-primary [&::-webkit-progress-bar]:bg-accent [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
+            aria-label="Semester reward allowance used"
+            value={Math.min(data.semester.earnedMarks, data.semester.capMarks)}
+            max={data.semester.capMarks || 1}
+          />
+          <Text className="text-muted">
+            {data.semester.earnedMarks} / {data.semester.capMarks} Marks earned
+            ·{" "}
+            {data.semester.capMarks === 0
+              ? "Rewards unavailable this semester"
+              : data.semester.remainingMarks === 0
+                ? "Semester cap reached"
+                : `${data.semester.remainingMarks} Marks available`}
+          </Text>
+        </div>
         <div className="space-y-1">
           <Text className="text-muted">Earned this semester</Text>
           <Text className="text-2xl font-semibold">
@@ -149,7 +180,7 @@ export function ReferralsPage() {
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Heading id="invited-friends-heading" level={2} size="sm">
-            Invited friends
+            Referrals
           </Heading>
           <Text className="text-sm text-muted">
             {data.friends.length} invited
@@ -158,8 +189,8 @@ export function ReferralsPage() {
         {data.friends.length === 0 ? (
           <EmptyState
             icon={<IconUsers />}
-            title="Your first study buddy starts here"
-            description="Invite a friend with your code. Once they join, you can follow their progress and rewards here."
+            title="No referrals yet"
+            description="Friends who sign up with your code will appear here."
             tone="secondary"
             action={
               <Button
@@ -214,6 +245,7 @@ export function ReferralsPage() {
                       </InfoPreview>
                     </span>
                   </TableHead>
+                  <TableHead>Completed date</TableHead>
                   <TableHead>Reward</TableHead>
                 </TableRow>
               </TableHeader>
@@ -230,11 +262,11 @@ export function ReferralsPage() {
                           ? "First session completed"
                           : "Account created"}
                       </Badge>
-                      {friend.completedAt && (
-                        <Text className="mt-1 text-muted">
-                          {formatSemesterEnd(friend.completedAt)}
-                        </Text>
-                      )}
+                    </TableCell>
+                    <TableCell>
+                      {friend.completedAt
+                        ? formatSemesterEnd(friend.completedAt)
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       {friend.completedAt ? (
@@ -254,10 +286,6 @@ export function ReferralsPage() {
             </Table>
           </TableContainer>
         )}
-        <Text className="text-sm text-muted">
-          Rewards are earned after your friend's first completed paid session,
-          within your semester cap.
-        </Text>
       </section>
     </Stack>
   );

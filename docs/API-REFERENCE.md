@@ -2734,3 +2734,5 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 ## Admin meeting retry
 
 `POST /rpc/adminBooking/retryMeeting` accepts `{"json":{"bookingId":"..."}}`. Admin only. It retries Google Meet creation for one confirmed online booking with a recorded failed Google Meet attempt, audits the action, and returns `{bookingId, scheduled}`. A failed retry leaves the booking confirmed for another attempt or manual-link setup.
+
+Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
