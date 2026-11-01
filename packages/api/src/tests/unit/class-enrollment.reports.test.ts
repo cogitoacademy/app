@@ -584,6 +584,36 @@ test("list reports expose join details to enrolled students, tutors and admins",
       reportCreatedAt: null,
       reportUpdatedAt: null,
     },
+    {
+      classId: reportClass.id,
+      classTitle: reportClass.titleEn,
+      classNumber: 12,
+      classKind: "cohort",
+      classDescription: "Class description",
+      sessionId: "session-room-no-location",
+      tutorId: "tutor-1",
+      sequenceNumber: 4,
+      sessionTitle: "Room without location",
+      curriculumEn: "Session curriculum",
+      startAt: new Date("2040-01-04T10:00:00.000Z"),
+      endAt: new Date("2040-01-04T11:00:00.000Z"),
+      mode: "in_person",
+      state: "scheduled",
+      meetingStatus: null,
+      meetingUrl: null,
+      roomName: "Room B",
+      roomLocation: null,
+      absenceReportedAt: null,
+      absenceLate: null,
+      tutorFeeIdr: reportSession.tutorFeeIdr,
+      reportId: null,
+      reportVersion: null,
+      discussion: null,
+      strengths: null,
+      improvements: null,
+      reportCreatedAt: null,
+      reportUpdatedAt: null,
+    },
   ];
   function dbForList(skippedSelects = 0) {
     const results: unknown[][] = [
@@ -632,8 +662,12 @@ test("list reports expose join details to enrolled students, tutors and admins",
     meetingUrl: null,
   });
   expect(tutorRows[2]?.room).toBeNull();
+  expect(tutorRows[3]?.room).toEqual({ name: "Room B", location: "" });
 
   await createService().listSessionReports("tutor-1", "tutor", {
+    includeUnreported: true,
+  });
+  await createService(2).listSessionReports("student-1", "student", {
     includeUnreported: true,
   });
 
