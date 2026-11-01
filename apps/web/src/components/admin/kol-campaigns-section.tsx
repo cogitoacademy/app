@@ -2,7 +2,8 @@
 
 import Loader from "@/components/loader";
 
-import { IconSpeakerphone } from "@tabler/icons-react";
+import { createPortal } from "react-dom";
+import { IconRefresh, IconSpeakerphone } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +39,11 @@ const date = (value: Date | string) =>
   new Date(value).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" }) +
   " WIB";
 
-export function KolCampaignsSection() {
+export function KolCampaignsSection({
+  actionsContainer,
+}: {
+  actionsContainer: HTMLElement | null;
+}) {
   const queryClient = useQueryClient();
   const query = useQuery({
     ...orpc.adminReferral.listKolCampaigns.queryOptions(),
@@ -65,6 +70,33 @@ export function KolCampaignsSection() {
 
   return (
     <Card className="min-w-0 [overflow-wrap:anywhere]">
+      {actionsContainer
+        ? createPortal(
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={open}
+                aria-controls="kol-campaign-form"
+                onClick={() => setOpen(!open)}
+              >
+                {open ? "Hide creation form" : "Create KOL campaign"}
+              </Button>
+              <Button
+                type="button"
+                variant="plain"
+                size="icon"
+                aria-label="Refresh campaigns"
+                title="Refresh campaigns"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <IconRefresh aria-hidden />
+              </Button>
+            </>,
+            actionsContainer,
+          )
+        : null}
       <CardHeader>
         <CardTitle level={2}>KOL campaigns</CardTitle>
       </CardHeader>
@@ -74,15 +106,6 @@ export function KolCampaignsSection() {
           cannot be edited. Student friend codes are separate and available to
           verified students on their My referrals page.
         </Text>
-        <Button
-          type="button"
-          variant="secondary"
-          aria-expanded={open}
-          aria-controls="kol-campaign-form"
-          onClick={() => setOpen(!open)}
-        >
-          {open ? "Hide creation form" : "Create KOL campaign"}
-        </Button>
         <form
           id="kol-campaign-form"
           hidden={!open}
@@ -192,14 +215,6 @@ export function KolCampaignsSection() {
           ) : null}
         </form>
         <div className="space-y-3">
-          <Button
-            type="button"
-            variant="plain"
-            disabled={query.isFetching}
-            onClick={() => void query.refetch()}
-          >
-            Refresh campaigns
-          </Button>
           {query.isPending ? (
             <Loader />
           ) : query.isError ? (
@@ -211,6 +226,7 @@ export function KolCampaignsSection() {
             </div>
           ) : !query.data?.length ? (
             <EmptyState
+              className="rounded-lg border border-dashed border-border"
               icon={<IconSpeakerphone />}
               title="No KOL campaigns yet."
               description="Create a campaign to give your partner a registration code and saved commission terms."

@@ -60,6 +60,9 @@ function date(value: string | Date | null) {
 }
 
 export function AdminReferralsPage() {
+  const [campaignActions, setCampaignActions] = useState<HTMLDivElement | null>(
+    null,
+  );
   const [view, setView] = useState<"activity" | "campaigns">("activity");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -85,32 +88,44 @@ export function AdminReferralsPage() {
           first paid completion, or commission for KOL referrals.
         </Text>
       </div>
-      <FilterTabBar
-        label="Referral sections"
-        tabs={[
-          { value: "activity", label: "Activity" },
-          { value: "campaigns", label: "KOL campaigns" },
-        ]}
-        activeTab={view}
-        onChange={setView}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <FilterTabBar
+            label="Referral sections"
+            tabs={[
+              { value: "activity", label: "Activity" },
+              { value: "campaigns", label: "KOL campaigns" },
+            ]}
+            activeTab={view}
+            onChange={setView}
+          />
+        </div>
+        <div
+          ref={setCampaignActions}
+          hidden={view !== "campaigns"}
+          className="flex shrink-0 items-center gap-2"
+        />
+      </div>
       <div hidden={view !== "campaigns"} className="min-w-0">
-        <KolCampaignsSection />
+        <KolCampaignsSection actionsContainer={campaignActions} />
       </div>
       <div hidden={view !== "activity"} className="min-w-0 space-y-6">
         <aside className="space-y-4" aria-label="Referral summary">
           {data ? (
             <>
-              <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+              <div className="flex flex-col overflow-hidden rounded-xl border border-border sm:flex-row sm:divide-x sm:divide-border">
                 {[
                   ["Saved choices", data.summary.signups],
                   ["Codes used", data.summary.codesUsed],
                   ["Welcome Marks credited", data.summary.welcomeMarks],
                   ["Friend Marks credited", data.summary.friendMarks],
                 ].map(([label, value]) => (
-                  <div key={label}>
-                    <Text className="text-muted">{label}</Text>
-                    <Text className="mt-2 text-xl font-semibold tabular-nums">
+                  <div
+                    key={label}
+                    className="min-w-0 flex-1 border-b border-border p-4 last:border-b-0 sm:border-b-0"
+                  >
+                    <Text className="text-sm text-muted">{label}</Text>
+                    <Text className="mt-1 text-3xl font-medium tabular-nums">
                       {value}
                     </Text>
                   </div>
@@ -278,6 +293,7 @@ export function AdminReferralsPage() {
                   </TableContainer>
                 ) : (
                   <EmptyState
+                    className="rounded-lg border border-dashed border-border"
                     icon={
                       search || kind !== "all" ? <IconSearch /> : <IconUsers />
                     }

@@ -1,5 +1,7 @@
 "use client";
 
+import { previewTopUpPrice } from "@/lib/top-up-price";
+
 import Loader from "@/components/loader";
 
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
@@ -115,6 +117,11 @@ export function BalancePage() {
   } = useQuery(orpc.payment.getTopUpCatalog.queryOptions());
   const v3Active = topUpCatalog?.active === true;
   const displayPackages = v3Active ? topUpCatalog.packages : [];
+  const customPrice = previewTopUpPrice(
+    customMarks,
+    displayPackages,
+    topUpCatalog?.exactSurchargeIdr ?? 0,
+  );
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -358,44 +365,78 @@ export function BalancePage() {
               <div className="space-y-1">
                 <Text className="font-semibold">Choose an exact amount</Text>
                 <Text className="text-sm text-muted">
-                  Review the quoted price and any package recommendation before
-                  continuing.
+                  The price updates as you enter your Marks.
                 </Text>
               </div>
-              <div className="flex flex-col gap-2 sm:min-w-72 sm:flex-row sm:items-end">
-                <Field className="min-w-0 flex-1 sm:flex-row!">
-                  <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
-                  <SeliaNumberField
-                    id="custom-marks-amount"
-                    allowOutOfRange
-                    format={{ useGrouping: false }}
-                    min={1}
-                    max={1_000_000}
-                    step={1}
-                    value={customMarks || null}
-                    onValueChange={(nextValue) =>
-                      setCustomMarks(nextValue ?? 0)
+              <div className="flex flex-col gap-2 sm:min-w-72">
+                <Text aria-live="polite" className="text-lg font-semibold">
+                  {customPrice !== null && customPrice <= 2_147_483_647
+                    ? formatIdr(customPrice)
+                    : "Enter a valid Marks amount"}
+                </Text>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <Field className="min-w-0 flex-1 sm:flex-row!">
+                    <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
+                    <SeliaNumberField
+                      id="custom-marks-amount"
+                      allowOutOfRange
+                      format={{ useGrouping: false }}
+                      min={1}
+                      max={1_000_000}
+                      step={1}
+                      value={customMarks || null}
+                      onValueChange={(nextValue) =>
+                        setCustomMarks(nextValue ?? 0)
+                      }
+                    />
+                  </Field>
+                  <Button
+                    variant="secondary"
+                    disabled={
+                      !Number.isInteger(customMarks) ||
+                      customMarks < 1 ||
+                      customMarks > 1_000_000 ||
+                      quoteTopUp.isPending ||
+                      purchaseFromQuote.isPending ||
+                      customPrice === null ||
+                      customPrice > 2_147_483_647
                     }
-                  />
-                </Field>
-                <Button
-                  variant="secondary"
-                  disabled={
-                    !Number.isInteger(customMarks) ||
-                    customMarks < 1 ||
-                    customMarks > 1_000_000 ||
-                    quoteTopUp.isPending
-                  }
-                  progress={quoteTopUp.isPending}
-                  onClick={() => {
-                    quoteTopUp.mutate({
-                      requestKey: crypto.randomUUID(),
-                      marks: customMarks,
-                    });
-                  }}
-                >
-                  Get a price
-                </Button>
+                    progress={
+                      quoteTopUp.isPending || purchaseFromQuote.isPending
+                    }
+                    onClick={() => {
+                      quoteTopUp.mutate(
+                        {
+                          requestKey: crypto.randomUUID(),
+                          marks: customMarks,
+                        },
+                        {
+                          onSuccess: (quote) => {
+                            const serverPrice =
+                              quote.exactPackage?.priceIdr ??
+                              quote.customAmountIdr;
+                            if (serverPrice !== customPrice) {
+                              toastManager.add({
+                                title: "Price updated",
+                                description:
+                                  "Review the current price before continuing.",
+                                type: "warning",
+                              });
+                              return;
+                            }
+                            setPaymentDrawerOpen(false);
+                            purchaseFromQuote.mutate({
+                              quoteId: quote.quoteId,
+                              choice: quote.exactPackage ? "package" : "custom",
+                            });
+                          },
+                        },
+                      );
+                    }}
+                  >
+                    Top up
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}

@@ -3670,3 +3670,17 @@ Referral page (1 November 2026): displays signup-to-reward flow with a connected
 Balance page (1 November 2026): custom top-up Marks label and input use a horizontal field layout on desktop. Payment unit-test quote fixtures expire in 2030 to remain valid for current test runs; production quote expiry is unchanged.
 
 Dashboard Pulse sections (student, tutor, admin) share `DashboardInsights`: a single rounded, bordered metric strip with column separators, prominent values, supporting descriptions, and accessible icon-only detail links at the top right of each metric. On mobile, metrics stack with horizontal separators. No Card surfaces are used for the section or metrics; data and destinations are unchanged.
+
+Referral empty states (30 October): reuse the shared EmptyState with contextual icons and copy. Student invites offer a copy-message action; filtered admin results offer Clear filters; unfiltered activity explains when records appear; an empty KOL list opens the existing create form. No new API or reward rules.
+
+Exact Balance top-up previews price immediately from the loaded catalog using tier pricing, upward rounding and per-Mark surcharge. Top up creates a server quote and starts checkout when the price matches; changed prices require drawer confirmation. No API contract or payment validation changes.
+
+Referral semester metrics use the same unified rounded border and responsive column dividers as dashboard Pulse, with progress above the metric strip. Reward calculations and API contracts are unchanged.
+
+Referral empty state uses the existing dashed-border EmptyState styling pattern.
+
+Admin referral empty and filtered-empty states use the same dashed-border EmptyState styling as the referral page.
+
+Admin referral summary (saved choices, codes used, welcome Marks and friend Marks) uses the unified Pulse metric wrapper with responsive dividers. Summary calculations are unchanged.
+
+KOL campaign create and icon-only refresh controls sit beside the referral tabs when the campaign tab is active; the campaign empty state uses a dashed border. Refresh remains available for uncertain creation outcomes.
