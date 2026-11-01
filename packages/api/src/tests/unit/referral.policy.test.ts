@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEFAULT_REFERRAL_SETTINGS,
   calculateFriendReward,
   calculateKolCommission,
   getReferralSemester,
@@ -11,6 +12,14 @@ import {
 } from "../../modules/referral/referral.policy";
 
 describe("referral policy", () => {
+  test("keeps launch defaults aligned with PRD REQ-FRIEND-01", () => {
+    expect(DEFAULT_REFERRAL_SETTINGS).toMatchObject({
+      welcomeMarks: 15,
+      friendRewardMarks: 15,
+      semesterCapMarks: 75,
+    });
+  });
+
   test("normalizes codes and rejects unsupported characters", () => {
     expect(normalizeReferralCode("  kol2026 ")).toBe("KOL2026");
     expect(normalizeReferralCode("bad-code")).toBeNull();

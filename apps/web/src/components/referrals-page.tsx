@@ -67,7 +67,11 @@ export function ReferralsPage() {
   const shareMessage = `Join me at Cogito Academy! Use my code ${data.code} when you sign up to get ${data.settings.welcomeMarks} welcome Marks.`;
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div>
         <Heading level={1} size="md">
           My referrals
@@ -79,18 +83,24 @@ export function ReferralsPage() {
       >
         <div className="space-y-1">
           <Text className="text-muted">Your referral code</Text>
-          <Text className="font-mono text-3xl font-semibold tracking-wider">
-            {data.code}
-          </Text>
+          <div className="flex items-center gap-2">
+            <Text className="font-mono text-3xl font-semibold tracking-wider">
+              {data.code}
+            </Text>
+            <Button
+              variant="plain"
+              size="icon"
+              aria-label="Copy referral code"
+              title="Copy referral code"
+              onClick={() =>
+                copyReferralText(data.code, "Referral code copied")
+              }
+            >
+              <IconCopy />
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => copyReferralText(data.code, "Referral code copied")}
-          >
-            <IconCopy />
-            Copy code
-          </Button>
           <Button
             onClick={() =>
               copyReferralText(shareMessage, "Invite message copied")
@@ -185,7 +195,7 @@ export function ReferralsPage() {
         </div>
       </section>
       <section
-        className="min-w-0 space-y-4"
+        className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4"
         aria-labelledby="invited-friends-heading"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -215,8 +225,13 @@ export function ReferralsPage() {
             }
           />
         ) : (
-          <TableContainer>
-            <Table>
+          <TableContainer
+            className="max-w-full"
+            tabIndex={0}
+            role="region"
+            aria-label="Referrals table"
+          >
+            <Table className="min-w-200 [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
