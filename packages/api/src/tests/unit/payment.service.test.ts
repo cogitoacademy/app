@@ -99,7 +99,7 @@ function makeTopUpQuote(overrides: Record<string, unknown> = {}) {
       customAmountIdr: 350_000,
       recommendation: null,
     },
-    expiresAt: new Date("2026-11-01T00:00:00.000Z"),
+    expiresAt: new Date("2030-11-01T00:00:00.000Z"),
     ...overrides,
   };
 }

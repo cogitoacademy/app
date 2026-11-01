@@ -363,7 +363,7 @@ export function BalancePage() {
                 </Text>
               </div>
               <div className="flex flex-col gap-2 sm:min-w-72 sm:flex-row sm:items-end">
-                <Field className="min-w-0 flex-1">
+                <Field className="min-w-0 flex-1 sm:flex-row!">
                   <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
                   <SeliaNumberField
                     id="custom-marks-amount"
