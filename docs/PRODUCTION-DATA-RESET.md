@@ -173,9 +173,11 @@ The final result must be `0`.
 ## 4. Start API and run the guarded seed
 
 Start `cogito-api` in Coolify and wait for `/health` to return `status: ok`.
-Use unique temporary passwords of at least 12 characters. Never put passwords
-in this document, shell history, Coolify environment, or chat. The review admin
-must not be an address listed in `ADMIN_EMAILS`.
+The seed runs from the compiled image (`dist/src/seed/seed.js`), so deploy the
+current `main` before starting the reset. Use unique temporary passwords of at
+least 12 characters. Never put passwords in this document, shell history,
+Coolify environment, or chat. The review admin must not be an address listed in
+`ADMIN_EMAILS`.
 
 Run on the VPS:
 
@@ -205,21 +207,10 @@ if [ "${#ADMIN_PASSWORD}" -lt 12 ] ||
   exit 1
 fi
 
-SEED_FILE="$(mktemp)"
 cleanup() {
-  rm -f "$SEED_FILE"
-  sudo docker exec --user root "$API_CONTAINER" \
-    rm -f /app/apps/server/seed-production.ts 2>/dev/null || true
   unset ADMIN_PASSWORD TUTOR_PASSWORD STUDENT_PASSWORD
 }
 trap cleanup EXIT
-
-curl --fail --silent --show-error --location \
-  "https://raw.githubusercontent.com/cogitoacademy/app/main/apps/server/src/seed/seed.ts" \
-  --output "$SEED_FILE"
-
-sudo docker cp "$SEED_FILE" \
-  "$API_CONTAINER:/app/apps/server/seed-production.ts"
 
 printf '%s\n%s\n%s\n%s\n' \
   "$ADMIN_EMAIL" \
@@ -237,14 +228,18 @@ sudo docker exec -i --workdir /app "$API_CONTAINER" sh -c '
   export SEED_ALLOWED_IN_PROD=true
   export SEED_REVIEW_TUTOR_EMAIL=cogito.diego@yopmail.com
   export SEED_REVIEW_STUDENT_EMAIL=cogito.andre@yopmail.com
-  bun run /app/apps/server/seed-production.ts
+  bun run /app/apps/server/dist/src/seed/seed.js
 '
 ```
 
 The launch seed creates one review admin, Diego as the published tutor, and
-Andre, Argya, and Athena as verified students with 200 Marks each. Seed
-warnings that verification email delivery is not configured are expected: the
-script marks these deterministic review accounts verified after signup.
+Andre, Argya, and Athena as verified students with 200 Marks each. It also
+seeds the 63 approved competition calendar events from
+`apps/server/src/seed/competition-calendar-seed-data.ts`, after the competition
+category catalog. The seed is idempotent: existing event IDs are left untouched,
+so an operator edit is never overwritten. Seed warnings that verification email
+delivery is not configured are expected: the script marks these deterministic
+review accounts verified after signup.
 
 ## 5. Verify and rotate credentials
 

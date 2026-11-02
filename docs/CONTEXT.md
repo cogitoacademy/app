@@ -1,5 +1,17 @@
 # Cogito App — Codebase Context
 
+## Competition calendar seed (3 November 2026)
+
+The launch seed inserts the 63 approved competition calendar events after the
+competition category catalog. Data lives in
+`apps/server/src/seed/competition-calendar-seed-data.ts`; the original event IDs
+are stable identities and inserts use `onConflictDoNothing`, so reseeding never
+overwrites an admin edit. Event category links use the seeded competition parent
+IDs `30000000-0000-4000-8000-000000000001` to `...0005`. Calendar events need no
+object storage; Knowledge Bank still requires `KB_PRIVATE_BUCKET` for PDFs and
+is not seeded. `bun run seed` and the production reset seed now include the
+calendar.
+
 ## Blog and profile image uploads require blob: in img-src (3 November 2026)
 
 Production UAT found that every blog hero image upload failed with **The source

@@ -35,6 +35,7 @@ import {
 import { seedPackages } from "./seed-packages";
 import { seedBlogCategories } from "./seed-blog-categories";
 import { seedFaq } from "./seed-faq";
+import { seedCompetitionCalendar } from "./seed-competition-calendar";
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
 
@@ -966,6 +967,7 @@ export async function seed() {
   await seedBlogCategories();
   await seedFaq();
   await seedCompetitionTypes();
+  await seedCompetitionCalendar();
 
   const admin = await ensureSeedAdmin(adminPassword);
   await seedV3Economy(admin.id);
