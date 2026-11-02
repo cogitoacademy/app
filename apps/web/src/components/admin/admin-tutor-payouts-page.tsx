@@ -769,7 +769,9 @@ export function AdminTutorPayoutsPage() {
               </div>
             ) : null}
             {taxConfigQuery.isError ? (
-              <FieldError>Tax defaults could not be loaded.</FieldError>
+              <Field>
+                <FieldError>Tax defaults could not be loaded.</FieldError>
+              </Field>
             ) : null}
           </CardBody>
         </Card>
@@ -1232,9 +1234,11 @@ export function AdminTutorPayoutsPage() {
                     {pendingQuery.isPending ? (
                       <Loader />
                     ) : pendingQuery.isError ? (
-                      <FieldError>
-                        Unpaid sessions could not be loaded.
-                      </FieldError>
+                      <Field>
+                        <FieldError>
+                          Unpaid sessions could not be loaded.
+                        </FieldError>
+                      </Field>
                     ) : selectedItems.length === 0 ? (
                       <Text className="text-sm text-muted">
                         No unpaid sessions remain.
@@ -1299,9 +1303,11 @@ export function AdminTutorPayoutsPage() {
                       </Text>
                     ) : null}
                     {previewQuery.isError ? (
-                      <FieldError>
-                        {getUserFacingError(previewQuery.error)}
-                      </FieldError>
+                      <Field>
+                        <FieldError>
+                          {getUserFacingError(previewQuery.error)}
+                        </FieldError>
+                      </Field>
                     ) : null}
                     {selectedPreview ? (
                       <div className="rounded-lg bg-accent p-4">
@@ -1362,16 +1368,20 @@ export function AdminTutorPayoutsPage() {
                           {selectedPreview.npwp?.slice(-4) || "Not provided"}
                         </Text>
                         {!selectedRow.payoutAccountComplete ? (
-                          <FieldError className="mt-2 block">
-                            Bank details must be complete before preparing this
-                            batch.
-                          </FieldError>
+                          <Field>
+                            <FieldError className="mt-2 block">
+                              Bank details must be complete before preparing
+                              this batch.
+                            </FieldError>
+                          </Field>
                         ) : null}
                         {!selectedPreview.legalName || !selectedPreview.nik ? (
-                          <FieldError className="mt-2 block">
-                            Legal name and a valid 16-digit NIK are required
-                            before preparing a new payout.
-                          </FieldError>
+                          <Field>
+                            <FieldError className="mt-2 block">
+                              Legal name and a valid 16-digit NIK are required
+                              before preparing a new payout.
+                            </FieldError>
+                          </Field>
                         ) : null}
                         <Button
                           className="mt-4"
