@@ -55,6 +55,15 @@ const versionRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const categoryRecord = (id: string) => ({
+  id,
+  parentId: null,
+  slugId: id,
+  slugEn: id,
+  titleId: id,
+  titleEn: id,
+});
+
 const allBlocks = [
   { type: "heading", level: 2, text: "Heading" },
   { type: "paragraph", runs: [{ text: "Paragraph" }] },
@@ -142,6 +151,7 @@ function baseRepo() {
     hasPublishedArticleInCategory: mock(async () => false),
     publishedArticleUsesCategory: mock(async () => false),
     categoryHasChildren: mock(async () => false),
+    categoryHasArticles: mock(async () => false),
     categorySlugOwner: mock(async () => undefined),
     transaction: mock(async (fn: any) => fn({})),
   };
@@ -719,6 +729,59 @@ describe("blog service article creation and updates", () => {
     await expect(
       archived.service.saveVersion(versionInput as any),
     ).rejects.toMatchObject({ code: "BLOG_ARTICLE_ARCHIVED" });
+  });
+
+  test("guards category removal and category changes", async () => {
+    const blocked = setup({
+      articleById: mock(async () => articleRow({ categoryId: null })),
+      versionsForArticle: mock(async () => [{ status: "published" }]),
+    });
+    await expect(
+      blocked.service.updateArticle(
+        { articleId: "a", expectedVersion: 1, categoryId: null } as any,
+        "admin",
+      ),
+    ).rejects.toMatchObject({ code: "PUBLISH_INVALID" });
+
+    const uncategorized = setup({
+      articleById: mock(async () => articleRow({ categoryId: null })),
+      versionsForArticle: mock(async () => [{ status: "draft" }]),
+      updateArticleIfVersion: mock(async () => ({ id: "a", version: 2 })),
+    });
+    await expect(
+      uncategorized.service.updateArticle(
+        { articleId: "a", expectedVersion: 1, categoryId: null } as any,
+        "admin",
+      ),
+    ).resolves.toEqual({ articleId: "a", version: 2 });
+
+    const moved = setup({
+      articleById: mock(async () => articleRow({ categoryId: "c" })),
+      categoryById: mock(async (id: string) => categoryRecord(id)),
+      updateArticleIfVersion: mock(async () => ({ id: "a", version: 2 })),
+    });
+    await expect(
+      moved.service.updateArticle(
+        {
+          articleId: "a",
+          expectedVersion: 1,
+          categoryId: "c2",
+          featuredTutorName: "Guest",
+          reviewedByName: "Reviewer",
+        } as any,
+        "admin",
+      ),
+    ).resolves.toEqual({ articleId: "a", version: 2 });
+    expect(moved.repo.updateArticleIfVersion).toHaveBeenCalledWith(
+      "a",
+      1,
+      expect.objectContaining({
+        categoryId: "c2",
+        subcategoryId: null,
+        featuredTutorName: "Guest",
+        reviewedByName: "Reviewer",
+      }),
+    );
   });
 
   test("inserts a new version with every block type normalized", async () => {
@@ -1424,6 +1487,19 @@ describe("blog service categories", () => {
       } as any),
     ).rejects.toMatchObject({ code: "BLOG_CATEGORY_INVALID" });
 
+    const hasChildren = setup({
+      categoryById: mock(async (id: string) =>
+        id === "c" ? category : { ...category, id: "p", parentId: null },
+      ),
+      categoryHasChildren: mock(async () => true),
+    });
+    await expect(
+      hasChildren.service.updateCategory({
+        categoryId: "c",
+        parentId: "p",
+      } as any),
+    ).rejects.toMatchObject({ code: "BLOG_CATEGORY_INVALID" });
+
     const takenId = setup({
       categoryById: mock(async () => category),
       categorySlugOwner: mock(async (locale: string) =>
@@ -1660,6 +1736,55 @@ describe("blog service public reads", () => {
     expect(article.related[0]?.slug).toBe("related");
   });
 
+  test("fills related articles from the same subcategory", async () => {
+    const relatedFallbackCards = mock(async () => [
+      cardRow({ articleId: "r2", slug: "fallback" }),
+    ]);
+    const { service } = setup({
+      getPublishedBySlug: mock(async () => ({
+        ...cardRow(),
+        categoryId: "c",
+        subcategoryId: "s",
+        lead: "",
+        seoTitle: "",
+        metaDescription: "",
+        keyFacts: [],
+        body: [],
+        faq: [],
+      })),
+      relatedIds: mock(async () => ["r1"]),
+      publishedCardsByIds: mock(async () => [
+        cardRow({ articleId: "r1", slug: "related" }),
+      ]),
+      relatedFallbackCards,
+    });
+    const article = await service.getPublic({ locale: "id", slug: "slug" });
+    expect(article.related.map((item) => item.slug)).toEqual([
+      "related",
+      "fallback",
+    ]);
+    expect(relatedFallbackCards).toHaveBeenCalledWith({
+      locale: "id",
+      articleId: "a",
+      categoryId: "c",
+      subcategoryId: "s",
+      excludeArticleIds: ["a", "r1"],
+      limit: 2,
+    });
+  });
+
+  test("pages public cards with an offset", async () => {
+    const listPublished = mock(async () => []);
+    const { service } = setup({ listPublished });
+    await service.listPublic({ locale: "id", limit: 12, page: 3 });
+    expect(listPublished).toHaveBeenCalledWith({
+      locale: "id",
+      limit: 12,
+      offset: 24,
+      cursor: null,
+    });
+  });
+
   test("rejects an unknown public slug and handles no alternate", async () => {
     const missing = setup();
     await expect(
@@ -1871,6 +1996,29 @@ describe("blog category deletion", () => {
     await expect(
       service.deleteCategory({ categoryId: "missing", expectedVersion: 1 }),
     ).rejects.toMatchObject({ code: "BLOG_NOT_FOUND" });
+  });
+  test("classifies top-level foreign key conflicts", async () => {
+    const { service } = setup({
+      categoryById: mock(async () => ({ id: "c", version: 1 })),
+      deleteCategoryIfVersion: mock(async () => {
+        throw { code: "23503" };
+      }),
+    });
+    await expect(
+      service.deleteCategory({ categoryId: "c", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "BLOG_CATEGORY_INVALID" });
+  });
+  test("rethrows unexpected deletion failures", async () => {
+    const failure = new Error("boom");
+    const { service } = setup({
+      categoryById: mock(async () => ({ id: "c", version: 1 })),
+      deleteCategoryIfVersion: mock(async () => {
+        throw failure;
+      }),
+    });
+    await expect(
+      service.deleteCategory({ categoryId: "c", expectedVersion: 1 }),
+    ).rejects.toBe(failure);
   });
 });
 

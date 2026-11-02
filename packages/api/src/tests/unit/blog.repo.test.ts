@@ -169,6 +169,52 @@ describe("blog repository", () => {
     expect(await repo.publishedGallery("a")).toEqual([{ articleId: "a" }]);
   });
 
+  test("checks category children and article usage", async () => {
+    const empty = createBlogRepo(createFake([]));
+    expect(await empty.categoryHasChildren("c")).toBe(false);
+    expect(await empty.categoryHasArticles("c")).toBe(false);
+
+    const found = createBlogRepo(createFake([{ id: "c" }]));
+    expect(await found.categoryHasChildren("c")).toBe(true);
+    expect(await found.categoryHasArticles("c")).toBe(true);
+  });
+
+  test("deletes categories at the expected version", async () => {
+    expect(
+      await createBlogRepo(createFake([])).deleteCategoryIfVersion("c", 1),
+    ).toBeUndefined();
+    expect(
+      await createBlogRepo(createFake([{ id: "c" }])).deleteCategoryIfVersion(
+        "c",
+        1,
+      ),
+    ).toEqual({ id: "c" });
+  });
+
+  test("loads related fallback cards with and without exclusions", async () => {
+    const repo = createBlogRepo(createFake([{ articleId: "r" }]));
+    const base = {
+      locale: "id",
+      articleId: "a",
+      categoryId: "c",
+      limit: 2,
+    };
+    expect(
+      await repo.relatedFallbackCards({
+        ...base,
+        subcategoryId: "s",
+        excludeArticleIds: ["a"],
+      }),
+    ).toEqual([{ articleId: "r" }]);
+    expect(
+      await repo.relatedFallbackCards({
+        ...base,
+        subcategoryId: null,
+        excludeArticleIds: [],
+      }),
+    ).toEqual([{ articleId: "r" }]);
+  });
+
   test("manages categories and counts", async () => {
     const repo = createBlogRepo(createFake([{ id: "row", count: 3 }]));
     expect(await repo.listCategoriesAdmin()).toEqual([{ id: "row", count: 3 }]);
