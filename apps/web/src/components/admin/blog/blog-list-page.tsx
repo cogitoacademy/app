@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   Table,
   TableBody,
@@ -66,6 +67,7 @@ import {
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { client } from "@/utils/orpc";
+import Loader from "@/components/loader";
 import { getUserFacingError } from "@/lib/error-message";
 import { slugify } from "./blog-api";
 
@@ -108,6 +110,8 @@ export function BlogListPage() {
   const [categoryTitleEn, setCategoryTitleEn] = useState("");
   const [categorySlugId, setCategorySlugId] = useState("");
   const [categorySlugEn, setCategorySlugEn] = useState("");
+  const [categoryIntroId, setCategoryIntroId] = useState("");
+  const [categoryIntroEn, setCategoryIntroEn] = useState("");
   const activeFilterCount =
     (status !== "all" ? 1 : 0) + (locale !== "all" ? 1 : 0);
 
@@ -151,14 +155,14 @@ export function BlogListPage() {
         titleEn: categoryTitleEn,
         slugId: categorySlugId || slugify(categoryTitleId),
         slugEn: categorySlugEn || slugify(categoryTitleEn),
+        introId: categoryIntroId || null,
+        introEn: categoryIntroEn || null,
       };
       return editingCategory
         ? client.adminBlog.categories.update({
             ...input,
             categoryId: editingCategory.id,
             expectedVersion: editingCategory.version,
-            introId: editingCategory.introId,
-            introEn: editingCategory.introEn,
             isActive: editingCategory.isActive,
           })
         : client.adminBlog.categories.create(input);
@@ -170,6 +174,8 @@ export function BlogListPage() {
       setCategoryTitleEn("");
       setCategorySlugId("");
       setCategorySlugEn("");
+      setCategoryIntroId("");
+      setCategoryIntroEn("");
       await queryClient.invalidateQueries({ queryKey: CATEGORY_KEY });
       toastManager.add({
         title: editingCategory ? "Category updated" : "Category created",
@@ -212,6 +218,8 @@ export function BlogListPage() {
     setCategoryTitleEn(category?.titleEn ?? "");
     setCategorySlugId(category?.slugId ?? "");
     setCategorySlugEn(category?.slugEn ?? "");
+    setCategoryIntroId(category?.introId ?? "");
+    setCategoryIntroEn(category?.introEn ?? "");
     setCategoryOpen(true);
   }
   const query = categorySearch.trim().toLocaleLowerCase();
@@ -362,73 +370,83 @@ export function BlogListPage() {
             </div>
           </div>
           <section className="min-w-0 max-w-full space-y-5 py-4">
-            <div>
-              <Stack spacing="md">
-                <TableContainer>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Article</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>ID</TableHead>
-                        <TableHead>EN</TableHead>
-                        <TableHead>Updated</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(list.data?.rows ?? []).map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell>
-                            <Link
-                              className="font-medium underline-offset-4 hover:underline"
-                              to="/admin-blog/$articleId"
-                              params={{ articleId: row.id }}
-                            >
-                              {row.titleId || row.titleEn || "Untitled article"}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            {row.categoryTitle || "Uncategorized"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant(row.statusId)}>
-                              {row.statusId
-                                ? STATUS_LABEL[row.statusId]
-                                : "Missing"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant(row.statusEn)}>
-                              {row.statusEn
-                                ? STATUS_LABEL[row.statusEn]
-                                : "Missing"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(row.updatedAt).toLocaleDateString(
-                              "id-ID",
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {list.data?.rows.length === 0 ? (
+            {list.isPending ? (
+              <Loader />
+            ) : (
+              <div>
+                <Stack spacing="md">
+                  <TableContainer>
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={5}>
-                            No articles yet. Start with a new draft.
-                          </TableCell>
+                          <TableHead>Article</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>ID</TableHead>
+                          <TableHead>EN</TableHead>
+                          <TableHead>Updated</TableHead>
                         </TableRow>
-                      ) : null}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
-            </div>
+                      </TableHeader>
+                      <TableBody>
+                        {(list.data?.rows ?? []).map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell>
+                              <Link
+                                className="font-medium underline-offset-4 hover:underline"
+                                to="/admin-blog/$articleId"
+                                params={{ articleId: row.id }}
+                              >
+                                {row.titleId ||
+                                  row.titleEn ||
+                                  "Untitled article"}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              {row.categoryTitle || "Uncategorized"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant(row.statusId)}>
+                                {row.statusId
+                                  ? STATUS_LABEL[row.statusId]
+                                  : "Missing"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant(row.statusEn)}>
+                                {row.statusEn
+                                  ? STATUS_LABEL[row.statusEn]
+                                  : "Missing"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(row.updatedAt).toLocaleDateString(
+                                "id-ID",
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {list.data?.rows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5}>
+                              No articles yet. Start with a new draft.
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Stack>
+              </div>
+            )}
           </section>
         </TabsPanel>
         <TabsPanel value="categories">
           <section className="space-y-3 py-4" aria-label="Category groups">
             <p role="status" className="text-sm text-muted">
-              {categories.isFetching ? "Updating…" : `${groups.length} groups`}
+              {categories.isPending
+                ? ""
+                : categories.isFetching
+                  ? "Updating…"
+                  : `${groups.length} groups`}
             </p>
             <TableContainer>
               <Table className="min-w-3xl">
@@ -583,13 +601,15 @@ export function BlogListPage() {
                   {!groups.length ? (
                     <TableRow>
                       <TableCell colSpan={4}>
-                        {categories.isPending
-                          ? "Loading categories…"
-                          : categories.isError
-                            ? "Categories could not be loaded."
-                            : query
-                              ? "No matching categories."
-                              : "No categories yet. Create your first category."}
+                        {categories.isPending ? (
+                          <Loader />
+                        ) : categories.isError ? (
+                          "Categories could not be loaded."
+                        ) : query ? (
+                          "No matching categories."
+                        ) : (
+                          "No categories yet. Create your first category."
+                        )}
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -711,6 +731,28 @@ export function BlogListPage() {
                     placeholder={slugify(categoryTitleEn)}
                     value={categorySlugEn}
                     onChange={(event) => setCategorySlugEn(event.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel>Indonesian introduction</FieldLabel>
+                  <Textarea
+                    rows={5}
+                    maxLength={3000}
+                    placeholder="150-300 words for an indexable hub."
+                    value={categoryIntroId}
+                    onChange={(event) => setCategoryIntroId(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>English introduction</FieldLabel>
+                  <Textarea
+                    rows={5}
+                    maxLength={3000}
+                    placeholder="150-300 words for an indexable hub."
+                    value={categoryIntroEn}
+                    onChange={(event) => setCategoryIntroEn(event.target.value)}
                   />
                 </Field>
               </div>

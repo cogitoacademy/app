@@ -43,6 +43,8 @@ describe("blog type schemas", () => {
       "http://instagram.com/reel/AbC/",
       "https://example.com/reel/AbC/",
       "https://instagram.com/explore/AbC/",
+      "https://instagram.com/reel/AbC/?utm=1",
+      "https://instagram.com/reel/AbC/#comments",
       "nope",
     ]) {
       expect(
@@ -72,6 +74,7 @@ describe("blog type schemas", () => {
       "http://tiktok.com/@user/video/123",
       "https://example.com/@user/video/123",
       "https://tiktok.com/@user/photo/123",
+      "https://tiktok.com/@user/video/123?is_from_webapp=1",
       "nope",
     ]) {
       expect(

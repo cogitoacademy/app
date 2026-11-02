@@ -28,7 +28,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@cogito-app/ui/components/selia/dialog";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -40,6 +44,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import {
   Accordion,
   AccordionItem,
@@ -51,6 +56,7 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { client } from "@/utils/orpc";
+import Loader from "@/components/loader";
 import { getUserFacingError } from "@/lib/error-message";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { BlogBodyEditor } from "./blog-body-editor";
@@ -99,6 +105,41 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archived",
 };
 
+const FIELD_LABEL: Record<string, string> = {
+  title: "Title",
+  seoTitle: "SEO title",
+  slug: "Address",
+  metaDescription: "Meta description",
+  lead: "Introduction",
+  body: "Article body",
+  keyFacts: "Key facts",
+  heroMedia: "Hero image",
+  heroAlt: "Cover description",
+  categoryId: "Category",
+  galleryAltId: "Gallery alt text (Indonesia)",
+  galleryAltEn: "Gallery alt text (English)",
+};
+
+function blogErrorDescription(error: unknown) {
+  const data = (error as { data?: unknown } | null)?.data;
+  if (data && typeof data === "object") {
+    const missing = (data as { missingFields?: unknown }).missingFields;
+    if (Array.isArray(missing) && missing.length > 0) {
+      const labels = missing
+        .map((field) =>
+          typeof field === "string" ? (FIELD_LABEL[field] ?? field) : "",
+        )
+        .filter(Boolean);
+      return `${getUserFacingError(error)} Missing: ${labels.join(", ")}.`;
+    }
+    const actual = (data as { actualVersion?: unknown }).actualVersion;
+    if (typeof actual === "number") {
+      return `${getUserFacingError(error)} Current version: ${actual}. Reload before saving again.`;
+    }
+  }
+  return getUserFacingError(error);
+}
+
 export function BlogEditorPage({ articleId }: { articleId: string }) {
   const navigate = useNavigate();
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -115,6 +156,10 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
   const tutors = useQuery({
     queryKey: ["adminBlog", "tutors"],
     queryFn: () => client.adminBlog.tutors(),
+  });
+  const publishedArticles = useQuery({
+    queryKey: ["adminBlog", "published-options"],
+    queryFn: () => client.adminBlog.list({ status: "published", limit: 50 }),
   });
 
   const [drafts, setDrafts] = useState<Record<BlogLocale, Draft>>({
@@ -141,8 +186,15 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     featured: false,
     reviewer: false,
   });
-  const [addedEnglish, setAddedEnglish] = useState<string[]>([]);
   const [initialized, setInitialized] = useState<string | null>(null);
+  const [relatedIds, setRelatedIds] = useState<string[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "publish" | "unpublish";
+    locale: BlogLocale;
+  } | null>(null);
+  const interacted = useRef(false);
+  const suppressDirtyUntil = useRef(0);
 
   useEffect(() => {
     const data = article.data;
@@ -170,6 +222,9 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     });
     setHeroMedia(data.heroMedia);
     setGallery(data.gallery);
+    setRelatedIds(data.relatedArticleIds);
+    clearDirty();
+    interacted.current = false;
   }, [article.data, initialized]);
 
   const mediaOptions = useMemo(() => {
@@ -180,16 +235,27 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     return [...map.values()];
   }, [heroMedia, gallery, article.data?.bodyMedia]);
 
+  function markDirty() {
+    if (interacted.current && Date.now() >= suppressDirtyUntil.current) {
+      setDirty(true);
+    }
+  }
+
+  function clearDirty() {
+    suppressDirtyUntil.current = Date.now() + 1_000;
+    setDirty(false);
+  }
+
   function toastError(title: string, error: unknown) {
     toastManager.add({
       title,
-      description: getUserFacingError(error),
+      description: blogErrorDescription(error),
       type: "error",
     });
   }
 
   async function persistShared() {
-    await client.adminBlog.updateArticle({
+    const updated = await client.adminBlog.updateArticle({
       articleId,
       expectedVersion: article.data!.version,
       categoryId: shared.categoryId || null,
@@ -204,6 +270,22 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       reviewedByTutorId: shared.reviewedByTutorId || null,
       internalNotes: shared.internalNotes || null,
     });
+    await Promise.all([
+      client.adminBlog.replaceGallery({
+        articleId,
+        expectedVersion: updated.version,
+        images: gallery.map((image) => ({
+          mediaId: image.id,
+          altId: image.altId,
+          altEn: image.altEn,
+        })),
+      }),
+      client.adminBlog.replaceRelated({
+        articleId,
+        expectedVersion: updated.version,
+        relatedArticleIds: relatedIds,
+      }),
+    ]);
     await article.refetch();
   }
 
@@ -228,7 +310,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
   }
 
   const saveOne = useMutation({
-    mutationFn: async (_locale: BlogLocale) => {
+    mutationFn: async () => {
       await persistShared();
       await saveVersion("id");
       if (
@@ -239,6 +321,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       return true;
     },
     onSuccess: async () => {
+      clearDirty();
       await article.refetch();
       await queryClient.invalidateQueries({ queryKey: ["adminBlog", "list"] });
       toastManager.add({ title: "Article saved", type: "success" });
@@ -258,6 +341,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       });
     },
     onSuccess: async (result) => {
+      clearDirty();
       setVersions((value) => ({ ...value, [result.locale]: result }));
       setDrafts((value) => ({ ...value, [result.locale]: draftFrom(result) }));
       await article.refetch();
@@ -275,6 +359,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
         expectedVersion: versions[locale]!.version,
       }),
     onSuccess: async (result, locale) => {
+      clearDirty();
       setVersions((value) => ({ ...value, [locale]: result }));
       await article.refetch();
       toastManager.add({
@@ -341,20 +426,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
   }
 
   const hasUnsavedChanges =
-    !!article.data &&
-    initialized === articleId &&
-    (JSON.stringify(drafts.id) !== JSON.stringify(draftFrom(versions.id)) ||
-      JSON.stringify(drafts.en) !== JSON.stringify(draftFrom(versions.en)) ||
-      JSON.stringify(shared) !==
-        JSON.stringify({
-          categoryId: article.data.category?.id ?? "",
-          subcategoryId: article.data.subcategory?.id ?? "",
-          featuredTutorName: article.data.featuredTutorName ?? "",
-          reviewedByName: article.data.reviewedByName ?? "",
-          featuredTutorId: article.data.featuredTutor?.id ?? "",
-          reviewedByTutorId: article.data.reviewedByTutor?.id ?? "",
-          internalNotes: article.data.internalNotes ?? "",
-        }));
+    !!article.data && initialized === articleId && dirty;
   const blocker = useBlocker({
     shouldBlockFn: () =>
       !archiveCompleted.current &&
@@ -363,8 +435,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     withResolver: true,
   });
 
-  if (article.isLoading)
-    return <p className="text-sm text-muted">Loading article…</p>;
+  if (article.isLoading) return <Loader />;
   if (article.isError || !article.data) {
     return <p className="text-sm text-danger">Article could not be loaded.</p>;
   }
@@ -382,55 +453,54 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     key: K,
     value: Draft[K],
   ) {
+    markDirty();
     setDrafts((current) => ({
       ...current,
       [locale]: { ...current[locale], [key]: value },
     }));
   }
-  function paired(
-    key: keyof Draft,
+
+  function updateShared(patch: Partial<typeof shared>) {
+    markDirty();
+    setShared((current) => ({ ...current, ...patch }));
+  }
+
+  function updateRelated(index: number, value: string) {
+    markDirty();
+    const next = [...relatedIds];
+    if (value) next[index] = value;
+    else next.splice(index, 1);
+    setRelatedIds([...new Set(next.filter(Boolean))].slice(0, 3));
+  }
+
+  function updateGalleryAlt(
+    index: number,
+    key: "altId" | "altEn",
+    value: string,
+  ) {
+    markDirty();
+    setGallery((current) =>
+      current.map((image, imageIndex) =>
+        imageIndex === index ? { ...image, [key]: value || null } : image,
+      ),
+    );
+  }
+
+  function removeGalleryImage(index: number) {
+    markDirty();
+    setGallery((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index),
+    );
+  }
+  function localeField(
     label: string,
     render: (locale: BlogLocale) => React.ReactNode,
   ) {
-    const englishValue = drafts.en[key];
-    const englishVisible =
-      addedEnglish.includes(key) ||
-      (Array.isArray(englishValue) ? englishValue.length > 0 : !!englishValue);
     return (
-      <section
-        className="space-y-3 border-l-2 border-border pl-3"
-        aria-label={label}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <Heading level={3} className="text-base">
-            {label}
-          </Heading>
-          {!englishVisible ? (
-            <Button
-              variant="plain"
-              size="sm"
-              onClick={() => setAddedEnglish((current) => [...current, key])}
-            >
-              <IconPlus aria-hidden="true" />
-              English
-            </Button>
-          ) : null}
-        </div>
-        <div>
-          <Field>
-            <FieldLabel>Indonesia</FieldLabel>
-            {render("id")}
-          </Field>
-        </div>
-        {englishVisible ? (
-          <div className="">
-            <Field>
-              <FieldLabel>English</FieldLabel>
-              {render("en")}
-            </Field>
-          </div>
-        ) : null}
-      </section>
+      <Field>
+        <FieldLabel>{label}</FieldLabel>
+        {render(activeLocale)}
+      </Field>
     );
   }
   function textField(
@@ -445,39 +515,90 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     label: string,
     multiline = false,
   ) {
-    return paired(key, label, (locale) =>
-      multiline ? (
-        <Textarea
-          rows={3}
-          value={drafts[locale][key] ?? ""}
-          onChange={(event) => changeDraft(locale, key, event.target.value)}
-        />
-      ) : (
-        <Input
-          value={drafts[locale][key] ?? ""}
-          disabled={key === "slug" && !!versions[locale]?.publishedAt}
-          maxLength={
-            key === "seoTitle"
-              ? 60
-              : key === "metaDescription"
-                ? 155
-                : undefined
-          }
-          placeholder={
-            key === "slug"
-              ? slugify(drafts[locale].title)
-              : key === "seoTitle"
-                ? drafts[locale].title.slice(0, 60)
-                : undefined
-          }
-          onChange={(event) => changeDraft(locale, key, event.target.value)}
-        />
-      ),
-    );
+    return localeField(label, (locale) => {
+      const value = String(drafts[locale][key] ?? "");
+      const limit =
+        key === "seoTitle" ? 60 : key === "metaDescription" ? 155 : null;
+      const canonicalSlug = value || slugify(drafts[locale].title);
+      return (
+        <div className="space-y-1">
+          {multiline ? (
+            <Textarea
+              rows={3}
+              value={value}
+              onChange={(event) => changeDraft(locale, key, event.target.value)}
+            />
+          ) : (
+            <Input
+              value={value}
+              disabled={key === "slug" && !!versions[locale]?.publishedAt}
+              maxLength={limit ?? undefined}
+              placeholder={
+                key === "slug"
+                  ? slugify(drafts[locale].title)
+                  : key === "seoTitle"
+                    ? drafts[locale].title.slice(0, 60)
+                    : undefined
+              }
+              onChange={(event) => changeDraft(locale, key, event.target.value)}
+            />
+          )}
+          {limit ? (
+            <p className="text-xs text-muted">
+              {value.length}/{limit} characters
+            </p>
+          ) : null}
+          {key === "slug" ? (
+            <p className="break-all text-xs text-muted">
+              {versions[locale]?.publishedAt ? "Locked after publish. " : ""}
+              https://www.cogitoacademy.id/{locale}/blog/
+              {canonicalSlug || "…"}
+            </p>
+          ) : null}
+        </div>
+      );
+    });
   }
 
+  // Mirrors the server publish gate so the tab can show what is still open.
+  function missingPublishFields(locale: BlogLocale) {
+    const draft = drafts[locale];
+    const missing: string[] = [];
+    if (!draft.title.trim()) missing.push("title");
+    if (!(draft.seoTitle.trim() || draft.title.trim()))
+      missing.push("seoTitle");
+    if (!draft.metaDescription.trim()) missing.push("metaDescription");
+    if (!draft.lead.trim()) missing.push("lead");
+    if (draft.body.length === 0) missing.push("body");
+    if (!heroMedia) missing.push("heroMedia");
+    if (!draft.heroAlt?.trim()) missing.push("heroAlt");
+    if (draft.keyFacts.length === 0) missing.push("keyFacts");
+    if (
+      gallery.some((image) =>
+        locale === "id" ? !image.altId?.trim() : !image.altEn?.trim(),
+      )
+    )
+      missing.push(locale === "id" ? "galleryAltId" : "galleryAltEn");
+    return missing;
+  }
+
+  const PUBLISH_GATE_TOTAL = 9;
+  const missingActive = missingPublishFields(activeLocale);
+  const missingLabels = missingActive.map(
+    (field) => FIELD_LABEL[field] ?? field,
+  );
+
   return (
-    <Stack spacing="lg" className="relative mx-auto w-full max-w-3xl">
+    <Stack
+      spacing="lg"
+      className="relative mx-auto w-full max-w-3xl"
+      onPointerDownCapture={() => {
+        interacted.current = true;
+      }}
+      onKeyDownCapture={() => {
+        interacted.current = true;
+      }}
+    >
       <Stack
         direction="row"
         className="flex-wrap items-center justify-between gap-3 border-b border-border pb-5"
@@ -520,7 +641,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
             <div className="space-y-7 pb-4">
               {textField("title", "Title")}
               {textField("lead", "Introduction", true)}
-              {paired("body", "Article body", (locale) => (
+              {localeField("Article body", (locale) => (
                 <BlogBodyEditor
                   key={locale}
                   blocks={drafts[locale].body}
@@ -542,7 +663,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
               {textField("slug", "Address")}
               {textField("metaDescription", "Meta description", true)}
               {textField("mainKeyword", "Main keyword")}
-              {paired("secondaryKeywords", "Secondary keywords", (locale) => (
+              {localeField("Secondary keywords", (locale) => (
                 <Input
                   value={(drafts[locale].secondaryKeywords ?? []).join(", ")}
                   onChange={(event) =>
@@ -567,7 +688,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
           <AccordionPanel>
             <div className="space-y-6 pb-4">
               {textField("heroAlt", "Cover description")}
-              {paired("keyFacts", "Key facts — one per line", (locale) => (
+              {localeField("Key facts — one per line", (locale) => (
                 <Textarea
                   rows={4}
                   value={drafts[locale].keyFacts
@@ -588,6 +709,92 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
             </div>
           </AccordionPanel>
         </AccordionItem>
+        <AccordionItem value="faq">
+          <AccordionHeader>
+            <AccordionTrigger>F.A.Q.</AccordionTrigger>
+          </AccordionHeader>
+          <AccordionPanel>
+            <div className="pb-4">
+              {localeField("Questions & answers", (locale) => {
+                const items = drafts[locale].faq;
+                return (
+                  <div className="space-y-3">
+                    {items.map((item, index) => (
+                      <div
+                        className="space-y-2 rounded-lg border border-border p-3"
+                        key={index}
+                      >
+                        <Field>
+                          <FieldLabel>Question {index + 1}</FieldLabel>
+                          <Input
+                            value={item.question}
+                            onChange={(event) =>
+                              changeDraft(
+                                locale,
+                                "faq",
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, question: event.target.value }
+                                    : entry,
+                                ),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Answer {index + 1}</FieldLabel>
+                          <Textarea
+                            rows={3}
+                            value={item.answer}
+                            onChange={(event) =>
+                              changeDraft(
+                                locale,
+                                "faq",
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, answer: event.target.value }
+                                    : entry,
+                                ),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Button
+                          variant="plain"
+                          size="sm"
+                          onClick={() =>
+                            changeDraft(
+                              locale,
+                              "faq",
+                              items.filter(
+                                (_, entryIndex) => entryIndex !== index,
+                              ),
+                            )
+                          }
+                        >
+                          Remove question
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        changeDraft(locale, "faq", [
+                          ...items,
+                          { question: "", answer: "" },
+                        ])
+                      }
+                    >
+                      <IconPlus />
+                      Add question
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </AccordionPanel>
+        </AccordionItem>
         <AccordionItem value="settings">
           <AccordionHeader>
             <AccordionTrigger>
@@ -603,11 +810,10 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                     <Select
                       value={shared.categoryId}
                       onValueChange={(value) =>
-                        setShared((current) => ({
-                          ...current,
+                        updateShared({
                           categoryId: String(value ?? ""),
                           subcategoryId: "",
-                        }))
+                        })
                       }
                     >
                       <SelectTrigger>
@@ -629,10 +835,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                     <Select
                       value={shared.subcategoryId}
                       onValueChange={(value) =>
-                        setShared((current) => ({
-                          ...current,
-                          subcategoryId: String(value ?? ""),
-                        }))
+                        updateShared({ subcategoryId: String(value ?? "") })
                       }
                     >
                       <SelectTrigger>
@@ -661,13 +864,12 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                           ...current,
                           featured: value === "manual",
                         }));
-                        setShared((current) => ({
-                          ...current,
+                        updateShared({
                           featuredTutorId:
                             value === "manual" ? "" : String(value ?? ""),
                           featuredTutorName:
-                            value === "manual" ? current.featuredTutorName : "",
-                        }));
+                            value === "manual" ? shared.featuredTutorName : "",
+                        });
                       }}
                     >
                       <SelectTrigger>
@@ -694,10 +896,9 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                         maxLength={200}
                         value={shared.featuredTutorName}
                         onChange={(event) =>
-                          setShared((current) => ({
-                            ...current,
+                          updateShared({
                             featuredTutorName: event.target.value,
-                          }))
+                          })
                         }
                       />
                     ) : null}
@@ -714,13 +915,12 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                           ...current,
                           reviewer: value === "manual",
                         }));
-                        setShared((current) => ({
-                          ...current,
+                        updateShared({
                           reviewedByTutorId:
                             value === "manual" ? "" : String(value ?? ""),
                           reviewedByName:
-                            value === "manual" ? current.reviewedByName : "",
-                        }));
+                            value === "manual" ? shared.reviewedByName : "",
+                        });
                       }}
                     >
                       <SelectTrigger>
@@ -747,10 +947,9 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                         maxLength={200}
                         value={shared.reviewedByName}
                         onChange={(event) =>
-                          setShared((current) => ({
-                            ...current,
+                          updateShared({
                             reviewedByName: event.target.value,
-                          }))
+                          })
                         }
                       />
                     ) : null}
@@ -782,39 +981,105 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
 
                 <Field>
                   <FieldLabel>Gallery</FieldLabel>
-                  <Stack
-                    direction="row"
-                    className="flex-wrap items-center gap-2"
-                  >
-                    {gallery.map((image) => (
-                      <div className="relative" key={image.id}>
+                  <FieldDescription>
+                    Every gallery image needs alt text in both languages before
+                    publishing.
+                  </FieldDescription>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {gallery.map((image, index) => (
+                      <div
+                        className="space-y-2 rounded-lg border border-border p-3"
+                        key={image.id}
+                      >
                         <img
                           alt={image.altId ?? ""}
-                          className="h-16 w-24 rounded-md object-cover"
+                          className="h-24 w-full rounded-md object-cover"
                           src={resolveProfileImageUrl(image.url) ?? image.url}
                         />
+                        <Input
+                          aria-label={`Gallery alt text Indonesia ${index + 1}`}
+                          placeholder="Alt text — Indonesia"
+                          maxLength={500}
+                          value={image.altId ?? ""}
+                          onChange={(event) =>
+                            updateGalleryAlt(index, "altId", event.target.value)
+                          }
+                        />
+                        <Input
+                          aria-label={`Gallery alt text English ${index + 1}`}
+                          placeholder="Alt text — English"
+                          maxLength={500}
+                          value={image.altEn ?? ""}
+                          onChange={(event) =>
+                            updateGalleryAlt(index, "altEn", event.target.value)
+                          }
+                        />
+                        <Button
+                          variant="plain"
+                          size="sm"
+                          onClick={() => removeGalleryImage(index)}
+                        >
+                          Remove image
+                        </Button>
                       </div>
                     ))}
-                    <label className="inline-flex">
-                      <input
-                        className="hidden"
-                        type="file"
-                        accept="image/*"
-                        disabled={uploading}
-                        onChange={(event) =>
-                          void handleUpload(event.target.files?.[0], "gallery")
+                  </div>
+                  <label className="mt-3 inline-flex">
+                    <input
+                      className="hidden"
+                      type="file"
+                      accept="image/*"
+                      disabled={uploading}
+                      onChange={(event) =>
+                        void handleUpload(event.target.files?.[0], "gallery")
+                      }
+                    />
+                    <Button
+                      variant="secondary"
+                      nativeButton={false}
+                      render={<span />}
+                    >
+                      <IconPhotoPlus />
+                      Add image
+                    </Button>
+                  </label>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Related articles</FieldLabel>
+                  <FieldDescription>
+                    Choose up to three. When empty, the newest articles from the
+                    same subcategory fill the block.
+                  </FieldDescription>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[0, 1, 2].map((index) => (
+                      <Select
+                        key={index}
+                        value={relatedIds[index] ?? ""}
+                        onValueChange={(value) =>
+                          updateRelated(index, String(value ?? ""))
                         }
-                      />
-                      <Button
-                        variant="secondary"
-                        nativeButton={false}
-                        render={<span />}
                       >
-                        <IconPhotoPlus />
-                        Add image
-                      </Button>
-                    </label>
-                  </Stack>
+                        <SelectTrigger>
+                          <SelectValue placeholder={`Related ${index + 1}`} />
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectList>
+                            <SelectItem value="">None</SelectItem>
+                            {(publishedArticles.data?.rows ?? [])
+                              .filter((row) => row.id !== articleId)
+                              .map((row) => (
+                                <SelectItem key={row.id} value={row.id}>
+                                  {row.titleId ||
+                                    row.titleEn ||
+                                    "Untitled article"}
+                                </SelectItem>
+                              ))}
+                          </SelectList>
+                        </SelectPopup>
+                      </Select>
+                    ))}
+                  </div>
                 </Field>
 
                 <Field>
@@ -823,10 +1088,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                     rows={3}
                     value={shared.internalNotes}
                     onChange={(event) =>
-                      setShared((current) => ({
-                        ...current,
-                        internalNotes: event.target.value,
-                      }))
+                      updateShared({ internalNotes: event.target.value })
                     }
                   />
                 </Field>
@@ -837,6 +1099,21 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       </Accordion>
       <div className="sticky bottom-0 z-20 -mb-8 flex border flex-wrap items-center justify-between gap-3 rounded-xl border-border bg-background/95 p-3 backdrop-blur">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Tabs
+            value={activeLocale}
+            onValueChange={(value) =>
+              setActiveLocale(value === "en" ? "en" : "id")
+            }
+          >
+            <TabsList aria-label="Language being edited">
+              <TabsItem value="id" className="whitespace-nowrap">
+                Indonesia
+              </TabsItem>
+              <TabsItem value="en" className="whitespace-nowrap">
+                English
+              </TabsItem>
+            </TabsList>
+          </Tabs>
           <Badge
             variant={
               versions[activeLocale]?.status === "published"
@@ -848,43 +1125,50 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
               ? STATUS_LABEL[versions[activeLocale]!.status]
               : "Not started"}
           </Badge>
-          <Select
-            value={activeLocale}
-            onValueChange={(value) =>
-              setActiveLocale(value === "en" ? "en" : "id")
-            }
-          >
-            <SelectTrigger aria-label="Language to publish" className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectList>
-                <SelectItem value="id">Indonesia</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-              </SelectList>
-            </SelectPopup>
-          </Select>
+          <span className="text-xs text-muted">
+            ID {PUBLISH_GATE_TOTAL - missingPublishFields("id").length}/
+            {PUBLISH_GATE_TOTAL} · EN{" "}
+            {PUBLISH_GATE_TOTAL - missingPublishFields("en").length}/
+            {PUBLISH_GATE_TOTAL}
+          </span>
           <span role="status" className="text-sm text-muted">
             {hasUnsavedChanges ? "Unsaved changes" : ""}
           </span>
+          {missingActive.length > 0 ? (
+            <span
+              className="text-xs text-muted"
+              title={missingLabels.join(", ")}
+            >
+              {missingActive.length} required{" "}
+              {missingActive.length === 1 ? "field" : "fields"} missing
+            </span>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
             disabled={saveOne.isPending || publish.isPending || uploading}
-            onClick={() => saveOne.mutate(activeLocale)}
+            onClick={() => saveOne.mutate()}
           >
             <IconDeviceFloppy />
-            {saveOne.isPending ? "Saving…" : "Save article"}
+            {saveOne.isPending ? "Saving…" : "Save all languages"}
           </Button>
           <Button
             disabled={
               saveOne.isPending ||
               publish.isPending ||
               uploading ||
-              !!data.archivedAt
+              !!data.archivedAt ||
+              missingActive.length > 0
             }
-            onClick={() => publish.mutate(activeLocale)}
+            title={
+              missingActive.length > 0
+                ? `Missing: ${missingLabels.join(", ")}`
+                : undefined
+            }
+            onClick={() =>
+              setConfirmAction({ type: "publish", locale: activeLocale })
+            }
           >
             {publish.isPending
               ? "Publishing…"
@@ -896,13 +1180,73 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
               disabled={
                 unpublish.isPending || saveOne.isPending || publish.isPending
               }
-              onClick={() => unpublish.mutate(activeLocale)}
+              onClick={() =>
+                setConfirmAction({ type: "unpublish", locale: activeLocale })
+              }
             >
               Unpublish
             </Button>
           ) : null}
         </div>
       </div>
+      <Dialog
+        open={!!confirmAction}
+        onOpenChange={(open) => {
+          if (!open && !publish.isPending && !unpublish.isPending)
+            setConfirmAction(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <div>
+              <DialogTitle>
+                {confirmAction?.type === "unpublish"
+                  ? `Unpublish ${confirmAction.locale === "id" ? "Indonesia" : "English"}?`
+                  : `Publish ${confirmAction?.locale === "id" ? "Indonesia" : "English"}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmAction?.type === "unpublish"
+                  ? "The page, its sitemap entry, and the sibling language alternate disappear within two minutes. The saved text is kept as a draft."
+                  : "The saved version goes live at the address below. The other language stays unchanged."}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          {confirmAction ? (
+            <div className="break-all rounded-lg bg-item p-3 text-sm">
+              https://www.cogitoacademy.id/{confirmAction.locale}/blog/
+              {drafts[confirmAction.locale].slug ||
+                slugify(drafts[confirmAction.locale].title) ||
+                "…"}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="plain"
+              disabled={publish.isPending || unpublish.isPending}
+              onClick={() => setConfirmAction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={
+                confirmAction?.type === "unpublish" ? "danger" : "primary"
+              }
+              disabled={publish.isPending || unpublish.isPending}
+              onClick={() => {
+                if (!confirmAction) return;
+                if (confirmAction.type === "unpublish")
+                  unpublish.mutate(confirmAction.locale);
+                else publish.mutate(confirmAction.locale);
+                setConfirmAction(null);
+              }}
+            >
+              {confirmAction?.type === "unpublish"
+                ? "Unpublish"
+                : "Publish now"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
       <Dialog
         open={archiveOpen}
         onOpenChange={(open) => {

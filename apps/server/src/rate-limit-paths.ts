@@ -117,8 +117,8 @@ export function matchRateLimitPath(path: string): RateLimitKind | null {
   if (urlPath === "/rpc/upload/createUploadUrl") return "upload";
   // The Knowledge Bank file proxy streams real bytes (bandwidth) — 30/min.
   if (urlPath.startsWith("/content/knowledge-bank/")) return "content";
-  if (urlPath === "/rpc/public-content/blog/sitemap") return "blogSitemap";
-  if (urlPath.startsWith("/rpc/public-content/blog/")) return "publicBlog";
+  if (urlPath === "/rpc/publicContent/blog/sitemap") return "blogSitemap";
+  if (urlPath.startsWith("/rpc/publicContent/blog/")) return "publicBlog";
   if (urlPath.startsWith("/reports/student/")) return "reportExport";
 
   return null;

@@ -3,7 +3,9 @@ import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
 import {
   badRequest,
+  badRequestWithData,
   conflict,
+  conflictWithData,
   internalServerError,
   notFound,
 } from "../../lib/errors";
@@ -117,14 +119,25 @@ export function mapBlogError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof BlogVersionNotFoundError)
     return notFound(err.message, err);
   if (err instanceof BlogVersionConflictError)
-    return conflict(err.message, err);
+    return conflictWithData(
+      err.message,
+      {
+        actualVersion: err.details?.actualVersion,
+        expectedVersion: err.details?.expectedVersion,
+      },
+      err,
+    );
   if (err instanceof BlogSlugTakenError) return conflict(err.message, err);
   if (err instanceof BlogSlugImmutableError) return conflict(err.message, err);
   if (err instanceof BlogCategoryInUseError) return conflict(err.message, err);
   if (err instanceof BlogArticleArchivedError)
     return conflict(err.message, err);
   if (err instanceof BlogPublishInvalidError)
-    return badRequest(err.message, err);
+    return badRequestWithData(
+      err.message,
+      { missingFields: err.details?.missingFields ?? [] },
+      err,
+    );
   if (err instanceof BlogCategoryInvalidError)
     return badRequest(err.message, err);
   if (err instanceof BlogMediaInvalidError) return badRequest(err.message, err);

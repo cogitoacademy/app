@@ -42,7 +42,7 @@ import type {
   UpdateBlogArticleInput,
   UpdateBlogCategoryInput,
 } from "./blog.types";
-import { normalizeEmbedUrl } from "./blog.types";
+import { BLOG_RELATED_MAX, normalizeEmbedUrl } from "./blog.types";
 
 type VersionRow = typeof blogArticleVersion.$inferSelect;
 
@@ -981,6 +981,11 @@ export function createBlogService(deps: {
             "Categories support only one level.",
           );
         }
+        if (await repo.categoryHasChildren(category.id)) {
+          throw new BlogCategoryInvalidError(
+            "Move or delete this category's subcategories before making it a subcategory.",
+          );
+        }
       }
       if (await repo.categorySlugOwner("id", input.slugId, category.id)) {
         throw new BlogSlugTakenError(input.slugId, "id");
@@ -1026,12 +1031,14 @@ export function createBlogService(deps: {
     async listPublic(input: {
       locale: BlogLocale;
       cursor?: string;
+      page?: number;
       limit: number;
     }): Promise<{ rows: PublicBlogCardDto[]; nextCursor: string | null }> {
       const rows = await repo.listPublished({
         locale: input.locale,
         limit: input.limit,
-        cursor: cursorFrom(input.cursor),
+        offset: input.page ? (input.page - 1) * input.limit : 0,
+        cursor: input.page ? null : cursorFrom(input.cursor),
       });
       const page = rows.slice(0, input.limit);
       const last = page.at(-1);
@@ -1075,15 +1082,36 @@ export function createBlogService(deps: {
         input.locale,
         relatedIds,
       );
-      const related = relatedIds
+      const chosenRelated = relatedIds
         .map((id) =>
           relatedRows.find((relatedRow) => relatedRow.articleId === id),
         )
         .filter(
           (relatedRow): relatedRow is NonNullable<typeof relatedRow> =>
             !!relatedRow,
-        )
-        .map((relatedRow) => publicCard(relatedRow, input.locale));
+        );
+      const related = chosenRelated.map((relatedRow) =>
+        publicCard(relatedRow, input.locale),
+      );
+
+      if (related.length < BLOG_RELATED_MAX && row.categoryId) {
+        const fallbackRows = await repo.relatedFallbackCards({
+          locale: input.locale,
+          articleId: row.articleId,
+          categoryId: row.categoryId,
+          subcategoryId: row.subcategoryId,
+          excludeArticleIds: [
+            row.articleId,
+            ...chosenRelated.map((relatedRow) => relatedRow.articleId),
+          ],
+          limit: BLOG_RELATED_MAX - related.length,
+        });
+        related.push(
+          ...fallbackRows.map((fallbackRow) =>
+            publicCard(fallbackRow, input.locale),
+          ),
+        );
+      }
 
       return {
         ...publicCard(row, input.locale),

@@ -7,6 +7,8 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -80,7 +82,7 @@ export function createBlogRepo(db: DbType) {
       limit: number;
       cursor: BlogCursor | null;
     }) {
-      const statusFilter =
+      const versionFilter =
         input.status && input.locale
           ? inArray(
               blogArticle.id,
@@ -102,7 +104,15 @@ export function createBlogRepo(db: DbType) {
                   .from(blogArticleVersion)
                   .where(eq(blogArticleVersion.status, input.status)),
               )
-            : undefined;
+            : input.locale
+              ? inArray(
+                  blogArticle.id,
+                  db
+                    .select({ id: blogArticleVersion.articleId })
+                    .from(blogArticleVersion)
+                    .where(eq(blogArticleVersion.locale, input.locale)),
+                )
+              : undefined;
 
       return db
         .select({
@@ -115,7 +125,7 @@ export function createBlogRepo(db: DbType) {
         })
         .from(blogArticle)
         .leftJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
-        .where(and(statusFilter, afterCursor(input.cursor)))
+        .where(and(versionFilter, afterCursor(input.cursor)))
         .orderBy(desc(blogArticle.updatedAt), desc(blogArticle.id))
         .limit(input.limit + 1);
     },
@@ -394,9 +404,58 @@ export function createBlogRepo(db: DbType) {
         );
     },
 
+    async relatedFallbackCards(input: {
+      locale: string;
+      articleId: string;
+      categoryId: string;
+      subcategoryId: string | null;
+      excludeArticleIds: string[];
+      limit: number;
+    }) {
+      const scope = input.subcategoryId
+        ? eq(blogArticle.subcategoryId, input.subcategoryId)
+        : eq(blogArticle.categoryId, input.categoryId);
+      return db
+        .select(publicCardSelection)
+        .from(blogArticleVersion)
+        .innerJoin(
+          blogArticle,
+          eq(blogArticle.id, blogArticleVersion.articleId),
+        )
+        .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
+        .leftJoin(subCategory, eq(subCategory.id, blogArticle.subcategoryId))
+        .leftJoin(blogMedia, eq(blogMedia.id, blogArticle.heroMediaId))
+        .leftJoin(
+          tutorProfile,
+          eq(tutorProfile.id, blogArticle.featuredTutorId),
+        )
+        .leftJoin(user, eq(user.id, tutorProfile.userId))
+        .where(
+          and(
+            eq(blogArticleVersion.locale, input.locale),
+            eq(blogArticleVersion.status, "published"),
+            isNull(blogArticle.archivedAt),
+            ne(blogArticleVersion.articleId, input.articleId),
+            scope,
+            input.excludeArticleIds.length > 0
+              ? notInArray(
+                  blogArticleVersion.articleId,
+                  input.excludeArticleIds,
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(
+          desc(blogArticleVersion.publishedAt),
+          desc(blogArticleVersion.id),
+        )
+        .limit(input.limit);
+    },
+
     async listPublished(input: {
       locale: string;
       limit: number;
+      offset?: number;
       cursor: BlogCursor | null;
     }) {
       return db
@@ -427,13 +486,16 @@ export function createBlogRepo(db: DbType) {
           desc(blogArticleVersion.publishedAt),
           desc(blogArticleVersion.id),
         )
-        .limit(input.limit + 1);
+        .limit(input.limit + 1)
+        .offset(input.offset ?? 0);
     },
 
     async getPublishedBySlug(input: { locale: string; slug: string }) {
       const [row] = await db
         .select({
           ...publicCardSelection,
+          categoryId: blogArticle.categoryId,
+          subcategoryId: blogArticle.subcategoryId,
           reviewedByTutorId: blogArticle.reviewedByTutorId,
           reviewedByName: blogArticle.reviewedByName,
           lead: blogArticleVersion.lead,

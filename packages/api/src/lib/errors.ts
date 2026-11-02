@@ -31,11 +31,35 @@ export function conflict(
   return new ORPCError("CONFLICT", { message, ...(cause ? { cause } : {}) });
 }
 
+export function conflictWithData(
+  message: string,
+  data: Record<string, unknown>,
+  cause?: unknown,
+): ORPCError<"CONFLICT", undefined> {
+  return new ORPCError("CONFLICT", {
+    message,
+    data,
+    ...(cause ? { cause } : {}),
+  }) as unknown as ORPCError<"CONFLICT", undefined>;
+}
+
 export function badRequest(
   message: string,
   cause?: unknown,
 ): ORPCError<"BAD_REQUEST", undefined> {
   return new ORPCError("BAD_REQUEST", { message, ...(cause ? { cause } : {}) });
+}
+
+export function badRequestWithData(
+  message: string,
+  data: Record<string, unknown>,
+  cause?: unknown,
+): ORPCError<"BAD_REQUEST", undefined> {
+  return new ORPCError("BAD_REQUEST", {
+    message,
+    data,
+    ...(cause ? { cause } : {}),
+  }) as unknown as ORPCError<"BAD_REQUEST", undefined>;
 }
 
 export function internalServerError(

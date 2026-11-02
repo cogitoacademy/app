@@ -62,9 +62,21 @@ describe("blog errors", () => {
     expect(mapBlogError(new BlogArticleArchivedError("a")).code).toBe(
       "CONFLICT",
     );
-    expect(mapBlogError(new BlogPublishInvalidError(["title"])).code).toBe(
-      "BAD_REQUEST",
+    const publishError = mapBlogError(
+      new BlogPublishInvalidError(["title", "heroAlt"]),
     );
+    expect(publishError.code).toBe("BAD_REQUEST");
+    expect(publishError.data).toEqual({
+      missingFields: ["title", "heroAlt"],
+    });
+
+    const conflictError = mapBlogError(
+      new BlogVersionConflictError("id", 1, 2),
+    );
+    expect(conflictError.data).toEqual({
+      actualVersion: 2,
+      expectedVersion: 1,
+    });
     expect(mapBlogError(new BlogCategoryInvalidError("bad")).code).toBe(
       "BAD_REQUEST",
     );

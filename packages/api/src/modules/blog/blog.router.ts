@@ -78,7 +78,7 @@ export function createBlogRouter(handler: BlogHandler) {
         list: publicProcedure
           .route({
             method: "POST",
-            path: "/public-content/blog/list",
+            path: "/publicContent/blog/list",
             tags: ["Public content", "Blog"],
             summary: "List published blog articles",
           })
@@ -87,7 +87,7 @@ export function createBlogRouter(handler: BlogHandler) {
         get: publicProcedure
           .route({
             method: "POST",
-            path: "/public-content/blog/get",
+            path: "/publicContent/blog/get",
             tags: ["Public content", "Blog"],
             summary: "Get one published blog article",
           })
@@ -96,7 +96,7 @@ export function createBlogRouter(handler: BlogHandler) {
         categories: publicProcedure
           .route({
             method: "POST",
-            path: "/public-content/blog/categories",
+            path: "/publicContent/blog/categories",
             tags: ["Public content", "Blog"],
             summary: "List active blog categories",
           })
@@ -105,7 +105,7 @@ export function createBlogRouter(handler: BlogHandler) {
         sitemap: publicProcedure
           .route({
             method: "POST",
-            path: "/public-content/blog/sitemap",
+            path: "/publicContent/blog/sitemap",
             tags: ["Public content", "Blog"],
             summary: "List published blog URLs for the sitemap",
           })

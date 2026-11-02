@@ -67,6 +67,7 @@ function isInstagramUrl(value: string) {
     ) {
       return false;
     }
+    if (url.search || url.hash) return false;
     return /^\/(reel|reels|p|tv)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
   } catch {
     return false;
@@ -80,6 +81,7 @@ function isTikTokUrl(value: string) {
     if (url.hostname !== "tiktok.com" && url.hostname !== "www.tiktok.com") {
       return false;
     }
+    if (url.search || url.hash) return false;
     return /^\/@[A-Za-z0-9._-]+\/video\/\d+\/?$/.test(url.pathname);
   } catch {
     return false;
@@ -368,8 +370,8 @@ const categoryFields = z
     titleEn: z.string().trim().min(1).max(200),
     slugId: slugSchema,
     slugEn: slugSchema,
-    introId: nullableText(1_000),
-    introEn: nullableText(1_000),
+    introId: nullableText(3_000),
+    introEn: nullableText(3_000),
     isActive: z.boolean().default(true),
   })
   .strict();
@@ -402,6 +404,7 @@ export const listPublicBlogArticlesInput = z
   .object({
     locale: z.enum(BLOG_LOCALES),
     cursor: z.string().trim().max(300).optional(),
+    page: z.number().int().min(1).max(1_000).optional(),
     limit: z
       .number()
       .int()

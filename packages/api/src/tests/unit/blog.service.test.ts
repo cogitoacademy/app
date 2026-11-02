@@ -120,6 +120,7 @@ function baseRepo() {
     replaceRelated: mock(async () => undefined),
     replaceGallery: mock(async () => undefined),
     publishedCardsByIds: mock(async () => []),
+    relatedFallbackCards: mock(async () => []),
     listPublished: mock(async () => []),
     getPublishedBySlug: mock(async () => undefined),
     publishedAlternate: mock(async () => undefined),
@@ -140,6 +141,7 @@ function baseRepo() {
     mediaByStorageKey: mock(async () => undefined),
     hasPublishedArticleInCategory: mock(async () => false),
     publishedArticleUsesCategory: mock(async () => false),
+    categoryHasChildren: mock(async () => false),
     categorySlugOwner: mock(async () => undefined),
     transaction: mock(async (fn: any) => fn({})),
   };
