@@ -14,13 +14,31 @@ function outputName(name: string) {
 }
 
 async function decode(file: File) {
+  // Decode the Blob directly when the browser supports it. This avoids a
+  // temporary object URL, which a restrictive img-src CSP can block before the
+  // browser exposes the decode failure as "The source image cannot be decoded."
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return {
+        image: bitmap as CanvasImageSource,
+        width: bitmap.width,
+        height: bitmap.height,
+        release: () => bitmap.close(),
+      };
+    } catch {
+      // Fall through to element decoding so unsupported formats still report
+      // the same error path.
+    }
+  }
+
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
     image.src = url;
     await image.decode();
     return {
-      image,
+      image: image as CanvasImageSource,
       width: image.naturalWidth,
       height: image.naturalHeight,
       release: () => URL.revokeObjectURL(url),

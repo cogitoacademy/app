@@ -1,5 +1,15 @@
 # Cogito Runbook
 
+## Web CSP and client-side image uploads (3 November 2026)
+
+Blog hero and gallery uploads and the profile photo crop preview decode the
+selected file in the browser. The web container CSP in `apps/web/nginx.conf`
+must allow `blob:` in `img-src`; without it the browser reports **The source
+image cannot be decoded** for a valid image. If an upload fails with that
+message, inspect the `Content-Security-Policy` response header on the web app
+origin and confirm `img-src` contains `blob:`. Rebuilding and redeploying the
+web image applies the header. The API CSP does not need `blob:`.
+
 ## Tutor payout bank snapshot column repair (2 November 2026)
 
 Migration `0090_tutor_payout_bank_columns.sql` is additive and idempotent. It restores `tutor_payout.bank_account_number` and `tutor_payout.bank_account_holder_name` on databases where migration 0049 was skipped because the journal timestamp order placed it before migration 0048. The same change makes every journal timestamp strictly increasing and adds a unit guard. Apply it with the normal forward runner (`bun run db:migrate`); do not reset or reseed.
