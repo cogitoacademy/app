@@ -1,5 +1,22 @@
 # Cogito App — Codebase Context
 
+## Blog and profile image uploads require blob: in img-src (3 November 2026)
+
+Production UAT found that every blog hero image upload failed with **The source
+image cannot be decoded**. The cause was the web nginx CSP: `img-src` allowed
+`'self' data: https:` but not `blob:`. The browser normalizes blog images in the
+client (`apps/web/src/lib/blog-image.ts`) and previously decoded the file from a
+`URL.createObjectURL` blob URL; the CSP blocked that load, so `image.decode()`
+rejected with the misleading message even for valid PNGs. The same block would
+break the profile photo crop dialog preview.
+
+The web CSP now allows `blob:` in `img-src`. Blog image decoding prefers
+`createImageBitmap(file)`, which needs no object URL and therefore no CSP
+allowance, and falls back to element decoding. `apps/web/src/nginx-security.test.ts`
+guards the `img-src` entry, and the web image must be rebuilt and deployed for
+the header change to take effect. No API, database, or migration change is
+involved.
+
 ## Bilingual blog app slice (2 November 2026)
 
 The bilingual blog now has an app-managed data and API path on branch `feat/bilingual-blog`. PostgreSQL stores `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`; migration `0086_fresh_spirit.sql` is additive. Each article has shared fields and at most two locale versions, and each version publishes independently. A slug locks after its first publish. The publish gate checks required editorial fields, hero media and alt text, key facts, and locale gallery alt text.
