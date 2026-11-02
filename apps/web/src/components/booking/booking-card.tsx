@@ -185,10 +185,7 @@ export function BookingListCard({
             {showFinancialInfo ? (
               <>
                 {people.length > 0 ? (
-                  <Separator
-                    orientation="vertical"
-                    className="self-stretch"
-                  />
+                  <Separator orientation="vertical" className="self-stretch" />
                 ) : null}
                 <BookingFinancialInfo
                   booking={booking}
