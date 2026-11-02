@@ -23,7 +23,9 @@ await page.getByRole("button", { name: "Sign In", exact: true }).click();
 await page.waitForURL(/\/(dashboard|verify-email)/, { timeout: 30_000 });
 await page.goto("http://localhost:3000/admin-economy");
 await page.getByRole("heading", { name: "Rate card" }).waitFor();
-await page.getByRole("heading", { name: "Price example" }).scrollIntoViewIfNeeded();
+await page
+  .getByRole("heading", { name: "Price example" })
+  .scrollIntoViewIfNeeded();
 await page.screenshot({
   path: "test-results/finance-layout/economy-topup.png",
 });

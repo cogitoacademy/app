@@ -4843,7 +4843,6 @@ Apply migration 0088_easy_garia before using manual blog bylines. It adds nullab
 
 Migration 0088 was applied to development localhost:6767/cogito-app during this authoring update. Marketing renderer byline support is implemented in cogito-acad; browser acceptance is pending.
 
-
 ### Developer-terminal production seed helper
 
 `bun scripts/seed-prod-db.ts --help` documents the optional helper. Set `PROD_DATABASE_URL` and `SEED_ADMIN_PASSWORD`, then pass `--confirm=<database-host>`. Loopback targets require `--via-tunnel`; existing users require `ALLOW_NONEMPTY_PROD_SEED=true`. Defaults are additive and demo users require `--with-demo-users` plus their passwords. The helper checks migration presence, invokes the existing seed with production opt-in, and verifies user count; it does not apply migrations. Confirm the exact target before running it. `packages/e2e/shot-topup.mjs` is a local screenshot helper requiring the local app and seeded admin; it is not a test or deployment step.

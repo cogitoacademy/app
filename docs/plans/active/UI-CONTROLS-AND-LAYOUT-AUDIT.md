@@ -491,7 +491,6 @@ Parent integration check (26 October 2026): after merging release head 8945a6d6 
 
 Implemented: single Referrals sidebar entry; URL-backed Activity, Campaigns and Commissions tabs; compact campaign table; existing KOL decision, CSV and settlement UI composed under Commissions; previous commission URL redirects. Activity/campaign requests are deferred to their tab. Financial RPC contracts and student friend-code ownership are unchanged. Campaign promotion support and campaign-level commission aggregation are outside this navigation change. Validation: 19 relevant synthetic browser cases passed across the two runs; lint passed. Four student referral expectations, two broader settlement checks and concurrent class-management type errors remain open; see RUNBOOK for scope.
 
-
 ## Admin finance follow-up (2 November 2026)
 
 - [x] Put rate card actions in the responsive Selia card header and compare current versus saved draft pricing.
