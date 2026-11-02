@@ -11,6 +11,7 @@ function createFake(rows: unknown[]) {
     groupBy: () => chain,
     orderBy: () => chain,
     limit: () => chain,
+    offset: () => chain,
     set: () => chain,
     values: () => chain,
     returning: async () => rows,
