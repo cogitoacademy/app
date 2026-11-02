@@ -678,6 +678,7 @@ export function createAdminService(deps: {
     return {
       ...settings,
       activeRevision: active?.version ?? null,
+      activeValues: active?.values ?? null,
       competitions: parents.map((parent) => ({
         id: parent.id,
         slug: parent.slug,

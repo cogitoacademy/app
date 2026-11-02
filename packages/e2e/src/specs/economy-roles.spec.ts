@@ -52,10 +52,10 @@ async function replaceNumberFieldValue(input: Locator, value: number) {
 
 async function startEconomyEditing(page: Page) {
   await page
-    .getByRole("button", { name: "Edit V3 draft", exact: true })
+    .getByRole("button", { name: "Change prices", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Save draft revision", exact: true }),
+    page.getByRole("button", { name: "Save new prices", exact: true }),
   ).toBeVisible();
 }
 
@@ -70,11 +70,11 @@ test("admin economy sections keep their normal gap across viewports", async ({
     await page.goto("/admin-economy");
     // eslint-disable-next-line no-await-in-loop -- Wait for the V3 query before measuring.
     await expect(
-      page.getByRole("heading", { name: "V3 rate card", exact: true }),
+      page.getByRole("heading", { name: "Rate card", exact: true }),
     ).toBeVisible();
     // eslint-disable-next-line no-await-in-loop -- Measure this viewport before resizing again.
     const spacing = await page
-      .getByRole("heading", { name: "V3 rate card", exact: true })
+      .getByRole("heading", { name: "Rate card", exact: true })
       .evaluate((heading) => {
         const grid = heading.closest('[data-slot="card"]')!.parentElement!;
         const styles = window.getComputedStyle(grid);
@@ -178,7 +178,7 @@ test("admin can save and reload competition-based V3 draft rates", async ({
   await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   await page.goto("/admin-economy");
   await expect(
-    page.getByRole("heading", { name: "V3 rate card", exact: true }),
+    page.getByRole("heading", { name: "Rate card", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Cogito take schedule", { exact: true }),
@@ -194,27 +194,29 @@ test("admin can save and reload competition-based V3 draft rates", async ({
     await replaceNumberFieldValue(amount, original + 1);
     await fillReasonPrompt(
       page,
-      "Save draft revision",
-      "Reason for this revision",
+      "Save new prices",
+      "Reason for changing prices",
       "E2E V3 rate editing",
     );
     await expect(
-      page.getByText("V3 draft saved", { exact: true }),
+      page.getByText("New prices saved", { exact: true }),
     ).toBeVisible();
     await page.reload();
+    await startEconomyEditing(page);
     await expectNumberFieldValue(amount, original + 1);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
   } finally {
     await page.goto("/admin-economy");
     await startEconomyEditing(page);
     await replaceNumberFieldValue(amount, original);
     await fillReasonPrompt(
       page,
-      "Save draft revision",
-      "Reason for this revision",
+      "Save new prices",
+      "Reason for changing prices",
       "Restore E2E V3 rate",
     );
     await expect(
-      page.getByText("V3 draft saved", { exact: true }),
+      page.getByText("New prices saved", { exact: true }),
     ).toBeVisible();
   }
 });
@@ -232,10 +234,9 @@ test("admin blocks negative V3 rates without persisting them", async ({
   await startEconomyEditing(page);
   await replaceNumberFieldValue(amount, -5);
   await expect(
-    page.getByRole("button", { name: "Save draft revision", exact: true }),
+    page.getByRole("button", { name: "Save new prices", exact: true }),
   ).toBeDisabled();
-  await page
-    .getByRole("button", { name: "Cancel and reload", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await startEconomyEditing(page);
   await expectNumberFieldValue(amount, 50);
 });

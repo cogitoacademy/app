@@ -77,29 +77,29 @@ const HEADERS = [
   "Bank",
   "Account number",
   "Account holder",
-  "Tax legal name snapshot",
-  "NIK snapshot",
-  "NPWP snapshot",
+  "Tax legal name at time of payout",
+  "NIK at time of payout",
+  "NPWP at time of payout",
   "Payout status",
   "Actual paid at (Asia/Jakarta)",
   "Transfer recorded at (Asia/Jakarta)",
-  "Voided at (Asia/Jakarta)",
+  "Cancelled on (Asia/Jakarta)",
   "Gross honorarium IDR",
-  "Tax status snapshot",
-  "Tax rate snapshot (basis points)",
-  "Tax rate source snapshot",
+  "Tax status at time of payout",
+  "Tax rate (%)",
+  "Tax rate source",
   "Tax withheld IDR",
   "Transfer fee IDR",
   "Calculated net IDR",
   "Actual transfer IDR",
   "Transfer reference",
   "Covered sessions",
-  "Reconciliation status",
-  "Void reason",
-  "Reconciliation reason",
+  "Follow-up status",
+  "Cancellation reason",
+  "Follow-up notes",
 ];
 
-export function buildTutorPayoutCsv(
+export function buildTutorPayoutReport(
   rows: TutorPayoutCsvRow[],
   dateFrom: string,
   dateTo: string,
@@ -113,7 +113,7 @@ export function buildTutorPayoutCsv(
       row.status === "void" && isWithinWibRange(row.voidedAt, dateFrom, dateTo),
   );
   const toCsvRow = (row: TutorPayoutCsvRow, type: "PAID" | "VOID") => [
-    type,
+    type === "VOID" ? "Cancelled" : "Paid",
     row.tutorName,
     row.bankName,
     row.bankAccountNumber,
@@ -121,19 +121,21 @@ export function buildTutorPayoutCsv(
     row.taxLegalName,
     row.taxNik,
     row.taxNpwp,
-    row.status,
+    row.status === "void" ? "Cancelled" : "Paid",
     formatWibDateTime(row.paidAt),
     formatWibDateTime(row.transferRecordedAt),
     formatWibDateTime(row.voidedAt),
     row.grossHonorariumIdr,
     row.taxStatus === null
-      ? "Unavailable (required snapshot missing)"
+      ? "Unavailable (not recorded at time of payout)"
       : formatPayoutTaxStatus(row.taxStatus),
-    row.taxRateBps ?? "Unavailable (required snapshot missing)",
+    row.taxRateBps === null
+      ? "Unavailable (not recorded at time of payout)"
+      : row.taxRateBps / 100,
     row.taxRateSource === null
-      ? "Unavailable (required snapshot missing)"
+      ? "Unavailable (not recorded at time of payout)"
       : formatPayoutTaxRateSource(row.taxRateSource),
-    row.taxHonorariumIdr ?? "Unavailable (required snapshot missing)",
+    row.taxHonorariumIdr ?? "Unavailable (not recorded at time of payout)",
     row.transferFeeIdr,
     row.netHonorariumIdr,
     row.actualAmountIdr,
@@ -141,7 +143,13 @@ export function buildTutorPayoutCsv(
     row.coveredSessionCount > 0
       ? row.coveredSessionCount
       : "Session coverage unavailable",
-    formatPayoutReconciliationStatus(row.reconciliationStatus),
+    row.reconciliationStatus === "not_required"
+      ? "No follow-up needed"
+      : row.reconciliationStatus === "resolved"
+        ? "Completed"
+        : row.reconciliationStatus === "required"
+          ? "Follow-up needed"
+          : formatPayoutReconciliationStatus(row.reconciliationStatus),
     row.voidReason,
     row.reconciliationReason,
   ];
@@ -170,20 +178,40 @@ export function buildTutorPayoutCsv(
         return "";
     }
   });
+  return {
+    headers: HEADERS,
+    paidRows,
+    voidRows,
+    paidValues: paidRows.map((row) => toCsvRow(row, "PAID")),
+    voidValues: voidRows.map((row) => toCsvRow(row, "VOID")),
+    totals,
+  };
+}
+
+export function buildTutorPayoutCsv(
+  rows: TutorPayoutCsvRow[],
+  dateFrom: string,
+  dateTo: string,
+) {
+  const { headers, paidValues, voidValues, totals } = buildTutorPayoutReport(
+    rows,
+    dateFrom,
+    dateTo,
+  );
   const rowsToWrite = [
     [
       "Actual transfers by Asia/Jakarta paid date",
       ...Array(HEADERS.length - 1).fill(""),
     ],
-    HEADERS,
-    ...paidRows.map((row) => toCsvRow(row, "PAID")),
+    headers,
+    ...paidValues,
     totals,
     [
-      "Void and reconciliation records by Asia/Jakarta void date",
+      "Cancelled payouts by cancellation date (Asia/Jakarta)",
       ...Array(HEADERS.length - 1).fill(""),
     ],
-    HEADERS,
-    ...voidRows.map((row) => toCsvRow(row, "VOID")),
+    headers,
+    ...voidValues,
   ];
 
   return (
