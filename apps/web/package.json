@@ -33,6 +33,7 @@
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.14",
     "dotenv": "catalog:",
+    "exceljs": "^4.4.0",
     "next-themes": "catalog:",
     "posthog-js": "^1.434.15",
     "react": "catalog:",

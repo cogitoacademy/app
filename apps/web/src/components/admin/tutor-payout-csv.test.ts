@@ -82,12 +82,12 @@ describe("tutor payout CSV", () => {
       "2026-05-31",
     );
     expect(csv).toContain("\"'=HYPERLINK");
-    expect(csv).toContain('"300"');
-    expect(csv).toContain('"500"');
+    expect(csv).toContain('"3"');
+    expect(csv).toContain('"5"');
     expect(csv).toContain('"3000"');
     expect(csv).toContain('"NIK + NPWP"');
     expect(csv).toContain('"Default (NIK + NPWP)"');
-    expect(csv).toContain('"Not required"');
+    expect(csv).toContain('"No follow-up needed"');
     expect(csv).not.toContain("nik_npwp");
     expect(csv).not.toContain('"8,000"');
     expect(csv).toContain('"\'001234567890"');
@@ -111,7 +111,7 @@ describe("tutor payout CSV", () => {
       "2026-05-31",
     );
 
-    expect(csv).toContain('"Unavailable (required snapshot missing)"');
+    expect(csv).toContain('"Unavailable (not recorded at time of payout)"');
     expect(csv).toContain('"Session coverage unavailable"');
     expect(csv).toContain('"Known allocation rows only: 0"');
   });

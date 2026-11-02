@@ -2526,7 +2526,7 @@ As a signed-in student or tutor, open `/notifications` and confirm the list show
 
 ### Economy rate-control smoke check
 
-As an admin, open `/admin-economy` and confirm only the V3 rate card and price preview are present. Select **Edit V3 draft**, edit a competition solo Marks/IDR pair or group/offline adjustments, and inspect the 1–6-student preview. Enter a revision reason and save. Confirm immutable draft versioning, stale-version rejection and draft persistence after reload; saving a draft does not activate it or change existing snapshots. Fresh seed initializes active V3 defaults. Verify negative or incomplete rates block save. The obsolete Cogito take schedule controls must not appear.
+As an admin, open `/admin-economy` and confirm only the rate card and price example are present, stacked in one column. select **Change prices**, edit a competition solo Marks/IDR pair or group/offline adjustments, and inspect the 1–6-student preview. Enter a revision reason and save. Confirm saved new prices are versioned, stale-version rejection and draft persistence after reload; saving a draft does not activate it or change existing snapshots. Fresh seed initializes active V3 defaults. Verify negative or incomplete rates block save. The obsolete Cogito take schedule controls must not appear.
 
 Students/tutors must be redirected away from `/admin-economy`; V3 admin RPCs must deny their access. The removed get/update take-schedule RPCs must not be registered. Tutor profiles display projected IDR fees by assigned competition and cannot mutate their own rates. Discovery/booking prices require active V3 configuration and an explicit specialization.
 
@@ -4842,3 +4842,7 @@ Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Canc
 Apply migration 0088_easy_garia before using manual blog bylines. It adds nullable featured_tutor_name and reviewed_by_name columns. Verify save/reopen with manual names and no tutor accounts, both linked/manual selections, and public byline/reviewer output. Bilingual editor fields follow the language selected in the sticky Tabs control (Indonesia or English). The bar shows per-language publish-gate progress, and publishing targets the active language only.
 
 Migration 0088 was applied to development localhost:6767/cogito-app during this authoring update. Marketing renderer byline support is implemented in cogito-acad; browser acceptance is pending.
+
+### Developer-terminal production seed helper
+
+`bun scripts/seed-prod-db.ts --help` documents the optional helper. Set `PROD_DATABASE_URL` and `SEED_ADMIN_PASSWORD`, then pass `--confirm=<database-host>`. Loopback targets require `--via-tunnel`; existing users require `ALLOW_NONEMPTY_PROD_SEED=true`. Defaults are additive and demo users require `--with-demo-users` plus their passwords. The helper checks migration presence, invokes the existing seed with production opt-in, and verifies user count; it does not apply migrations. Confirm the exact target before running it. `packages/e2e/shot-topup.mjs` is a local screenshot helper requiring the local app and seeded admin; it is not a test or deployment step.

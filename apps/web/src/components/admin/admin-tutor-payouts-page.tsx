@@ -3,6 +3,7 @@
 import { ActionReasonDialog } from "@/components/action-reason-dialog";
 
 import Loader from "@/components/loader";
+import { TablePagination } from "@/components/table-pagination";
 
 import { percentToBasisPoints } from "./tax-rate-input";
 
@@ -12,12 +13,19 @@ import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuItem,
+} from "@cogito-app/ui/components/selia/menu";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
   CardHeader,
+  CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -60,6 +68,7 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import {
   IconCoins,
+  IconChevronDown,
   IconDownload,
   IconInbox,
   IconRefresh,
@@ -81,6 +90,7 @@ import { client, orpc } from "@/utils/orpc";
 import { buildTutorPayoutCsv } from "./tutor-payout-csv";
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+const PAGE_SIZE = 25;
 const QUICK_RANGE_DAYS = [7, 30, 90] as const;
 type PayoutReportRow = Awaited<
   ReturnType<typeof client.admin.getTutorPayoutReport>
@@ -230,7 +240,8 @@ export function AdminTutorPayoutsPage() {
   const [draftFrom, setDraftFrom] = useState(defaultRange.from);
   const [draftTo, setDraftTo] = useState(defaultRange.to);
   const [appliedRange, setAppliedRange] = useState(defaultRange);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [exporting, setExporting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("priority");
   const [selectedRow, setSelectedRow] = useState<PayoutReportRow | null>(null);
   const [selectedSourceKeys, setSelectedSourceKeys] = useState<string[]>([]);
@@ -242,6 +253,7 @@ export function AdminTutorPayoutsPage() {
   const [reconciliationReason, setReconciliationReason] = useState("");
   const [overrideRateBps, setOverrideRateBps] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
+  const [editingTaxRates, setEditingTaxRates] = useState(false);
   const [taxRateDraftDirty, setTaxRateDraftDirty] = useState(false);
   const [taxRateDraft, setTaxRateDraft] = useState({
     nikNpwpRateBps: "250",
@@ -291,6 +303,17 @@ export function AdminTutorPayoutsPage() {
       );
     });
   }, [reportRows, sortOption, statusFilter]);
+
+  const paginationKey = `${appliedRange.from}:${appliedRange.to}:${statusFilter}:${sortOption}`;
+  const [pagination, setPagination] = useState({ key: paginationKey, page: 0 });
+  if (pagination.key !== paginationKey) {
+    setPagination({ key: paginationKey, page: 0 });
+  }
+  const page = Math.min(
+    pagination.key === paginationKey ? pagination.page : 0,
+    Math.max(0, Math.ceil(visibleRows.length / PAGE_SIZE) - 1),
+  );
+  const pageRows = visibleRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const pendingQuery = useQuery({
     ...orpc.admin.getPendingTutorPayouts.queryOptions({
@@ -428,6 +451,7 @@ export function AdminTutorPayoutsPage() {
           missingRateBps: String(result.missingRateBps),
         });
         setTaxRateDraftDirty(false);
+        setEditingTaxRates(false);
         toastManager.add({
           title: "Default payout rates updated",
           description: "The change is audited and affects future previews.",
@@ -498,14 +522,46 @@ export function AdminTutorPayoutsPage() {
     setSelectedRow(null);
   }
 
-  function handleDownload() {
-    csvDownload(reportRows, appliedRange.from, appliedRange.to);
-    toastManager.add({
-      title: "Monthly payout CSV downloaded",
-      description:
-        "Paid transfers use their actual Asia/Jakarta transfer date. Void and reconciliation rows are kept in a separate section.",
-      type: "success",
-    });
+  async function handleDownload(format: "xlsx" | "csv") {
+    setExporting(true);
+    try {
+      if (format === "csv") {
+        csvDownload(reportRows, appliedRange.from, appliedRange.to);
+      } else {
+        const { buildTutorPayoutXlsx } = await import("./tutor-payout-xlsx");
+        const buffer = await buildTutorPayoutXlsx(
+          reportRows,
+          appliedRange.from,
+          appliedRange.to,
+        );
+        const url = URL.createObjectURL(
+          new Blob([new Uint8Array(buffer)], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `tutor-payouts-${appliedRange.from}-to-${appliedRange.to}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      toastManager.add({
+        title: "Payout report downloaded",
+        description:
+          "Includes paid transfers and void records for the applied date range.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Report could not be downloaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
   }
 
   function prepareSelectedPayout(preview: PayoutPreview) {
@@ -584,16 +640,33 @@ export function AdminTutorPayoutsPage() {
         </Button>
       </div>
 
-      <div className="xl:grid-cols-[1.4fr_2fr] xl:grid xl:gap-4">
+      <div>
         <Card>
           <CardHeader>
             <div>
               <CardTitle>Default tax rates</CardTitle>
               <Text className="mt-1 text-sm text-muted">
-                Choose the percentage deducted from tutor fees. Changes apply to
-                new payout calculations.
+                Default withholding percentages based on the tutor’s identity
+                documents. Rates apply to new payout previews; prepared payouts
+                keep their saved rates. Select Edit to change these defaults.
               </Text>
             </div>
+            <CardHeaderAction>
+              {!editingTaxRates ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!taxConfigQuery.data || taxConfigQuery.isFetching}
+                  onClick={() => {
+                    setTaxRateDraft(taxRateDraftValues);
+                    setTaxRateDraftDirty(true);
+                    setEditingTaxRates(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              ) : null}
+            </CardHeaderAction>
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -610,6 +683,7 @@ export function AdminTutorPayoutsPage() {
                   </FieldLabel>
                   <SeliaNumberField
                     id={`tax-rate-${key}`}
+                    disabled={!editingTaxRates || taxConfigMutation.isPending}
                     allowOutOfRange
                     format={{ useGrouping: false, maximumFractionDigits: 2 }}
                     min={0}
@@ -641,64 +715,80 @@ export function AdminTutorPayoutsPage() {
                 </Field>
               ))}
             </div>
-            <div className="flex flex-wrap items-end gap-3">
-              <ActionReasonDialog
-                label="Save default tax rates"
-                reasonLabel="Change reason"
-                description="Every rate change is recorded in the audit log."
-                confirmLabel="Save default tax rates"
-                minLength={1}
-                maxLength={2000}
-                disabled={
-                  taxConfigMutation.isPending ||
-                  !taxConfigQuery.data ||
-                  taxConfigInvalid
-                }
-                trigger={
-                  <Button
-                    disabled={
-                      taxConfigMutation.isPending ||
-                      !taxConfigQuery.data ||
-                      taxConfigInvalid
-                    }
-                    progress={taxConfigMutation.isPending}
-                  >
-                    Save default tax rates
-                  </Button>
-                }
-                onConfirm={(reason) => {
-                  const config = taxConfigQuery.data;
-                  if (!config)
-                    return Promise.reject(
-                      new Error("Tax defaults are not loaded."),
-                    );
-                  return taxConfigMutation.mutateAsync({
-                    expectedVersion: config.version,
-                    nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
-                    nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
-                    missingRateBps: Number(taxRateDraftValues.missingRateBps),
-                    reason,
-                  });
-                }}
-              />
-            </div>
+            {editingTaxRates ? (
+              <div className="flex flex-wrap items-end gap-3">
+                <ActionReasonDialog
+                  label="Save default tax rates"
+                  reasonLabel="Change reason"
+                  description="Every rate change is recorded in the audit log."
+                  confirmLabel="Save default tax rates"
+                  minLength={1}
+                  maxLength={2000}
+                  disabled={
+                    taxConfigMutation.isPending ||
+                    !taxConfigQuery.data ||
+                    taxConfigInvalid
+                  }
+                  trigger={
+                    <Button
+                      disabled={
+                        taxConfigMutation.isPending ||
+                        !taxConfigQuery.data ||
+                        taxConfigInvalid
+                      }
+                      progress={taxConfigMutation.isPending}
+                    >
+                      Save default tax rates
+                    </Button>
+                  }
+                  onConfirm={(reason) => {
+                    const config = taxConfigQuery.data;
+                    if (!config)
+                      return Promise.reject(
+                        new Error("Tax defaults are not loaded."),
+                      );
+                    return taxConfigMutation.mutateAsync({
+                      expectedVersion: config.version,
+                      nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
+                      nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
+                      missingRateBps: Number(taxRateDraftValues.missingRateBps),
+                      reason,
+                    });
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  disabled={taxConfigMutation.isPending}
+                  onClick={() => {
+                    setTaxRateDraftDirty(false);
+                    setEditingTaxRates(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : null}
             {taxConfigQuery.isError ? (
               <FieldError>Tax defaults could not be loaded.</FieldError>
             ) : null}
           </CardBody>
         </Card>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Payout filters</CardTitle>
-              <Text className="mt-1 text-sm text-muted">
-                Paid and void history follows the selected dates in
-                Asia/Jakarta. Current unpaid sessions remain visible.
-              </Text>
+      <Card id="admin-tutor-payouts" className="scroll-mt-4">
+        <CardHeader>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Tutor payout records</CardTitle>
+              <Badge variant="secondary">{visibleRows.length} rows</Badge>
             </div>
-          </CardHeader>
-          <CardBody className="space-y-5">
+            <Text className="mt-1 text-sm text-muted">
+              {appliedRange.from} to {appliedRange.to} (WIB)
+            </Text>
+          </div>
+        </CardHeader>
+        <CardBody aria-busy={reportQuery.isFetching}>
+          <div className="mb-6 space-y-5">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Field>
                 <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
@@ -788,37 +878,39 @@ export function AdminTutorPayoutsPage() {
                   Apply date range
                 </Button>
               </div>
-              <Button
-                size="sm"
-                variant="tertiary"
-                onClick={handleDownload}
-                disabled={reportQuery.isPending || reportQuery.isError}
-              >
-                <IconDownload />
-                Download monthly CSV
-              </Button>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      aria-label="Download report"
+                      size="sm"
+                      variant="tertiary"
+                      progress={exporting}
+                    />
+                  }
+                  disabled={
+                    exporting ||
+                    reportQuery.isFetching ||
+                    reportQuery.isPending ||
+                    reportQuery.isError
+                  }
+                >
+                  <IconDownload /> Download report <IconChevronDown />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuItem onClick={() => void handleDownload("xlsx")}>
+                    Excel (.xlsx)
+                  </MenuItem>
+                  <MenuItem onClick={() => void handleDownload("csv")}>
+                    CSV (.csv)
+                  </MenuItem>
+                </MenuPopup>
+              </Menu>
             </div>
             {dateRangeError ? (
               <Text className="text-sm text-danger">{dateRangeError}</Text>
             ) : null}
-          </CardBody>
-        </Card>
-      </div>
-
-      <Card id="admin-tutor-payouts" className="scroll-mt-4">
-        <CardHeader>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Tutor payout records</CardTitle>
-              <Badge variant="secondary">{visibleRows.length} rows</Badge>
-            </div>
-            <Text className="mt-1 text-sm text-muted">
-              {appliedRange.from} to {appliedRange.to} · paid export uses actual
-              transfer date
-            </Text>
           </div>
-        </CardHeader>
-        <CardBody aria-busy={reportQuery.isFetching}>
           {reportQuery.isError ? (
             <div>
               <Text className="text-sm text-danger">
@@ -859,7 +951,7 @@ export function AdminTutorPayoutsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleRows.map((row) => (
+                  {pageRows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell>
                         <Text className="whitespace-nowrap font-medium">
@@ -925,6 +1017,28 @@ export function AdminTutorPayoutsPage() {
               </Table>
             </TableContainer>
           )}
+          {!reportQuery.isPending &&
+          !reportQuery.isError &&
+          visibleRows.length > 0 ? (
+            <TablePagination
+              targetId="admin-tutor-payouts"
+              label="payout records"
+              pageSize={PAGE_SIZE}
+              page={page}
+              itemCount={pageRows.length}
+              hasNext={(page + 1) * PAGE_SIZE < visibleRows.length}
+              isFetching={reportQuery.isFetching}
+              onPrevious={() =>
+                setPagination({
+                  key: paginationKey,
+                  page: Math.max(0, page - 1),
+                })
+              }
+              onNext={() =>
+                setPagination({ key: paginationKey, page: page + 1 })
+              }
+            />
+          ) : null}
         </CardBody>
       </Card>
 

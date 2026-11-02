@@ -285,6 +285,7 @@ describe("V3 admin revision transaction", () => {
     });
     expect(await service.getV3EconomySettings()).toMatchObject({
       activeRevision: 7,
+      activeValues: DEFAULT_V3_ECONOMY_CONFIG,
       version: 0,
     });
   });

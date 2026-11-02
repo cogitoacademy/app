@@ -367,12 +367,12 @@ for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/admin-economy");
     await expect(
-      page.getByRole("heading", { name: "V3 rate card", exact: true }),
+      page.getByRole("heading", { name: "Rate card", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Active", { exact: true })).toBeVisible();
+    await expect(page.getByText("In use", { exact: true })).toBeVisible();
     await measure(page, `economy-readonly-${width}`);
     await page
-      .getByRole("button", { name: "Edit V3 draft", exact: true })
+      .getByRole("button", { name: "Change prices", exact: true })
       .click();
     const amount = page.getByRole("textbox", {
       name: "starter price in IDR",
@@ -406,10 +406,7 @@ for (const width of [320, 390, 768, 1440]) {
         return el.scrollLeft;
       }),
     ).toBeGreaterThan(0);
-    await page
-      .getByRole("combobox")
-      .filter({ hasText: "Unpaid sessions" })
-      .click();
+    await page.getByRole("combobox", { name: "Status" }).click();
     await page
       .getByRole("option", { name: "All statuses", exact: true })
       .click();
@@ -485,9 +482,11 @@ for (const width of [320, 390, 768, 1440]) {
       .toBe(width);
     await measure(page, `payout-void-${width}`);
     await page
-      .getByLabel("Resolution details", { exact: true })
+      .getByRole("textbox", { name: "Resolution details", exact: true })
       .fill("Synthetic review only");
-    await page.getByLabel("Resolution details", { exact: true }).press("Tab");
+    await page
+      .getByRole("textbox", { name: "Resolution details", exact: true })
+      .press("Tab");
     await expect(
       page.getByRole("button", { name: "Resolve reconciliation", exact: true }),
     ).toBeFocused();
@@ -503,20 +502,20 @@ test("economy activation requires reason and refreshes active badge", async ({
   const errors = await mockFinance(page, true);
   await page.goto("/admin-economy");
   await expect(
-    page.getByText("Draft · not active", { exact: true }),
+    page.getByText("New prices, not in use", { exact: true }),
   ).toBeVisible();
   const button = page.getByRole("button", {
-    name: "Activate saved pricing",
+    name: "Use these prices",
     exact: true,
   });
   await expect(button).toBeEnabled();
   await fillReasonPrompt(
     page,
-    "Activate saved pricing",
-    "Reason for activating pricing",
+    "Use these prices",
+    "Reason for using these prices",
     "Approved new pricing",
   );
-  await expect(page.getByText("Active", { exact: true })).toBeVisible();
+  await expect(page.getByText("In use", { exact: true })).toBeVisible();
   await expect(button).toHaveCount(0);
   expect(errors).toEqual([]);
 });
