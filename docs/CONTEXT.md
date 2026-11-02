@@ -1206,6 +1206,12 @@ only to those legacy aggregate rows, including unresolved allocationless voids
 until audited reconciliation is resolved. Identical transfer retries return
 the saved paid result without another audit or notification. Tutor payout
 history and its notification list the covered booking number, type and date.
+Admin and tutor payout surfaces render stored enum snapshots through shared
+presentation labels (`nik_only` becomes "NIK only", `default_nik_npwp` becomes
+"Default (NIK + NPWP)", `not_required` becomes "Not required", `no_show`
+becomes "No-show"), and the monthly CSV uses the same labels. Unknown future
+enum values are humanized instead of showing underscores. Status badges stay on
+one line in payout tables.
 OPS01 tax-adviser confirmation remains a release operational gate, and the
 defaults are not legal validation. Focused pure/unit checks in this review pass
 passed 78 tests / 260 expectations across tax/profile, CSV, environment guard,

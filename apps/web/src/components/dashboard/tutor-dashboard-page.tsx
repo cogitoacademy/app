@@ -40,6 +40,7 @@ import {
 import { useNow } from "@/hooks/use-now";
 import {
   formatPayoutCoverageLabel,
+  formatPayoutTaxRateSource,
   formatTaxRateSnapshot,
 } from "@/lib/tutor-payout-presentation";
 import { orpc } from "@/utils/orpc";
@@ -212,7 +213,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                       {(pendingPayout.taxRateBps / 100).toFixed(2)}%
                     </Text>
                     <Text className="text-xs text-dimmed">
-                      {pendingPayout.taxRateSource.replaceAll("_", " ")}
+                      {formatPayoutTaxRateSource(pendingPayout.taxRateSource)}
                     </Text>
                   </div>
                 </div>
