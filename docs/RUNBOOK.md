@@ -496,6 +496,9 @@ must not be pushed to GitHub. Tooling tests contain synthetic content only.
    `/knowledge-bank` or `/calendar`; explicitly reconcile old IDs/links before switching if manual
    creation replaces imported source IDs. Do not combine manual copies and import
    without resolving identity conflicts.
+   To seed the competition calendar only, add `--events-only` and omit
+   `--assets`: resources are dropped from the manifest, no PDF is read, and no
+   private bucket is required. Knowledge Bank stays on its current source.
 7. Reconcile counts, stable IDs, categories, prose selections, links, file bytes/
    hashes and active states. Test anonymous/unsupported/ineligible denials,
    eligible student/admin-grant/tutor/admin readbacks, metadata privacy, stale

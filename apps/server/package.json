@@ -11,6 +11,7 @@
     "seed": "bun run src/seed/seed.ts",
     "seed-sanity-content": "bun --env-file .env ../../migration/sanity-content/import.ts",
     "seed-sanity-content:apply": "bun src/seed/seed.ts --sanity-content",
+    "seed-calendar": "bun --env-file .env ../../migration/sanity-content/import.ts --events-only",
     "seed-invite": "bun run src/seed/seed-invite.ts"
   },
   "dependencies": {

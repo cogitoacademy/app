@@ -157,16 +157,21 @@ async function main() {
   const manifestPath = arg("--manifest"),
     mappingPath = arg("--mapping"),
     assets = arg("--assets");
-  if (!manifestPath || !mappingPath || !assets)
+  const eventsOnly = args.includes("--events-only");
+  if (!manifestPath || !mappingPath || (!assets && !eventsOnly))
     throw new Error(
-      "Required: --manifest local-prepared.json --mapping local-category-map.json --assets local-assets-directory [--apply --expect-target host:port/database --actor admin-id]",
+      "Required: --manifest local-prepared.json --mapping local-category-map.json [--assets local-assets-directory] [--events-only] [--apply --expect-target host:port/database --actor admin-id]",
     );
+  const raw = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (eventsOnly && raw && typeof raw === "object") {
+    (raw as { resources?: unknown }).resources = [];
+  }
   const rows = await prepareImport(
-    JSON.parse(await readFile(manifestPath, "utf8")),
+    raw,
     z
       .record(z.string(), z.string().min(1))
       .parse(JSON.parse(await readFile(mappingPath, "utf8"))),
-    assets,
+    assets ?? process.cwd(),
   );
   console.log(
     JSON.stringify({
@@ -235,11 +240,13 @@ async function main() {
       throw new Error(
         "Import category must map to an existing active parent competition",
       );
-  const storage = createPrivateKbStorage(env);
+  const storage = pending.some((row) => row.asset)
+    ? createPrivateKbStorage(env)
+    : null;
   // Immutable hash-addressed files first. DB failure can leave an unreferenced private file, never a public object.
   for (const row of pending) {
     if (row.asset) {
-      await storage.put(`${row.asset.sha256}.pdf`, row.asset.bytes);
+      await storage!.put(`${row.asset.sha256}.pdf`, row.asset.bytes);
       await repo.registerFile({
         id: row.asset.sha256,
         storageKey: `${row.asset.sha256}.pdf`,
