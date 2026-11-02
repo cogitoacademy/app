@@ -176,10 +176,10 @@ export function ClassesPage() {
                       className="flex min-w-0 items-center gap-3 px-3 py-3 transition-colors hover:bg-accent"
                     >
                       <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-lg bg-accent text-center leading-none">
-                        <span className="text-xs text-muted uppercase">
+                        <span className="text-xs text-muted uppercase mt-px">
                           {month}
                         </span>
-                        <span className="mt-1 text-lg font-semibold tabular-nums">
+                        <span className="text-lg font-semibold tabular-nums">
                           {day}
                         </span>
                       </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ClassActionReason } from "./class-action-reason";
+import { ActionReasonDialog } from "@/components/action-reason-dialog";
 import {
   Dialog,
   DialogPopup,
@@ -328,17 +328,19 @@ export function ClassAdminLifecyclePanel({
                       </Field>
                     ))}
                     <Stack direction="row" spacing="sm" className="flex-wrap">
-                      <ClassActionReason
+                      <ActionReasonDialog
                         label="Review continue decision"
                         reasonLabel="Decision reason"
+                        confirmLabel="Review continue decision"
                         disabled={busy}
                         onConfirm={(value) =>
                           previewMinimumDecision("continue", value)
                         }
                       />
-                      <ClassActionReason
+                      <ActionReasonDialog
                         label="Review one-time postponement"
                         reasonLabel="Decision reason"
+                        confirmLabel="Review one-time postponement"
                         disabled={
                           busy ||
                           check.postponementCount > 0 ||

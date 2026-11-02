@@ -1,6 +1,6 @@
 "use client";
 
-import { ReasonField } from "@/components/reason-field";
+import { ActionReasonDialog } from "@/components/action-reason-dialog";
 
 import Loader from "@/components/loader";
 
@@ -236,7 +236,6 @@ export function AdminTutorPayoutsPage() {
   const [reconciliationReason, setReconciliationReason] = useState("");
   const [overrideRateBps, setOverrideRateBps] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
-  const [taxConfigReason, setTaxConfigReason] = useState("");
   const [taxRateDraftDirty, setTaxRateDraftDirty] = useState(false);
   const [taxRateDraft, setTaxRateDraft] = useState({
     nikNpwpRateBps: "250",
@@ -261,6 +260,9 @@ export function AdminTutorPayoutsPage() {
           nikOnlyRateBps: String(taxConfigQuery.data.nikOnlyRateBps),
           missingRateBps: String(taxConfigQuery.data.missingRateBps),
         };
+  const taxConfigInvalid = Object.values(taxRateDraftValues).some(
+    (value) => !/^\d+$/.test(value) || Number(value) > 10000,
+  );
   const reportRows = reportQuery.data ?? EMPTY_PAYOUT_ROWS;
   const visibleRows = useMemo(() => {
     const filtered = reportRows.filter(
@@ -420,7 +422,6 @@ export function AdminTutorPayoutsPage() {
           missingRateBps: String(result.missingRateBps),
         });
         setTaxRateDraftDirty(false);
-        setTaxConfigReason("");
         toastManager.add({
           title: "Default payout rates updated",
           description: "The change is audited and affects future previews.",
@@ -635,41 +636,45 @@ export function AdminTutorPayoutsPage() {
               ))}
             </div>
             <div className="flex flex-wrap items-end gap-3">
-              <Field className="min-w-64 flex-1">
-                <ReasonField
-                  label="Change reason"
-                  required
-                  id="tax-config-reason"
-                  maxLength={2000}
-                  value={taxConfigReason}
-                  onChange={(value) => setTaxConfigReason(value)}
-                  minLength={1}
-                />
-              </Field>
-              <Button
+              <ActionReasonDialog
+                label="Save default tax rates"
+                reasonLabel="Change reason"
+                description="Every rate change is recorded in the audit log."
+                confirmLabel="Save default tax rates"
+                minLength={1}
+                maxLength={2000}
                 disabled={
                   taxConfigMutation.isPending ||
-                  !taxConfigReason.trim() ||
                   !taxConfigQuery.data ||
-                  Object.values(taxRateDraftValues).some(
-                    (value) => !/^\d+$/.test(value) || Number(value) > 10000,
-                  )
+                  taxConfigInvalid
                 }
-                progress={taxConfigMutation.isPending}
-                onClick={() => {
+                trigger={
+                  <Button
+                    disabled={
+                      taxConfigMutation.isPending ||
+                      !taxConfigQuery.data ||
+                      taxConfigInvalid
+                    }
+                    progress={taxConfigMutation.isPending}
+                  >
+                    Save default tax rates
+                  </Button>
+                }
+                onConfirm={(reason) => {
                   const config = taxConfigQuery.data;
-                  if (!config) return;
-                  taxConfigMutation.mutate({
+                  if (!config)
+                    return Promise.reject(
+                      new Error("Tax defaults are not loaded."),
+                    );
+                  return taxConfigMutation.mutateAsync({
                     expectedVersion: config.version,
                     nikNpwpRateBps: Number(taxRateDraftValues.nikNpwpRateBps),
                     nikOnlyRateBps: Number(taxRateDraftValues.nikOnlyRateBps),
                     missingRateBps: Number(taxRateDraftValues.missingRateBps),
-                    reason: taxConfigReason.trim(),
+                    reason,
                   });
                 }}
-              >
-                Save default rates
-              </Button>
+              />
             </div>
             {taxConfigQuery.isError ? (
               <FieldError>Tax defaults could not be loaded.</FieldError>

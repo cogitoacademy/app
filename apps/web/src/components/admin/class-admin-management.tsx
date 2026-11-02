@@ -25,7 +25,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { ClassActionReason } from "./class-action-reason";
+import { ActionReasonDialog } from "@/components/action-reason-dialog";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
@@ -187,9 +187,10 @@ export function ClassAdminManagement({
         </Heading>
       )}
       {!sessionOnly && failedMeetings.length > 0 ? (
-        <ClassActionReason
+        <ActionReasonDialog
           label="Retry failed meeting setup"
           reasonLabel="Retry reason"
+          confirmLabel="Retry failed meeting setup"
           disabled={retryClassMeetings.isPending}
           onConfirm={(reason) =>
             retryClassMeetings.mutateAsync({ id: record.id, reason })
@@ -234,7 +235,7 @@ export function ClassAdminManagement({
                           }).format(new Date(session.startAt))}{" "}
                           WIB
                         </Text>
-                        <ClassActionReason
+                        <ActionReasonDialog
                           label="Update session time"
                           onOpen={() =>
                             setRescheduleValues((current) => {
@@ -297,7 +298,7 @@ export function ClassAdminManagement({
                               the same.
                             </FieldDescription>
                           </Field>
-                        </ClassActionReason>
+                        </ActionReasonDialog>
                       </div>
                     </div>
                   </div>
@@ -312,7 +313,7 @@ export function ClassAdminManagement({
                           {session.tutor?.name ?? "Current tutor"}
                           {session.tutorAbsence ? " · Absence reported" : ""}
                         </Text>
-                        <ClassActionReason
+                        <ActionReasonDialog
                           label="Replace tutor"
                           onOpen={() =>
                             setReplacementTutorIds((current) => {
@@ -392,7 +393,7 @@ export function ClassAdminManagement({
                               the same.
                             </FieldDescription>
                           </Field>
-                        </ClassActionReason>
+                        </ActionReasonDialog>
                       </div>
                     </div>
                   </div>

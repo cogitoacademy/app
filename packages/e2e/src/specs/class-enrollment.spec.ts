@@ -713,16 +713,20 @@ test("admin cancels a class with an exact future-hold return and retained studen
     await card
       .getByRole("button", { name: "Manage class", exact: true })
       .click();
-    await fillReasonPrompt(
-      adminPage,
-      "Class cancellation reason",
-      "Class cancellation browser acceptance",
-      card,
-    );
     await card
+      .getByRole("button", { name: "Cancel class", exact: true })
+      .click();
+    const cancelDialog = adminPage.getByRole("dialog", {
+      name: "Cancel class",
+      exact: true,
+    });
+    await cancelDialog
+      .getByLabel("Class cancellation reason")
+      .fill("Class cancellation browser acceptance");
+    await cancelDialog
       .getByRole("button", { name: "Review class cancellation", exact: true })
       .click();
-    const review = card.getByRole("region", {
+    const review = cancelDialog.getByRole("region", {
       name: "Admin class cancellation review",
     });
     await expect(
@@ -839,14 +843,17 @@ test("admin cancels one session, postpones once, and student confirms the exact 
       .getByRole("button", { name: "Review cancellation" })
       .first()
       .click();
-    await fillReasonPrompt(
-      adminPage,
-      "Cancellation reason",
-      "Cancel the first future session for lifecycle acceptance",
-      card,
-    );
-    await card.getByRole("button", { name: "Preview exact return" }).click();
-    const cancelReview = card.getByRole("region", {
+    const cancelSessionDialog = adminPage.getByRole("dialog", {
+      name: "Cancel session",
+      exact: true,
+    });
+    await cancelSessionDialog
+      .getByLabel("Cancellation reason")
+      .fill("Cancel the first future session for lifecycle acceptance");
+    await cancelSessionDialog
+      .getByRole("button", { name: "Preview exact return" })
+      .click();
+    const cancelReview = cancelSessionDialog.getByRole("region", {
       name: "Session cancellation review",
     });
     await expect(
@@ -889,13 +896,11 @@ test("admin cancels one session, postpones once, and student confirms the exact 
     }
     await fillReasonPrompt(
       adminPage,
+      "Review one-time postponement",
       "Decision reason",
       "Postpone once to meet the minimum enrollment policy",
       card,
     );
-    await card
-      .getByRole("button", { name: "Review one-time postponement" })
-      .click();
     const postponeReview = card.getByRole("region", {
       name: "Minimum decision review",
     });
