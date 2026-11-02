@@ -50,7 +50,7 @@ Updated 2026-11-02.
 
 ## Verification
 
-2026-11-02 seed/category slice: `bun run check-types` passed across the workspace, and the FAQ unit/handler suites passed (11 tests, 36 expectations). The seed guard suite passed its 13 non-database tests, including the 55-entry count, landing-six selection, and placeholder checks. The FAQ Postgres integration suite could not run in this checkout because the dedicated test database at `localhost:6769` was not running; it parks seeded rows before asserting fixture-only state and restores them afterward. Browser E2E was not run.
+2026-11-02 seed/category slice: `bun run check-types` passed across the workspace. The full FAQ unit set passed (46 tests, 164 expectations), and the repository counter instrumenter reported 100% statements, functions, and branches for every FAQ API module, including the new `faq-categories.ts`. The seed guard suite passed its 13 non-database tests, including the 55-entry count, landing-six selection, and placeholder checks. The FAQ Postgres integration suite could not run in this checkout because the dedicated test database at `localhost:6769` was not running; it parks seeded rows before asserting fixture-only state and restores them afterward. Browser E2E was not run.
 
 2026-10-24 consolidated app UI: web typecheck, focused lint and formatting
 passed. Browser checks on the actual admin component with synthetic data and

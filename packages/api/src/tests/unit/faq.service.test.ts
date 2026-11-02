@@ -24,6 +24,7 @@ function row(overrides: Partial<FaqRow> = {}): FaqRow {
     questionIdRich: question("Pertanyaan?"),
     answerEnRich: answer("Answer."),
     answerIdRich: answer("Jawaban."),
+    category: "about",
     isActive: true,
     showOnLanding: true,
     sortOrder: 0,
@@ -43,6 +44,7 @@ describe("FAQ service", () => {
     expect((await service.listAdmin())[0]?.modifiedAt).toBe(
       "2026-01-02T00:00:00.000Z",
     );
+    expect((await service.listAdmin())[0]?.category).toBe("about");
 
     repo.listAdmin = mock(async () => [
       row({ updatedAt: "not-a-date" as never } as Partial<FaqRow>),
@@ -79,6 +81,10 @@ describe("FAQ service", () => {
       ],
     );
     expect(localized[1]?.questionRich).toEqual(question("Question?"));
+    expect(localized.map(({ category }) => category)).toEqual([
+      "about",
+      "about",
+    ]);
 
     await service.listPublic({ locale: "en", surface: "full" });
     expect(listPublic).toHaveBeenLastCalledWith(false);
@@ -105,6 +111,7 @@ describe("FAQ service", () => {
           },
         ],
       },
+      category: "tutors",
       isActive: false,
       showOnLanding: true,
     };
@@ -119,6 +126,7 @@ describe("FAQ service", () => {
           { type: "list", style: "unordered", items: ["One", "Two"] },
         ],
         answerId: null,
+        category: "tutors",
         showOnLanding: false,
       }),
     );
@@ -137,6 +145,7 @@ describe("FAQ service", () => {
       questionIdRich: question("Pertanyaan"),
       answerEnRich: answer("Answer"),
       answerIdRich: answer("Jawaban"),
+      category: "programs",
       isActive: true,
       showOnLanding: true,
     });
@@ -144,6 +153,7 @@ describe("FAQ service", () => {
       expect.objectContaining({
         questionId: "Pertanyaan",
         answerId: [{ type: "paragraph", text: "Jawaban" }],
+        category: "programs",
         showOnLanding: true,
       }),
     );
@@ -160,10 +170,16 @@ describe("FAQ service", () => {
       expectedVersion: 1,
       questionEnRich: question("Q"),
       answerEnRich: answer("A"),
+      category: "payments",
       isActive: true,
       showOnLanding: true,
     } as const;
     expect((await service.update(input)).id).toBe("faq-1");
+    expect(updateIfVersion).toHaveBeenCalledWith(
+      "faq-1",
+      1,
+      expect.objectContaining({ category: "payments" }),
+    );
 
     updateIfVersion.mockImplementation(async () => undefined);
     await expect(service.update(input)).rejects.toMatchObject({
