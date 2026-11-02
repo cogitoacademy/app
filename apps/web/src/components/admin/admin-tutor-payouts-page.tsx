@@ -13,6 +13,12 @@ import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuItem,
+} from "@cogito-app/ui/components/selia/menu";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -62,6 +68,7 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import {
   IconCoins,
+  IconChevronDown,
   IconDownload,
   IconInbox,
   IconRefresh,
@@ -233,6 +240,7 @@ export function AdminTutorPayoutsPage() {
   const [draftFrom, setDraftFrom] = useState(defaultRange.from);
   const [draftTo, setDraftTo] = useState(defaultRange.to);
   const [appliedRange, setAppliedRange] = useState(defaultRange);
+  const [exporting, setExporting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("priority");
   const [selectedRow, setSelectedRow] = useState<PayoutReportRow | null>(null);
@@ -514,14 +522,46 @@ export function AdminTutorPayoutsPage() {
     setSelectedRow(null);
   }
 
-  function handleDownload() {
-    csvDownload(reportRows, appliedRange.from, appliedRange.to);
-    toastManager.add({
-      title: "Monthly payout CSV downloaded",
-      description:
-        "Paid transfers use their actual Asia/Jakarta transfer date. Void and reconciliation rows are kept in a separate section.",
-      type: "success",
-    });
+  async function handleDownload(format: "xlsx" | "csv") {
+    setExporting(true);
+    try {
+      if (format === "csv") {
+        csvDownload(reportRows, appliedRange.from, appliedRange.to);
+      } else {
+        const { buildTutorPayoutXlsx } = await import("./tutor-payout-xlsx");
+        const buffer = await buildTutorPayoutXlsx(
+          reportRows,
+          appliedRange.from,
+          appliedRange.to,
+        );
+        const url = URL.createObjectURL(
+          new Blob([new Uint8Array(buffer)], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `tutor-payouts-${appliedRange.from}-to-${appliedRange.to}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      toastManager.add({
+        title: "Payout report downloaded",
+        description:
+          "Includes paid transfers and void records for the applied date range.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Report could not be downloaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
   }
 
   function prepareSelectedPayout(preview: PayoutPreview) {
@@ -838,15 +878,34 @@ export function AdminTutorPayoutsPage() {
                   Apply date range
                 </Button>
               </div>
-              <Button
-                size="sm"
-                variant="tertiary"
-                onClick={handleDownload}
-                disabled={reportQuery.isPending || reportQuery.isError}
-              >
-                <IconDownload />
-                Download monthly CSV
-              </Button>
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      aria-label="Download report"
+                      size="sm"
+                      variant="tertiary"
+                      progress={exporting}
+                    />
+                  }
+                  disabled={
+                    exporting ||
+                    reportQuery.isFetching ||
+                    reportQuery.isPending ||
+                    reportQuery.isError
+                  }
+                >
+                  <IconDownload /> Download report <IconChevronDown />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuItem onClick={() => void handleDownload("xlsx")}>
+                    Excel (.xlsx)
+                  </MenuItem>
+                  <MenuItem onClick={() => void handleDownload("csv")}>
+                    CSV (.csv)
+                  </MenuItem>
+                </MenuPopup>
+              </Menu>
             </div>
             {dateRangeError ? (
               <Text className="text-sm text-danger">{dateRangeError}</Text>

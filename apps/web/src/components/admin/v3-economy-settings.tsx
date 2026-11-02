@@ -1,12 +1,13 @@
 "use client";
 
 import { ActionReasonDialog } from "@/components/action-reason-dialog";
+import { CogitoMarks } from "@/components/cogito-marks";
 
 import Loader from "@/components/loader";
 
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -14,6 +15,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
@@ -25,7 +27,13 @@ import {
   SelectList,
   SelectItem,
 } from "@cogito-app/ui/components/selia/select";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@cogito-app/ui/components/selia/accordion";
 import {
   Table,
   TableContainer,
@@ -64,32 +72,36 @@ const adjustments = [
   ],
 ] as const;
 
-const idr = (amount: number) => `Rp${amount.toLocaleString("en-US")}`;
+const idr = (amount: number | null | undefined) =>
+  amount === null || amount === undefined
+    ? "Not set"
+    : `Rp${amount.toLocaleString("en-US")}`;
 
 function AmountInput({
   label,
   value,
-  disabled,
   onChange,
 }: {
   label: string;
   value: number | undefined;
-  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
     <SeliaNumberField
-      className="min-w-56"
-      inputProps={{ "aria-label": label }}
+      className="w-full min-w-44 max-w-52"
+      inputProps={{ "aria-label": label, className: "min-w-32" }}
       allowOutOfRange
       format={{ useGrouping: false }}
       min={0}
       step={1}
       value={Number.isFinite(value) ? value : null}
-      disabled={disabled}
       onValueChange={(nextValue) => onChange(nextValue ?? Number.NaN)}
     />
   );
+}
+
+function ValueText({ children }: { children: ReactNode }) {
+  return <Text className="whitespace-nowrap tabular-nums">{children}</Text>;
 }
 
 export function V3EconomySettings() {
@@ -104,7 +116,15 @@ export function V3EconomySettings() {
   const [competition, setCompetition] = useState("");
   const [exactMarks, setExactMarks] = useState(140);
   const values = draft?.values ?? settings.data?.values;
+  const activeValues = settings.data?.activeValues ?? null;
+  const primaryValues = activeValues ?? values;
   const competitions = settings.data?.competitions ?? [];
+  const editing = draft !== null;
+  const hasNewerDraft =
+    !editing &&
+    settings.data !== undefined &&
+    settings.data.activeRevision !== settings.data.version;
+  const showDraftColumn = editing || (hasNewerDraft && activeValues !== null);
   const competitionRates = draft
     ? Object.fromEntries(
         Object.entries(rateDrafts).flatMap(([slug, rate]) =>
@@ -150,8 +170,8 @@ export function V3EconomySettings() {
         setRateDrafts({});
         setError(null);
         toastManager.add({
-          title: "V3 draft saved",
-          description: "Customer pricing has not changed.",
+          title: "New prices saved",
+          description: "Not in use until you activate them.",
           type: "success",
         });
       },
@@ -165,9 +185,9 @@ export function V3EconomySettings() {
         await queryClient.invalidateQueries();
         setError(null);
         toastManager.add({
-          title: "Pricing activated",
+          title: "Prices in use",
           description:
-            "New purchases and bookings use this revision. Existing agreements keep their prices.",
+            "New purchases and bookings use these prices. Existing agreements keep their price.",
           type: "success",
         });
       },
@@ -219,240 +239,79 @@ export function V3EconomySettings() {
     return (
       <Card>
         <CardBody>
-          <Text role="alert">Could not load the V3 draft rate card.</Text>
+          <Text role="alert">Could not load the rate card.</Text>
           <Button variant="tertiary" onClick={() => settings.refetch()}>
             Retry
           </Button>
         </CardBody>
       </Card>
     );
-  const disabled = !draft || save.isPending;
-  const viewingActive =
-    !draft && settings.data?.activeRevision === settings.data?.version;
+
+  const activeRevision = settings.data.activeRevision;
+  const viewingActive = !editing && activeRevision === settings.data.version;
+  const previewUsesDraft = editing || hasNewerDraft || activeValues === null;
+  const primaryLabel = "Current";
 
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card className="">
+    <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-4">
+      <Card>
         <CardHeader>
-          <CardTitle>V3 rate card</CardTitle>
-          <Badge variant={viewingActive ? "success" : "warning"}>
-            {draft
-              ? "Unsaved draft"
-              : viewingActive
-                ? "Active"
-                : "Draft · not active"}
-          </Badge>
-        </CardHeader>
-        <CardBody className="flex flex-col gap-5">
-          <Text>
-            Review package prices, competition rates and student group sizes
-            together. Saving a revision does not change checkout or existing
-            bookings.
-          </Text>
-          <Text className="text-sm text-muted">
-            Saved revision: {settings.data?.version ?? 0}
-          </Text>
-          {!draft && !viewingActive && settings.data.version > 0 ? (
-            <Field>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Rate card</CardTitle>
+              <Badge variant={viewingActive ? "success" : "warning"}>
+                {editing
+                  ? "Editing new prices"
+                  : viewingActive
+                    ? "In use"
+                    : "New prices, not in use"}
+              </Badge>
+            </div>
+            <Text className="mt-1 text-sm text-muted">
+              Current version: {activeRevision ?? "none"} · Saved version:{" "}
+              {settings.data.version}
+            </Text>
+          </div>
+          <CardHeaderAction>
+            {!editing && !viewingActive && settings.data.version > 0 ? (
               <ActionReasonDialog
-                label="Activate saved pricing"
-                reasonLabel="Reason for activating pricing"
-                description="Activation applies this revision to new purchases and bookings. Existing agreements keep their prices."
-                confirmLabel="Activate saved pricing"
+                label="Use these prices"
+                reasonLabel="Reason for using these prices"
+                description="New prices apply to future purchases and bookings. Existing agreements keep their price."
+                confirmLabel="Use these prices"
                 minLength={1}
                 maxLength={2000}
                 disabled={activate.isPending}
                 trigger={
                   <Button disabled={activate.isPending}>
-                    Activate saved pricing
+                    Use these prices
                   </Button>
                 }
                 onConfirm={(reason) =>
                   activate.mutateAsync({
                     version: settings.data.version,
-                    expectedActiveRevision: settings.data.activeRevision,
+                    expectedActiveRevision: activeRevision,
                     reason,
                   })
                 }
               />
-            </Field>
-          ) : null}
-          {!draft ? (
-            <Button
-              variant="tertiary"
-              disabled={activate.isPending}
-              onClick={() => {
-                beginEdit();
-              }}
-            >
-              Edit V3 draft
-            </Button>
-          ) : null}
-
-          <TableContainer>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Package</TableHead>
-                  <TableHead>Marks</TableHead>
-                  <TableHead>Price (IDR)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {values.packages.map((pkg, index) => (
-                  <TableRow key={pkg.code}>
-                    <TableCell>{pkg.code}</TableCell>
-                    <TableCell>
-                      <AmountInput
-                        label={`${pkg.code} Marks`}
-                        value={pkg.marks}
-                        disabled={disabled}
-                        onChange={(amount) =>
-                          update((next) => {
-                            next.packages[index]!.marks = amount;
-                          })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <AmountInput
-                        label={`${pkg.code} price in IDR`}
-                        value={pkg.priceIdr}
-                        disabled={disabled}
-                        onChange={(amount) =>
-                          update((next) => {
-                            next.packages[index]!.priceIdr = amount;
-                          })
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <Field>
-            <FieldLabel>Exact top-up surcharge per Mark (IDR)</FieldLabel>
-            <AmountInput
-              label="Exact top-up surcharge per Mark in IDR"
-              value={values.exactSurchargeIdr}
-              disabled={disabled}
-              onChange={(amount) =>
-                update((next) => {
-                  next.exactSurchargeIdr = amount;
-                })
-              }
-            />
-          </Field>
-          <Text className="text-sm text-muted">
-            Custom tiers follow the package Marks and unit prices plus this
-            surcharge. Exact package amounts use their package price. Students
-            can choose either a custom amount or a better-value recommended
-            package.
-          </Text>
-
-          <TableContainer>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Competition</TableHead>
-                  <TableHead>Online solo Marks</TableHead>
-                  <TableHead>Online solo tutor fee (IDR)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {competitions.map((item) => {
-                  const rate = draft
-                    ? rateDrafts[item.slug]
-                    : (item.rate ?? undefined);
-                  const completeRate =
-                    typeof rate?.soloMarks === "number" &&
-                    typeof rate?.soloFeeIdr === "number";
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <Stack direction="column" spacing="sm">
-                          <Text>{item.name}</Text>
-                          <Text className="text-xs text-muted">
-                            {draft
-                              ? completeRate
-                                ? "Rate entered in this draft"
-                                : "Explicit rate required before this parent is ready"
-                              : item.rateConfigured
-                                ? "Rate saved"
-                                : "Rate required"}
-                          </Text>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <AmountInput
-                          label={`${item.name} online solo Marks`}
-                          value={rate?.soloMarks}
-                          disabled={disabled}
-                          onChange={(amount) =>
-                            updateRate(item.slug, "soloMarks", amount)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <AmountInput
-                          label={`${item.name} online solo tutor fee in IDR`}
-                          value={rate?.soloFeeIdr}
-                          disabled={disabled}
-                          onChange={(amount) =>
-                            updateRate(item.slug, "soloFeeIdr", amount)
-                          }
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {adjustments.map(([key, label]) => (
-              <Field key={key}>
-                <FieldLabel>{label}</FieldLabel>
-                <AmountInput
-                  label={label}
-                  value={values[key]}
-                  disabled={disabled}
-                  onChange={(amount) =>
-                    update((next) => {
-                      next[key] = amount;
-                    })
-                  }
-                />
-              </Field>
-            ))}
-          </div>
-          {draft && (incompleteRates || !parsed.success) ? (
-            <div role="alert" className="text-sm text-danger">
-              {incompleteRates ? (
-                <Text>
-                  Enter both positive values for each configured rate.
-                </Text>
-              ) : null}
-              {!parsed.success ? (
-                <ul className="list-disc pl-5">
-                  {parsed.error.issues.map((issue) => (
-                    <li key={`${issue.path.join(".")}:${issue.message}`}>
-                      {issue.path.join(" · ")}: {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-          {draft ? (
-            <>
-              <div className="flex flex-wrap gap-2">
+            ) : null}
+            {!editing ? (
+              <Button
+                variant="tertiary"
+                disabled={activate.isPending}
+                onClick={() => beginEdit()}
+              >
+                Change prices
+              </Button>
+            ) : null}
+            {editing ? (
+              <>
                 <ActionReasonDialog
-                  label="Save draft revision"
-                  reasonLabel="Reason for this revision"
-                  description="The saved revision is recorded in the audit log. Customer pricing does not change until activation."
-                  confirmLabel="Save draft revision"
+                  label="Save new prices"
+                  reasonLabel="Reason for changing prices"
+                  description="Saved changes do not affect students until you activate them."
+                  confirmLabel="Save new prices"
                   minLength={1}
                   maxLength={2000}
                   disabled={
@@ -466,7 +325,7 @@ export function V3EconomySettings() {
                       }
                       progress={save.isPending}
                     >
-                      Save draft revision
+                      Save new prices
                     </Button>
                   }
                   onConfirm={(reason) => {
@@ -491,22 +350,335 @@ export function V3EconomySettings() {
                     settings.refetch();
                   }}
                 >
-                  Cancel and reload
+                  Cancel
                 </Button>
-              </div>
-            </>
+              </>
+            ) : null}
+          </CardHeaderAction>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-5 p-0 pb-6">
+          <Accordion
+            multiple
+            defaultValue={[
+              "surcharge",
+              "packages",
+              "competitions",
+              "adjustments",
+            ]}
+          >
+            <AccordionItem value="surcharge">
+              <AccordionHeader render={<h3 />}>
+                <AccordionTrigger type="button" className="px-6 py-3">
+                  Extra cost per Mark for custom top-up (IDR)
+                </AccordionTrigger>
+              </AccordionHeader>
+              <AccordionPanel
+                keepMounted
+                className="[&_[data-slot=accordion-panel-content]]:px-0"
+              >
+                <div className="mx-6 flex flex-col gap-3 p-px sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <Text className="max-w-md text-sm text-muted">
+                    Custom top-up uses the package rate plus this extra cost.
+                    Students can still pick a package.
+                  </Text>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <ValueText>
+                      {primaryLabel}: {idr(primaryValues?.exactSurchargeIdr)}
+                    </ValueText>
+                    {editing ? (
+                      <AmountInput
+                        label="Extra cost per Mark for custom top-up in IDR"
+                        value={values.exactSurchargeIdr}
+                        onChange={(amount) =>
+                          update((next) => {
+                            next.exactSurchargeIdr = amount;
+                          })
+                        }
+                      />
+                    ) : hasNewerDraft ? (
+                      <Text className="text-sm text-muted">
+                        New prices: {idr(values.exactSurchargeIdr)}
+                      </Text>
+                    ) : null}
+                  </div>
+                </div>
+              </AccordionPanel>
+            </AccordionItem>
+
+            <AccordionItem value="packages">
+              <AccordionHeader render={<h3 />}>
+                <AccordionTrigger type="button" className="px-6 py-3">
+                  Packages
+                </AccordionTrigger>
+              </AccordionHeader>
+              <AccordionPanel
+                keepMounted
+                className="[&_[data-slot=accordion-panel-content]]:px-0"
+              >
+                <TableContainer>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Package</TableHead>
+                        <TableHead>{primaryLabel}</TableHead>
+                        {showDraftColumn ? (
+                          <TableHead>New prices</TableHead>
+                        ) : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {values.packages.map((pkg, index) => {
+                        const currentPkg = primaryValues?.packages.find(
+                          (item) => item.code === pkg.code,
+                        );
+                        return (
+                          <TableRow key={pkg.code}>
+                            <TableCell className="capitalize">
+                              {pkg.code}
+                            </TableCell>
+                            <TableCell>
+                              {currentPkg ? (
+                                <ValueText>
+                                  <CogitoMarks value={currentPkg.marks} /> ·{" "}
+                                  {idr(currentPkg.priceIdr)}
+                                </ValueText>
+                              ) : (
+                                <Text className="text-muted">Not set</Text>
+                              )}
+                            </TableCell>
+                            {showDraftColumn ? (
+                              <TableCell>
+                                {editing ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    <AmountInput
+                                      label={`${pkg.code} Marks`}
+                                      value={pkg.marks}
+                                      onChange={(amount) =>
+                                        update((next) => {
+                                          next.packages[index]!.marks = amount;
+                                        })
+                                      }
+                                    />
+                                    <AmountInput
+                                      label={`${pkg.code} price in IDR`}
+                                      value={pkg.priceIdr}
+                                      onChange={(amount) =>
+                                        update((next) => {
+                                          next.packages[index]!.priceIdr =
+                                            amount;
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                ) : (
+                                  <ValueText>
+                                    <CogitoMarks value={pkg.marks} /> ·{" "}
+                                    {idr(pkg.priceIdr)}
+                                  </ValueText>
+                                )}
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionPanel>
+            </AccordionItem>
+
+            <AccordionItem value="competitions">
+              <AccordionHeader render={<h3 />}>
+                <AccordionTrigger type="button" className="px-6 py-3">
+                  Competition rates
+                </AccordionTrigger>
+              </AccordionHeader>
+              <AccordionPanel
+                keepMounted
+                className="[&_[data-slot=accordion-panel-content]]:px-0"
+              >
+                <Text className="px-6 pb-1 text-sm text-muted">
+                  Online solo rates. Offline delivery adds the group size
+                  adjustments below.
+                </Text>
+                <TableContainer>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Competition</TableHead>
+                        <TableHead>{primaryLabel}</TableHead>
+                        {showDraftColumn ? (
+                          <TableHead>New prices</TableHead>
+                        ) : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {competitions.map((item) => {
+                        const currentRate =
+                          primaryValues?.competitionRates[item.slug] ?? null;
+                        const newRate = editing
+                          ? rateDrafts[item.slug]
+                          : (item.rate ?? undefined);
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>
+                              {currentRate ? (
+                                <ValueText>
+                                  <CogitoMarks value={currentRate.soloMarks} />{" "}
+                                  · {idr(currentRate.soloFeeIdr)}
+                                </ValueText>
+                              ) : (
+                                <Text className="text-muted">Not set</Text>
+                              )}
+                            </TableCell>
+                            {showDraftColumn ? (
+                              <TableCell>
+                                {editing ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    <AmountInput
+                                      label={`${item.name} online solo Marks`}
+                                      value={newRate?.soloMarks}
+                                      onChange={(amount) =>
+                                        updateRate(
+                                          item.slug,
+                                          "soloMarks",
+                                          amount,
+                                        )
+                                      }
+                                    />
+                                    <AmountInput
+                                      label={`${item.name} online solo tutor fee in IDR`}
+                                      value={newRate?.soloFeeIdr}
+                                      onChange={(amount) =>
+                                        updateRate(
+                                          item.slug,
+                                          "soloFeeIdr",
+                                          amount,
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                ) : newRate &&
+                                  typeof newRate.soloMarks === "number" &&
+                                  typeof newRate.soloFeeIdr === "number" ? (
+                                  <ValueText>
+                                    <CogitoMarks value={newRate.soloMarks} /> ·{" "}
+                                    {idr(newRate.soloFeeIdr)}
+                                  </ValueText>
+                                ) : (
+                                  <Text className="text-muted">Required</Text>
+                                )}
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionPanel>
+            </AccordionItem>
+
+            <AccordionItem value="adjustments">
+              <AccordionHeader render={<h3 />}>
+                <AccordionTrigger type="button" className="px-6 py-3">
+                  Group size adjustments
+                </AccordionTrigger>
+              </AccordionHeader>
+              <AccordionPanel
+                keepMounted
+                className="[&_[data-slot=accordion-panel-content]]:px-0"
+              >
+                <TableContainer>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Setting</TableHead>
+                        <TableHead>{primaryLabel}</TableHead>
+                        {showDraftColumn ? (
+                          <TableHead>New prices</TableHead>
+                        ) : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {adjustments.map(([key, label]) => (
+                        <TableRow key={key}>
+                          <TableCell>{label}</TableCell>
+                          <TableCell>
+                            {primaryValues ? (
+                              <ValueText>
+                                {primaryValues[key].toLocaleString()}
+                              </ValueText>
+                            ) : (
+                              <Text className="text-muted">Not set</Text>
+                            )}
+                          </TableCell>
+                          {showDraftColumn ? (
+                            <TableCell>
+                              {editing ? (
+                                <AmountInput
+                                  label={label}
+                                  value={values[key]}
+                                  onChange={(amount) =>
+                                    update((next) => {
+                                      next[key] = amount;
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <ValueText>
+                                  {values[key].toLocaleString()}
+                                </ValueText>
+                              )}
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
+
+          {draft && (incompleteRates || !parsed.success) ? (
+            <div role="alert" className="px-6 text-sm text-danger">
+              {incompleteRates ? (
+                <Text>
+                  Enter both positive values for each configured rate.
+                </Text>
+              ) : null}
+              {!parsed.success ? (
+                <ul className="list-disc pl-5">
+                  {parsed.error.issues.map((issue) => (
+                    <li key={`${issue.path.join(".")}:${issue.message}`}>
+                      {issue.path.join(" · ")}: {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           ) : null}
           {error ? (
-            <Text role="alert" className="text-danger">
-              {error} Cancel and reload to review the latest saved revision.
+            <Text role="alert" className="px-6 text-danger">
+              {error} Cancel, then reload to review the latest saved version.
             </Text>
           ) : null}
         </CardBody>
       </Card>
 
-      <Card className="h-fit">
+      <Card>
         <CardHeader>
-          <CardTitle>V3 price preview</CardTitle>
+          <div>
+            <CardTitle>Price example</CardTitle>
+            <Text className="mt-1 text-sm text-muted">
+              Example of what a student pays.{" "}
+              {previewUsesDraft
+                ? "Showing new prices."
+                : "Showing current prices."}
+            </Text>
+          </div>
         </CardHeader>
         <CardBody className="flex flex-col gap-4">
           <Field>
@@ -584,7 +756,7 @@ export function V3EconomySettings() {
               </Table>
             </TableContainer>
           ) : (
-            <Text>Correct the configuration to see the preview.</Text>
+            <Text>Correct the configuration to see the example.</Text>
           )}
           <Field>
             <FieldLabel>Custom top-up Marks</FieldLabel>
@@ -595,20 +767,28 @@ export function V3EconomySettings() {
             />
           </Field>
           {topUp ? (
-            <div aria-live="polite">
-              <Text>
-                {topUp.marks} Marks · {idr(topUp.amountIdr)}
-              </Text>
-              {topUp.recommendation ? (
-                <Text className="text-muted">
-                  Better value: {topUp.recommendation.marks} Marks for{" "}
-                  {idr(topUp.recommendation.priceIdr)}. Both choices remain
-                  available.
+            <div
+              aria-live="polite"
+              className="flex flex-col gap-2 rounded-lg bg-accent p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Text className="text-sm text-muted">You get</Text>
+                <Text className="flex items-center gap-1 font-semibold tabular-nums">
+                  <CogitoMarks value={topUp.marks} /> · {idr(topUp.amountIdr)}
                 </Text>
+              </div>
+              {topUp.recommendation ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+                  <Text className="text-sm text-muted">Better value</Text>
+                  <Text className="flex items-center gap-1 text-sm tabular-nums">
+                    <CogitoMarks value={topUp.recommendation.marks} /> ·{" "}
+                    {idr(topUp.recommendation.priceIdr)}
+                  </Text>
+                </div>
               ) : null}
             </div>
           ) : (
-            <Text>
+            <Text className="text-sm text-muted">
               Enter a whole number from 1 to 1,000,000 Marks with a valid
               configuration.
             </Text>
