@@ -424,7 +424,7 @@ export function FaqPage() {
               updateDraft({ category: value as FaqCategoryKey })
             }
           >
-            <SelectTrigger aria-label="Category" className="w-64">
+            <SelectTrigger aria-label="Category" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
