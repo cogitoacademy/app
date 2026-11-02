@@ -139,6 +139,23 @@ export async function findBookingStateById(conn: DbOrTx, bookingId: string) {
   return row?.currentState ?? null;
 }
 
+/** Returns the participant requirement used to validate room capacity. */
+export async function findBookingRoomRequirementById(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  const [row] = await conn
+    .select({
+      currentState: booking.currentState,
+      targetGroupSize: booking.targetGroupSize,
+      confirmedHeadcount: booking.confirmedHeadcount,
+    })
+    .from(booking)
+    .where(and(eq(booking.id, bookingId), eq(booking.modality, "offline")))
+    .limit(1);
+  return row ?? null;
+}
+
 /**
  * Inserts a new room.
  *
@@ -411,6 +428,7 @@ export function createRoomRepo() {
     findPendingRoomApprovals,
     findPendingApprovalBookingById,
     findBookingStateById,
+    findBookingRoomRequirementById,
     insertRoom,
     findRoomById,
     findRoomRecordById,

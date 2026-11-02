@@ -310,6 +310,7 @@ export function createAdminClassCancellation(deps: {
           title: "Upcoming class sessions cancelled",
           body: `${record.titleEn}: future sessions were cancelled. Already earned fees are unchanged. Reason: ${input.reason}`,
           eventKey: `class:${record.id}:admin-cancel:tutor:${tutorId}`,
+          metadata: { classId: record.id },
         });
       }
       // Meeting cancellation is durable: the existing worker sees cancelled

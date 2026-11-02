@@ -11,8 +11,15 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -46,7 +53,9 @@ import {
   DrawerClose,
 } from "@cogito-app/ui/components/selia/drawer";
 import { orpc } from "@/utils/orpc";
+import { AdminKolCommissionsPage } from "./admin-kol-commissions-page";
 import { KolCampaignsSection } from "./kol-campaigns-section";
+import { ReferralSettingsCard } from "./referral-settings-card";
 import { referralUsageStatus } from "./referral-usage-status";
 
 function date(value: string | Date | null) {
@@ -59,19 +68,30 @@ function date(value: string | Date | null) {
     : "Not provided";
 }
 
+const route = getRouteApi("/_app/admin-referrals");
+
 export function AdminReferralsPage() {
-  const [view, setView] = useState<"activity" | "campaigns">("activity");
+  const [campaignActions, setCampaignActions] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const { view } = route.useSearch();
+  const navigate = route.useNavigate();
+  function setView(value: "activity" | "campaigns" | "commissions") {
+    setDrawerOpen(false);
+    void navigate({ search: { view: value } });
+  }
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<"all" | "friend" | "kol" | "none">("all");
   const [page, setPage] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const query = useQuery(
-    orpc.adminReferral.listUsage.queryOptions({
+  const query = useQuery({
+    ...orpc.adminReferral.listUsage.queryOptions({
       input: { search, kind, page, limit: 25 },
     }),
-  );
+    enabled: view === "activity",
+  });
   const data = query.data;
   const selected = data?.items.find((row) => row.id === selectedId);
   return (
@@ -85,32 +105,50 @@ export function AdminReferralsPage() {
           first paid completion, or commission for KOL referrals.
         </Text>
       </div>
-      <FilterTabBar
-        label="Referral sections"
-        tabs={[
-          { value: "activity", label: "Activity" },
-          { value: "campaigns", label: "KOL campaigns" },
-        ]}
-        activeTab={view}
-        onChange={setView}
-      />
-      <div hidden={view !== "campaigns"} className="min-w-0">
-        <KolCampaignsSection />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <FilterTabBar
+            label="Referral sections"
+            tabs={[
+              { value: "activity", label: "Activity" },
+              { value: "campaigns", label: "Campaigns" },
+              { value: "commissions", label: "Commissions" },
+            ]}
+            activeTab={view}
+            onChange={setView}
+          />
+        </div>
+        <div
+          ref={setCampaignActions}
+          hidden={view !== "campaigns"}
+          className="flex shrink-0 items-center gap-2"
+        />
       </div>
+      <div hidden={view !== "campaigns"} className="min-w-0">
+        <KolCampaignsSection
+          actionsContainer={campaignActions}
+          enabled={view === "campaigns"}
+        />
+      </div>
+      {view === "commissions" ? <AdminKolCommissionsPage /> : null}
       <div hidden={view !== "activity"} className="min-w-0 space-y-6">
+        <ReferralSettingsCard />
         <aside className="space-y-4" aria-label="Referral summary">
           {data ? (
             <>
-              <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+              <div className="flex flex-col overflow-hidden rounded-xl border border-border sm:flex-row sm:divide-x sm:divide-border">
                 {[
                   ["Saved choices", data.summary.signups],
                   ["Codes used", data.summary.codesUsed],
                   ["Welcome Marks credited", data.summary.welcomeMarks],
                   ["Friend Marks credited", data.summary.friendMarks],
                 ].map(([label, value]) => (
-                  <div key={label}>
-                    <Text className="text-muted">{label}</Text>
-                    <Text className="mt-2 text-xl font-semibold tabular-nums">
+                  <div
+                    key={label}
+                    className="min-w-0 flex-1 border-b border-border p-4 last:border-b-0 sm:border-b-0"
+                  >
+                    <Text className="text-sm text-muted">{label}</Text>
+                    <Text className="mt-1 text-3xl font-medium tabular-nums">
                       {value}
                     </Text>
                   </div>
@@ -209,7 +247,7 @@ export function AdminReferralsPage() {
               <>
                 {data.items.length ? (
                   <TableContainer>
-                    <Table>
+                    <Table className="min-w-max">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Student</TableHead>
@@ -278,6 +316,7 @@ export function AdminReferralsPage() {
                   </TableContainer>
                 ) : (
                   <EmptyState
+                    className="rounded-lg border border-dashed border-border"
                     icon={
                       search || kind !== "all" ? <IconSearch /> : <IconUsers />
                     }
@@ -477,78 +516,102 @@ export function AdminReferralsPage() {
                               ))}
                             </dl>
                           </section>
-                          <details>
-                            <summary className="mb-4 cursor-pointer font-medium">
-                              Technical details and saved terms
-                            </summary>
-                            <dl className="divide-y divide-border">
-                              {[
-                                ["Choice ID", selected.id],
-                                ["Student ID", selected.studentId],
-                                ["Settings version", selected.settingsVersion],
-                                [
-                                  "Welcome terms",
-                                  `${selected.welcomeMarksSnapshot} Marks`,
-                                ],
-                                ["Welcome ledger", selected.welcomeLedgerId],
-                                ["Friend decision", selected.friendDecisionId],
-                                [
-                                  "Friend reward ledger",
-                                  selected.friendLedgerId,
-                                ],
-                                [
-                                  "First eligible completion",
-                                  selected.completionId
-                                    ? `${selected.completionType} · ${selected.completionId}`
-                                    : null,
-                                ],
-                                ["Completed at", date(selected.completedAt)],
-                                ["Reward semester", selected.semesterKey],
-                                [
-                                  "Semester cap at decision",
-                                  selected.semesterCapMarks === null
-                                    ? null
-                                    : `${selected.semesterCapMarks} Marks`,
-                                ],
-                                ["KOL decision", selected.kolDecisionId],
-                                ["Payment ID", selected.paymentId],
-                                ["Payment state", selected.paymentStatus],
-                                [
-                                  "Provider time state",
-                                  selected.providerTimeState,
-                                ],
-                                ["Refund review", selected.refundState],
-                                [
-                                  "Attribution expires",
-                                  date(selected.attributionExpiresAt),
-                                ],
-                              ]
-                                .filter(
-                                  ([, value]) =>
-                                    value != null && value !== "Not provided",
-                                )
-                                .map(([label, value]) => (
-                                  <div
-                                    key={label}
-                                    className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 py-3"
-                                  >
-                                    <dt className="text-sm text-muted">
-                                      {label}
-                                    </dt>
-                                    <dd className="break-all font-mono text-sm">
-                                      {value ?? "Not provided"}
-                                    </dd>
-                                  </div>
-                                ))}
-                            </dl>
-                          </details>
+                          <Accordion>
+                            <AccordionItem className="border-0">
+                              <AccordionHeader>
+                                <AccordionTrigger
+                                  type="button"
+                                  className="font-medium"
+                                >
+                                  Technical details and saved terms
+                                </AccordionTrigger>
+                              </AccordionHeader>
+                              <AccordionPanel>
+                                <dl className="divide-y divide-border">
+                                  {[
+                                    ["Choice ID", selected.id],
+                                    ["Student ID", selected.studentId],
+                                    [
+                                      "Settings version",
+                                      selected.settingsVersion,
+                                    ],
+                                    [
+                                      "Welcome terms",
+                                      `${selected.welcomeMarksSnapshot} Marks`,
+                                    ],
+                                    [
+                                      "Welcome ledger",
+                                      selected.welcomeLedgerId,
+                                    ],
+                                    [
+                                      "Friend decision",
+                                      selected.friendDecisionId,
+                                    ],
+                                    [
+                                      "Friend reward ledger",
+                                      selected.friendLedgerId,
+                                    ],
+                                    [
+                                      "First eligible completion",
+                                      selected.completionId
+                                        ? `${selected.completionType} · ${selected.completionId}`
+                                        : null,
+                                    ],
+                                    [
+                                      "Completed at",
+                                      date(selected.completedAt),
+                                    ],
+                                    ["Reward semester", selected.semesterKey],
+                                    [
+                                      "Semester cap at decision",
+                                      selected.semesterCapMarks === null
+                                        ? null
+                                        : `${selected.semesterCapMarks} Marks`,
+                                    ],
+                                    ["KOL decision", selected.kolDecisionId],
+                                    ["Payment ID", selected.paymentId],
+                                    ["Payment state", selected.paymentStatus],
+                                    [
+                                      "Provider time state",
+                                      selected.providerTimeState,
+                                    ],
+                                    ["Refund review", selected.refundState],
+                                    [
+                                      "Attribution expires",
+                                      date(selected.attributionExpiresAt),
+                                    ],
+                                  ]
+                                    .filter(
+                                      ([, value]) =>
+                                        value != null &&
+                                        value !== "Not provided",
+                                    )
+                                    .map(([label, value]) => (
+                                      <div
+                                        key={label}
+                                        className="grid grid-cols-[8rem_minmax(0,1fr)] gap-4 py-3"
+                                      >
+                                        <dt className="text-sm text-muted">
+                                          {label}
+                                        </dt>
+                                        <dd className="break-all font-mono text-sm">
+                                          {value ?? "Not provided"}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                </dl>
+                              </AccordionPanel>
+                            </AccordionItem>
+                          </Accordion>
                           {selected.kind === "kol" ? (
                             <Button
                               className="mt-5"
                               variant="secondary"
+                              onClick={() => setDrawerOpen(false)}
                               render={
                                 <Link
-                                  to="/admin-kol-commissions"
+                                  to="/admin-referrals"
+                                  search={{ view: "commissions" }}
                                   aria-label="Open KOL reconciliation"
                                 />
                               }

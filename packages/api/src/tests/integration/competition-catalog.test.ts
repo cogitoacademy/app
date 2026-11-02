@@ -850,7 +850,7 @@ describe("competition catalog PostgreSQL CRUD", () => {
       );
     }
     expect(bookingAfterArchiveResult.error).toMatchObject({
-      code: "BOOKING_NOT_EDITABLE",
+      code: "BOOKING_V3_COMPETITION_REQUIRED",
     });
     expect(
       await db.query.booking.findFirst({

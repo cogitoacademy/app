@@ -203,7 +203,10 @@ export function createContentService(deps: {
       if (!deps.database) throw new Error("KB database adapter missing");
       return deps.database.resources();
     }
-    return client.fetch<StudentResourceContent[]>(studentResourcesQuery);
+    const rows = await client.fetch<
+      Array<Omit<StudentResourceContent, "categoryName">>
+    >(studentResourcesQuery);
+    return rows.map((row) => ({ ...row, categoryName: null }));
   }
 
   async function getStudentResourceFile(

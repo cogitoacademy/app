@@ -60,10 +60,12 @@ export function calculateFriendReward(input: {
 }
 
 export function isKolCampaignActive(
-  campaign: { activationAt: Date; expiresAt: Date },
+  campaign: { activationAt: Date; expiresAt: Date; pausedAt: Date | null },
   at: Date,
 ) {
-  return campaign.activationAt <= at && at < campaign.expiresAt;
+  return (
+    !campaign.pausedAt && campaign.activationAt <= at && at < campaign.expiresAt
+  );
 }
 
 export function isKolPurchaseEligible(

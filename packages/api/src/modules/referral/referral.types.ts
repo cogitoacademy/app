@@ -55,11 +55,19 @@ export const listKolCommissionsInput = z.object({
   cursor: z.string().min(1).max(512).optional(),
 });
 
+export const setKolCampaignPausedInput = z.object({
+  id: z.string().uuid(),
+  paused: z.boolean(),
+  reason: z.string().trim().min(3).max(600),
+});
+
 export type SaveGoogleChoiceInput = typeof saveGoogleChoiceInput._output;
 export type UpdateReferralSettingsInput =
   typeof updateReferralSettingsInput._output;
 export type CreateKolCampaignInput = typeof createKolCampaignInput._output;
 export type ListKolCommissionsInput = typeof listKolCommissionsInput._output;
+export type SetKolCampaignPausedInput =
+  typeof setKolCampaignPausedInput._output;
 
 const settlementBase = {
   decisionId: z.string().uuid(),

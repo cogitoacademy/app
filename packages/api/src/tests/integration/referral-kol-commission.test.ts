@@ -1476,4 +1476,66 @@ describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
     for (const { id, included } of decisions)
       expect(csv.includes(id)).toBe(included);
   });
+
+  test("pausing a KOL campaign blocks new signups and resumes cleanly", async () => {
+    const code = `K${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
+    const campaign = await referral.createKolCampaign(adminId, {
+      name: "Pause boundary",
+      code,
+      activationAt: new Date("2099-01-01T00:00:00.000Z"),
+      expiresAt: new Date("2101-01-01T00:00:00.000Z"),
+      attributionWindowDays: 90,
+      flatAmountIdr: 0,
+      percentBps: 500,
+    });
+    ownedCampaignIds.push(campaign.id);
+
+    await referral.setKolCampaignPaused(adminId, {
+      id: campaign.id,
+      paused: true,
+      reason: "Pause new signups for the test",
+    });
+    await referral.setKolCampaignPaused(adminId, {
+      id: campaign.id,
+      paused: true,
+      reason: "Pause is idempotent",
+    });
+    const blockedUser = await student();
+    await expect(
+      db.transaction((tx) =>
+        referral.applyEmailSignupChoice(tx, {
+          userId: blockedUser,
+          code,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_REFERRAL_CODE" });
+
+    await referral.setKolCampaignPaused(adminId, {
+      id: campaign.id,
+      paused: false,
+      reason: "Resume after the pause check",
+    });
+    await referral.setKolCampaignPaused(adminId, {
+      id: campaign.id,
+      paused: false,
+      reason: "Resume is idempotent",
+    });
+    const allowedUser = await student();
+    const choice = await db.transaction((tx) =>
+      referral.applyEmailSignupChoice(tx, {
+        userId: allowedUser,
+        code,
+      }),
+    );
+    expect(choice.kind).toBe("kol");
+    expect(choice.campaignId).toBe(campaign.id);
+
+    await expect(
+      referral.setKolCampaignPaused(adminId, {
+        id: crypto.randomUUID(),
+        paused: true,
+        reason: "Missing campaign",
+      }),
+    ).rejects.toMatchObject({ code: "REFERRAL_CAMPAIGN_INVALID" });
+  });
 });

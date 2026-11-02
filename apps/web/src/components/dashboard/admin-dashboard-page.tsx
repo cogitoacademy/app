@@ -1,24 +1,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconClipboardCheck,
   IconTrophy,
   IconWallet,
 } from "@tabler/icons-react";
-import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
-import { Button } from "@cogito-app/ui/components/selia/button";
-import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Text } from "@cogito-app/ui/components/selia/text";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import Loader from "@/components/loader";
 import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
-import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
+import { createDashboardGreeting } from "./dashboard-greetings";
+import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
 const AdminAnalytics = lazy(() =>
@@ -62,50 +57,20 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
   );
   const tutorCount = tutors.data?.length ?? 0;
   const achievementCount = achievementStats.data?.pending ?? 0;
+  const now = useNow(60_000);
+  const [randomValue] = useState(() => Math.random());
+  const greeting = createDashboardGreeting(
+    "admin",
+    adminName,
+    new Date(now).getHours(),
+    randomValue,
+    { priorityCount: priorityItems.length + tutorCount + achievementCount },
+  );
   return (
     <Stack direction="column" spacing="lg">
-      <div className="grid lg:grid-cols-2 gap-4">
-        <DashboardWelcomeCard
-          name={adminName}
-          viewerRole="admin"
-          priorityCount={priorityItems.length + tutorCount + achievementCount}
-        />
-
-        <Card>
-          <CardBody className="flex flex-wrap h-full justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <IconBox variant="tertiary">
-                <IconWallet />
-              </IconBox>
-              <div className="min-w-0">
-                <Heading size="sm">Tutor payouts</Heading>
-                <Text className="text-sm text-muted">
-                  Verify accounts, review unpaid honorarium, and record
-                  transfers.
-                </Text>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="self-end"
-              variant="secondary"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/admin-tutor-payouts"
-                  aria-label="Open tutor payouts"
-                />
-              }
-            >
-              Open payouts
-            </Button>
-          </CardBody>
-        </Card>
-      </div>
-
       <DashboardInsights
-        title="Operations pulse"
-        description="Queues with a concrete next step, separate from business trends."
+        title={greeting.title}
+        description={greeting.description}
         items={[
           {
             key: "escalations",
@@ -148,6 +113,16 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
             tone: "primary-subtle",
             to: "/admin-achievements",
             actionLabel: "Open achievement reviews",
+          },
+          {
+            key: "tutor-payouts",
+            icon: <IconWallet />,
+            label: "Tutor payouts",
+            value: "Payouts",
+            detail: "Verify accounts, review honorarium, and record transfers",
+            tone: "primary-subtle",
+            to: "/admin-tutor-payouts",
+            actionLabel: "Open tutor payouts",
           },
         ]}
       />

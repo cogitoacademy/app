@@ -19,6 +19,7 @@ function classRecord() {
   return {
     id: classId,
     version: 1,
+    tutorFeeIdr: 400000,
     kind: "cohort",
     state: "published",
     titleEn: "Synthetic algebra cohort",
@@ -27,7 +28,6 @@ function classRecord() {
     descriptionId: null,
     competition,
     competitionId: competition.id,
-    coverKey: null,
     cohortFullRateMarks: 20,
     cohortHalfRateMarks: 22,
     cohortSingleRateMarks: 25,
@@ -138,7 +138,11 @@ async function mockApp(
     else if (procedure === "admin/rescheduleClassSession") {
       requests.push(input);
       data = classRecord();
-    } else if (procedure === "classes/get") data = classRecord();
+    } else if (
+      procedure === "classes/get" ||
+      procedure === "admin/getAcademyClass"
+    )
+      data = classRecord();
     else if (procedure === "classes/getMyEnrollments") {
       enrollmentsCalls += 1;
       const allocationState =
@@ -253,20 +257,31 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByRole("heading", { name: "Class Studio" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Change scheduled session time" }),
-    ).toBeVisible();
-    const row = page.getByRole("region", {
-      name: "Change scheduled session time",
-    });
-    await row
+    await page
+      .getByRole("link", {
+        name: "View class details for Synthetic algebra cohort",
+      })
+      .click();
+    await page
+      .getByRole("button", { name: /Algebra session/ })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "Change session time for Algebra session" })
+      .click();
+    const prompt = page.getByRole("dialog", { name: "Update session time" });
+    await expect(prompt).toBeVisible();
+    await prompt
       .getByRole("textbox", { name: "New date and start time" })
       .last()
       .fill("11:15");
-    await row
+    expect(mock.requests).toHaveLength(0);
+    await prompt
       .getByRole("textbox", { name: "Reason for students" })
       .fill("Tutor schedule conflict");
-    await row.getByRole("button", { name: "Update session time" }).click();
+    await prompt
+      .getByRole("button", { name: "Confirm update session time" })
+      .click();
     await expect.poll(() => mock.requests.length).toBe(1);
     expect(mock.requests[0]).toMatchObject({
       sessionId,

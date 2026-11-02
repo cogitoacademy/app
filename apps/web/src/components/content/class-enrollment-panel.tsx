@@ -278,6 +278,9 @@ export function ClassEnrollmentPanel({
         queryKey: orpc.classes.getMyEnrollments.key(),
       }),
       queryClient.invalidateQueries({ queryKey: orpc.wallet.get.queryKey() }),
+      queryClient.invalidateQueries({
+        queryKey: orpc.classes.listSessionReports.key(),
+      }),
     ]);
 
   const createEnrollment = useMutation(

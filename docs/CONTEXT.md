@@ -1,5 +1,96 @@
 # Cogito App — Codebase Context
 
+## Class catalog and referral controls (2 November 2026)
+
+The student class page now has an **Upcoming classes** section above the class
+catalog. It lists every future session from the filtered classes, sorted by
+start time, with a badge naming the parent cohort or masterclass. Cancelled and
+past sessions are excluded. The class catalog cards remain unchanged.
+
+Class cover storage and upload were removed from the schema, API, admin editor
+and public projection. Class cards and details render text only. Migration 0085
+drops `academy_class.cover_key`.
+
+Admin Referrals now exposes a referral settings card with an edit dialog for
+welcome Marks, friend reward and semester cap. The dialog sends the loaded
+settings version and a required reason, and surfaces stale-version errors.
+KOL campaigns can be paused or resumed with a reason. Pausing stores `pausedAt`
+and stops new sign-ups only; existing referral choices keep their attribution
+window. Migration 0085 also adds `referral_campaign.paused_at`.
+
+The website Activities page keeps its single Classes section and adds an
+**Upcoming cohort sessions** list. Each row is tagged with its parent cohort
+and opens the same app handoff modal.
+
+## Public class session status badges (1 November 2026)
+
+The public class detail page shows one status badge per session in **Curriculum and schedule**: `Upcoming` (info), `In progress` (primary), `Completed` (secondary), or `Cancelled` (danger). The badge sits at the end of the accordion trigger row, immediately before the expand indicator, and moves below the title on narrow screens so a long title keeps the full row width. Sessions sort in three groups: live session first, then upcoming sessions by start time, then completed and cancelled sessions by sequence number. A completed session never sits above the next session a student should prepare for. Public `classes/list` and `classes/get` now expose session `endAt` and `state` for this label; no meeting, room, tutor-fee, or roster data is added. The label and order come from `apps/web/src/lib/class-session-presentation.ts`.
+
+## Tutor class assignments (1 November 2026)
+
+Tutors now have a **Classes** sidebar item at `/my-classes`. It lists cohort and masterclass sessions assigned to the signed-in tutor, with class/session title, `CLS-{classNumber}-S{sequenceNumber}` reference, Jakarta date and time, format, and status. Upcoming sessions sort first; each class title opens `/my-classes/$classId` for the class description, assigned sessions, curriculum, format, and join details. Online sessions show a **Join meeting** action once the stored Meet link is ready; in-person sessions show the assigned room name and location. The tutor remains an attendee on the Google Calendar event, so the provider invitation also remains available outside the app. Started sessions link to `/class-reports` to record or view the report. Both pages use the existing `classes.listSessionReports` procedure; its tutor/admin rows now include `classDescription`, `curriculumEn`, `meeting` (`status`, `meetingUrl` once created), and `room` (`name`, `location`). Student rows include the same meeting and room fields only for sessions where the student holds a funded allocation; `includeUnreported: true` returns those scheduled sessions even before a report exists. The student class detail uses this protected read to show **Join meeting** only to enrolled students. Tutor results exclude draft sessions so an unpublished class assignment cannot appear or break the response. Notification clicks for class updates now open `/my-classes` for tutors, class details for students, and the Classes studio for admins instead of the Competition Calendar; whole-class cancellation tutor notifications include `classId` metadata for this routing.
+
+## Offline room capacity and assignment (2 November 2026)
+
+Offline room requests, admin assignment, and relocation now require the room
+capacity to cover the booking target group size. `room.service.ts` checks this
+inside the room lock; `room.errors.ts` maps failure to
+`ROOM_CAPACITY_EXCEEDED` (400) and booking creation reports it as
+`roomConflict`. Admin assignment marks any prior requested room row relocated
+before inserting the confirmed row. Unit coverage is in `room.service.test.ts`;
+live acceptance used a capacity-1 room and a 2-person group, and a 5-seat class
+session against the same room.
+
+## Class join, KB labels and absence entry (1 November 2026)
+
+Student class detail now uses the protected class-session read with
+`includeUnreported: true` and shows **Join meeting** only when the signed-in
+student has a funded allocation for that session. The API returns meeting and
+room data only for rows the caller may access; a cancelled or non-enrolled
+student receives no session row. Completed sessions show "Session completed"
+instead of a join action. `classes.listSessionReports` gained the optional
+`includeUnreported` input; the report workspace keeps its existing past-session
+behavior.
+
+Knowledge Bank student metadata now includes `categoryName` resolved from the
+parent competition, so cards, filter options and the viewer do not render a raw
+category ID. `category` remains the stable ID. Valid-competition failures now
+return the specific "A supported competition topic must be selected" or
+"not available for V3 pricing" message instead of the generic booking edit
+error. Tutors can report a scheduled absence before the session starts from
+`/my-classes/$classId`; the notice timestamp and late flag remain server-owned.
+Non-admin direct access to `/activities` redirects to the dashboard.
+
+## Academy class draft reason dialog (1 November 2026)
+
+The Academy class draft editor no longer shows an inline "Reason for this change" field. Save draft and Publish class validate the form first, then open a confirmation dialog that collects the required audit reason before submitting, matching the booking cancellation pattern. Publishing an edited draft still saves pending changes first and reuses the same reason for both the draft-save and publication audits.
+
+## Single-language Academy classes (1 November 2026)
+
+Academy class title/description and session title/curriculum now each have one input. API contracts retain the canonical `titleEn`, `descriptionEn`, `curriculumEn` names; these fields can contain the authored language and have no alternate-language partner. Schema and migration 0085 remove `academy_class.title_id/description_id` and `academy_class_session.title_id/curriculum_id`. Admin and public reads use the real reduced schema, with no filtering mapper. Other modules' localized content is outside this change.
+
+## Compact Academy class details (1 November 2026)
+
+The minimum enrollment check and its existing decision workflow sit in the Administration column. Each scheduled session shows compact date and tutor details with icon actions opening dialogs for date selection or tutor replacement plus the required reason. Cancellation is a single session button that opens the existing reason, return preview and final confirmation flow. Meeting retry appears in class management only when meeting work needs attention.
+
+## Academy class session controls (1 November 2026)
+
+Admin class details place cancellation of the whole class beside the class badges. Each session accordion contains its own schedule update, tutor replacement, absence history, and session cancellation. The change icon beside the tutor reveals replacement selection. Schedule updates, replacement, meeting retries, and minimum decisions collect a reason after the action is chosen; cancellation dialogs collect the reason and require review of the return before final confirmation. Student details do not expose these admin controls.
+
+## Shared class and booking details (1 November 2026)
+
+`/classes/$classId` now allows students and admins. Both roles use `ClassDetailView` for descriptions, prices, tutors, curriculum and schedules. Students retain enrollment; admins load `admin/getAcademyClass` and see administration, session capacity/room/meeting details and the existing reschedule, replacement, absence, meeting retry, cancellation and lifecycle controls. The admin class list links to details instead of mounting a management drawer. Detail/list/public class queries refresh after management actions.
+
+`/bookings/$bookingId` is the canonical detail for every role. Admins receive the full `AdminBookingDetailPage` wrapper, including override, room actions, financial context and state history. Operations remains the queue/wallet/room workspace and links to this route; its previous booking-detail URL redirects to the canonical route after the admin guard.
+
+## Reason entry and requirement markers (1 November 2026)
+
+Reason labels show a red trailing asterisk when required and `(optional)` when optional. Required inputs also expose `aria-required`; markers follow the current API/service rules, including mandatory Knowledge Bank reasons and optional invite-decline/withdrawal reasons. This UI change does not relax API requirements.
+
+Inline reasons for tax configuration, economy draft/activation and KOL adjustments use the shared `ReasonField`: an explicit Add/Edit button opens a desktop dialog or a bottom drawer below 640px. Cancel/dismiss discards only the unsaved reason draft; Use reason applies it without submitting the surrounding action. Reasons already inside an editor dialog/drawer retain that flow. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
+
+Verification and limits are recorded in RUNBOOK and the active UI controls audit. No schema, migration, environment or provider changes are needed.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
@@ -671,9 +762,9 @@ non-students to dashboard before the panel mounts. Synthetic auth/layout checks
 passed on 23 October; the permanent catalog E2E locator still targets the old
 button and must be updated to the full-card link (see the UI audit plan).
 The app header identifies Class details and Class studio correctly.
-Admin `/admin-classes` starts with published/postponed classes. Drafts & editor
+Admin `/admin-classes` starts with published/postponed classes. Session rescheduling, same-time tutor replacement, and tutor absence history are available on the shared class detail page, keeping the published list focused on summaries. Drafts & editor
 keeps the editor mounted across tab changes; publishing returns to the published
-list. Manage class expands existing cancellation/minimum/schedule controls.
+list. Class details expose existing cancellation/minimum/schedule controls to admins.
 Student/tutor/admin report lists are bounded and scroll locally. Mobile session
 selection focuses and scrolls to the selected report. Existing route role guards,
 RPCs, quote math, settlement and audit rules are unchanged.
@@ -3501,6 +3592,8 @@ Classes catalog cards on mobile and desktop follow My Bookings: date tile and se
 
 Classes and My Bookings share `FilterTabBar` for pill styling and horizontal overflow; booking counts remain optional per tab.
 
+Native control sweep (1 November 2026): browser `confirm` dialogs are replaced by the shared `ConfirmationDialog`, and every disclosure uses the Selia Accordion. Article deletion (Activities · Others) and the unsaved-report discard prompt are the changed confirmations; referral technical details, competition catalog descriptions, display colors, move specialization and session report history are the changed disclosures. The web source has no remaining `alert`, `confirm`, `prompt`, `details`, `summary`, `dialog`, `select` or `textarea` elements. Hidden form inputs, the profile-image file chooser, the semester `progress` meter and custom widget buttons stay native on purpose. See `docs/plans/active/UI-CONTROLS-AND-LAYOUT-AUDIT.md`.
+
 Classes page heading uses the Tutors page typography and title-to-description spacing (Heading md, muted Text, no extra vertical gap).
 
 Classes competition badges use the configured parent competition palette (or the competition itself for root types), with light/dark theme support and a neutral fallback.
@@ -3668,3 +3761,23 @@ Coverage remediation: resetDatabase() suites are discovered across the complete 
 Referral page (1 November 2026): displays signup-to-reward flow with a connected horizontal desktop stepper, configured welcome/referrer rewards, semester cap progress, an icon-only copy button beside the referral code and a separate copy-message button, and one Referrals table covering users and reward history with separate status and completion-date columns. On mobile, only the width-constrained table wrapper scrolls horizontally; the page and table section can shrink to the viewport. API contracts, reward rules and operations are unchanged.
 
 Balance page (1 November 2026): custom top-up Marks label and input use a horizontal field layout on desktop. Payment unit-test quote fixtures expire in 2030 to remain valid for current test runs; production quote expiry is unchanged.
+
+KOL commission settlement uses the shared Selia DatePicker for the required actual payment date; submission retains WIB midnight semantics.
+
+Dashboard Pulse sections (student, tutor, admin) share `DashboardInsights`: a single rounded, bordered metric strip with column separators, prominent values, supporting descriptions, and accessible icon-only detail links at the top right of each metric. On mobile, metrics stack with horizontal separators. No Card surfaces are used for the section or metrics; data and destinations are unchanged.
+
+Exact Balance top-up previews price immediately from the loaded catalog using tier pricing, upward rounding and per-Mark surcharge. Top up creates a server quote and starts checkout when the price matches; changed prices require drawer confirmation. No API contract or payment validation changes.
+
+Referral semester metrics use the same unified rounded border and responsive column dividers as dashboard Pulse, with progress above the metric strip. Reward calculations and API contracts are unchanged.
+
+Referral empty state uses the existing dashed-border EmptyState styling pattern.
+
+Admin referral empty and filtered-empty states use the same dashed-border EmptyState styling as the referral page.
+
+Admin referral summary (saved choices, codes used, welcome Marks and friend Marks) uses the unified Pulse metric wrapper with responsive dividers. Summary calculations are unchanged.
+
+KOL campaign create and icon-only refresh controls sit beside the referral tabs when the campaign tab is active; the campaign empty state uses a dashed border. Refresh remains available for uncertain creation outcomes.
+
+Admin dashboard greeting uses plain title and description above the operations metric strip; Tutor payouts is a linked metric in that strip.
+
+Admin referrals navigation (2026-11-01): one Finance sidebar entry, Referrals, opens `/admin-referrals`. Activity (default), Campaigns and Commissions are URL-backed tabs (`?view=activity|campaigns|commissions`); invalid views fall back to Activity. Campaign records use a compact table. Commissions reuses the existing per-student KOL decision table, CSV export and settlement controls; it is not a campaign-level aggregate. `/admin-kol-commissions` redirects admins to the Commissions tab; non-admin access remains rejected. Activity tracks saved student referral choices; Campaigns currently supports admin-created KOL codes only. Cogito promotion campaigns remain unimplemented in this checkout.

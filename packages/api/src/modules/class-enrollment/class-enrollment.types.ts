@@ -395,7 +395,10 @@ export const classSessionReportOutput = z.object({
 });
 
 export const listClassSessionReportsInput = z
-  .object({ classId: z.string().uuid().optional() })
+  .object({
+    classId: z.string().uuid().optional(),
+    includeUnreported: z.boolean().optional(),
+  })
   .strict();
 
 export const listClassSessionReportsOutput = z.array(
@@ -404,14 +407,34 @@ export const listClassSessionReportsOutput = z.array(
     classTitle: z.string(),
     classNumber: z.number().int().positive(),
     classKind: z.enum(["cohort", "masterclass"]),
+    classDescription: z.string(),
     sessionId: z.string().uuid(),
     tutorId: z.string(),
     sequenceNumber: z.number().int().positive(),
     sessionTitle: z.string(),
+    curriculumEn: z.string().nullable(),
     startAt: z.date(),
     endAt: z.date(),
     mode: z.enum(["online", "in_person"]),
     state: z.enum(["scheduled", "completed", "cancelled"]),
+    meeting: z
+      .object({
+        status: z.enum([
+          "pending",
+          "processing",
+          "created",
+          "failed",
+          "cancelled",
+        ]),
+        meetingUrl: z.string().nullable(),
+      })
+      .nullable(),
+    room: z
+      .object({
+        name: z.string(),
+        location: z.string(),
+      })
+      .nullable(),
     absenceReportedAt: z.date().nullable(),
     absenceLate: z.boolean().nullable(),
     report: classSessionReportOutput.nullable(),

@@ -54,6 +54,21 @@ export function ClassesPage() {
           .toLocaleLowerCase()
           .includes(query)),
   );
+  const upcomingSessions = visibleClasses
+    .flatMap((academyClass) =>
+      academyClass.sessions
+        .filter(
+          (session) =>
+            session.state !== "cancelled" &&
+            new Date(session.startAt).getTime() > now,
+        )
+        .map((session) => ({ academyClass, session })),
+    )
+    .toSorted(
+      (left, right) =>
+        new Date(left.session.startAt).getTime() -
+        new Date(right.session.startAt).getTime(),
+    );
 
   return (
     <Stack
@@ -122,6 +137,79 @@ export function ClassesPage() {
           </InputGroup>
         </Field>
       </div>
+
+      {upcomingSessions.length > 0 ? (
+        <section
+          aria-labelledby="upcoming-classes-heading"
+          className="min-w-0 space-y-3"
+        >
+          <>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <Heading level={2} size="sm" id="upcoming-classes-heading">
+                Upcoming classes
+              </Heading>
+              <Text className="text-sm text-muted">
+                {upcomingSessions.length} upcoming session
+                {upcomingSessions.length === 1 ? "" : "s"} · WIB
+              </Text>
+            </div>
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+              {upcomingSessions.map(({ academyClass, session }) => {
+                const start = new Date(session.startAt);
+                const day = new Intl.DateTimeFormat("en", {
+                  day: "numeric",
+                  timeZone: "Asia/Jakarta",
+                }).format(start);
+                const month = new Intl.DateTimeFormat("en", {
+                  month: "short",
+                  timeZone: "Asia/Jakarta",
+                }).format(start);
+                const time = new Intl.DateTimeFormat("en", {
+                  timeStyle: "short",
+                  timeZone: "Asia/Jakarta",
+                }).format(start);
+                return (
+                  <li key={session.id} className="min-w-0">
+                    <Link
+                      to="/classes/$classId"
+                      params={{ classId: academyClass.id }}
+                      className="flex min-w-0 items-center gap-3 px-3 py-3 transition-colors hover:bg-accent"
+                    >
+                      <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-lg bg-accent text-center leading-none">
+                        <span className="text-xs text-muted uppercase">
+                          {month}
+                        </span>
+                        <span className="mt-1 text-lg font-semibold tabular-nums">
+                          {day}
+                        </span>
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="wrap-anywhere min-w-0 font-medium">
+                            {session.titleEn}
+                          </span>
+                          <Badge variant="secondary" size="sm">
+                            Part of {academyClass.titleEn}
+                          </Badge>
+                        </span>
+                        <span className="text-sm text-muted">
+                          {time} ·{" "}
+                          {session.mode === "online" ? "Online" : "In person"} ·{" "}
+                          {session.tutor?.name ?? "Tutor to be announced"}
+                        </span>
+                      </span>
+                      <IconChevronRight
+                        className="shrink-0 text-muted"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        </section>
+      ) : null}
 
       <section aria-label="Class catalog" className="min-w-0 space-y-4">
         {classes.isPending ? (

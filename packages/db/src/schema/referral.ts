@@ -21,6 +21,7 @@ export const referralCampaign = pgTable(
     name: text("name").notNull(),
     activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
     attributionWindowDays: integer("attribution_window_days").notNull(),
     flatAmountIdr: integer("flat_amount_idr").notNull().default(0),
     percentBps: integer("percent_bps").notNull().default(0),

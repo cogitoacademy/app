@@ -38,6 +38,7 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyState } from "@/components/empty-state";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
@@ -100,6 +101,7 @@ export function SessionReportingWorkspace({
   const [open, setOpen] = useState(Boolean(initialReportId));
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState(false);
+  const [discardPrompt, setDiscardPrompt] = useState<null | (() => void)>(null);
   const [editorGeneration, setEditorGeneration] = useState(0);
   const sessions = useMemo<Session[]>(
     () =>
@@ -159,19 +161,27 @@ export function SessionReportingWorkspace({
     search || typeFilter !== "all" || status !== "all",
   );
 
-  function allowDiscard() {
-    if (pending) return false;
-    if (dirty && !window.confirm("Discard the unsaved report draft?"))
-      return false;
-    if (dirty) setEditorGeneration((value) => value + 1);
+  function applyDiscard() {
+    setEditorGeneration((value) => value + 1);
     setDirty(false);
-    return true;
+  }
+  function requestDiscard(action: () => void) {
+    if (pending) return;
+    if (!dirty) {
+      action();
+      return;
+    }
+    setDiscardPrompt(() => () => {
+      applyDiscard();
+      action();
+    });
   }
   function view(session: Session) {
-    if (!allowDiscard()) return;
-    setSelectedId(session.id);
-    setSnapshot(session);
-    setOpen(true);
+    requestDiscard(() => {
+      setSelectedId(session.id);
+      setSnapshot(session);
+      setOpen(true);
+    });
   }
   function clearFilters() {
     setSearch("");
@@ -394,7 +404,8 @@ export function SessionReportingWorkspace({
       <Drawer
         open={open}
         onOpenChange={(next) => {
-          if (next || allowDiscard()) setOpen(next);
+          if (next) setOpen(true);
+          else requestDiscard(() => setOpen(false));
         }}
       >
         <DrawerPopup direction="right">
@@ -437,6 +448,21 @@ export function SessionReportingWorkspace({
           </DrawerFooter>
         </DrawerPopup>
       </Drawer>
+      <ConfirmationDialog
+        open={discardPrompt !== null}
+        onOpenChange={(next) => {
+          if (!next) setDiscardPrompt(null);
+        }}
+        title="Discard the unsaved report draft?"
+        description="The report changes you have not saved will be lost."
+        confirmLabel="Discard draft"
+        confirmVariant="danger"
+        onConfirm={() => {
+          const action = discardPrompt;
+          setDiscardPrompt(null);
+          action?.();
+        }}
+      />
     </Stack>
   );
 }

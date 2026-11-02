@@ -14,9 +14,12 @@ import {
   MenuTrigger,
 } from "@cogito-app/ui/components/selia/menu";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import type { CogitoUser } from "@cogito-app/auth";
 
 import { EmptyState } from "@/components/empty-state";
 import { useNow } from "@/hooks/use-now";
+import { authClient } from "@/lib/auth-client";
+import { getNotificationTarget } from "@/lib/notification-destination";
 import { orpc } from "@/utils/orpc";
 
 function formatRelativeTime(date: Date | string, now: number) {
@@ -35,6 +38,8 @@ export function NotificationBell() {
   const now = useNow();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const auth = authClient.useSession();
+  const role = (auth.data?.user as CogitoUser | undefined)?.role;
 
   const unreadQuery = useQuery(
     orpc.notification.list.queryOptions({
@@ -95,29 +100,20 @@ export function NotificationBell() {
     category: string;
     metadata: Record<string, unknown> | null;
   }) {
-    if (notification.metadata?.action === "class-session-report") {
-      return navigate({ to: "/class-reports" });
-    }
-    if (notification.bookingId) {
-      return navigate({
-        to: "/bookings/$bookingId",
-        params: { bookingId: notification.bookingId },
-      });
-    }
-
-    switch (notification.category) {
-      case "achievement":
-        return navigate({ to: "/achievements" });
-      case "booking":
-      case "override":
-        return navigate({ to: "/bookings" });
-      case "payment":
-      case "refund":
-        return navigate({ to: "/balance" });
-      case "schedule":
-        return navigate({ to: "/calendar" });
+    const target = getNotificationTarget(notification, role);
+    switch (target.to) {
+      case "/bookings/$bookingId":
+        return navigate({
+          to: target.to,
+          params: { bookingId: target.bookingId },
+        });
+      case "/classes/$classId":
+        return navigate({
+          to: target.to,
+          params: { classId: target.classId },
+        });
       default:
-        return navigate({ to: "/notifications" });
+        return navigate({ to: target.to });
     }
   }
 

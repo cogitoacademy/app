@@ -71,12 +71,24 @@ describe("referral policy", () => {
     const campaign = {
       activationAt: new Date("2026-10-01T00:00:00.000Z"),
       expiresAt: new Date("2026-11-01T00:00:00.000Z"),
+      pausedAt: null,
     };
     expect(isKolCampaignActive(campaign, campaign.activationAt)).toBe(true);
     expect(
       isKolCampaignActive(campaign, new Date(campaign.expiresAt.getTime() - 1)),
     ).toBe(true);
     expect(isKolCampaignActive(campaign, campaign.expiresAt)).toBe(false);
+  });
+
+  test("a paused KOL campaign is inactive until resumed", () => {
+    const campaign = {
+      activationAt: new Date("2026-10-01T00:00:00.000Z"),
+      expiresAt: new Date("2026-11-01T00:00:00.000Z"),
+      pausedAt: new Date("2026-10-15T00:00:00.000Z"),
+    };
+    expect(
+      isKolCampaignActive(campaign, new Date("2026-10-20T00:00:00.000Z")),
+    ).toBe(false);
   });
 
   test("KOL purchase eligibility is strictly before the saved expiry", () => {

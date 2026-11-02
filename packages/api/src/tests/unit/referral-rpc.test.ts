@@ -59,6 +59,11 @@ const adminCases = [
     actor: true,
   },
   { method: "createKolCampaign", input: campaign, actor: true },
+  {
+    method: "setKolCampaignPaused",
+    input: { id, paused: true, reason: "Pause campaign" },
+    actor: true,
+  },
   { method: "listKolCampaigns", input: undefined, actor: false },
   { method: "listKolCommissions", input: { limit: 50 }, actor: false },
 ] as const;

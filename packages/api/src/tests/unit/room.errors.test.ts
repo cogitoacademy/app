@@ -3,6 +3,7 @@ import { DomainError } from "../../lib/domain-errors";
 import {
   RoomNotFoundError,
   RoomBookingConflictError,
+  RoomCapacityError,
   RoomBookingNotFoundError,
   RoomBookingStateError,
   mapRoomError,
@@ -58,6 +59,17 @@ describe("room.errors", () => {
       expect(err.name).toBe("RoomBookingConflictError");
     });
   });
+  describe("RoomCapacityError", () => {
+    it("should expose capacity details", () => {
+      const err = new RoomCapacityError("rm_1", 1, 2);
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("ROOM_CAPACITY_EXCEEDED");
+      expect(err.domain).toBe("room");
+      expect(err.message).toBe("Room capacity is too small for this booking");
+      expect(err.details).toEqual({ roomId: "rm_1", capacity: 1, required: 2 });
+      expect(err.name).toBe("RoomCapacityError");
+    });
+  });
   describe("RoomBookingStateError", () => {
     it("should be instance of DomainError", () => {
       const err = new RoomBookingStateError("b_1", "confirmed");
@@ -98,6 +110,10 @@ describe("room.errors", () => {
         new RoomBookingStateError("b_1", "confirmed"),
       );
       expect(result.status).toBe(409);
+    });
+    it("should map RoomCapacityError to BAD_REQUEST", () => {
+      const result = mapRoomError(new RoomCapacityError("rm_1", 1, 2));
+      expect(result.status).toBe(400);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const result = mapRoomError(new TestDomainError());

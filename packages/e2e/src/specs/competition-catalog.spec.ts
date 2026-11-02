@@ -176,7 +176,6 @@ test("admin can archive, restore, and move an unused specialization", async ({
       page.getByRole("heading", { name: child.name, exact: true }),
     ).toBeVisible();
 
-    await page.getByText("Availability and deletion", { exact: true }).click();
     await page.getByRole("button", { name: "Archive", exact: true }).click();
     const archiveDialog = page.getByRole("dialog", {
       name: "Archive catalog entry",

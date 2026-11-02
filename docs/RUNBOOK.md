@@ -1,5 +1,49 @@
 # Cogito Runbook
 
+## Academy single-language cutover (1 November 2026)
+
+Migration `0085_academy_class_single_language.sql` removes four alternate-language columns and uses `DROP COLUMN IF EXISTS` so deployment can repeat the DDL safely. The generated Drizzle journal and 0085 snapshot are included. Deploy web/API/schema together; author content once in the remaining fields.
+
+Local development `localhost:6767/cogito-app` was identity-checked and only 0085's four DROP statements were applied in a transaction. Information-schema verification found zero alternate-language columns in the two Academy tables. The database migration journal is still at 0082: unrelated pending Activities migrations 0083/0084 were not executed or marked applied. No 0085 journal entry was inserted out of order. A future standard migration run must apply 0083/0084 and then safely replay 0085. Test, production and other databases were not changed.
+
+Validation: app web typecheck and 133 focused API unit tests passed; synthetic editor case verified one Title, one Description and no optional Indonesian field. Website typecheck and 5 focused adapter/title tests passed. Website main remote equals `060a4b532ce298304a20b801fdd3ea534394fba9`. The wider website UI suite still has a stale empty-state assertion; standalone API typecheck includes failing report-asset project configuration and unrelated test typings, so full-project green is not claimed.
+
+## Compact class detail verification (1 November 2026)
+
+No migration or configuration change is required. In admin class details verify the minimum check is in Administration, session date/tutor icon buttons open their respective dialogs, and session cancellation first previews the return. A cancelled dialog must not submit an action. Synthetic Edge fixtures mock RPCs; live database and provider verification remain separate. Focused verification passed 10 synthetic Edge cases and web typecheck; scoped lint and diff checks passed. Admin detail captures were inspected at 390px and 1440px.
+
+## Academy class accordion verification (1 November 2026)
+
+No migration or configuration change is required. Confirm on mobile and desktop that each expanded session exposes only its own schedule, tutor and cancellation controls. Confirm class cancellation is adjacent to the badges. Check that submitting a reason does not bypass cancellation quote review, and that confirmation uses the quote version. Browser fixtures mock the RPCs and are not live database or provider acceptance. Focused Edge verification passed 9 cases across the layout, reschedule, absence and multi-session suites. The 390px admin detail was visually inspected. Web typecheck passed; scoped lint reports an existing function-scoping warning.
+
+## Shared details verification (1 November 2026)
+
+No migration, environment change or data reset is required. Deploy web and API together for admin class detail absence enrichment. Verify admin class-list navigation to `/classes/<id>`, shared curriculum/schedule, admin-only capacity/meeting/room data, and management refresh after actions. Student detail must retain enrollment and omit admin queries/controls; tutors remain excluded from class catalog detail. Admin booking links from Operations and direct `/bookings/<id>` must show the same override, finance and history controls; the former Operations detail URL redirects. Student/tutor booking routes retain their existing controls.
+
+Synthetic browser checks use `packages/e2e/playwright.classes-layout.config.ts`, `playwright.class-reschedule.config.ts`, and `playwright.class-absence.config.ts`; they mock session/RPC and do not verify database, payment, notification or calendar providers.
+
+Verified locally: 135 unit tests / 358 assertions across the five explicit Academy service/handler/public/absence/reschedule files; 23 focused synthetic Edge cases; web `check-types` with `GOMAXPROCS=1` and `GOMEMLIMIT=650MiB`. The first higher-memory compiler run exhausted Windows commit memory; the bounded final run passed. Scoped frontend lint has no errors and one existing `.sort()` warning. Admin detail screenshots were inspected at 390px and 1440px. No live API/database/provider acceptance was run.
+
+## Reason control UI verification (1 November 2026)
+
+No deployment configuration, migration, database mutation or provider call is needed for this UI change. API reason requirements stay unchanged; deploy the web bundle with the shared UI package changes.
+
+Run web/E2E `check-types` and focused lint/formatting for the touched files. The mocked Edge suites exercise reason entry without API processes or database setup:
+
+```powershell
+$env:KOL_BROWSER_CHANNEL = 'msedge'
+$env:KOL_WEB_PORT = '3318'
+$env:KOL_API_PORT = '3319'
+bunx playwright test --config playwright.kol-settlement-synthetic.config.ts -g 'adjustment requires reason'
+bunx playwright test --config playwright.class-reschedule.config.ts
+bunx playwright test --config playwright.finance-layout.config.ts -g 'economy activation'
+bunx playwright test --config playwright.competition-types-synthetic.config.ts -g 'edit keeps|creation and lifecycle|new competition|palette previews' --timeout 90000
+```
+
+Run these commands from `packages/e2e`. KOL screenshots are under `packages/e2e/test-results/kol-settlement-synthetic/**/reason-prompt-*.png`. The desktop/mobile checks cover required markers, whitespace/minimum length, cancel/dismiss, editing, focus return and no premature financial submission. This is synthetic browser/wire verification, not live financial or provider acceptance.
+
+Final focused evidence: 2 KOL, 6 reschedule, 1 activation and 4 catalog cases passed; catalog cases were verified across bounded invocations after initial navigation timeouts and a test precondition fix to expand the collapsed group before choosing a specialization. Web/E2E/UI typechecks passed using `GOMAXPROCS=2`, `GOMEMLIMIT=1GiB`, `GOGC=50` serially after a concurrent web check exhausted memory. Focused formatting/lint passed with existing warnings. Live API/provider workflows were not exercised.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
@@ -342,7 +386,8 @@ No provider send or real Gmail/Outlook rendering is part of these checks.
 No migration is needed. Restart the API after loading the new adminReferral
 listUsage procedure, then open `/admin-referrals` as admin. Filters are literal
 search and choice type; totals cover matching saved choices. KOL settlement
-payments remain on `/admin-kol-commissions`. Do not interpret pending/zero rewards
+payments are available on `/admin-referrals?view=commissions` (the old
+`/admin-kol-commissions` URL redirects there). Do not interpret pending/zero rewards
 as paid or decision commission as cash settlement.
 Focused unit checks: `bun test packages/api/src/tests/unit/referral-usage.test.ts apps/web/src/components/admin/referral-usage-status.test.ts`.
 From packages/e2e: `bunx playwright test --config playwright.admin-referrals.config.ts`.
@@ -4752,3 +4797,7 @@ Selected runs replace only their own `coverage/<group>/counters.json`, print PAS
 Coverage collections must run one at a time against the same test databases. Concurrent resets invalidate fixture isolation and can cause duplicate revision or foreign-key failures. A server restart cancels running collectors; verify both test containers are running before restarting collection. Source changes, including formatting, require recollecting any profiles with stale source hashes. Partial group runs leave the canonical merged report unchanged.
 
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
+
+Admin Referrals navigation verification (2026-11-01): no migration or new environment variables. As admin, check `/admin-referrals`, switch through Activity, Campaigns and Commissions, reload each URL, and use browser Back. Check `/admin-kol-commissions` redirects to the Commissions tab. Student access must redirect to the dashboard before admin RPCs. Synthetic Edge suites: `KOL_BROWSER_CHANNEL=msedge node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`, then the same command with `playwright.kol-settlement-synthetic.config.ts`. These run isolated Vite with mocked session/RPC traffic; they do not establish live DB, provider or financial acceptance.
+
+Validation result (2026-11-01): scoped lint and diff whitespace checks pass. Campaign/referral run: 11 passed (8 campaign creation/error/responsive cases plus 3 admin usage/access cases), 4 failed in existing student referral invitation/empty-state expectations. Focused commissions run on ports 3396/3397: 8 passed (CSV bytes, non-admin denial, five responsive settlement widths and unified tabs/refresh/history/redirect). An earlier broader settlement run was stopped after failures in cached balance refresh on reopening and transfer date input interaction; no full settlement green is claimed. Web typecheck passed before concurrent class-management edits, but the final run reports `class-admin-management.tsx:359` (`tutorAbsence`) and `:468` (`tutorLateNoticeCount`). Those files are outside this change. No live API/DB/provider acceptance, migration, commit or push was performed.

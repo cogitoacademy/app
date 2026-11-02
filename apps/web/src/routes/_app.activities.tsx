@@ -1,9 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useRole } from "@/hooks/use-role";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import type { CogitoUser } from "@cogito-app/auth";
 import { ActivitiesPage } from "@/components/admin/activities-page";
-export const Route = createFileRoute("/_app/activities")({ component: Page });
-function Page() {
-  const { role, isLoading } = useRole();
-  if (isLoading) return null;
-  return role === "admin" ? <ActivitiesPage /> : <p>Admin access required.</p>;
-}
+
+export const Route = createFileRoute("/_app/activities")({
+  component: ActivitiesPage,
+  beforeLoad: ({ context }) => {
+    const user = context.session?.data?.user as CogitoUser | undefined;
+    if (user?.role !== "admin") throw redirect({ to: "/dashboard" });
+  },
+});

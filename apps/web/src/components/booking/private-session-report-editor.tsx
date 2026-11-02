@@ -274,7 +274,7 @@ function PrivateReportForm({
             </FieldLabel>
           </Field>
           <Field>
-            <FieldLabel htmlFor="private-report-reason">
+            <FieldLabel htmlFor="private-report-reason" required>
               Audit reason
             </FieldLabel>
             <FieldDescription>
@@ -283,6 +283,7 @@ function PrivateReportForm({
             </FieldDescription>
             <Textarea
               id="private-report-reason"
+              aria-required="true"
               value={reason}
               onChange={(event) => {
                 setReason(event.target.value);

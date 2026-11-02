@@ -50,6 +50,7 @@ import type {
   adjustKolCommissionInput,
   CreateKolCampaignInput,
   ListKolCommissionsInput,
+  SetKolCampaignPausedInput,
   UpdateReferralSettingsInput,
 } from "./referral.types";
 import {
@@ -616,6 +617,7 @@ export function createReferralService(deps: {
         code: referralCode.code,
         activationAt: referralCampaign.activationAt,
         expiresAt: referralCampaign.expiresAt,
+        pausedAt: referralCampaign.pausedAt,
         attributionWindowDays: referralCampaign.attributionWindowDays,
         flatAmountIdr: referralCampaign.flatAmountIdr,
         percentBps: referralCampaign.percentBps,
@@ -626,6 +628,51 @@ export function createReferralService(deps: {
       .orderBy(desc(referralCampaign.createdAt));
   }
 
+  async function setKolCampaignPaused(
+    adminId: string,
+    input: SetKolCampaignPausedInput,
+  ) {
+    return db.transaction(async (tx) => {
+      const [campaign] = await tx
+        .select()
+        .from(referralCampaign)
+        .where(eq(referralCampaign.id, input.id))
+        .for("update");
+      if (!campaign) {
+        throw new ReferralError(
+          "REFERRAL_CAMPAIGN_INVALID",
+          "Campaign not found.",
+        );
+      }
+      if (input.paused && campaign.pausedAt) return campaign;
+      if (!input.paused && !campaign.pausedAt) return campaign;
+      const pausedAt = input.paused ? now() : null;
+      const updated = (
+        await tx
+          .update(referralCampaign)
+          .set({ pausedAt })
+          .where(eq(referralCampaign.id, campaign.id))
+          .returning()
+      )[0]!;
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: input.paused
+          ? "kol_referral_campaign_paused"
+          : "kol_referral_campaign_resumed",
+        targetId: updated.id,
+        targetType: "referral_campaign",
+        beforeState: { pausedAt: campaign.pausedAt },
+        afterState: { pausedAt: updated.pausedAt },
+        details: { reason: input.reason },
+      });
+      return updated;
+    });
+  }
+
+  // Student top-ups are Midtrans-only. KOL commission follows a successful
+  // provider payment; manual bank-transfer top-ups are out of scope.
   async function recordSuccessfulKolTopUp(
     conn: DbOrTx,
     input: {
@@ -1544,6 +1591,7 @@ export function createReferralService(deps: {
     updateSettings,
     createKolCampaign,
     listKolCampaigns,
+    setKolCampaignPaused,
     recordSuccessfulKolTopUp,
     listKolCommissions,
     exportKolMonthly,

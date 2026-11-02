@@ -676,7 +676,7 @@ function BookingQueue({
                                 variant="tertiary"
                                 render={
                                   <Link
-                                    to="/admin-operations/bookings/$bookingId"
+                                    to="/bookings/$bookingId"
                                     params={{ bookingId: item.id }}
                                     aria-label={`View booking #${item.bookingNumber} details`}
                                   />
@@ -1038,7 +1038,10 @@ function AdminReviewContextCard({ booking }: { booking: QueueItem }) {
         </CardTitle>
       </CardHeader>
       <CardBody className="grid gap-3 sm:grid-cols-2">
-        <AdminMetricRow label="Source" value="Admin override" />
+        <AdminMetricRow
+          label="Source"
+          value={booking.overrideMeta ? "Admin override" : "Booking"}
+        />
         <AdminMetricRow
           label="Urgency"
           value={getUrgencyLabel(booking.currentState)}
@@ -1463,8 +1466,8 @@ function OverrideDialog({
             </div>
           </div>
           <Field>
-            <FieldLabel htmlFor="override-reason">
-              Reason <span className="text-danger">*</span>
+            <FieldLabel htmlFor="override-reason" required>
+              Reason
             </FieldLabel>
             <Textarea
               id="override-reason"
@@ -1474,6 +1477,7 @@ function OverrideDialog({
                 setReason(event.target.value);
                 setPreview(null);
               }}
+              aria-required="true"
             />
           </Field>
           <Field>
@@ -2902,7 +2906,7 @@ function PendingRoomApprovals({
                           variant="secondary"
                           render={
                             <Link
-                              to="/admin-operations/bookings/$bookingId"
+                              to="/bookings/$bookingId"
                               params={{ bookingId: item.bookingId }}
                               aria-label={
                                 item.requestedRoomId

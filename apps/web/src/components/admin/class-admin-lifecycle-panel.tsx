@@ -1,5 +1,16 @@
 "use client";
 
+import { ClassActionReason } from "./class-action-reason";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+} from "@cogito-app/ui/components/selia/dialog";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
+
 import Loader from "@/components/loader";
 
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
@@ -15,12 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -65,12 +71,15 @@ function formatDate(value: Date | string | null) {
 export function ClassAdminLifecyclePanel({
   classRecord,
   onChanged,
+  sessionOnly = false,
+  minimumOnly = false,
 }: {
   classRecord: LifecycleClass;
+  sessionOnly?: boolean;
+  minimumOnly?: boolean;
   onChanged: () => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
-  const [reason, setReason] = useState("");
   const [replacementStarts, setReplacementStarts] = useState<
     Record<string, string>
   >({});
@@ -98,7 +107,9 @@ export function ClassAdminLifecyclePanel({
       input: { classId: classRecord.id },
     }),
     enabled:
-      classRecord.kind === "cohort" && classRecord.minimumCheckAt !== null,
+      !sessionOnly &&
+      classRecord.kind === "cohort" &&
+      classRecord.minimumCheckAt !== null,
   });
 
   const invalidateClassLists = async () => {
@@ -138,7 +149,6 @@ export function ClassAdminLifecyclePanel({
     orpc.classes.confirmAdminMinimumDecision.mutationOptions({
       onSuccess: async (result) => {
         setDecisionReview(null);
-        setReason("");
         setReplacementStarts({});
         await invalidateClassLists();
         toastManager.add({
@@ -203,8 +213,10 @@ export function ClassAdminLifecyclePanel({
     previewSessionCancellation.isPending ||
     confirmSessionCancellation.isPending;
 
-  function previewMinimumDecision(decision: "continue" | "postpone") {
-    if (reason.trim().length < 3) return;
+  function previewMinimumDecision(
+    decision: "continue" | "postpone",
+    actionReason: string,
+  ) {
     const starts =
       decision === "postpone"
         ? scheduledSessions.map((session) => ({
@@ -214,11 +226,11 @@ export function ClassAdminLifecyclePanel({
           }))
         : [];
     setDecisionReview(null);
-    previewDecision.mutate({
+    return previewDecision.mutateAsync({
       classId: classRecord.id,
       expectedClassVersion: classRecord.version,
       decision,
-      reason: reason.trim(),
+      reason: actionReason,
       replacementStarts: starts,
     });
   }
@@ -239,7 +251,9 @@ export function ClassAdminLifecyclePanel({
 
   return (
     <Stack direction="column" spacing="sm" className="mt-4">
-      {classRecord.kind === "cohort" && classRecord.minimumCheckAt ? (
+      {!sessionOnly &&
+      classRecord.kind === "cohort" &&
+      classRecord.minimumCheckAt ? (
         <Card>
           <CardHeader>
             <CardTitle>Minimum enrollment check</CardTitle>
@@ -295,23 +309,6 @@ export function ClassAdminLifecyclePanel({
                         replacement session must start after that deadline.
                       </Text>
                     ) : null}
-                    <Field>
-                      <FieldLabel htmlFor={`minimum-reason-${classRecord.id}`}>
-                        Decision reason
-                      </FieldLabel>
-                      <Input
-                        id={`minimum-reason-${classRecord.id}`}
-                        maxLength={500}
-                        value={reason}
-                        onChange={(event) => {
-                          setReason(event.target.value);
-                          setDecisionReview(null);
-                        }}
-                      />
-                      <FieldDescription>
-                        Required for the audit record.
-                      </FieldDescription>
-                    </Field>
                     {scheduledSessions.map((session) => (
                       <Field key={session.id}>
                         <FieldLabel htmlFor={`replacement-${session.id}`}>
@@ -331,27 +328,28 @@ export function ClassAdminLifecyclePanel({
                       </Field>
                     ))}
                     <Stack direction="row" spacing="sm" className="flex-wrap">
-                      <Button
-                        variant="secondary"
-                        disabled={busy || reason.trim().length < 3}
-                        onClick={() => previewMinimumDecision("continue")}
-                      >
-                        Review continue decision
-                      </Button>
-                      <Button
-                        variant="outline"
+                      <ClassActionReason
+                        label="Review continue decision"
+                        reasonLabel="Decision reason"
+                        disabled={busy}
+                        onConfirm={(value) =>
+                          previewMinimumDecision("continue", value)
+                        }
+                      />
+                      <ClassActionReason
+                        label="Review one-time postponement"
+                        reasonLabel="Decision reason"
                         disabled={
                           busy ||
-                          reason.trim().length < 3 ||
                           check.postponementCount > 0 ||
                           scheduledSessions.some(
                             (session) => !replacementStarts[session.id],
                           )
                         }
-                        onClick={() => previewMinimumDecision("postpone")}
-                      >
-                        Review one-time postponement
-                      </Button>
+                        onConfirm={(value) =>
+                          previewMinimumDecision("postpone", value)
+                        }
+                      />
                     </Stack>
                   </>
                 ) : null}
@@ -425,114 +423,106 @@ export function ClassAdminLifecyclePanel({
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Individual session cancellation</CardTitle>
-          <CardDescription>
-            Only upcoming scheduled sessions can be cancelled. Completed
-            reports, earned tutor fees, and past delivery holds stay intact.
-          </CardDescription>
-        </CardHeader>
-        <CardBody className="space-y-3">
-          {scheduledSessions.length === 0 ? (
-            <Text className="text-sm text-muted">
-              No future scheduled sessions can be cancelled.
-            </Text>
-          ) : (
-            scheduledSessions.map((session) => (
-              <div
-                key={session.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
-              >
-                <div>
-                  <Text className="font-medium">
-                    Session {session.sequenceNumber}
-                  </Text>
-                  <Text className="text-sm text-muted">
-                    {formatDate(session.startAt)}
-                  </Text>
-                </div>
+      {!minimumOnly && scheduledSessions.length > 0 && (
+        <div className="mt-3">
+          {scheduledSessions.map((session) => (
+            <Button
+              key={session.id}
+              size="xs"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                setCancelSessionId(session.id);
+                setSessionReview(null);
+              }}
+            >
+              Cancel session
+            </Button>
+          ))}
+          <Dialog
+            open={cancelSessionId !== null}
+            onOpenChange={(open) => {
+              if (!open && !busy) {
+                setCancelSessionId(null);
+                setCancelReason("");
+                setSessionReview(null);
+              }
+            }}
+          >
+            <DialogPopup>
+              <DialogHeader>
+                <DialogTitle>Cancel session</DialogTitle>
+              </DialogHeader>
+              <DialogBody className="space-y-3">
+                <DialogDescription>
+                  Review the return before confirming cancellation.
+                </DialogDescription>
+                <Field>
+                  <FieldLabel required>Cancellation reason</FieldLabel>
+                  <Textarea
+                    aria-label="Cancellation reason"
+                    maxLength={500}
+                    value={cancelReason}
+                    disabled={busy || !!sessionReview}
+                    onChange={(event) => {
+                      setCancelReason(event.target.value);
+                      setSessionReview(null);
+                    }}
+                  />
+                </Field>
                 <Button
-                  variant="secondary"
-                  disabled={
-                    busy ||
-                    (cancelSessionId !== null && cancelSessionId !== session.id)
-                  }
+                  disabled={busy || cancelReason.trim().length < 3}
                   onClick={() => {
-                    setCancelSessionId(session.id);
-                    setSessionReview(null);
+                    if (cancelSessionId) previewSessionCancel(cancelSessionId);
                   }}
                 >
-                  Review cancellation
+                  Preview exact return
                 </Button>
-              </div>
-            ))
-          )}
-          {cancelSessionId ? (
-            <div className="space-y-3 rounded border border-border p-4">
-              <Field>
-                <FieldLabel htmlFor={`session-cancel-reason-${classRecord.id}`}>
-                  Cancellation reason
-                </FieldLabel>
-                <Input
-                  id={`session-cancel-reason-${classRecord.id}`}
-                  maxLength={500}
-                  value={cancelReason}
-                  onChange={(event) => {
-                    setCancelReason(event.target.value);
-                    setSessionReview(null);
-                  }}
-                />
-              </Field>
-              <Button
-                disabled={busy || cancelReason.trim().length < 3}
-                onClick={() => previewSessionCancel(cancelSessionId)}
-              >
-                Preview exact return
-              </Button>
-              {sessionReview ? (
-                <div
-                  className="space-y-3"
-                  role="region"
-                  aria-label="Session cancellation review"
-                >
-                  <Text>
-                    Return: {sessionReview.quote.returnMarks} Marks · Fee: 0
-                    Marks · {sessionReview.quote.releasedAllocationIds.length}{" "}
-                    seat allocation(s) released.
-                  </Text>
-                  <Stack direction="row" spacing="sm" className="flex-wrap">
-                    <Button
-                      variant="danger"
-                      disabled={busy}
-                      progress={confirmSessionCancellation.isPending}
-                      onClick={() =>
-                        confirmSessionCancellation.mutate({
-                          ...sessionReview.input,
-                          requestKey: sessionReview.requestKey,
-                          quoteVersion: sessionReview.quote.quoteVersion,
-                        })
-                      }
-                    >
-                      Confirm session cancellation
-                    </Button>
-                    <Button
-                      variant="plain"
-                      disabled={busy}
-                      onClick={() => {
-                        setSessionReview(null);
-                        setCancelSessionId(null);
-                      }}
-                    >
-                      Keep session
-                    </Button>
-                  </Stack>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </CardBody>
-      </Card>
+                {sessionReview ? (
+                  <div
+                    className="space-y-3"
+                    role="region"
+                    aria-label="Session cancellation review"
+                  >
+                    <Text>
+                      Return: {sessionReview.quote.returnMarks} Marks · Fee: 0
+                      Marks · {sessionReview.quote.releasedAllocationIds.length}{" "}
+                      seat allocation(s) released.
+                    </Text>
+                    <Stack direction="row" spacing="sm" className="flex-wrap">
+                      <Button
+                        variant="danger"
+                        disabled={busy}
+                        progress={confirmSessionCancellation.isPending}
+                        onClick={() =>
+                          confirmSessionCancellation.mutate({
+                            ...sessionReview.input,
+                            requestKey: sessionReview.requestKey,
+                            quoteVersion: sessionReview.quote.quoteVersion,
+                          })
+                        }
+                      >
+                        Confirm session cancellation
+                      </Button>
+                      <Button
+                        variant="plain"
+                        disabled={busy}
+                        onClick={() => {
+                          setSessionReview(null);
+                          setCancelReason("");
+                          setCancelSessionId(null);
+                        }}
+                      >
+                        Keep session
+                      </Button>
+                    </Stack>
+                  </div>
+                ) : null}
+              </DialogBody>
+            </DialogPopup>
+          </Dialog>
+        </div>
+      )}
     </Stack>
   );
 }
