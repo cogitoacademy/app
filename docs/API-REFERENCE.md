@@ -1914,30 +1914,30 @@ Blog content is app-managed. PostgreSQL is the only source; Sanity is not involv
 ### `publicContent.blog.list`
 
 - **Auth:** Public; no session cookie is required
-- **HTTP request:** `POST /rpc/public-content/blog/list` with `{"json":{"locale":"id","limit":12}}`
-- **Input:** `{ locale: "id" | "en", cursor?: string, limit?: 1..24 }`; `limit` defaults to 12
+- **HTTP request:** `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id","limit":12}}`
+- **Input:** `{ locale: "id" | "en", cursor?: string, page?: 1..1000, limit?: 1..24 }`; `limit` defaults to 12. Use `page` for numbered marketing pages; use `cursor` for cursor navigation.
 - **Output:** `{ rows: PublicBlogCardDto[], nextCursor: string | null }`
 - **Description:** Returns published, non-archived versions for the locale ordered by `publishedAt` descending, then version ID. Cursor is opaque base64url. Cards contain `id`, `slug`, `title`, `excerpt` (meta description), `hero`, localized `category` and nullable `subcategory`, `tutorName`, `publishedAt`, `updatedAt`, and `readingMinutes`. Hero is `{ url, width, height, alt }` or `null`. Drafts and archived articles never appear.
 
 ### `publicContent.blog.get`
 
 - **Auth:** Public; no session cookie is required
-- **HTTP request:** `POST /rpc/public-content/blog/get` with `{"json":{"locale":"id","slug":"..."}}`
+- **HTTP request:** `POST /rpc/publicContent/blog/get` with `{"json":{"locale":"id","slug":"..."}}`
 - **Output:** A `PublicBlogArticleDto`: the card fields plus `lead`, `seoTitle`, `metaDescription`, `keyFacts`, `body`, `faq`, `gallery`, `media`, `related`, and `alternate`.
-- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
+- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. When fewer than three are chosen, the newest published articles from the same subcategory fill the remaining slots. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
 - **Errors:** `NOT_FOUND` when no published version matches.
 
 ### `publicContent.blog.categories`
 
 - **Auth:** Public; no session cookie is required
-- **HTTP request:** `POST /rpc/public-content/blog/categories` with `{"json":{"locale":"id"}}`
+- **HTTP request:** `POST /rpc/publicContent/blog/categories` with `{"json":{"locale":"id"}}`
 - **Output:** `PublicBlogCategoryDto[]`, each `{ id, parentId, slug, title, intro, articleCount }`
 - **Description:** Returns active categories ordered by `sortOrder`. `articleCount` counts published versions in the requested locale for articles whose root category matches; it does not count subcategory-only matches. Titles, slugs, and intros are locale-selected.
 
 ### `publicContent.blog.sitemap`
 
 - **Auth:** Public; no session cookie is required
-- **HTTP request:** `POST /rpc/public-content/blog/sitemap` with `{"json":{}}`
+- **HTTP request:** `POST /rpc/publicContent/blog/sitemap` with `{"json":{}}`
 - **Output:** `PublicBlogSitemapEntry[]`, each `{ articleId, locale, slug, updatedAt, alternate }`, capped at 5,000 rows
 - **Description:** Lists every published, non-archived version ordered by `updatedAt` descending. `alternate` is populated only when the sibling locale version is also published. Rate limits: 120 requests per minute for list/get/categories and 12 per minute for the sitemap.
 
@@ -1969,7 +1969,7 @@ Blog content is app-managed. PostgreSQL is the only source; Sanity is not involv
 - **Auth:** Admin
 - **Input:** `{ articleId, locale, expectedVersion }`
 - **Output:** The updated `AdminBlogVersionDto`
-- **Errors:** `BAD_REQUEST` with the missing field list when publish requirements are not met; `NOT_FOUND` when the version does not exist; `CONFLICT` when `expectedVersion` is stale or the article is archived.
+- **Errors:** `BAD_REQUEST` with `data.missingFields` listing every missing field when publish requirements are not met; `NOT_FOUND` when the version does not exist; `CONFLICT` with `data.actualVersion` when `expectedVersion` is stale, or without data when the article is archived.
 - **Description:** Publish requires title, SEO title, slug, meta description, lead, a non-empty body, a hero media ID, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image. The first publish stamps `publishedAt`; later publishes keep it. Both transitions write an audit record.
 
 ### `adminBlog.archiveArticle`, `adminBlog.replaceRelated`, and `adminBlog.replaceGallery`

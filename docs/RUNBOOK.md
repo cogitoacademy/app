@@ -13,9 +13,11 @@ Verification steps:
 3. Run the blog integration test against the local `cogito-test` database: `bun test --env-file apps/server/.env.test packages/api/src/tests/integration/blog.test.ts`.
 4. Sign in as admin, open `/admin-blog`, create a category, then create an article.
 5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time.
-6. Confirm `POST /rpc/public-content/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
+6. Confirm `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
 
-Public blog reads are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
+Public blog reads use `/rpc/publicContent/blog/*` and are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
+
+The marketing site must not add `app/[locale]/loading.tsx`. That route-level streaming boundary makes `notFound()` return HTTP 200; without it, unknown blog URLs return 404.
 
 No environment variable is specific to the blog. Media reuse the existing R2 or local upload configuration, and public image URLs come from `R2_PUBLIC_URL` (or the local upload base URL).
 
@@ -4842,6 +4844,6 @@ To delete a blog category, move its articles first and delete/move its subcatego
 Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
 
 
-Apply migration 0088_easy_garia before using manual blog bylines. It adds nullable featured_tutor_name and reviewed_by_name columns. Verify save/reopen with manual names and no tutor accounts, both linked/manual selections, and public byline/reviewer output. Bilingual editor fields are vertically paired with per-field + English; publishing locale is explicit.
+Apply migration 0088_easy_garia before using manual blog bylines. It adds nullable featured_tutor_name and reviewed_by_name columns. Verify save/reopen with manual names and no tutor accounts, both linked/manual selections, and public byline/reviewer output. Bilingual editor fields follow the language selected in the sticky Tabs control (Indonesia or English). The bar shows per-language publish-gate progress, and publishing targets the active language only.
 
 Migration 0088 was applied to development localhost:6767/cogito-app during this authoring update. Marketing renderer byline support is implemented in cogito-acad; browser acceptance is pending.

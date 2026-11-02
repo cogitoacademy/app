@@ -112,7 +112,7 @@ Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts
 
 ## Admin KOL campaign presentation (26 October 2026)
 
-`KolCampaignsSection` composes Selia fields/cards on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
+`KolCampaignsSection` composes Selia fields, table, and an inline page section on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
 
 ## Referral session cache correction (24 October 2026)
 
@@ -2892,7 +2892,7 @@ Admin Referrals composition (2026-11-01): `AdminReferralsPage` owns the Activity
 Blog authoring uses TipTap and converts to the existing BlogBlock contract. Inline images use registered media IDs with locale-specific alt text and captions; preview URLs are not persisted in body JSON. Admin reads resolve body media independently of the hero and gallery.
 
 
-Blog draft creation does not require taxonomy. Admin listings use a left join so uncategorized drafts remain visible; public publish validation requires a root category. Category removal is blocked while any language is published. Save article saves shared settings and the active language; the other language keeps its own draft.
+Blog draft creation does not require taxonomy. Admin listings use a left join so uncategorized drafts remain visible; public publish validation requires a root category. Category removal is blocked while any language is published. Save all languages saves shared settings and every authored language; publish and unpublish target the language selected in the editor's sticky Tabs control. The client publish gate mirrors the server check for the active language.
 
 
 Blog category deletion checks for children and any article reference, then deletes with the expected version. Foreign-key restrictions also protect concurrent reference creation; reference conflicts map to a category validation error. No recursive deletion or article deletion occurs.

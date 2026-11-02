@@ -3702,7 +3702,7 @@ Latest shared-checkout typecheck (30 October 2026): web passed before concurrent
 
 ### Session Reporting workspace
 
-Session Reporting combines ended private booking sessions and cohort/masterclass sessions in one searchable, paginated table. Search accepts BKG/CLS references or titles; type and report-status filters narrow the list. Selecting a row opens its report in a drawer. Student Reports remains the student-centric bulk PDF workspace. Booking detail shortcuts open `/class-reports?workspace=sessions&report=private:<booking-or-child-id>`. Recorded private reports are view-only for tutors and correctable by admins; class report permissions remain unchanged.
+Session Reporting combines ended private booking sessions and cohort/masterclass sessions in one searchable, paginated table. Search accepts BKG/CLS references or titles; type and report-status filters narrow the list. Selecting a row opens its report in a drawer. Student Reports remains the student-centric bulk PDF workspace. Booking detail actions open the shared private report editor in a local drawer for both single and series sessions; closing or saving keeps the booking page in place. Labels distinguish recording from viewing an existing report. Closing an unsaved draft requires discard confirmation, and closing during submission is blocked. The Session Reporting workspace retains its own drawer and deep links. Recorded private reports are view-only for tutors and correctable by admins; class report permissions remain unchanged.
 
 Competition types uses a compact Selia table with collapsed category rows and expandable specialization tables. Search reveals matching groups. Superseded migration-0027 seed IDs are excluded from this admin directory; database records remain untouched.
 
@@ -3807,7 +3807,11 @@ Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Canc
 Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
 
 
-Blog authoring now pairs Indonesia and English vertically per field. Indonesia is the initial language; + English reveals each secondary field. Save article saves shared settings and all authored languages; publish still targets one explicitly selected language. Search and article settings use Selia Accordion. Featured tutor and reviewer support linked tutors, manual names, or none. Manual names are stored on the shared article and rendered as public byline text.
+Blog authoring pairs Indonesia and English through a single language switch in the sticky action bar. The switch is a Selia Tabs control; every per-field editor renders only the active language. The bar also shows per-language publish-gate progress. Save all languages saves shared settings and every authored language; publish and unpublish still target the language selected in the switch, and publish stays disabled while that language has open required fields. Search and article settings use Selia Accordion. Featured tutor and reviewer support linked tutors, manual names, or none. Manual names are stored on the shared article and rendered as public byline text.
 
 
 Rich-text inline controls use Selia Field/FieldLabel for image alt/caption, quote attribution, callout titles, embed URLs and shared link addresses. Action rows have separate spacing and responsive wrapping across Blog, FAQ and Activities.
+
+Admin class details show status, tutor fee, and session count in the main details column without a duplicate Administration sidebar. Class status badges use sentence case (for example, Published).
+
+Admin session accordions reuse the student meeting/room presentation, with a Join meeting button and readable availability messages. Capacity remains visible; the schedule badge conveys session status instead of raw state and meeting-provider fields.
