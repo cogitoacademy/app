@@ -1876,21 +1876,21 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Auth:** Public; no session cookie is required
 - **HTTP request:** `POST /rpc/publicContent/faq/list` with `{"json":{"locale":"en","surface":"full"}}`
 - **Input:** `{ locale?: "en" | "id", surface?: "full" | "landing" }`; both default to `en` and `full`
-- **Output:** `Faq[]`, each item `{ id, question, answer, questionRich, answerRich, sortOrder }`; the legacy answer blocks remain `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`. Rich documents are `{ type: "doc", blocks }` with paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays.
-- **Description:** Returns active entries alphabetically by the question displayed for the requested locale (locale-aware comparison, ID tie-break). `sortOrder` remains in the backward-compatible DTO and is assigned the zero-based display position. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; rich and plain projections use the same locale fallback. Rich fields are additive; older consumers can ignore them, and the marketing adapter accepts their absence from an older API and renders the legacy text instead. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors. Public output still omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, requires the `json` field, accepts `meta` when absent or an array (the configured API may omit empty metadata), validates rich entries, and renders failures separately from a valid empty list.
+- **Output:** `Faq[]`, each item `{ id, question, answer, questionRich, answerRich, category, sortOrder }`; the legacy answer blocks remain `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`. Rich documents are `{ type: "doc", blocks }` with paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. `category` is one of `about`, `programs`, `tutors`, `accounts`, `marks`, `payments`, `progress`, `offline`, or `tutor-join`.
+- **Description:** Returns active entries in saved display order (`sortOrder` ascending, then creation time, then ID). `sortOrder` remains in the DTO and is assigned the zero-based display position. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; rich and plain projections use the same locale fallback. Rich fields are additive; older consumers can ignore them, and the marketing adapter accepts their absence from an older API and renders the legacy text instead. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors. Public output still omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, requires the `json` field, accepts `meta` when absent or an array (the configured API may omit empty metadata), validates rich entries, and renders failures separately from a valid empty list.
 
 ### `adminFaq.list`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/list` with `{"json":{}}`
 - **Input:** `{}` (strict empty object)
-- **Output:** All `AdminFaqDto` entries ordered alphabetically by the English question, then ID. Each item includes `id`, `questionEn`, `questionId`, legacy `answerEn`/`answerId` projections, `questionEnRich`, `questionIdRich`, `answerEnRich`, `answerIdRich`, `isActive`, `showOnLanding`, `version`, and ISO `modifiedAt`.
+- **Output:** All `AdminFaqDto` entries ordered by saved display order, then creation time and ID. Each item includes `id`, `questionEn`, `questionId`, legacy `answerEn`/`answerId` projections, `questionEnRich`, `questionIdRich`, `answerEnRich`, `answerIdRich`, `category`, `isActive`, `showOnLanding`, `version`, and ISO `modifiedAt`.
 
 ### `adminFaq.create`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/create` with the standard `{"json": <input>}` envelope
-- **Input:** `{ questionEnRich, questionIdRich?, answerEnRich, answerIdRich?, isActive?, showOnLanding? }`. English rich question and answer are required; Indonesian documents are optional or `null`. A document is `{ type: "doc", blocks }`; blocks are paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. Questions are limited to 500 plain-text characters; documents to 50 blocks. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors; unsafe protocols and raw HTML are rejected. Active defaults to true and landing visibility to false.
+- **Input:** `{ questionEnRich, questionIdRich?, answerEnRich, answerIdRich?, category?, isActive?, showOnLanding? }`. English rich question and answer are required; Indonesian documents are optional or `null`. A document is `{ type: "doc", blocks }`; blocks are paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. Questions are limited to 500 plain-text characters; documents to 50 blocks. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors; unsafe protocols and raw HTML are rejected. `category` defaults to `about`; the allowed keys are fixed. Active defaults to true and landing visibility to false.
 - **Output:** The created `AdminFaqDto`, initially at version 1 with `modifiedAt`. The service also derives the legacy plain-text question and answer fields used by the public DTO.
 - **Errors:** `BAD_REQUEST` when selecting the new entry would exceed the six-active-FAQ landing limit.
 
@@ -1898,7 +1898,7 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 
 The admin controls on `/faq` use the existing admin procedures; student/tutor
 views continue to use `publicContent.faq.list`. Saving refreshes both query
-families. No RPC input, output, or authorization contract changed.
+families and persists the category selector.
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/update` with the standard `{"json": <input>}` envelope
@@ -1906,6 +1906,85 @@ families. No RPC input, output, or authorization contract changed.
 - **Output:** The updated `AdminFaqDto` with its version incremented
 - **Errors:** Wire codes are `NOT_FOUND` (404) when the ID does not exist, `CONFLICT` (409) when `expectedVersion` is stale, and `BAD_REQUEST` when selecting the entry would exceed the six-active-FAQ landing limit. The underlying FAQ domain error names are not exposed as the oRPC error code.
 - **Description:** Updates are compare-and-swap writes. Deactivation hides the entry publicly and clears landing selection while retaining it for admin editing; there is no destructive delete procedure. Create uses the same six-active-entry landing limit.
+
+## Blog (`publicContent.blog.*` and `adminBlog.*`)
+
+Blog content is app-managed. PostgreSQL is the only source; Sanity is not involved. Each article stores shared fields once and one version per locale, and each version publishes independently. Slugs are immutable after the first publish.
+
+### `publicContent.blog.list`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id","limit":12}}`
+- **Input:** `{ locale: "id" | "en", cursor?: string, page?: 1..1000, limit?: 1..24 }`; `limit` defaults to 12. Use `page` for numbered marketing pages; use `cursor` for cursor navigation.
+- **Output:** `{ rows: PublicBlogCardDto[], nextCursor: string | null }`
+- **Description:** Returns published, non-archived versions for the locale ordered by `publishedAt` descending, then version ID. Cursor is opaque base64url. Cards contain `id`, `slug`, `title`, `excerpt` (meta description), `hero`, localized `category` and nullable `subcategory`, `tutorName`, `publishedAt`, `updatedAt`, and `readingMinutes`. Hero is `{ url, width, height, alt }` or `null`. Drafts and archived articles never appear.
+
+### `publicContent.blog.get`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/blog/get` with `{"json":{"locale":"id","slug":"..."}}`
+- **Output:** A `PublicBlogArticleDto`: the card fields plus `lead`, `seoTitle`, `metaDescription`, `keyFacts`, `body`, `faq`, `gallery`, `media`, `related`, and `alternate`.
+- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. When fewer than three are chosen, the newest published articles from the same subcategory fill the remaining slots. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
+- **Errors:** `NOT_FOUND` when no published version matches.
+
+### `publicContent.blog.categories`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/blog/categories` with `{"json":{"locale":"id"}}`
+- **Output:** `PublicBlogCategoryDto[]`, each `{ id, parentId, slug, title, intro, articleCount }`
+- **Description:** Returns active categories ordered by `sortOrder`. `articleCount` counts published versions in the requested locale for articles whose root category matches; it does not count subcategory-only matches. Titles, slugs, and intros are locale-selected.
+
+### `publicContent.blog.sitemap`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/blog/sitemap` with `{"json":{}}`
+- **Output:** `PublicBlogSitemapEntry[]`, each `{ articleId, locale, slug, updatedAt, alternate }`, capped at 5,000 rows
+- **Description:** Lists every published, non-archived version ordered by `updatedAt` descending. `alternate` is populated only when the sibling locale version is also published. Rate limits: 120 requests per minute for list/get/categories and 12 per minute for the sitemap.
+
+### `adminBlog.list` and `adminBlog.get`
+
+- **Auth:** Admin
+- **HTTP requests:** `POST /rpc/adminBlog/list` and `POST /rpc/adminBlog/get` with the standard `{"json": <input>}` envelope
+- **Input:** `list` takes `{ status?, locale?, cursor?, limit? }`; `get` takes `{ articleId }`
+- **Output:** `list` returns `{ rows: AdminBlogListRowDto[], nextCursor }` with both locale titles and statuses. `get` returns `AdminBlogArticleDto`, including shared fields, hero, gallery with alt text, tutor references, related IDs, internal notes, article version, both versions, and archive state.
+- **Description:** Admin reads include drafts. Internal notes and media identifiers never appear in public responses.
+
+### `adminBlog.createArticle` and `adminBlog.updateArticle`
+
+- **Auth:** Admin
+- **Input:** `createArticle` takes `{ categoryId, subcategoryId?, heroMediaId?, featuredTutorId?, reviewedByTutorId?, internalNotes? }`. `updateArticle` adds `{ articleId, expectedVersion }`.
+- **Output:** `{ articleId, version }` with the shared version incremented by updates
+- **Errors:** `NOT_FOUND` for unknown category or tutor, `BAD_REQUEST` when the subcategory does not belong to the category or a media ID is unregistered, `CONFLICT` for a stale `expectedVersion` or an archived article.
+
+### `adminBlog.saveVersion`
+
+- **Auth:** Admin
+- **Input:** `{ articleId, locale, expectedVersion, slug, title, seoTitle, metaDescription, lead, mainKeyword?, secondaryKeywords?, keyFacts, body, faq, heroAlt? }`
+- **Output:** `AdminBlogVersionDto` with computed `readingMinutes` and the incremented version
+- **Description:** Creates the locale version when it does not exist (`expectedVersion` must be 0) or updates it with compare-and-swap. Body embeds must be public Instagram reel/post/TV or TikTok video URLs; the URL is normalized to the `www` host. Links must use `http` or `https`.
+- **Errors:** `CONFLICT` for a duplicate slug, a stale version, or an attempt to rename a slug after the first publish; `BAD_REQUEST` for an unregistered body image.
+
+### `adminBlog.publishVersion` and `adminBlog.unpublishVersion`
+
+- **Auth:** Admin
+- **Input:** `{ articleId, locale, expectedVersion }`
+- **Output:** The updated `AdminBlogVersionDto`
+- **Errors:** `BAD_REQUEST` with `data.missingFields` listing every missing field when publish requirements are not met; `NOT_FOUND` when the version does not exist; `CONFLICT` with `data.actualVersion` when `expectedVersion` is stale, or without data when the article is archived.
+- **Description:** Publish requires title, SEO title, slug, meta description, lead, a non-empty body, a hero media ID, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image. The first publish stamps `publishedAt`; later publishes keep it. Both transitions write an audit record.
+
+### `adminBlog.archiveArticle`, `adminBlog.replaceRelated`, and `adminBlog.replaceGallery`
+
+- **Auth:** Admin
+- **Input:** `archiveArticle` takes `{ articleId, expectedVersion }`. `replaceRelated` takes `{ articleId, expectedVersion, relatedArticleIds }`, up to 3 unique IDs. `replaceGallery` takes `{ articleId, expectedVersion, images: [{ mediaId, altId, altEn }] }`.
+- **Output:** `{ articleId }`
+- **Description:** Archive stamps `archivedAt` and sets every locale version to `archived`; archived articles stop serving publicly and reject edits. Related and gallery replacement are transactional and replace the full ordered set. Gallery alt text is required per locale at publish time, not at save time.
+
+### `adminBlog.registerMedia`, `adminBlog.tutors`, and `adminBlog.categories.*`
+
+- **Auth:** Admin
+- **Input:** `registerMedia` takes `{ storageKey, filename, contentType, width?, height?, byteSize? }`. `tutors` takes `{}`. `categories.list` takes `{}`; `categories.create` and `categories.update` take bilingual titles, slugs, optional intros, parent ID, and active state; `categories.reorder` takes `{ ids }`.
+- **Output:** `registerMedia` returns `BlogMediaDto` with the resolved public URL. `tutors` returns `{ id, name }[]`. Category procedures return `AdminBlogCategoryDto[]` or `{ id, version }`.
+- **Description:** Media must be uploaded through the caller's own upload prefix (`<userId>/...`), which prevents registering another admin's object. Categories support one nesting level. Deactivating a category is rejected while any published article still uses it as root or subcategory. Optimistic versions guard category updates.
 
 ## Tutor Discovery (`tutors.*`)
 
@@ -2768,3 +2847,13 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
 
 Admin Referrals tabs (2026-11-01): this navigation change adds no RPC inputs or outputs. Activity uses `/rpc/adminReferral/listUsage`, Campaigns uses `listKolCampaigns` / `createKolCampaign`, and Commissions uses the existing KOL decisions, monthly CSV and settlement procedures under `/rpc/adminReferral/`. Request/response envelopes and financial rules are unchanged. `view` is a web route search parameter, not an RPC field.
+
+### Blog rich text authoring (2 November 2026)
+
+Blog admin article responses include `bodyMedia: BlogMediaDto[]` for image and embed-poster references in either language body. Body runs preserve whitespace around formatted text.
+
+`adminBlog.createArticle` accepts `{}` and stores a nullable category for drafts. Admin article `category` and list `categoryId` can be null. `adminBlog.updateArticle` accepts null category for unpublished drafts; publishing requires categoryId. Category create accepts parentId for one-level subcategories. Partial shared-detail updates preserve omitted cover, people and notes fields.
+
+POST `/rpc/adminBlog/categories/delete` accepts `{"json":{"categoryId":"...","expectedVersion":1}}` and returns the deleted id in the standard envelope. Admin-only. Deletes only categories without article references (including drafts/archived articles) or child categories. Stale versions return VERSION_CONFLICT; referenced categories return BLOG_CATEGORY_INVALID.
+
+adminBlog.createArticle/updateArticle accept optional nullable featuredTutorName and reviewedByName (trimmed, max 200 characters). Admin get returns both manual fields; public cards tutorName falls back to the manual featured name. Public article get adds reviewerName, preferring the linked reviewer name then the manual value. Manual names do not create tutor accounts or profile links.

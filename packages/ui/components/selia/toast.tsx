@@ -64,7 +64,7 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
       className={cn(
         "overflow-hidden transition-opacity data-behind:pointer-events-none data-behind:opacity-0",
         "data-expanded:opacity-100 data-expanded:pointer-events-auto",
-        "flex gap-x-2.5 gap-y-0.5 items-start",
+        "flex gap-x-2.5 gap-y-0.5 items-center",
       )}
     >
       {toast.type && (
@@ -95,7 +95,7 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
       <BaseToast.Close
         data-slot="toast-close"
         aria-label="Dismiss notification"
-        className="shrink-0 self-start rounded-sm p-1 text-dimmed transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="shrink-0 rounded-sm p-1 text-dimmed transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -127,7 +127,7 @@ function ToastIcon({
     <div
       data-slot="toast-icon"
       className={cn(
-        "mt-px flex size-4.5 shrink-0 items-center justify-center [&>svg]:size-full",
+        "flex size-4.5 shrink-0 items-center justify-center [&>svg]:size-full",
         type === "success" && "*:[svg]:fill-success/20 *:[svg]:stroke-success",
         type === "info" && "*:[svg]:fill-info/20 *:[svg]:stroke-info",
         type === "warning" && "*:[svg]:fill-warning/20 *:[svg]:stroke-warning",

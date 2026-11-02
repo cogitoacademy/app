@@ -92,7 +92,10 @@ export function AccordionPanel({
       )}
       {...props}
     >
-      <div data-slot="accordion-panel-content" className="pb-2">
+      <div
+        data-slot="accordion-panel-content"
+        className="min-w-0 px-1 pt-1 pb-2"
+      >
         {children}
       </div>
     </BaseAccordion.Panel>

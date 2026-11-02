@@ -21,6 +21,7 @@ import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppActivitiesRouteImport } from './routes/_app.activities'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminBlogRouteImport } from './routes/_app.admin-blog'
 import { Route as AppAdminClassesRouteImport } from './routes/_app.admin-classes'
 import { Route as AppAdminCompetitionsRouteImport } from './routes/_app.admin-competitions'
 import { Route as AppAdminContentRouteImport } from './routes/_app.admin-content'
@@ -47,6 +48,7 @@ import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppReferralsRouteImport } from './routes/_app.referrals'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AppAdminBlogArticleIdRouteImport } from './routes/_app.admin-blog_.$articleId'
 import { Route as AppAdminTutorsProfileIdRouteImport } from './routes/_app.admin-tutors_.$profileId'
 import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
 import { Route as AppClassesClassIdRouteImport } from './routes/_app.classes_.$classId'
@@ -111,6 +113,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminBlogRoute = AppAdminBlogRouteImport.update({
+  id: '/admin-blog',
+  path: '/admin-blog',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminClassesRoute = AppAdminClassesRouteImport.update({
@@ -243,6 +250,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAdminBlogArticleIdRoute = AppAdminBlogArticleIdRouteImport.update({
+  id: '/admin-blog_/$articleId',
+  path: '/admin-blog/$articleId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminTutorsProfileIdRoute = AppAdminTutorsProfileIdRouteImport.update({
   id: '/admin-tutors_/$profileId',
   path: '/admin-tutors/$profileId',
@@ -287,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-blog': typeof AppAdminBlogRoute
   '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-content': typeof AppAdminContentRoute
@@ -313,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/referrals': typeof AppReferralsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/admin-blog/$articleId': typeof AppAdminBlogArticleIdRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
   '/classes/$classId': typeof AppClassesClassIdRoute
@@ -332,6 +346,7 @@ export interface FileRoutesByTo {
   '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-blog': typeof AppAdminBlogRoute
   '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-content': typeof AppAdminContentRoute
@@ -358,6 +373,7 @@ export interface FileRoutesByTo {
   '/referrals': typeof AppReferralsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/admin-blog/$articleId': typeof AppAdminBlogArticleIdRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
   '/classes/$classId': typeof AppClassesClassIdRoute
@@ -379,6 +395,7 @@ export interface FileRoutesById {
   '/_app/activities': typeof AppActivitiesRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-blog': typeof AppAdminBlogRoute
   '/_app/admin-classes': typeof AppAdminClassesRoute
   '/_app/admin-competitions': typeof AppAdminCompetitionsRoute
   '/_app/admin-content': typeof AppAdminContentRoute
@@ -405,6 +422,7 @@ export interface FileRoutesById {
   '/_app/referrals': typeof AppReferralsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/_app/admin-blog_/$articleId': typeof AppAdminBlogArticleIdRoute
   '/_app/admin-tutors_/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/_app/bookings_/$bookingId': typeof AppBookingsBookingIdRoute
   '/_app/classes_/$classId': typeof AppClassesClassIdRoute
@@ -426,6 +444,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-blog'
     | '/admin-classes'
     | '/admin-competitions'
     | '/admin-content'
@@ -452,6 +471,7 @@ export interface FileRouteTypes {
     | '/referrals'
     | '/tutors'
     | '/auth/callback'
+    | '/admin-blog/$articleId'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
     | '/classes/$classId'
@@ -471,6 +491,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-blog'
     | '/admin-classes'
     | '/admin-competitions'
     | '/admin-content'
@@ -497,6 +518,7 @@ export interface FileRouteTypes {
     | '/referrals'
     | '/tutors'
     | '/auth/callback'
+    | '/admin-blog/$articleId'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
     | '/classes/$classId'
@@ -517,6 +539,7 @@ export interface FileRouteTypes {
     | '/_app/activities'
     | '/_app/admin'
     | '/_app/admin-achievements'
+    | '/_app/admin-blog'
     | '/_app/admin-classes'
     | '/_app/admin-competitions'
     | '/_app/admin-content'
@@ -543,6 +566,7 @@ export interface FileRouteTypes {
     | '/_app/referrals'
     | '/_app/tutors'
     | '/auth/callback'
+    | '/_app/admin-blog_/$articleId'
     | '/_app/admin-tutors_/$profileId'
     | '/_app/bookings_/$bookingId'
     | '/_app/classes_/$classId'
@@ -647,6 +671,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-achievements'
       fullPath: '/admin-achievements'
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-blog': {
+      id: '/_app/admin-blog'
+      path: '/admin-blog'
+      fullPath: '/admin-blog'
+      preLoaderRoute: typeof AppAdminBlogRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-classes': {
@@ -831,6 +862,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/admin-blog_/$articleId': {
+      id: '/_app/admin-blog_/$articleId'
+      path: '/admin-blog/$articleId'
+      fullPath: '/admin-blog/$articleId'
+      preLoaderRoute: typeof AppAdminBlogArticleIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-tutors_/$profileId': {
       id: '/_app/admin-tutors_/$profileId'
       path: '/admin-tutors/$profileId'
@@ -881,6 +919,7 @@ interface AppRouteChildren {
   AppActivitiesRoute: typeof AppActivitiesRoute
   AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminBlogRoute: typeof AppAdminBlogRoute
   AppAdminClassesRoute: typeof AppAdminClassesRoute
   AppAdminCompetitionsRoute: typeof AppAdminCompetitionsRoute
   AppAdminContentRoute: typeof AppAdminContentRoute
@@ -906,6 +945,7 @@ interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
   AppReferralsRoute: typeof AppReferralsRoute
   AppTutorsRoute: typeof AppTutorsRoute
+  AppAdminBlogArticleIdRoute: typeof AppAdminBlogArticleIdRoute
   AppAdminTutorsProfileIdRoute: typeof AppAdminTutorsProfileIdRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
   AppClassesClassIdRoute: typeof AppClassesClassIdRoute
@@ -919,6 +959,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppActivitiesRoute: AppActivitiesRoute,
   AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminBlogRoute: AppAdminBlogRoute,
   AppAdminClassesRoute: AppAdminClassesRoute,
   AppAdminCompetitionsRoute: AppAdminCompetitionsRoute,
   AppAdminContentRoute: AppAdminContentRoute,
@@ -944,6 +985,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppReferralsRoute: AppReferralsRoute,
   AppTutorsRoute: AppTutorsRoute,
+  AppAdminBlogArticleIdRoute: AppAdminBlogArticleIdRoute,
   AppAdminTutorsProfileIdRoute: AppAdminTutorsProfileIdRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,
   AppClassesClassIdRoute: AppClassesClassIdRoute,

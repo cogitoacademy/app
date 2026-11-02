@@ -366,13 +366,11 @@ test("admin publishes both class modes; students see only the published DTO", as
 
     await fillReasonPrompt(
       adminPage,
+      "Retry failed meeting setup",
       "Retry reason",
       "Retry the accepted event with a pending Meet link",
       publishedCard,
     );
-    await publishedCard
-      .getByRole("button", { name: "Retry failed meeting setup" })
-      .click();
     await expect(publishedCard.getByText(/1 Meet\(s\) ready/)).toBeVisible();
 
     const publishedRecord = await rpc<AdminClass>(

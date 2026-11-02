@@ -245,6 +245,8 @@ Implemented required red asterisks and explicit optional labels for reason input
 
 Verification complete for this slice: focused mocked Edge cases passed for desktop/mobile KOL reason entry (2), reschedule/changed-session flows (6), economy activation (1) and catalog reason/lifecycle flows (4, across bounded invocations). Initial catalog navigation timeouts cleared on isolated reruns; its move test now expands the collapsed group before selecting a specialization. Reviewed desktop/mobile reason prompt screenshots. Web/E2E/UI typechecks pass with constrained memory; focused formatting and lint pass with existing warnings, and the CRLF-aware diff check passes. A concurrent web typecheck exhausted memory before the bounded serial rerun passed.
 
+Approach updated (2 November 2026): the separate Add/Edit reason prompt was replaced by `ActionReasonDialog`. The action trigger now opens the reason dialog, and its confirmation button submits the action with the reason. This applies to tax configuration, V3 economy draft/activation, KOL adjustments, class lifecycle decisions and session changes. `ReasonField` and `ClassActionReason` were removed; E2E helpers now enter the reason after clicking the action trigger. E2E typecheck, focused lint and formatting pass. Web typecheck could not finish on this machine because tsgo exhausted commit memory; live Academy/enrollment/economy/booking specs remain unrun.
+
 Live Academy/enrollment/economy/booking specs were updated for the new reason prompts/selectors but were not run. No API policy change, DB/storage/provider acceptance or broader release readiness is implied.
 
 ### Tutor honorarium in booking detail (2026-10-29)

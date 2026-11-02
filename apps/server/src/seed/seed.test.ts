@@ -13,6 +13,7 @@ import {
   seedAdminPassword,
 } from "./seed";
 import { PACKAGES, seedPackages, seedPackagesAllowed } from "./seed-packages";
+import { buildFaqSeedRows } from "./seed-faq";
 
 describe("seed guards", () => {
   test("uses the Cogito launch review identities", () => {
@@ -115,6 +116,45 @@ describe("seed guards", () => {
     expect(seedAllowed("production", "true")).toBe(true);
     expect(seedAllowed("production", undefined)).toBe(false);
     expect(seedAllowed("development", undefined)).toBe(true);
+  });
+});
+
+describe("FAQ default seed", () => {
+  const rows = buildFaqSeedRows();
+
+  test("ships all 55 approved bilingual questions in order", () => {
+    expect(rows).toHaveLength(55);
+    expect(new Set(rows.map(({ id }) => id)).size).toBe(55);
+    expect(rows.map(({ sortOrder }) => sortOrder)).toEqual(
+      Array.from({ length: 55 }, (_, index) => index),
+    );
+    expect(
+      rows.every(
+        (row) =>
+          row.questionEn.length > 0 &&
+          row.questionId !== null &&
+          row.questionId.length > 0 &&
+          row.answerEn.length > 0 &&
+          row.answerId !== null &&
+          row.answerId.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  test("selects exactly the curated six landing questions", () => {
+    expect(
+      rows
+        .filter(({ showOnLanding }) => showOnLanding)
+        .map(({ sortOrder }) => sortOrder),
+    ).toEqual([0, 4, 7, 28, 35, 36]);
+  });
+
+  test("contains no unresolved client placeholders", () => {
+    const content = rows
+      .flatMap((row) => [row.questionEn, row.questionId, row.answerEn])
+      .join("\n");
+    expect(content).not.toContain("[No.]");
+    expect(content).not.toContain("[number]");
   });
 });
 

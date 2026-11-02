@@ -1,5 +1,28 @@
 # Cogito Runbook
 
+## Bilingual blog migration and verification (2 November 2026)
+
+Migration `0086_fresh_spirit.sql` is additive. It creates `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`. Apply it with the normal forward runner (`bun run db:migrate`) against the authorized target. Do not reset or reseed; the blog starts with no categories or articles.
+
+The migration needs the existing `user` and `tutor_profile` tables because media creators and featured tutors are foreign keys. Review those targets first. After migration, verify that the six tables exist and that the application starts with the new module.
+
+Verification steps:
+
+1. Confirm `DATABASE_URL` points to the intended database.
+2. Run `bun run db:migrate`.
+3. Run the blog integration test against the local `cogito-test` database: `bun test --env-file apps/server/.env.test packages/api/src/tests/integration/blog.test.ts`.
+4. Sign in as admin, open `/admin-blog`, create a category, then create an article.
+5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time.
+6. Confirm `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
+
+Public blog reads use `/rpc/publicContent/blog/*` and are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
+
+The marketing site must not add `app/[locale]/loading.tsx`. That route-level streaming boundary makes `notFound()` return HTTP 200; without it, unknown blog URLs return 404.
+
+No environment variable is specific to the blog. Media reuse the existing R2 or local upload configuration, and public image URLs come from `R2_PUBLIC_URL` (or the local upload base URL).
+
+Marketing deploy order: apply migration 0086 and deploy the app API first, then deploy `cogito-acad`. The marketing project needs `COGITO_APP_API_URL` pointed at the app origin, `NEXT_PUBLIC_SITE_URL=https://www.cogitoacademy.id`, and `NEXT_PUBLIC_R2_HOST` set to the R2 public host so `next/image` accepts blog images. Blog pages revalidate every 60 seconds; there is no publish webhook, so a new article appears after the ISR window or a redeploy. If the API is unreachable, the marketing article pages render a localized retry state and the sitemap returns 503 with `Retry-After`.
+
 ## Academy single-language cutover (1 November 2026)
 
 Migration `0085_academy_class_single_language.sql` removes four alternate-language columns and uses `DROP COLUMN IF EXISTS` so deployment can repeat the DDL safely. The generated Drizzle journal and 0085 snapshot are included. Deploy web/API/schema together; author content once in the remaining fields.
@@ -4801,3 +4824,21 @@ Referral page (1 November 2026): displays signup-to-reward flow, configured welc
 Admin Referrals navigation verification (2026-11-01): no migration or new environment variables. As admin, check `/admin-referrals`, switch through Activity, Campaigns and Commissions, reload each URL, and use browser Back. Check `/admin-kol-commissions` redirects to the Commissions tab. Student access must redirect to the dashboard before admin RPCs. Synthetic Edge suites: `KOL_BROWSER_CHANNEL=msedge node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`, then the same command with `playwright.kol-settlement-synthetic.config.ts`. These run isolated Vite with mocked session/RPC traffic; they do not establish live DB, provider or financial acceptance.
 
 Validation result (2026-11-01): scoped lint and diff whitespace checks pass. Campaign/referral run: 11 passed (8 campaign creation/error/responsive cases plus 3 admin usage/access cases), 4 failed in existing student referral invitation/empty-state expectations. Focused commissions run on ports 3396/3397: 8 passed (CSV bytes, non-admin denial, five responsive settlement widths and unified tabs/refresh/history/redirect). An earlier broader settlement run was stopped after failures in cached balance refresh on reopening and transfer date input interaction; no full settlement green is claimed. Web typecheck passed before concurrent class-management edits, but the final run reports `class-admin-management.tsx:359` (`tutorAbsence`) and `:468` (`tutorLateNoticeCount`). Those files are outside this change. No live API/DB/provider acceptance, migration, commit or push was performed.
+
+### Blog rich text authoring (2 November 2026)
+
+Blog editor check: insert an image between two paragraphs with Add image, provide alt text and an optional caption, save, reopen, and verify its position and preview in both locales. Uploads use the existing signed upload and adminBlog.registerMedia flow; no new environment variables or database migration.
+
+Apply migration 0087_sticky_cyclops before deploying uncategorized draft creation; it only drops NOT NULL on blog_article.category_id. Verify New draft with no categories, save/reopen, assign a category then publish. Categories tab supports parent selection for subcategory creation. Browser acceptance of the studio layout and upload flow remains pending.
+
+Blog taxonomy seed: `bun --env-file=apps/server/.env apps/server/src/seed/seed-blog-categories.ts`. The normal seed calls this too. Stable seed IDs preserve renamed titles and slugs. Seeded locally: 4 roots and 17 subcategories from the supplied developer spec; English subcategory labels are editorial adaptations.
+
+Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
+
+To delete a blog category, move its articles first and delete/move its subcategories. Use the row Delete action and confirm. Draft and archived article references also block deletion; stale categories must be refreshed. This change needs no database migration.
+
+Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
+
+Apply migration 0088_easy_garia before using manual blog bylines. It adds nullable featured_tutor_name and reviewed_by_name columns. Verify save/reopen with manual names and no tutor accounts, both linked/manual selections, and public byline/reviewer output. Bilingual editor fields follow the language selected in the sticky Tabs control (Indonesia or English). The bar shows per-language publish-gate progress, and publishing targets the active language only.
+
+Migration 0088 was applied to development localhost:6767/cogito-app during this authoring update. Marketing renderer byline support is implemented in cogito-acad; browser acceptance is pending.

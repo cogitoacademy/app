@@ -31,6 +31,7 @@ function makeRow(overrides: Partial<FaqRow> = {}): FaqRow {
     answerId: null,
     answerEnRich: paragraph("Contact the support team."),
     answerIdRich: null,
+    category: "about",
     sortOrder: 1,
     isActive: true,
     showOnLanding: false,
@@ -190,6 +191,7 @@ describe("FAQ content", () => {
         answer: rowWithQuestionOnly.answerEn,
         questionRich: rowWithQuestionOnly.questionIdRich,
         answerRich: rowWithQuestionOnly.answerEnRich,
+        category: "about",
         sortOrder: rowWithQuestionOnly.sortOrder,
       },
       {
@@ -198,6 +200,7 @@ describe("FAQ content", () => {
         answer: rowWithAnswerOnly.answerId,
         questionRich: rowWithAnswerOnly.questionEnRich,
         answerRich: rowWithAnswerOnly.answerIdRich,
+        category: "about",
         sortOrder: rowWithAnswerOnly.sortOrder,
       },
     ]);
@@ -207,6 +210,7 @@ describe("FAQ content", () => {
       "answer",
       "questionRich",
       "answerRich",
+      "category",
       "sortOrder",
     ]);
   });
@@ -264,6 +268,7 @@ describe("FAQ content", () => {
             items: ["Create an account.", "Join a class."],
           },
         ],
+        category: "about",
         showOnLanding: true,
       }),
     );

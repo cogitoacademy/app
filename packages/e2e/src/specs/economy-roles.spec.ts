@@ -194,12 +194,10 @@ test("admin can save and reload competition-based V3 draft rates", async ({
     await replaceNumberFieldValue(amount, original + 1);
     await fillReasonPrompt(
       page,
+      "Save draft revision",
       "Reason for this revision",
       "E2E V3 rate editing",
     );
-    await page
-      .getByRole("button", { name: "Save draft revision", exact: true })
-      .click();
     await expect(
       page.getByText("V3 draft saved", { exact: true }),
     ).toBeVisible();
@@ -211,12 +209,10 @@ test("admin can save and reload competition-based V3 draft rates", async ({
     await replaceNumberFieldValue(amount, original);
     await fillReasonPrompt(
       page,
+      "Save draft revision",
       "Reason for this revision",
       "Restore E2E V3 rate",
     );
-    await page
-      .getByRole("button", { name: "Save draft revision", exact: true })
-      .click();
     await expect(
       page.getByText("V3 draft saved", { exact: true }),
     ).toBeVisible();
@@ -235,11 +231,6 @@ test("admin blocks negative V3 rates without persisting them", async ({
   await expectNumberFieldValue(amount, 50);
   await startEconomyEditing(page);
   await replaceNumberFieldValue(amount, -5);
-  await fillReasonPrompt(
-    page,
-    "Reason for this revision",
-    "Invalid negative rate",
-  );
   await expect(
     page.getByRole("button", { name: "Save draft revision", exact: true }),
   ).toBeDisabled();

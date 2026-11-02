@@ -44,6 +44,9 @@ import { createFaqModule } from "./modules/faq";
 import type { FaqService } from "./modules/faq/faq.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
+import { createBlogModule } from "./modules/blog";
+import type { BlogService } from "./modules/blog/blog.service";
+import type { BlogHandler } from "./modules/blog/blog.handler";
 import { createContactModule } from "./modules/contact";
 import { createReferralModule } from "./modules/referral";
 import { createStorage } from "./lib/storage";
@@ -135,6 +138,7 @@ export interface ServiceRegistry {
   publicContent: PublicContentService;
   contentAdmin: ContentAdminService;
   faq: FaqService;
+  blog: BlogService;
   meeting: MeetingModule;
   contact: ContactService;
   referral: ReferralService;
@@ -168,6 +172,7 @@ export interface HandlerRegistry {
   publicContent: PublicContentHandler;
   contentAdmin: ContentAdminHandler;
   faq: FaqHandler;
+  blog: BlogHandler;
   contact: ContactHandler;
   referral: ReferralHandler;
 }
@@ -500,15 +505,19 @@ function createServices() {
     notification: notification.service,
   });
 
-  const upload = createUploadModule({
-    storage: createStorage({
-      R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
-      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
-      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
-      R2_BUCKET: env.R2_BUCKET,
-      R2_PUBLIC_URL: env.R2_PUBLIC_URL,
-      UPLOAD_DIR: env.UPLOAD_DIR,
-    }),
+  const storage = createStorage({
+    R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET: env.R2_BUCKET,
+    R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+    UPLOAD_DIR: env.UPLOAD_DIR,
+  });
+  const upload = createUploadModule({ storage });
+  const blog = createBlogModule({
+    db,
+    storage,
+    audit: audit.service,
   });
 
   const services: ServiceRegistry = {
@@ -540,6 +549,7 @@ function createServices() {
     publicContent: publicContent.service,
     contentAdmin: contentAdmin.service,
     faq: faq.service,
+    blog: blog.service,
     meeting,
     contact: contact.service,
     referral: referral.service,
@@ -573,6 +583,7 @@ function createServices() {
     publicContent: publicContent.handler,
     contentAdmin: contentAdmin.handler,
     faq: faq.handler,
+    blog: blog.handler,
     contact: contact.handler,
     referral: referral.handler,
   };

@@ -118,6 +118,7 @@ import {
   CompleteSessionDialog,
   type CompletionFeedbackDraft,
 } from "./complete-session-dialog";
+import { BookingSessionReportDrawer } from "./booking-session-report-drawer";
 import { SessionCompletionFeedbackCard } from "./session-completion-feedback-card";
 
 type BookingConfirmation = {
@@ -179,6 +180,7 @@ export function BookingDetailPage({
   const [declineReason, setDeclineReason] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
   const now = useNow();
   const isTutor = viewerRole === "tutor";
   const isAdmin = viewerRole === "admin";
@@ -1066,19 +1068,11 @@ export function BookingDetailPage({
               sessionHasEnded ? (
                 <Button
                   variant="plain"
-                  nativeButton={false}
-                  render={
-                    <Link
-                      to="/class-reports"
-                      aria-label="Open Session Reporting"
-                      search={{
-                        workspace: "sessions",
-                        report: `private:${bookingId}`,
-                      }}
-                    />
-                  }
+                  onClick={() => setReportTarget(bookingId)}
                 >
-                  Open Session Reporting
+                  {completionFeedbacks.length
+                    ? "View session report"
+                    : "Record session report"}
                 </Button>
               ) : null}
             </CardBody>
@@ -1228,19 +1222,11 @@ export function BookingDetailPage({
                             <Button
                               variant="plain"
                               size="sm"
-                              nativeButton={false}
-                              render={
-                                <Link
-                                  to="/class-reports"
-                                  aria-label="Open Session Reporting"
-                                  search={{
-                                    workspace: "sessions",
-                                    report: `private:${session.id}`,
-                                  }}
-                                />
-                              }
+                              onClick={() => setReportTarget(session.id)}
                             >
-                              Open Session Reporting
+                              {sessionFeedback
+                                ? "View session report"
+                                : "Record session report"}
                             </Button>
                           ) : null}
                         </div>
@@ -1592,6 +1578,14 @@ export function BookingDetailPage({
           </FieldDescription>
         </Field>
       </ConfirmationDialog>
+      {reportTarget ? (
+        <BookingSessionReportDrawer
+          bookingId={bookingId}
+          targetId={reportTarget}
+          isAdmin={isAdmin}
+          onClose={() => setReportTarget(null)}
+        />
+      ) : null}
       <CompleteSessionDialog
         key={completeDialog?.requestScope ?? "closed"}
         open={completeDialog !== null}

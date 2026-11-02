@@ -111,7 +111,7 @@ export function ClassDetailPage({ classId }: { classId: string }) {
   );
 }
 
-function SessionJoinDetails({
+export function SessionJoinDetails({
   mode,
   state,
   meetingUrl,
@@ -182,7 +182,6 @@ type ClassDetailRecord = Awaited<ReturnType<typeof client.classes.get>>;
 export function ClassDetailView({
   item,
   adminTutorFeeIdr,
-  adminSummary,
   adminControls,
   sessionDetails,
   sessionActions,
@@ -190,7 +189,6 @@ export function ClassDetailView({
 }: {
   item: ClassDetailRecord;
   adminTutorFeeIdr?: number;
-  adminSummary?: ReactNode;
   adminControls?: ReactNode;
   sessionActions?: ReadonlyMap<string, ReactNode>;
   badgeActions?: ReactNode;
@@ -323,7 +321,7 @@ export function ClassDetailView({
                       item.state === "published" ? "success" : "secondary"
                     }
                   >
-                    {item.state}
+                    {item.state.charAt(0).toUpperCase() + item.state.slice(1)}
                   </Badge>
                 </dd>
               </div>
@@ -411,14 +409,6 @@ export function ClassDetailView({
             </Text>
           ) : null}
         </section>
-        {isAdmin && adminSummary ? (
-          <aside
-            aria-label="Class administration"
-            className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2"
-          >
-            {adminSummary}
-          </aside>
-        ) : null}
         {!isAdmin && enrollmentKind ? (
           <aside
             aria-label="Class enrollment"

@@ -1,0 +1,1 @@
+ALTER TABLE "blog_article" ALTER COLUMN "category_id" DROP NOT NULL;

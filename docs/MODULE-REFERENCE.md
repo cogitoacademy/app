@@ -6,11 +6,11 @@ Academy schema migration 0085 drops the alternate class/session content columns.
 
 ## Compact class administration controls (1 November 2026)
 
-`ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ClassActionReason` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
+`ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ActionReasonDialog` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
 
 ## Academy class action presentation (1 November 2026)
 
-Admin session actions are mounted in the corresponding curriculum accordion. `ClassActionReason` collects and submits a reason after a schedule, tutor, meeting or minimum-decision action is chosen. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
+Admin session actions are mounted in the corresponding curriculum accordion. `ActionReasonDialog` collects the reason and submits the schedule, tutor, meeting or minimum-decision action from its confirmation button. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
 
 ## Class and booking detail composition (1 November 2026)
 
@@ -18,11 +18,11 @@ Admin session actions are mounted in the corresponding curriculum accordion. `Cl
 
 The canonical booking route selects the complete `AdminBookingDetailPage` for admins and `BookingDetailPage` for student/tutor viewers. Admin extensions share the booking presentation rather than a second detail layout. Operations retains its queue, wallet lookup and room operations; queue/room links target `/bookings/$bookingId`.
 
-## Shared reason controls (1 November 2026)
+## Shared reason action dialog (2 November 2026)
 
-Web `ReasonField` composes Selia controls to collect inline audit/action reasons on demand. It uses a dialog at widths >=640px and a bottom drawer below that breakpoint, with caller-supplied minimum/maximum lengths. A local draft is committed only by Use reason; Cancel, Escape and outside dismissal preserve the previously committed value. It never submits the enclosing action. Named controls retain a hidden form value for KOL adjustment FormData; the adjustment action stays disabled until its required reason is valid. Existing retry payload identity and service validation remain intact.
+Web `ActionReasonDialog` composes Selia controls so an action trigger opens a dialog with the reason field and a confirmation button. Confirmation submits the action with the trimmed reason; Cancel, Escape and outside dismissal close the dialog without submitting. Callers supply minimum/maximum lengths, description, confirm label and confirm-disabled state. The dialog shows progress while the confirmation promise runs and keeps validation errors in place. It replaces `ReasonField` and `ClassActionReason` for tax configuration, V3 economy draft/activation, KOL adjustments, class lifecycle decisions and session changes. Existing retry payload identity and service validation remain intact.
 
-Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. DrawerPopup accepts an optional `layerClassName` for the reason drawer's backdrop/viewport above an existing overlay. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
+Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
 
 ## Integrated release branch validation (30 October 2026)
 
@@ -112,7 +112,7 @@ Evidence: `tmp/v3-only-dev/verification.json`, `verify.ts`, and `verify-group.ts
 
 ## Admin KOL campaign presentation (26 October 2026)
 
-`KolCampaignsSection` composes Selia fields/cards on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
+`KolCampaignsSection` composes Selia fields, table, and an inline page section on the existing referral usage page. `kol-campaign-input.ts` reuses `createKolCampaignInput`, the tax percentage conversion helper, and explicit WIB date conversion. Saved campaign terms are read-only; codes apply to new registrations. Friend codes remain student-owned through verifiedStudent `referral.getMine`; admin creation only creates KOL campaigns. Failed creation preserves fields; uncertain results instruct admins to refresh the list before another submission. Success clears fields, shows a toast, and invalidates campaign queries. No backend/security/commission/settlement behavior changed.
 
 ## Referral session cache correction (24 October 2026)
 
@@ -1576,15 +1576,62 @@ existing headings, public projection, and loading/error/empty states.
 **Files:**
 
 - `faq.types.ts` — strict rich-document inputs, public/admin DTOs, and the six-entry landing limit
+- `faq-categories.ts` — fixed category keys with English/Indonesian labels and the Zod category enum
 - `faq-rich-text.ts` — rich-document validation, safe-link allowlist, and legacy plain-text/list projections
-- `faq.repo.ts` — alphabetized admin/public reads, create, version-checked update, and serialized landing-selection writes
-- `faq.service.ts` — locale fallback/sorting and strict admin/public DTO mapping
+- `faq.repo.ts` — ordered admin/public reads, create, version-checked update, and serialized landing-selection writes
+- `faq.service.ts` — locale fallback/ordering and strict admin/public DTO mapping
 - `faq.handler.ts` and `faq.router.ts` — anonymous `publicContent.faq.list` and admin-only `adminFaq.list/create/update` RPC procedures
-- `packages/db/src/schema/faq.ts`, migration `0058_faq_entries.sql`, and migration `0059_faq_rich_text.sql` — localized legacy fields, rich JSONB documents, visibility, and optimistic version
-- `apps/web/src/components/admin/faq-page.tsx`, `faq-rich-text-editor.tsx`, and `/faq` — admin-only Selia editor with optional Indonesian fields and modified dates
-- `apps/web/src/components/admin/faq-read-only-page.tsx`, `/faq`, and `packages/ui/components/selia/accordion.tsx` — authenticated student/tutor/admin read-only FAQ view using the public DTO and Selia accordion
+- `packages/db/src/schema/faq.ts`, migration `0058_faq_entries.sql`, migration `0059_faq_rich_text.sql`, and migration `0089_faq_categories.sql` — localized legacy fields, rich JSONB documents, category, visibility, and optimistic version
+- `apps/server/src/seed/faq-seed-content.ts` and `seed-faq.ts` — 55 approved bilingual entries with stable IDs and the curated landing six
+- `apps/web/src/components/admin/faq-page.tsx`, `faq-rich-text-editor.tsx`, and `/faq` — admin-only Selia editor with category, optional Indonesian fields, and modified dates
+- `apps/web/src/components/admin/faq-read-only-page.tsx`, `/faq`, and `packages/ui/components/selia/accordion.tsx` — authenticated student/tutor/admin read-only FAQ view grouped by category using the public DTO and Selia accordion
 
-English question and answer documents are required; Indonesian documents are optional and fall back independently to English. Rich documents support paragraphs, bold/italic text, safe links (`http:`, `https:`, `mailto:`, same-origin paths, and anchors), and ordered/unordered lists. Raw HTML is rejected. Migration 0059 backfills the rich JSONB columns while keeping the legacy question/answer columns for existing consumers. Public entries retain `{ id, question, answer, sortOrder }` and add locale-selected `questionRich` and `answerRich`; the marketing adapter accepts their absence from older APIs and falls back to legacy rendering. Public entries are alphabetized by the displayed localized question. Admin entries are alphabetized by English question and include `modifiedAt`. The landing projection includes active rows marked `showOnLanding`; create/update serialize selection changes with a transaction advisory lock and reject more than six active selections. Deactivating an entry clears its landing selection and hides it publicly while retaining it for editing. The marketing site fetches both surfaces server-side with no-store caching, requires the response `json` field, accepts omitted or array-valued `meta`, and validates rich documents and safe links; question links remain non-interactive inside button triggers, and FAQ JSON-LD continues to use the plain projection. Migrations 0058/0059 are applied to local `cogito-test`; 0059 is also applied to local development `cogito-app`. Shared/production migration remains a release operation.
+English question and answer documents are required; Indonesian documents are optional and fall back independently to English. Rich documents support paragraphs, bold/italic text, safe links (`http:`, `https:`, `mailto:`, same-origin paths, and anchors), and ordered/unordered lists. Raw HTML is rejected. Migration 0059 backfills the rich JSONB columns while keeping the legacy question/answer columns for existing consumers. Migration 0089 adds the fixed `category` key with `about` as the default and a check constraint for the nine allowed values. Public entries retain `{ id, question, answer, sortOrder }` and add locale-selected `questionRich` and `answerRich` plus `category`; the marketing adapter accepts their absence from older APIs and falls back to legacy rendering. Public and admin reads follow the saved display order (`sortOrder`, then creation time, then ID); admins can reorder rows. The read-only app view groups the full list by category in the fixed category order. Admin entries include `modifiedAt` and a category selector. The landing projection includes active rows marked `showOnLanding`; create/update serialize selection changes with a transaction advisory lock and reject more than six active selections. Deactivating an entry clears its landing selection and hides it publicly while retaining it for editing. The default seed ships the client's 55 approved bilingual questions in their category order, with stable IDs, and marks the curated six landing entries; rerunning it preserves admin edits. The marketing site fetches both surfaces server-side with no-store caching, requires the response `json` field, accepts omitted or array-valued `meta`, and validates rich documents and safe links; question links remain non-interactive inside button triggers, and FAQ JSON-LD continues to use the plain projection. Migrations 0058/0059 are applied to local `cogito-test`; 0059 is also applied to local development `cogito-app`. Migration 0089 and the FAQ seed await a release operation on shared environments.
+
+## Blog Module
+
+**Purpose:** Manage bilingual blog content inside the app and serve published versions to the marketing site. PostgreSQL is the only source; Sanity is not used for blog content.
+
+**Files:**
+
+- `packages/db/src/schema/blog.ts` — `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`
+- `packages/db/src/migrations/0086_fresh_spirit.sql` — additive blog tables, constraints, and indexes
+- `blog.types.ts` — Zod input contracts, block/run/F.A.Q. shapes, embed URL validation, and admin/public DTOs
+- `blog.errors.ts` — domain errors and their oRPC mapping
+- `blog.repo.ts` — Drizzle reads and compare-and-swap writes
+- `blog.service.ts` — publish gate, slug lock, media resolution, public projection, and audit writes
+- `blog.handler.ts` and `blog.router.ts` — `adminBlog.*` and `publicContent.blog.*` procedures
+- `apps/web/src/components/admin/blog/` and `/admin-blog` — admin list, category creation, and bilingual editor
+- `apps/web/src/lib/blog-image.ts` — browser-side WebP normalization before upload
+
+**Data rules:**
+
+- `blog_article` stores shared editorial fields: category, optional subcategory, hero media, optional featured and reviewing tutors, internal notes, archive timestamp, and optimistic version.
+- `blog_article_version` stores one row per locale (`id`, `en`) with slug, titles, body, F.A.Q., key facts, reading time, status, and `publishedAt`. A unique index on `(articleId, locale)` caps each article at two versions; `(locale, slug)` is unique.
+- Body is structured JSON, never HTML: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, and `embed`. Paragraph-like blocks hold runs with optional bold, italic, and safe `http`/`https` links.
+- Embeds store `{ provider, url, posterMediaId? }`. Instagram reels/posts/TV and TikTok `/@user/video/<id>` URLs are accepted and normalized; no oEmbed request is made.
+- Media rows store the storage key, content type, dimensions, and byte size. Uploads are normalized in the browser to WebP, max 2000 px on the long edge, which strips EXIF. Registration requires the storage key to start with the caller's user ID.
+
+**Lifecycle rules:**
+
+- Each locale publishes independently. `publishedAt` is stamped once and retained across later publishes and unpublishes.
+- The publish gate requires title, SEO title, slug, meta description, lead, non-empty body, hero media, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image.
+- A slug is immutable after the version has ever been published; `saveVersion` rejects a rename with `CONFLICT`.
+- Archive stamps `archivedAt` and moves every version to `archived`. Archived articles disappear from public reads, related lists, and the sitemap, and reject edits.
+- Public reads filter `status = 'published'` and `archivedAt is null` in SQL. Draft content, internal notes, editor IDs, tutor profile IDs, and media IDs stay out of the public DTO.
+- Reading time is computed on save from title, lead, body text, and F.A.Q. at 220 words per minute, with a floor of one minute.
+
+**API surface:**
+
+- Admin: `adminBlog.list`, `get`, `createArticle`, `updateArticle`, `saveVersion`, `publishVersion`, `unpublishVersion`, `archiveArticle`, `replaceRelated`, `replaceGallery`, `registerMedia`, `tutors`, and `categories.list/create/update/reorder`. All use `adminProcedure`.
+- Public: `publicContent.blog.list/get/categories/sitemap`. These are unauthenticated and rate-limited separately: 120 requests per minute for list/get/categories, 12 per minute for the sitemap.
+- Marketing consumption is request-time or ISR; there is no publish webhook in Phase 1.
+
+**Admin UI:**
+
+- `/admin-blog` lists articles with status filters, creates articles, and creates root categories.
+- `/admin-blog/$articleId` edits shared fields plus Indonesian and English versions in tabs. The body editor manipulates structured blocks; there is no rich-text HTML editor.
+- Publishing from the editor saves the current draft first, then publishes the saved version. Unpublish and archive are explicit actions.
 
 ## Content Module
 
@@ -2840,3 +2887,15 @@ Admin booking detail exposes an icon-only retry action when an online booking is
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
 
 Admin Referrals composition (2026-11-01): `AdminReferralsPage` owns the Activity/Campaigns/Commissions navigation through validated route search state. Activity and campaign queries are enabled only on their active tab; campaign drafts remain mounted when changing tabs. `AdminKolCommissionsPage` is composed as a section with a level-two heading and mounts on Commissions; existing decision pagination, export and `KolSettlementPanel` are reused. Admin-created campaign codes and student-owned friend codes remain separate. This checkout exposes KOL campaign creation and pause/resume; the Campaigns tab does not imply promotion support. The commission table remains one row per KOL decision, with cash balances in settlement details.
+
+### Blog rich text authoring (2 November 2026)
+
+Blog authoring uses TipTap and converts to the existing BlogBlock contract. Inline images use registered media IDs with locale-specific alt text and captions; preview URLs are not persisted in body JSON. Admin reads resolve body media independently of the hero and gallery.
+
+Blog draft creation does not require taxonomy. Admin listings use a left join so uncategorized drafts remain visible; public publish validation requires a root category. Category removal is blocked while any language is published. Save all languages saves shared settings and every authored language; publish and unpublish target the language selected in the editor's sticky Tabs control. The client publish gate mirrors the server check for the active language.
+
+Blog category deletion checks for children and any article reference, then deletes with the expected version. Foreign-key restrictions also protect concurrent reference creation; reference conflicts map to a category validation error. No recursive deletion or article deletion occurs.
+
+Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
+
+Blog people references remain optional. Manual featured/reviewer names are shared across locales and persisted separately from tutor IDs. Linked identities take display precedence. The editor defaults to Indonesian-first per the client spec, derives an empty SEO title from that language title, generates an unpublished draft slug when necessary, and never copies Indonesian prose into English.

@@ -8,6 +8,11 @@ import {
   reorderFaqInput,
   updateFaqInput,
 } from "../../modules/faq/faq.types";
+import {
+  DEFAULT_FAQ_CATEGORY,
+  FAQ_CATEGORY_KEYS,
+  FAQ_CATEGORY_LABELS,
+} from "../../modules/faq/faq-categories";
 
 const doc = (text: string) => ({
   type: "doc" as const,
@@ -33,6 +38,22 @@ describe("FAQ input schemas", () => {
     expect(reorderFaqInput.safeParse({ ids: ["faq-1", "faq-2"] }).success).toBe(
       true,
     );
+  });
+
+  test("defaults and validates FAQ categories", () => {
+    const base = {
+      questionEnRich: doc("Q"),
+      answerEnRich: doc("A"),
+    };
+    expect(createFaqInput.parse(base).category).toBe(DEFAULT_FAQ_CATEGORY);
+    expect(createFaqInput.parse({ ...base, category: "tutors" }).category).toBe(
+      "tutors",
+    );
+    expect(
+      createFaqInput.safeParse({ ...base, category: "unknown" }).success,
+    ).toBe(false);
+    expect(FAQ_CATEGORY_KEYS).toEqual(Object.keys(FAQ_CATEGORY_LABELS));
+    expect(FAQ_CATEGORY_KEYS).toContain(DEFAULT_FAQ_CATEGORY);
   });
 
   test("requires valid question/answer content and strict update fields", () => {

@@ -509,13 +509,13 @@ test("economy activation requires reason and refreshes active badge", async ({
     name: "Activate saved pricing",
     exact: true,
   });
-  await expect(button).toBeDisabled();
+  await expect(button).toBeEnabled();
   await fillReasonPrompt(
     page,
+    "Activate saved pricing",
     "Reason for activating pricing",
     "Approved new pricing",
   );
-  await button.click();
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(button).toHaveCount(0);
   expect(errors).toEqual([]);

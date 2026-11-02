@@ -10,6 +10,11 @@ import {
   faqAnswerRichTextSchema,
   faqQuestionRichTextSchema,
 } from "./faq-rich-text";
+import {
+  DEFAULT_FAQ_CATEGORY,
+  faqCategorySchema,
+  type FaqCategoryKey,
+} from "./faq-categories";
 
 export const FAQ_LANDING_MAX_ITEMS = 6;
 
@@ -40,6 +45,7 @@ const faqFieldsSchema = z
     questionIdRich: faqQuestionRichTextSchema.nullable().optional(),
     answerEnRich: faqAnswerRichTextSchema,
     answerIdRich: faqAnswerRichTextSchema.nullable().optional(),
+    category: faqCategorySchema.default(DEFAULT_FAQ_CATEGORY),
     isActive: z.boolean().default(true),
     showOnLanding: z.boolean().default(false),
   })
@@ -72,6 +78,7 @@ export type PublicFaqDto = {
   answer: FaqAnswerBlock[];
   questionRich: FaqRichTextDocument;
   answerRich: FaqRichTextDocument;
+  category: FaqCategoryKey;
   sortOrder: number;
 };
 
@@ -85,6 +92,7 @@ export type AdminFaqDto = {
   questionIdRich: FaqRichTextDocument | null;
   answerEnRich: FaqRichTextDocument;
   answerIdRich: FaqRichTextDocument | null;
+  category: FaqCategoryKey;
   isActive: boolean;
   showOnLanding: boolean;
   version: number;

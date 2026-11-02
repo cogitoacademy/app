@@ -54,6 +54,7 @@ export const faqEntry = pgTable(
       .$type<FaqRichTextDocument>()
       .notNull(),
     answerIdRich: jsonb("answer_id_rich").$type<FaqRichTextDocument | null>(),
+    category: text("category").notNull().default("about"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     showOnLanding: boolean("show_on_landing").notNull().default(false),
@@ -67,6 +68,10 @@ export const faqEntry = pgTable(
   (table) => [
     check("faq_entry_sort_order_nonnegative", sql`${table.sortOrder} >= 0`),
     check("faq_entry_version_positive", sql`${table.version} > 0`),
+    check(
+      "faq_entry_category_valid",
+      sql`${table.category} in ('about', 'programs', 'tutors', 'accounts', 'marks', 'payments', 'progress', 'offline', 'tutor-join')`,
+    ),
     index("faq_entry_public_order_idx").on(
       table.isActive,
       table.sortOrder,

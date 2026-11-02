@@ -101,6 +101,21 @@ export function registerRpcRoutes(app: EvlogApp) {
         prefix: "/rpc",
         context: ctx,
       });
+      if (
+        response &&
+        new URL(request.url).pathname.startsWith("/rpc/publicContent/blog/")
+      ) {
+        const headers = new Headers(response.headers);
+        headers.set(
+          "Cache-Control",
+          "public, s-maxage=60, stale-while-revalidate=300",
+        );
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
+      }
       return response ?? new Response("Not Found", { status: 404 });
     },
     { parse: "none" },

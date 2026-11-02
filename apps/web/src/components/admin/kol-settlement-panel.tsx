@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ReasonField } from "@/components/reason-field";
+import { ActionReasonDialog } from "@/components/action-reason-dialog";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -38,7 +38,7 @@ export function KolSettlementPanel({
     orpc.adminReferral.getKolSettlement.queryOptions({ input: { decisionId } }),
   );
   const [paidAt, setPaidAt] = useState("");
-  const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [formVersion, setFormVersion] = useState(0);
   const [command, setCommand] = useState<Command | null>(null);
   const mutation = useMutation({
@@ -48,7 +48,7 @@ export function KolSettlementPanel({
         : client.adminReferral.adjustKolCommission(value.input),
     onSuccess: async () => {
       setCommand(null);
-      setAdjustmentReason("");
+      setAdjustmentAmount("");
       setFormVersion((version) => version + 1);
       await query.refetch();
     },
@@ -64,38 +64,43 @@ export function KolSettlementPanel({
       </Text>
     );
   const locked = command !== null || mutation.isPending;
-  function submit(form: HTMLFormElement, kind: Command["kind"]) {
-    if (command) {
-      mutation.mutate(command);
-      return;
-    }
-    if (kind === "adjustment" && adjustmentReason.trim().length < 3) return;
+  const adjustmentAmountValue = Number(adjustmentAmount);
+  const adjustmentLocked =
+    locked ||
+    adjustmentAmount.trim() === "" ||
+    !Number.isFinite(adjustmentAmountValue) ||
+    adjustmentAmountValue < -1000000000 ||
+    adjustmentAmountValue > 1000000000 ||
+    data.decision.paymentStatusSnapshot === "REFUNDED" ||
+    data.decision.providerSuccessTimeState === "unresolved";
+  function submitTransfer(form: HTMLFormElement) {
     const values = new FormData(form);
-    const base = {
-      decisionId,
-      operationId: crypto.randomUUID(),
-      amountIdr: Number(values.get("amount")),
+    const next: Command = {
+      kind: "transfer",
+      input: {
+        decisionId,
+        operationId: crypto.randomUUID(),
+        amountIdr: Number(values.get("amount")),
+        paidAt: new Date(`${values.get("paidAt")}T00:00:00+07:00`),
+        reference: String(values.get("reference")),
+      },
     };
-    const next: Command =
-      kind === "transfer"
-        ? {
-            kind,
-            input: {
-              ...base,
-              paidAt: new Date(`${values.get("paidAt")}T00:00:00+07:00`),
-              reference: String(values.get("reference")),
-            },
-          }
-        : {
-            kind,
-            input: {
-              ...base,
-              expectedObligationIdr: data!.obligationIdr,
-              reason: String(values.get("reason")),
-            },
-          };
     setCommand(next);
-    mutation.mutate(next);
+    return mutation.mutateAsync(next).catch(() => {});
+  }
+  function submitAdjustment(reason: string) {
+    const next: Command = {
+      kind: "adjustment",
+      input: {
+        decisionId,
+        operationId: crypto.randomUUID(),
+        amountIdr: adjustmentAmountValue,
+        expectedObligationIdr: data!.obligationIdr,
+        reason,
+      },
+    };
+    setCommand(next);
+    return mutation.mutateAsync(next);
   }
   return (
     <Card className="[overflow-wrap:anywhere]">
@@ -182,7 +187,7 @@ export function KolSettlementPanel({
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            submit(event.currentTarget, "transfer");
+            void submitTransfer(event.currentTarget);
           }}
         >
           <Field>
@@ -227,10 +232,7 @@ export function KolSettlementPanel({
         <form
           key={`adjustment-${formVersion}`}
           className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit(event.currentTarget, "adjustment");
-          }}
+          onSubmit={(event) => event.preventDefault()}
         >
           <Field>
             <FieldLabel>Signed obligation adjustment (IDR)</FieldLabel>
@@ -242,35 +244,34 @@ export function KolSettlementPanel({
               step={1}
               required
               disabled={locked}
+              value={adjustmentAmount}
+              onChange={(event) => setAdjustmentAmount(event.target.value)}
             />
           </Field>
-          <ReasonField
-            label="Correction reason"
-            name="reason"
-            value={adjustmentReason}
-            onChange={setAdjustmentReason}
-            required
-            minLength={3}
-            maxLength={600}
-            disabled={locked}
-          />
           <Text className="text-muted">
             Positive increases the obligation; negative decreases it. This
             preserves the student's choice and every settled transfer. Correct
             an adjustment with a new reasoned entry.
           </Text>
-          <Button
-            className="h-auto min-h-9.5 max-w-full py-2"
-            type="submit"
-            disabled={
-              locked ||
-              adjustmentReason.trim().length < 3 ||
-              data.decision.paymentStatusSnapshot === "REFUNDED" ||
-              data.decision.providerSuccessTimeState === "unresolved"
+          <ActionReasonDialog
+            label="Record commission adjustment"
+            reasonLabel="Correction reason"
+            description="Positive increases the obligation; negative decreases it. The correction is recorded in the audit log."
+            confirmLabel="Record commission adjustment"
+            minLength={3}
+            maxLength={600}
+            disabled={adjustmentLocked}
+            trigger={
+              <Button
+                className="h-auto min-h-9.5 max-w-full py-2"
+                type="button"
+                disabled={adjustmentLocked}
+              >
+                Record commission adjustment
+              </Button>
             }
-          >
-            Record commission adjustment
-          </Button>
+            onConfirm={(reason) => submitAdjustment(reason).catch(() => {})}
+          />
         </form>
       </CardBody>
     </Card>

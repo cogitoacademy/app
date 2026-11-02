@@ -1,0 +1,2 @@
+ALTER TABLE "faq_entry" ADD COLUMN "category" text DEFAULT 'about' NOT NULL;--> statement-breakpoint
+ALTER TABLE "faq_entry" ADD CONSTRAINT "faq_entry_category_valid" CHECK ("faq_entry"."category" in ('about', 'programs', 'tutors', 'accounts', 'marks', 'payments', 'progress', 'offline', 'tutor-join'));

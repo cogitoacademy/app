@@ -17,6 +17,12 @@ import type {
   CreateFaqInput,
   FaqRichTextDocument,
 } from "@cogito-app/api/modules/faq/faq.types";
+import {
+  DEFAULT_FAQ_CATEGORY,
+  FAQ_CATEGORY_KEYS,
+  FAQ_CATEGORY_LABELS,
+  type FaqCategoryKey,
+} from "@cogito-app/api/modules/faq/faq-categories";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -85,6 +91,7 @@ type FaqDraft = {
   questionIdRich: FaqRichTextDocument;
   answerEnRich: FaqRichTextDocument;
   answerIdRich: FaqRichTextDocument;
+  category: FaqCategoryKey;
   isActive: boolean;
   showOnLanding: boolean;
   showIndonesian: boolean;
@@ -104,6 +111,7 @@ function emptyDraft(): FaqDraft {
     questionIdRich: emptyRichDocument(),
     answerEnRich: emptyRichDocument(),
     answerIdRich: emptyRichDocument(),
+    category: DEFAULT_FAQ_CATEGORY,
     isActive: true,
     showOnLanding: false,
     showIndonesian: false,
@@ -140,6 +148,7 @@ function draftFromEntry(entry: FaqEntry): FaqDraft {
     questionIdRich,
     answerEnRich,
     answerIdRich,
+    category: entry.category,
     isActive: entry.isActive,
     showOnLanding: entry.showOnLanding,
     showIndonesian: hasText(questionIdRich) || hasText(answerIdRich),
@@ -372,6 +381,7 @@ export function FaqPage() {
         : null,
       answerEnRich: draft.answerEnRich,
       answerIdRich: hasText(draft.answerIdRich) ? draft.answerIdRich : null,
+      category: draft.category,
       isActive: draft.isActive,
       showOnLanding: draft.isActive && draft.showOnLanding,
     });
@@ -406,6 +416,31 @@ export function FaqPage() {
           }
           invalid={validationError?.field === "answerEnRich"}
         />
+        <Field>
+          <FieldLabel>Category</FieldLabel>
+          <Select
+            value={draft.category}
+            onValueChange={(value) =>
+              updateDraft({ category: value as FaqCategoryKey })
+            }
+          >
+            <SelectTrigger aria-label="Category" className="w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectList>
+                {FAQ_CATEGORY_KEYS.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {FAQ_CATEGORY_LABELS[category].en}
+                  </SelectItem>
+                ))}
+              </SelectList>
+            </SelectPopup>
+          </Select>
+          <FieldDescription>
+            Groups this question on the full FAQ page.
+          </FieldDescription>
+        </Field>
         <div>
           <Button
             type="button"
@@ -676,6 +711,9 @@ export function FaqPage() {
                       </Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pl-14 pr-5 pb-3">
+                      <Badge variant="secondary">
+                        {FAQ_CATEGORY_LABELS[entry.category].en}
+                      </Badge>
                       <Badge variant={entry.isActive ? "success" : "secondary"}>
                         {entry.isActive ? "Active" : "Inactive"}
                       </Badge>

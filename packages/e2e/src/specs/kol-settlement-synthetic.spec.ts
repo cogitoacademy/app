@@ -219,21 +219,14 @@ for (const width of [1440, 390])
       name: "Record commission adjustment",
       exact: true,
     });
-    await expect(submit).toBeDisabled();
+    await expect(submit).toBeEnabled();
     expect(submitted).toHaveLength(0);
-    const addReason = page.getByRole("button", {
-      name: "Add correction reason (required)",
-      exact: true,
-    });
-    await addReason.click();
+    await submit.click();
     const prompt = page.getByRole("dialog", {
-      name: "Correction reason",
+      name: "Record commission adjustment",
       exact: true,
     });
-    await expect(prompt).toHaveAttribute(
-      "data-slot",
-      width < 640 ? "drawer-popup" : "dialog-popup",
-    );
+    await expect(prompt).toHaveAttribute("data-slot", "dialog-popup");
     const reason = prompt.getByRole("textbox", {
       name: "Correction reason",
       exact: true,
@@ -242,48 +235,31 @@ for (const width of [1440, 390])
     await expect(
       prompt.locator('[data-slot="field-label"] .text-danger'),
     ).toHaveText("*");
-    const useReason = prompt.getByRole("button", {
-      name: "Use reason",
+    const confirm = prompt.getByRole("button", {
+      name: "Record commission adjustment",
       exact: true,
     });
+    await expect(confirm).toBeDisabled();
     await reason.fill("  ");
-    await expect(useReason).toBeDisabled();
+    await expect(confirm).toBeDisabled();
     await reason.fill("ab");
-    await expect(useReason).toBeDisabled();
+    await expect(confirm).toBeDisabled();
     await reason.fill("Discard this draft");
     await prompt.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(submit).toBeDisabled();
-    await expect(addReason).toBeFocused();
-    await addReason.click();
+    await expect(prompt).not.toBeVisible();
+    await expect(submit).toBeFocused();
+    expect(submitted).toHaveLength(0);
+    await submit.click();
     await expect(reason).toHaveValue("");
     await reason.fill("Approved partial refund correction");
-    await expect(useReason).toBeInViewport();
+    await expect(confirm).toBeInViewport();
     await page.screenshot({
       path: testInfo.outputPath(`reason-prompt-${width}.png`),
       animations: "disabled",
     });
     expect(submitted).toHaveLength(0);
-    await useReason.click();
+    await confirm.click();
     await expect(prompt).not.toBeVisible();
-    await expect(submit).toBeEnabled();
-    await page
-      .getByRole("button", {
-        name: "Edit correction reason (required)",
-        exact: true,
-      })
-      .click();
-    await expect(reason).toHaveValue("Approved partial refund correction");
-    await reason.fill("Cancel editing the saved reason");
-    await reason.press("Escape");
-    await expect(prompt).not.toBeVisible();
-    // Collecting or dismissing a reason must never submit the financial form.
-    expect(submitted).toHaveLength(0);
-    await page
-      .getByRole("button", {
-        name: "Record commission adjustment",
-        exact: true,
-      })
-      .click();
     await expect.poll(() => submitted.length).toBe(1);
     expect(submitted[0].json).toEqual({
       decisionId: decision.id,

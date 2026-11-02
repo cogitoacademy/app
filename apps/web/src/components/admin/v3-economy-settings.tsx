@@ -1,6 +1,6 @@
 "use client";
 
-import { ReasonField } from "@/components/reason-field";
+import { ActionReasonDialog } from "@/components/action-reason-dialog";
 
 import Loader from "@/components/loader";
 
@@ -100,7 +100,6 @@ export function V3EconomySettings() {
     values: V3EconomyConfig;
   } | null>(null);
   const [rateDrafts, setRateDrafts] = useState<Record<string, RateDraft>>({});
-  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [competition, setCompetition] = useState("");
   const [exactMarks, setExactMarks] = useState(140);
@@ -149,7 +148,6 @@ export function V3EconomySettings() {
         });
         setDraft(null);
         setRateDrafts({});
-        setReason("");
         setError(null);
         toastManager.add({
           title: "V3 draft saved",
@@ -165,7 +163,6 @@ export function V3EconomySettings() {
     orpc.admin.activateV3EconomySettings.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries();
-        setReason("");
         setError(null);
         toastManager.add({
           title: "Pricing activated",
@@ -257,33 +254,27 @@ export function V3EconomySettings() {
           </Text>
           {!draft && !viewingActive && settings.data.version > 0 ? (
             <Field>
-              <ReasonField
-                label="Reason for activating pricing"
-                required
-                id="v3-activation-reason"
-                value={reason}
+              <ActionReasonDialog
+                label="Activate saved pricing"
+                reasonLabel="Reason for activating pricing"
+                description="Activation applies this revision to new purchases and bookings. Existing agreements keep their prices."
+                confirmLabel="Activate saved pricing"
+                minLength={1}
                 maxLength={2000}
                 disabled={activate.isPending}
-                onChange={(value) => setReason(value)}
-                minLength={1}
-              />
-              <Text>
-                Activation applies this saved revision to new purchases and
-                bookings. Existing quotes and bookings keep their agreed prices.
-              </Text>
-              <Button
-                disabled={!reason.trim() || activate.isPending}
-                progress={activate.isPending}
-                onClick={() =>
-                  activate.mutate({
+                trigger={
+                  <Button disabled={activate.isPending}>
+                    Activate saved pricing
+                  </Button>
+                }
+                onConfirm={(reason) =>
+                  activate.mutateAsync({
                     version: settings.data.version,
                     expectedActiveRevision: settings.data.activeRevision,
                     reason,
                   })
                 }
-              >
-                Activate saved pricing
-              </Button>
+              />
             </Field>
           ) : null}
           {!draft ? (
@@ -456,45 +447,46 @@ export function V3EconomySettings() {
           ) : null}
           {draft ? (
             <>
-              <Field>
-                <ReasonField
-                  label="Reason for this revision"
-                  required
-                  id="v3-revision-reason"
-                  value={reason}
-                  maxLength={2000}
-                  disabled={save.isPending}
-                  onChange={(value) => setReason(value)}
-                  minLength={1}
-                />
-              </Field>
               <div className="flex flex-wrap gap-2">
-                <Button
+                <ActionReasonDialog
+                  label="Save draft revision"
+                  reasonLabel="Reason for this revision"
+                  description="The saved revision is recorded in the audit log. Customer pricing does not change until activation."
+                  confirmLabel="Save draft revision"
+                  minLength={1}
+                  maxLength={2000}
                   disabled={
-                    !parsed.success ||
-                    incompleteRates ||
-                    !reason.trim() ||
-                    save.isPending
+                    save.isPending || !previewConfig || !!incompleteRates
                   }
-                  progress={save.isPending}
-                  onClick={() => {
-                    if (parsed.success)
-                      save.mutate({
-                        expectedVersion: draft.version,
-                        values: parsed.data,
-                        reason,
-                      });
+                  confirmDisabled={!previewConfig || !!incompleteRates}
+                  trigger={
+                    <Button
+                      disabled={
+                        !previewConfig || !!incompleteRates || save.isPending
+                      }
+                      progress={save.isPending}
+                    >
+                      Save draft revision
+                    </Button>
+                  }
+                  onConfirm={(reason) => {
+                    if (!previewConfig)
+                      return Promise.reject(
+                        new Error("Fix the invalid values before saving."),
+                      );
+                    return save.mutateAsync({
+                      expectedVersion: draft.version,
+                      values: previewConfig,
+                      reason,
+                    });
                   }}
-                >
-                  Save draft revision
-                </Button>
+                />
                 <Button
                   variant="tertiary"
                   disabled={save.isPending}
                   onClick={() => {
                     setDraft(null);
                     setRateDrafts({});
-                    setReason("");
                     setError(null);
                     settings.refetch();
                   }}
