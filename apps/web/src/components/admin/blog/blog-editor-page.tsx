@@ -57,6 +57,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { client } from "@/utils/orpc";
 import Loader from "@/components/loader";
+import { assertBodyImageAlts } from "@/lib/blog-body-alt";
 import { getUserFacingError } from "@/lib/error-message";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { BlogBodyEditor } from "./blog-body-editor";
@@ -292,6 +293,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
   async function saveVersion(locale: BlogLocale) {
     const current = versions[locale];
     const draft = drafts[locale];
+    assertBodyImageAlts(draft.body);
     const draftSlug = `draft-${articleId}-${locale}`;
     const saved = await client.adminBlog.saveVersion({
       articleId,

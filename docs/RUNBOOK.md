@@ -26,7 +26,7 @@ Verification steps:
 2. Run `bun run db:migrate`.
 3. Run the blog integration test against the local `cogito-test` database: `bun test --env-file apps/server/.env.test packages/api/src/tests/integration/blog.test.ts`.
 4. Sign in as admin, open `/admin-blog`, create a category, then create an article.
-5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time.
+5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time. Body images require alt text before save; the editor reports the missing image position.
 6. Confirm `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
 
 Public blog reads use `/rpc/publicContent/blog/*` and are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
@@ -512,6 +512,26 @@ must not be pushed to GitHub. Tooling tests contain synthetic content only.
    Do not drop destination tables/files or remove migration history. A rollback
    changes the source and can temporarily hide post-cutover entries; confirm
    this consequence with the owner before executing it. Rehearse website redirect.
+
+### Vault and Coolify wiring for the cutover
+
+`infra/secrets/prod.env` feeds the `cogito-api` container through
+`infra/ansible/coolify-resources.yml` `app_env_keys`. The three cutover keys
+`KB_SOURCE`, `CC_SOURCE`, and `CONTENT_ADMIN_ENABLED` are listed there and in
+`.sops.yaml` `encrypted_regex`.
+
+1. Import with `CONTENT_ADMIN_ENABLED=false`, `KB_SOURCE=sanity`,
+   `CC_SOURCE=sanity`.
+2. Edit the vault with `sops infra/secrets/prod.env`, set the three values, and
+   save. If the rows were ever written as plaintext, confirm the file now stores
+   them as `ENC[...]` (`grep -E '^(KB_SOURCE|CC_SOURCE|CONTENT_ADMIN_ENABLED)=ENC\[' infra/secrets/prod.env`
+   returns three lines). Re-run `sops edit` after deleting and re-adding a value
+   if one is still plaintext; `encrypted_regex` applies when sops writes the file.
+3. Run the Coolify playbook (or redeploy the API with the vault values) so the
+   container receives the new env, then restart it.
+4. Verify admin authoring: create and edit one Knowledge Bank resource and one
+   calendar event, then confirm both appear on the public app surfaces. Missing
+   entries mean the source flag is still `sanity` or the import is incomplete.
 
 PDF upload uses admin RPC base64 with a 5 MiB decoded cap; ensure deployment proxy
 body limits permit its roughly 7 MiB JSON envelope. Never expose private bucket

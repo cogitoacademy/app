@@ -17,6 +17,15 @@ guards the `img-src` entry, and the web image must be rebuilt and deployed for
 the header change to take effect. No API, database, or migration change is
 involved.
 
+The same CSP allows the Cloudflare Insights beacon host
+(`https://static.cloudflareinsights.com`) in `script-src`, so proxied pages no
+longer log a blocked-script error.
+
+Body images require alt text. The blog editor now checks every image block
+before save or publish (`apps/web/src/lib/blog-body-alt.ts`) and names the
+missing image positions, instead of surfacing the API's generic validation
+failure. Hero and gallery alt fields keep their existing required-field check.
+
 ## Bilingual blog app slice (2 November 2026)
 
 The bilingual blog now has an app-managed data and API path on branch `feat/bilingual-blog`. PostgreSQL stores `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`; migration `0086_fresh_spirit.sql` is additive. Each article has shared fields and at most two locale versions, and each version publishes independently. A slug locks after its first publish. The publish gate checks required editorial fields, hero media and alt text, key facts, and locale gallery alt text.
