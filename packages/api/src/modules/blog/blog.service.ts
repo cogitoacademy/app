@@ -260,8 +260,7 @@ export function createBlogService(deps: {
         row.subcategorySlugId && row.subcategorySlugEn
           ? {
               slug:
-                pick(locale, row.subcategorySlugId, row.subcategorySlugEn) ??
-                row.subcategorySlugId,
+                locale === "id" ? row.subcategorySlugId : row.subcategorySlugEn,
               title:
                 pick(locale, row.subcategoryTitleId, row.subcategoryTitleEn) ??
                 row.subcategoryTitleId ??
