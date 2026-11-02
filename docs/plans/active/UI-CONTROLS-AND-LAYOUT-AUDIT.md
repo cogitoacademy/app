@@ -496,4 +496,5 @@ Implemented: single Referrals sidebar entry; URL-backed Activity, Campaigns and 
 
 - [x] Put rate card actions in the responsive Selia card header and compare current versus saved draft pricing.
 - [x] Add separate paid and cancelled payout Excel sheets and readable CSV cancellation labels.
-- [ ] Complete final delivery checks and merge.
+- [x] Workspace typecheck, lint baseline, 160 web tests, 38 economy API tests and 9 synthetic finance layout tests passed.
+- [ ] Merge after hosted checks pass.
