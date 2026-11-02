@@ -671,6 +671,8 @@ export function createReferralService(deps: {
     });
   }
 
+  // Student top-ups are Midtrans-only. KOL commission follows a successful
+  // provider payment; manual bank-transfer top-ups are out of scope.
   async function recordSuccessfulKolTopUp(
     conn: DbOrTx,
     input: {

@@ -64,16 +64,16 @@ The biggest product gaps are:
 
 ## Missing items
 
-| ID  | Item                                                   | Status                                                                                                                                     |
-| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| M01 | Upcoming classes list with cohort-session parent badge | **Done.** App classes page lists future sessions sorted by date, with a parent badge.                                                      |
-| M02 | Class cover display                                    | **Removed by decision.** Cover storage, upload, schema column, and API field are gone.                                                     |
-| M03 | Website Activities split into three sections           | **Kept as-is by decision.** Single Classes section plus Other.                                                                             |
-| M04 | Individual cohort sessions on website Activities       | **Done.** Upcoming cohort sessions list with parent badge and app handoff.                                                                 |
-| M05 | Admin referral settings UI                             | **Done.** Edit dialog with welcome Marks, friend reward, semester cap, reason, and version check.                                          |
-| M06 | KOL campaign pause                                     | **Done.** Pause/resume action stores `pausedAt`; new signups stop, existing choices keep their window.                                     |
-| M07 | Manual bank-transfer top-up credited by admin          | **Open decision.** PDF says the admin-credited top-up counts for KOL commission. Tutor and KOL payout recording already exists separately. |
-| M08 | Legal name/NIK required at profile completion          | **Kept as-is by decision.** Tax fields stay optional until payout preparation.                                                             |
+| ID  | Item                                                   | Status                                                                                                                           |
+| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| M01 | Upcoming classes list with cohort-session parent badge | **Done.** App classes page lists future sessions sorted by date, with a parent badge.                                            |
+| M02 | Class cover display                                    | **Removed by decision.** Cover storage, upload, schema column, and API field are gone.                                           |
+| M03 | Website Activities split into three sections           | **Kept as-is by decision.** Single Classes section plus Other.                                                                   |
+| M04 | Individual cohort sessions on website Activities       | **Done.** Upcoming cohort sessions list with parent badge and app handoff.                                                       |
+| M05 | Admin referral settings UI                             | **Done.** Edit dialog with welcome Marks, friend reward, semester cap, reason, and version check.                                |
+| M06 | KOL campaign pause                                     | **Done.** Pause/resume action stores `pausedAt`; new signups stop, existing choices keep their window.                           |
+| M07 | Manual bank-transfer top-up credited by admin          | **Out of scope by decision.** All student top-ups go through Midtrans. Tutor and KOL payouts remain separate recorded transfers. |
+| M08 | Legal name/NIK required at profile completion          | **Kept as-is by decision.** Tax fields stay optional until payout preparation.                                                   |
 
 ## Behavior mismatches
 
