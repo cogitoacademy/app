@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth-client";
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/admin": "Admin workspace",
+  "/admin-blog": "Blog studio",
   "/balance": "Balance",
   "/bookings": "Bookings",
   "/classes": "Classes",
@@ -76,13 +77,15 @@ function RouteComponent() {
   const isTutorProfile = pathname === "/profile" && role === "tutor";
   const title = isTutorProfile
     ? "Tutor Profile"
-    : pathname.startsWith("/classes/")
-      ? "Class details"
-      : pathname.startsWith("/bookings/")
-        ? "Booking Details"
-        : pathname.startsWith("/tutors/")
-          ? "Book a Session"
-          : (routeTitles[pathname] ?? "Dashboard");
+    : pathname.startsWith("/admin-blog/")
+      ? "Blog studio"
+      : pathname.startsWith("/classes/")
+        ? "Class details"
+        : pathname.startsWith("/bookings/")
+          ? "Booking Details"
+          : pathname.startsWith("/tutors/")
+            ? "Book a Session"
+            : (routeTitles[pathname] ?? "Dashboard");
 
   return (
     <Layout

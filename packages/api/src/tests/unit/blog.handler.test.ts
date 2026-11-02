@@ -11,6 +11,7 @@ function service(overrides: Record<string, unknown> = {}) {
     "listTutorOptions",
     "createCategory",
     "updateCategory",
+    "deleteCategory",
     "reorderCategories",
     "listAdmin",
     "getAdmin",
@@ -43,6 +44,9 @@ describe("blog admin handler", () => {
     await handler.listTutors();
     await handler.createCategory({ input: { titleId: "a" } } as any);
     await handler.updateCategory({ input: { categoryId: "c" } } as any);
+    await handler.deleteCategory({
+      input: { categoryId: "c", expectedVersion: 1 },
+    });
     await handler.reorderCategories({ input: { ids: ["a"] } } as any);
     await handler.list({ input: { limit: 20 } } as any);
     await handler.get({ input: { articleId: "a" } } as any);

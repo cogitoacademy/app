@@ -1,12 +1,30 @@
 "use client";
 
+import { useEffect, useRef, useState, useId } from "react";
 import {
-  IconArrowDown,
-  IconArrowUp,
-  IconPlus,
-  IconTrash,
+  Node,
+  NodeViewWrapper,
+  NodeViewContent,
+  ReactNodeViewRenderer,
+  useEditor,
+  useEditorState,
+  type NodeViewProps,
+} from "@tiptap/react";
+import {
+  IconH2,
+  IconH3,
+  IconBlockquote,
+  IconPhotoPlus,
+  IconInfoCircle,
+  IconBrandInstagram,
+  IconBrandTiktok,
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconLoader2,
+  IconDots,
 } from "@tabler/icons-react";
-
+import type { Transaction } from "@tiptap/pm/state";
+import { StarterKit } from "@tiptap/starter-kit";
 import type {
   BlogBlock,
   BlogMediaDto,
@@ -15,381 +33,500 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
-  Select,
-  SelectItem,
-  SelectList,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@cogito-app/ui/components/selia/select";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Textarea } from "@cogito-app/ui/components/selia/textarea";
+  RichTextEditorSurface,
+  RichTextToolbarDivider,
+} from "../rich-text-editor-surface";
+import {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuItem,
+  MenuSeparator,
+} from "@cogito-app/ui/components/selia/menu";
+import {
+  blogBlocksToTiptap,
+  tiptapToBlogBlocks,
+  normalizeBlogHref,
+} from "@/lib/blog-rich-text";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { uploadBlogImage } from "./blog-api";
 
-type BlockType = BlogBlock["type"];
-
-const EMPTY_BLOCKS: Record<BlockType, () => BlogBlock> = {
-  heading: () => ({ type: "heading", level: 2, text: "Heading" }),
-  paragraph: () => ({ type: "paragraph", runs: [{ text: "" }] }),
-  list: () => ({ type: "list", style: "unordered", items: [[{ text: "" }]] }),
-  quote: () => ({ type: "quote", runs: [{ text: "" }] }),
-  callout: () => ({ type: "callout", title: "Note", runs: [{ text: "" }] }),
-  image: () => ({ type: "image", mediaId: "", alt: "" }),
-  embed: () => ({ type: "embed", provider: "instagram", url: "" }),
-};
-
-function textOf(block: BlogBlock) {
-  if (block.type === "heading") return block.text;
-  if (block.type === "paragraph" || block.type === "quote") {
-    return block.runs.map((run) => run.text).join("");
-  }
-  if (block.type === "callout")
-    return block.runs.map((run) => run.text).join("");
-  return "";
+function ImageView({
+  node,
+  updateAttributes,
+  deleteNode,
+  selected,
+}: NodeViewProps) {
+  const id = useId();
+  return (
+    <NodeViewWrapper className="my-5" contentEditable={false}>
+      {node.attrs.src ? (
+        <img
+          src={resolveProfileImageUrl(node.attrs.src)}
+          alt={node.attrs.alt}
+          className={`mx-auto max-h-96 max-w-full rounded-lg object-contain ${
+            selected
+              ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+              : ""
+          }`}
+        />
+      ) : (
+        <p className="text-muted">Image unavailable</p>
+      )}
+      {!selected && node.attrs.caption ? (
+        <p className="mt-2 text-center text-sm text-muted">
+          {node.attrs.caption}
+        </p>
+      ) : null}
+      {selected ? (
+        <div className="mt-3 space-y-3 rounded-lg border border-border bg-card p-3">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <Field className="min-w-0">
+              <FieldLabel htmlFor={`${id}-alt`}>Alt text</FieldLabel>
+              <Input
+                id={`${id}-alt`}
+                value={node.attrs.alt}
+                onChange={(event) =>
+                  updateAttributes({ alt: event.target.value })
+                }
+              />
+            </Field>
+            <Field className="min-w-0">
+              <FieldLabel htmlFor={`${id}-caption`}>Caption</FieldLabel>
+              <Input
+                id={`${id}-caption`}
+                value={node.attrs.caption}
+                onChange={(event) =>
+                  updateAttributes({ caption: event.target.value })
+                }
+              />
+            </Field>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="plain"
+              onClick={deleteNode}
+            >
+              Remove image
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </NodeViewWrapper>
+  );
 }
+function CalloutView({ node, updateAttributes, selected }: NodeViewProps) {
+  const id = useId();
+  return (
+    <NodeViewWrapper className="my-4 rounded-r-lg border-l-2 border-primary bg-accent px-3 pt-1 pb-2">
+      {selected ? (
+        <Field className="mb-2" contentEditable={false}>
+          <FieldLabel htmlFor={id}>Callout title</FieldLabel>
+          <Input
+            id={id}
+            value={node.attrs.title}
+            onChange={(event) =>
+              updateAttributes({ title: event.target.value })
+            }
+          />
+        </Field>
+      ) : (
+        <p className="leading-none font-semibold">{node.attrs.title}</p>
+      )}
+      <NodeViewContent className="text-sm" />
+    </NodeViewWrapper>
+  );
+}
+function EmbedView({
+  node,
+  updateAttributes,
+  deleteNode,
+  selected,
+}: NodeViewProps) {
+  const id = useId();
+  return (
+    <NodeViewWrapper
+      contentEditable={false}
+      className="my-4 rounded-lg border border-border bg-item p-3"
+    >
+      {selected ? (
+        <div className="space-y-3">
+          <Field>
+            <FieldLabel htmlFor={id}>
+              {node.attrs.provider === "tiktok" ? "TikTok" : "Instagram"} post
+              URL
+            </FieldLabel>
+            <Input
+              id={id}
+              value={node.attrs.url}
+              onChange={(event) =>
+                updateAttributes({ url: event.target.value })
+              }
+            />
+          </Field>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="plain"
+              onClick={deleteNode}
+            >
+              Remove embed
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-sm font-medium">
+            {node.attrs.provider === "tiktok" ? "TikTok" : "Instagram"} embed
+          </p>
+          <p className="truncate text-xs text-muted">
+            {node.attrs.url || "Select this block to add a link."}
+          </p>
+        </div>
+      )}
+    </NodeViewWrapper>
+  );
+}
+const BlogImage = Node.create({
+  name: "blogImage",
+  group: "block",
+  atom: true,
+  draggable: true,
+  addAttributes: () => ({
+    mediaId: { default: "" },
+    alt: { default: "" },
+    caption: { default: "" },
+    src: { default: "" },
+  }),
+  parseHTML: () => [{ tag: "figure[data-blog-image]" }],
+  renderHTML: () => ["figure", { "data-blog-image": "" }],
+  addNodeView: () => ReactNodeViewRenderer(ImageView),
+});
+const BlogCallout = Node.create({
+  name: "blogCallout",
+  group: "block",
+  content: "inline*",
+  addAttributes: () => ({ title: { default: "Note" } }),
+  parseHTML: () => [{ tag: "aside[data-blog-callout]" }],
+  renderHTML: () => ["aside", { "data-blog-callout": "" }, 0],
+  addNodeView: () => ReactNodeViewRenderer(CalloutView),
+});
+const BlogEmbed = Node.create({
+  name: "blogEmbed",
+  group: "block",
+  atom: true,
+  addAttributes: () => ({
+    provider: { default: "instagram" },
+    url: { default: "" },
+    posterMediaId: { default: null },
+  }),
+  parseHTML: () => [{ tag: "div[data-blog-embed]" }],
+  renderHTML: () => ["div", { "data-blog-embed": "" }],
+  addNodeView: () => ReactNodeViewRenderer(EmbedView),
+});
+function QuoteView({ node, updateAttributes, selected }: NodeViewProps) {
+  const id = useId();
+  return (
+    <NodeViewWrapper className="my-4 border-l-2 border-border pl-4">
+      <NodeViewContent className="italic" />
+      {selected ? (
+        <Field contentEditable={false} className="mt-2">
+          <FieldLabel htmlFor={id}>Attribution</FieldLabel>
+          <Input
+            id={id}
+            value={node.attrs.attribution}
+            onChange={(event) =>
+              updateAttributes({ attribution: event.target.value })
+            }
+          />
+        </Field>
+      ) : node.attrs.attribution ? (
+        <cite className="mt-1 block text-sm not-italic text-muted">
+          {node.attrs.attribution}
+        </cite>
+      ) : null}
+    </NodeViewWrapper>
+  );
+}
+const BlogQuote = Node.create({
+  name: "blockquote",
+  group: "block",
+  content: "paragraph+",
+  defining: true,
+  addAttributes: () => ({ attribution: { default: "" } }),
+  parseHTML: () => [{ tag: "blockquote" }],
+  renderHTML: () => ["blockquote", 0],
+  addNodeView: () => ReactNodeViewRenderer(QuoteView),
+});
+const extensions = [
+  StarterKit.configure({
+    heading: { levels: [2, 3] },
+    blockquote: false,
+    code: false,
+    codeBlock: false,
+    strike: false,
+    underline: false,
+    horizontalRule: false,
+    link: {
+      openOnClick: false,
+      autolink: false,
+      isAllowedUri: (href) => /^https?:\/\//i.test(href),
+    },
+  }),
+  BlogQuote,
+  BlogImage,
+  BlogCallout,
+  BlogEmbed,
+];
 
 export function BlogBodyEditor({
   blocks,
   onChange,
   media,
+  label = "Article body",
 }: {
   blocks: BlogBlock[];
   onChange: (blocks: BlogBlock[]) => void;
   media: BlogMediaDto[];
+  label?: string;
 }) {
-  function replace(index: number, block: BlogBlock) {
-    onChange(
-      blocks.map((current, position) => (position === index ? block : current)),
-    );
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const editor = useEditor({
+    extensions,
+    immediatelyRender: false,
+    content: blogBlocksToTiptap(blocks),
+    editorProps: {
+      attributes: {
+        role: "textbox",
+        "aria-label": label,
+        "aria-multiline": "true",
+        class:
+          "min-h-80 w-full px-4 py-6 text-sm leading-6 text-foreground outline-none [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-3xl [&_p]:my-2 [&_p]:leading-6 [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_a]:text-primary [&_a]:underline",
+      },
+    },
+    onUpdate: ({ editor: current }) =>
+      onChange(tiptapToBlogBlocks(current.getJSON())),
+  });
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: e }) => ({
+      bold: e?.isActive("bold"),
+      italic: e?.isActive("italic"),
+      h2: e?.isActive("heading", { level: 2 }),
+      h3: e?.isActive("heading", { level: 3 }),
+      bullet: e?.isActive("bulletList"),
+      ordered: e?.isActive("orderedList"),
+      quote: e?.isActive("blockquote"),
+    }),
+  });
+  useEffect(() => {
+    if (!editor) return;
+    if (
+      JSON.stringify(tiptapToBlogBlocks(editor.getJSON())) !==
+      JSON.stringify(blocks)
+    )
+      editor.commands.setContent(blogBlocksToTiptap(blocks), {
+        emitUpdate: false,
+      });
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "blogImage") return;
+      const image = media.find((item) => item.id === node.attrs.mediaId);
+      if (image && node.attrs.src !== image.url)
+        editor.view.dispatch(
+          editor.state.tr.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            src: image.url,
+          }),
+        );
+    });
+  }, [blocks, editor, media]);
+  async function insertImage(file: File) {
+    if (!editor) return;
+    let insertion = editor.state.selection.getBookmark();
+    const mapInsertion = ({ transaction }: { transaction: Transaction }) => {
+      insertion = insertion.map(transaction.mapping);
+    };
+    editor.on("transaction", mapInsertion);
+    setUploading(true);
+    setError("");
+    try {
+      const image = await uploadBlogImage(file);
+      if (editor.isDestroyed) return;
+      const selection = insertion.resolve(editor.state.doc);
+      editor
+        .chain()
+        .focus()
+        .setTextSelection(selection.to)
+        .insertContent([
+          {
+            type: "blogImage",
+            attrs: { mediaId: image.id, src: image.url, alt: "", caption: "" },
+          },
+          { type: "paragraph" },
+        ])
+        .run();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Image could not be uploaded.",
+      );
+    } finally {
+      editor.off("transaction", mapInsertion);
+      setUploading(false);
+    }
   }
-
-  function move(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= blocks.length) return;
-    const next = [...blocks];
-    const current = next[index];
-    const other = next[target];
-    if (!current || !other) return;
-    next[index] = other;
-    next[target] = current;
-    onChange(next);
-  }
-
+  const actions = [
+    {
+      label: "Heading 2",
+      icon: IconH2,
+      active: state?.h2,
+      run: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+    },
+    {
+      label: "Heading 3",
+      icon: IconH3,
+      active: state?.h3,
+      run: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
+    },
+    {
+      label: "Quote",
+      icon: IconBlockquote,
+      active: state?.quote,
+      run: () => editor?.chain().focus().toggleWrap("blockquote").run(),
+    },
+  ];
   return (
-    <Stack spacing="sm">
-      {blocks.map((block, index) => (
-        <div
-          className="space-y-2 rounded-md border border-border p-3"
-          key={index}
-        >
-          <Stack direction="row" className="items-center justify-between gap-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">
-              {block.type}
-            </span>
-            <Stack direction="row" className="gap-1">
-              <Button
-                variant="plain"
-                size="sm"
-                onClick={() => move(index, -1)}
-                aria-label="Move up"
-              >
-                <IconArrowUp />
-              </Button>
-              <Button
-                variant="plain"
-                size="sm"
-                onClick={() => move(index, 1)}
-                aria-label="Move down"
-              >
-                <IconArrowDown />
-              </Button>
-              <Button
-                variant="plain"
-                size="sm"
-                onClick={() =>
-                  onChange(blocks.filter((_, position) => position !== index))
-                }
-                aria-label="Remove block"
-              >
-                <IconTrash />
-              </Button>
-            </Stack>
-          </Stack>
-
-          {block.type === "heading" ? (
-            <Stack direction="row" className="items-end gap-2">
-              <Field className="flex-1">
-                <FieldLabel>Heading</FieldLabel>
-                <Input
-                  value={block.text}
-                  onChange={(event) =>
-                    replace(index, { ...block, text: event.target.value })
-                  }
-                />
-              </Field>
-              <Field className="w-24">
-                <FieldLabel>Level</FieldLabel>
-                <Select
-                  value={String(block.level)}
-                  onValueChange={(value) =>
-                    replace(index, { ...block, level: value === "3" ? 3 : 2 })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      <SelectItem value="2">H2</SelectItem>
-                      <SelectItem value="3">H3</SelectItem>
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-              </Field>
-            </Stack>
-          ) : null}
-
-          {block.type === "paragraph" || block.type === "quote" ? (
-            <Textarea
-              rows={4}
-              value={textOf(block)}
-              onChange={(event) =>
-                replace(index, {
-                  ...block,
-                  runs: [{ text: event.target.value }],
-                })
-              }
-            />
-          ) : null}
-
-          {block.type === "quote" ? (
-            <Field>
-              <FieldLabel>Attribution</FieldLabel>
-              <Input
-                value={block.attribution ?? ""}
-                onChange={(event) =>
-                  replace(index, {
-                    ...block,
-                    attribution: event.target.value || undefined,
-                  })
-                }
-              />
-            </Field>
-          ) : null}
-
-          {block.type === "list" ? (
-            <Stack direction="row" className="items-start gap-2">
-              <Field className="w-28">
-                <FieldLabel>Style</FieldLabel>
-                <Select
-                  value={block.style}
-                  onValueChange={(value) =>
-                    replace(index, {
-                      ...block,
-                      style: value === "ordered" ? "ordered" : "unordered",
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      <SelectItem value="unordered">Bullets</SelectItem>
-                      <SelectItem value="ordered">Numbers</SelectItem>
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-              </Field>
-              <Field className="flex-1">
-                <FieldLabel>One item per line</FieldLabel>
-                <Textarea
-                  rows={4}
-                  value={block.items
-                    .map((item) => item.map((run) => run.text).join(""))
-                    .join("\n")}
-                  onChange={(event) =>
-                    replace(index, {
-                      ...block,
-                      items: event.target.value
-                        .split("\n")
-                        .map((line) => [{ text: line }]),
-                    })
-                  }
-                />
-              </Field>
-            </Stack>
-          ) : null}
-
-          {block.type === "callout" ? (
-            <Stack spacing="sm">
-              <Field>
-                <FieldLabel>Title</FieldLabel>
-                <Input
-                  value={block.title}
-                  onChange={(event) =>
-                    replace(index, { ...block, title: event.target.value })
-                  }
-                />
-              </Field>
-              <Textarea
-                rows={3}
-                value={textOf(block)}
-                onChange={(event) =>
-                  replace(index, {
-                    ...block,
-                    runs: [{ text: event.target.value }],
-                  })
-                }
-              />
-            </Stack>
-          ) : null}
-
-          {block.type === "image" ? (
-            <Stack spacing="sm">
-              <Field>
-                <FieldLabel>Image</FieldLabel>
-                <Select
-                  value={block.mediaId}
-                  onValueChange={(value) =>
-                    replace(index, { ...block, mediaId: String(value ?? "") })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an uploaded image" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      {media.map((image) => (
-                        <SelectItem key={image.id} value={image.id}>
-                          {image.filename}
-                        </SelectItem>
-                      ))}
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Alt text</FieldLabel>
-                <Input
-                  value={block.alt}
-                  onChange={(event) =>
-                    replace(index, { ...block, alt: event.target.value })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Caption</FieldLabel>
-                <Input
-                  value={block.caption ?? ""}
-                  onChange={(event) =>
-                    replace(index, {
-                      ...block,
-                      caption: event.target.value || undefined,
-                    })
-                  }
-                />
-              </Field>
-            </Stack>
-          ) : null}
-
-          {block.type === "embed" ? (
-            <Stack spacing="sm">
-              <Stack direction="row" className="items-end gap-2">
-                <Field className="w-36">
-                  <FieldLabel>Provider</FieldLabel>
-                  <Select
-                    value={block.provider}
-                    onValueChange={(value) =>
-                      replace(index, {
-                        ...block,
-                        provider: value === "tiktok" ? "tiktok" : "instagram",
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectList>
-                        <SelectItem value="instagram">Instagram</SelectItem>
-                        <SelectItem value="tiktok">TikTok</SelectItem>
-                      </SelectList>
-                    </SelectPopup>
-                  </Select>
-                </Field>
-                <Field className="flex-1">
-                  <FieldLabel>Post URL</FieldLabel>
-                  <Input
-                    value={block.url}
-                    onChange={(event) =>
-                      replace(index, { ...block, url: event.target.value })
-                    }
-                  />
-                </Field>
-              </Stack>
-              <Field>
-                <FieldLabel>Poster image (optional)</FieldLabel>
-                <Select
-                  value={block.posterMediaId ?? ""}
-                  onValueChange={(value) =>
-                    replace(index, {
-                      ...block,
-                      posterMediaId: value ? String(value) : undefined,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="No poster" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      {media.map((image) => (
-                        <SelectItem key={image.id} value={image.id}>
-                          {image.filename}
-                        </SelectItem>
-                      ))}
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-              </Field>
-            </Stack>
-          ) : null}
-        </div>
-      ))}
-
-      <Stack direction="row" className="flex-wrap items-end gap-2">
-        <Field className="w-40">
-          <FieldLabel>Add block</FieldLabel>
-          <Select
-            value=""
-            onValueChange={(value) => {
-              const type = value as BlockType | null;
-              if (type && type in EMPTY_BLOCKS) {
-                onChange([...blocks, EMPTY_BLOCKS[type]()]);
-              }
-            }}
+    <div className="space-y-2">
+      <RichTextEditorSurface
+        editor={editor}
+        label={label}
+        normalizeHref={normalizeBlogHref}
+      >
+        <RichTextToolbarDivider />
+        {actions.map((action) => (
+          <Button
+            key={action.label}
+            type="button"
+            size="sm-icon"
+            title={action.label}
+            aria-label={action.label}
+            aria-pressed={action.active ?? false}
+            disabled={!editor}
+            variant={action.active ? "secondary" : "plain"}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={action.run}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Choose a block" />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectList>
-                <SelectItem value="heading">Heading</SelectItem>
-                <SelectItem value="paragraph">Paragraph</SelectItem>
-                <SelectItem value="list">List</SelectItem>
-                <SelectItem value="quote">Quote</SelectItem>
-                <SelectItem value="callout">Callout</SelectItem>
-                <SelectItem value="image">Image</SelectItem>
-                <SelectItem value="embed">Embed</SelectItem>
-              </SelectList>
-            </SelectPopup>
-          </Select>
-        </Field>
-        <span className="text-xs text-muted">
-          <IconPlus className="inline size-3" /> Blocks save as structured JSON,
-          never HTML.
-        </span>
-      </Stack>
-    </Stack>
+            <action.icon aria-hidden="true" />
+          </Button>
+        ))}
+        <RichTextToolbarDivider />
+        <Button
+          type="button"
+          size="sm-icon"
+          variant="plain"
+          aria-label={uploading ? "Uploading image" : "Add image"}
+          title="Add image"
+          disabled={!editor || uploading}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? (
+            <IconLoader2 aria-hidden="true" className="animate-spin" />
+          ) : (
+            <IconPhotoPlus aria-hidden="true" />
+          )}
+        </Button>
+        <Menu>
+          <MenuTrigger
+            disabled={!editor}
+            render={
+              <Button
+                type="button"
+                variant="plain"
+                size="sm-icon"
+                aria-label="More article tools"
+                title="More article tools"
+              />
+            }
+          >
+            <IconDots aria-hidden="true" />
+          </MenuTrigger>
+          <MenuPopup>
+            <MenuItem
+              onClick={() =>
+                editor
+                  ?.chain()
+                  .focus()
+                  .insertContent({
+                    type: "blogCallout",
+                    attrs: { title: "Try this" },
+                  })
+                  .run()
+              }
+            >
+              <IconInfoCircle />
+              Callout
+            </MenuItem>
+            <MenuItem
+              onClick={() =>
+                editor
+                  ?.chain()
+                  .focus()
+                  .insertContent({ type: "blogEmbed" })
+                  .run()
+              }
+            >
+              <IconBrandInstagram />
+              Instagram post
+            </MenuItem>
+            <MenuItem
+              onClick={() =>
+                editor
+                  ?.chain()
+                  .focus()
+                  .insertContent({
+                    type: "blogEmbed",
+                    attrs: { provider: "tiktok" },
+                  })
+                  .run()
+              }
+            >
+              <IconBrandTiktok />
+              TikTok video
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem onClick={() => editor?.chain().focus().undo().run()}>
+              <IconArrowBackUp />
+              Undo
+            </MenuItem>
+            <MenuItem onClick={() => editor?.chain().focus().redo().run()}>
+              <IconArrowForwardUp />
+              Redo
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      </RichTextEditorSurface>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        aria-label="Upload article image"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void insertImage(file);
+        }}
+      />
+      {error ? (
+        <p role="alert" className="px-4 py-2 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -297,6 +297,48 @@ describe("blog service admin article detail", () => {
     expect(result.updatedAt).toBe(new Date(0).toISOString());
   });
 
+  test("resolves body images from both languages without gallery membership", async () => {
+    const mediaByIds = mock(async () => [
+      {
+        id: "inline",
+        storageKey: "blog/inline.webp",
+        filename: "inline.webp",
+        contentType: "image/webp",
+        width: 1200,
+        height: 800,
+        byteSize: 100,
+      },
+    ]);
+    const { service } = setup({
+      articleById: mock(async () => articleRow()),
+      categoryById: mock(async () => ({
+        id: "c",
+        slugId: "stories",
+        slugEn: "stories",
+        titleId: "Cerita",
+        titleEn: "Stories",
+        parentId: null,
+      })),
+      versionsForArticle: mock(async () => [
+        versionRow({
+          body: [{ type: "image", mediaId: "inline", alt: "Photo" }],
+        }),
+        versionRow({
+          locale: "en",
+          body: [{ type: "image", mediaId: "inline", alt: "Photo" }],
+        }),
+      ]),
+      mediaByIds,
+    });
+    const result = await service.getAdmin("a");
+    expect(mediaByIds).toHaveBeenCalledWith(["inline"]);
+    expect(result.bodyMedia[0]).toMatchObject({
+      id: "inline",
+      url: "https://cdn.test/blog/inline.webp",
+    });
+    expect(result.gallery).toEqual([]);
+  });
+
   test("maps an article with a single language version", async () => {
     const onlyId = setup({
       articleById: mock(async () => articleRow()),
@@ -1722,5 +1764,207 @@ describe("blog service public reads", () => {
         alternate: null,
       },
     ]);
+  });
+});
+
+describe("uncategorized blog drafts", () => {
+  test("creates a draft immediately without a category", async () => {
+    const { service, repo } = setup();
+    expect(await service.createArticle({}, "admin")).toMatchObject({
+      articleId: "a",
+    });
+    expect(repo.createArticle.mock.calls[0]?.[0]).toMatchObject({
+      categoryId: null,
+    });
+    expect(repo.categoryById).not.toHaveBeenCalled();
+  });
+  test("opens an uncategorized draft", async () => {
+    const { service } = setup({
+      articleById: mock(async () => articleRow({ categoryId: null })),
+    });
+    expect((await service.getAdmin("a")).category).toBeNull();
+  });
+  test("blocks publication without category", async () => {
+    const { service, repo } = setup({
+      articleById: mock(async () =>
+        articleRow({ categoryId: null, heroMediaId: "hero" }),
+      ),
+      versionByArticleLocale: mock(async () => versionRow()),
+    });
+    await expect(
+      service.publishVersion(
+        { articleId: "a", locale: "id", expectedVersion: 1 },
+        "admin",
+      ),
+    ).rejects.toMatchObject({ code: "PUBLISH_INVALID" });
+    expect(repo.updateVersionIfVersion).not.toHaveBeenCalled();
+  });
+  test("saving shared details preserves an existing cover", async () => {
+    const { service, repo } = setup({
+      articleById: mock(async () => articleRow({ heroMediaId: "hero" })),
+      categoryById: mock(async () => ({
+        id: "c",
+        parentId: null,
+        isActive: true,
+      })),
+      updateArticleIfVersion: mock(async () => articleRow({ version: 2 })),
+    });
+    await service.updateArticle(
+      { articleId: "a", expectedVersion: 1, categoryId: "c" },
+      "admin",
+    );
+    expect(repo.updateArticleIfVersion.mock.calls[0]?.[2]).toMatchObject({
+      heroMediaId: "hero",
+    });
+  });
+});
+
+describe("blog category deletion", () => {
+  test("deletes an unused category at the expected version", async () => {
+    const remove = mock(async () => ({ id: "c" }));
+    const { service } = setup({
+      categoryById: mock(async () => ({ id: "c", version: 2 })),
+      categoryHasChildren: mock(async () => false),
+      categoryHasArticles: mock(async () => false),
+      deleteCategoryIfVersion: remove,
+    });
+    expect(
+      await service.deleteCategory({ categoryId: "c", expectedVersion: 2 }),
+    ).toEqual({ id: "c" });
+    expect(remove).toHaveBeenCalledWith("c", 2);
+  });
+  test("rejects articles, subcategories and stale versions", async () => {
+    for (const blocked of ["children", "articles", "stale"]) {
+      const remove = mock(async () => undefined);
+      const { service } = setup({
+        categoryById: mock(async () => ({ id: "c", version: 2 })),
+        categoryHasChildren: mock(async () => blocked === "children"),
+        categoryHasArticles: mock(async () => blocked === "articles"),
+        deleteCategoryIfVersion: remove,
+      });
+      await expect(
+        service.deleteCategory({ categoryId: "c", expectedVersion: 1 }),
+      ).rejects.toMatchObject({
+        code:
+          blocked === "stale" ? "VERSION_CONFLICT" : "BLOG_CATEGORY_INVALID",
+      });
+      if (blocked !== "stale") expect(remove).not.toHaveBeenCalled();
+    }
+  });
+  test("maps a concurrent foreign key reference to an actionable error", async () => {
+    const { service } = setup({
+      categoryById: mock(async () => ({ id: "c", version: 1 })),
+      categoryHasChildren: mock(async () => false),
+      categoryHasArticles: mock(async () => false),
+      deleteCategoryIfVersion: mock(async () => {
+        throw { cause: { code: "23503" } };
+      }),
+    });
+    await expect(
+      service.deleteCategory({ categoryId: "c", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "BLOG_CATEGORY_INVALID" });
+  });
+  test("rejects a missing category", async () => {
+    const { service } = setup();
+    await expect(
+      service.deleteCategory({ categoryId: "missing", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "BLOG_NOT_FOUND" });
+  });
+});
+
+describe("blog manual people", () => {
+  test("creates and reloads manual featured and reviewer names without tutor accounts", async () => {
+    const { service, repo } = setup({
+      articleById: mock(async () =>
+        articleRow({
+          featuredTutorName: "Kak Gita",
+          reviewedByName: "Guest reviewer",
+        }),
+      ),
+      categoryById: mock(async () => ({
+        id: "c",
+        parentId: null,
+        titleId: "Cerita",
+        titleEn: "Stories",
+        slugId: "cerita",
+        slugEn: "stories",
+      })),
+    });
+    await service.createArticle(
+      { featuredTutorName: "Kak Gita", reviewedByName: "Guest reviewer" },
+      "admin",
+    );
+    expect(repo.createArticle.mock.calls[0]?.[0]).toMatchObject({
+      featuredTutorId: null,
+      reviewedByTutorId: null,
+      featuredTutorName: "Kak Gita",
+      reviewedByName: "Guest reviewer",
+    });
+    expect(await service.getAdmin("a")).toMatchObject({
+      featuredTutor: null,
+      reviewedByTutor: null,
+      featuredTutorName: "Kak Gita",
+      reviewedByName: "Guest reviewer",
+    });
+  });
+  test("returns a manual reviewer on public articles", async () => {
+    const { service } = setup({
+      getPublishedBySlug: mock(async () => ({
+        articleId: "a",
+        versionId: "v",
+        slug: "story",
+        title: "Story",
+        excerpt: "",
+        publishedAt: stamp,
+        updatedAt: stamp,
+        readingMinutes: 1,
+        categorySlugId: "stories",
+        categorySlugEn: "stories",
+        categoryTitleId: "Cerita",
+        categoryTitleEn: "Stories",
+        body: [],
+        faq: [],
+        keyFacts: [],
+        lead: "Intro",
+        seoTitle: "Story",
+        metaDescription: "Story",
+        reviewedByName: "Guest reviewer",
+        reviewedByTutorId: null,
+        tutorName: "Kak Gita",
+      })),
+    });
+    expect(
+      await service.getPublic({ locale: "id", slug: "story" }),
+    ).toMatchObject({ reviewerName: "Guest reviewer", tutorName: "Kak Gita" });
+  });
+  test("uses a linked reviewer's current name before the fallback", async () => {
+    const { service } = setup({
+      getPublishedBySlug: mock(async () => ({
+        articleId: "a",
+        versionId: "v",
+        slug: "story",
+        title: "Story",
+        excerpt: "",
+        publishedAt: stamp,
+        updatedAt: stamp,
+        readingMinutes: 1,
+        categorySlugId: "stories",
+        categorySlugEn: "stories",
+        categoryTitleId: "Cerita",
+        categoryTitleEn: "Stories",
+        body: [],
+        faq: [],
+        keyFacts: [],
+        lead: "Intro",
+        seoTitle: "Story",
+        metaDescription: "Story",
+        reviewedByName: "Old name",
+        reviewedByTutorId: "t",
+      })),
+      tutorsByIds: mock(async () => [{ id: "t", name: "Current name" }]),
+    });
+    expect(
+      (await service.getPublic({ locale: "en", slug: "story" })).reviewerName,
+    ).toBe("Current name");
   });
 });

@@ -16,5 +16,5 @@ export const Route = createFileRoute("/_app/admin-blog_/$articleId")({
 
 function RouteComponent() {
   const { articleId } = Route.useParams();
-  return <BlogEditorPage articleId={articleId} />;
+  return <BlogEditorPage key={articleId} articleId={articleId} />;
 }

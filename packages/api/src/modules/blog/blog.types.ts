@@ -97,7 +97,7 @@ export function normalizeEmbedUrl(
 
 export const blogRunSchema = z
   .object({
-    text: z.string().trim().min(1).max(5_000),
+    text: z.string().min(1).max(5_000),
     bold: z.boolean().optional(),
     italic: z.boolean().optional(),
     href: z
@@ -232,9 +232,11 @@ export const getAdminBlogArticleInput = z
 
 export const createBlogArticleInput = z
   .object({
-    categoryId: idSchema,
+    categoryId: optionalIdSchema,
     subcategoryId: optionalIdSchema,
     heroMediaId: optionalIdSchema,
+    featuredTutorName: nullableText(200),
+    reviewedByName: nullableText(200),
     featuredTutorId: optionalIdSchema,
     reviewedByTutorId: optionalIdSchema,
     internalNotes: nullableText(5_000),
@@ -245,9 +247,11 @@ export const updateBlogArticleInput = z
   .object({
     articleId: idSchema,
     expectedVersion: z.number().int().positive(),
-    categoryId: idSchema.optional(),
+    categoryId: optionalIdSchema,
     subcategoryId: optionalIdSchema,
     heroMediaId: optionalIdSchema,
+    featuredTutorName: nullableText(200),
+    reviewedByName: nullableText(200),
     featuredTutorId: optionalIdSchema,
     reviewedByTutorId: optionalIdSchema,
     internalNotes: nullableText(5_000),
@@ -378,6 +382,13 @@ export const updateBlogCategoryInput = categoryFields
   })
   .strict();
 
+export const deleteBlogCategoryInput = z
+  .object({
+    categoryId: idSchema,
+    expectedVersion: z.number().int().positive(),
+  })
+  .strict();
+
 export const reorderBlogCategoriesInput = z
   .object({
     ids: z
@@ -498,8 +509,9 @@ export type BlogTutorRefDto = {
 };
 
 export type AdminBlogArticleDto = {
+  bodyMedia: BlogMediaDto[];
   id: string;
-  category: BlogCategoryRefDto;
+  category: BlogCategoryRefDto | null;
   subcategory: BlogCategoryRefDto | null;
   heroMedia: BlogMediaDto | null;
   gallery: Array<
@@ -509,6 +521,8 @@ export type AdminBlogArticleDto = {
       altEn: string | null;
     }
   >;
+  featuredTutorName: string | null;
+  reviewedByName: string | null;
   featuredTutor: BlogTutorRefDto | null;
   reviewedByTutor: BlogTutorRefDto | null;
   relatedArticleIds: string[];
@@ -522,7 +536,7 @@ export type AdminBlogArticleDto = {
 
 export type AdminBlogListRowDto = {
   id: string;
-  categoryId: string;
+  categoryId: string | null;
   categoryTitle: string;
   titleId: string | null;
   titleEn: string | null;
@@ -552,6 +566,7 @@ export type PublicBlogCardDto = {
 };
 
 export type PublicBlogArticleDto = PublicBlogCardDto & {
+  reviewerName: string | null;
   lead: string;
   seoTitle: string;
   metaDescription: string;

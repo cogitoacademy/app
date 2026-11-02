@@ -136,9 +136,9 @@ export const blogArticle = pgTable(
   "blog_article",
   {
     id: uuidPrimaryKey,
-    categoryId: text("category_id")
-      .notNull()
-      .references(() => blogCategory.id, { onDelete: "restrict" }),
+    categoryId: text("category_id").references(() => blogCategory.id, {
+      onDelete: "restrict",
+    }),
     subcategoryId: text("subcategory_id").references(() => blogCategory.id, {
       onDelete: "restrict",
     }),
@@ -153,6 +153,8 @@ export const blogArticle = pgTable(
       () => tutorProfile.id,
       { onDelete: "set null" },
     ),
+    featuredTutorName: text("featured_tutor_name"),
+    reviewedByName: text("reviewed_by_name"),
     internalNotes: text("internal_notes"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     version: integer("version").notNull().default(1),

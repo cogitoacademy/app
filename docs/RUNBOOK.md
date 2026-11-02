@@ -4822,3 +4822,26 @@ Referral page (1 November 2026): displays signup-to-reward flow, configured welc
 Admin Referrals navigation verification (2026-11-01): no migration or new environment variables. As admin, check `/admin-referrals`, switch through Activity, Campaigns and Commissions, reload each URL, and use browser Back. Check `/admin-kol-commissions` redirects to the Commissions tab. Student access must redirect to the dashboard before admin RPCs. Synthetic Edge suites: `KOL_BROWSER_CHANNEL=msedge node packages/e2e/node_modules/@playwright/test/cli.js test --config packages/e2e/playwright.kol-campaign-synthetic.config.ts`, then the same command with `playwright.kol-settlement-synthetic.config.ts`. These run isolated Vite with mocked session/RPC traffic; they do not establish live DB, provider or financial acceptance.
 
 Validation result (2026-11-01): scoped lint and diff whitespace checks pass. Campaign/referral run: 11 passed (8 campaign creation/error/responsive cases plus 3 admin usage/access cases), 4 failed in existing student referral invitation/empty-state expectations. Focused commissions run on ports 3396/3397: 8 passed (CSV bytes, non-admin denial, five responsive settlement widths and unified tabs/refresh/history/redirect). An earlier broader settlement run was stopped after failures in cached balance refresh on reopening and transfer date input interaction; no full settlement green is claimed. Web typecheck passed before concurrent class-management edits, but the final run reports `class-admin-management.tsx:359` (`tutorAbsence`) and `:468` (`tutorLateNoticeCount`). Those files are outside this change. No live API/DB/provider acceptance, migration, commit or push was performed.
+
+
+### Blog rich text authoring (2 November 2026)
+
+Blog editor check: insert an image between two paragraphs with Add image, provide alt text and an optional caption, save, reopen, and verify its position and preview in both locales. Uploads use the existing signed upload and adminBlog.registerMedia flow; no new environment variables or database migration.
+
+
+Apply migration 0087_sticky_cyclops before deploying uncategorized draft creation; it only drops NOT NULL on blog_article.category_id. Verify New draft with no categories, save/reopen, assign a category then publish. Categories tab supports parent selection for subcategory creation. Browser acceptance of the studio layout and upload flow remains pending.
+
+Blog taxonomy seed: `bun --env-file=apps/server/.env apps/server/src/seed/seed-blog-categories.ts`. The normal seed calls this too. Stable seed IDs preserve renamed titles and slugs. Seeded locally: 4 roots and 17 subcategories from the supplied developer spec; English subcategory labels are editorial adaptations.
+
+Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
+
+
+To delete a blog category, move its articles first and delete/move its subcategories. Use the row Delete action and confirm. Draft and archived article references also block deletion; stale categories must be refreshed. This change needs no database migration.
+
+
+Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
+
+
+Apply migration 0088_easy_garia before using manual blog bylines. It adds nullable featured_tutor_name and reviewed_by_name columns. Verify save/reopen with manual names and no tutor accounts, both linked/manual selections, and public byline/reviewer output. Bilingual editor fields are vertically paired with per-field + English; publishing locale is explicit.
+
+Migration 0088 was applied to development localhost:6767/cogito-app during this authoring update. Marketing renderer byline support is implemented in cogito-acad; browser acceptance is pending.

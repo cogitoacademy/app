@@ -4,6 +4,7 @@ import {
   archiveBlogArticleInput,
   createBlogArticleInput,
   createBlogCategoryInput,
+  deleteBlogCategoryInput,
   getAdminBlogArticleInput,
   getPublicBlogArticleInput,
   listAdminBlogArticlesInput,
@@ -33,6 +34,9 @@ export function createBlogRouter(handler: BlogHandler) {
         update: adminProcedure
           .input(updateBlogCategoryInput)
           .handler(handler.updateCategory),
+        delete: adminProcedure
+          .input(deleteBlogCategoryInput)
+          .handler(handler.deleteCategory),
         reorder: adminProcedure
           .input(reorderBlogCategoriesInput)
           .handler(handler.reorderCategories),

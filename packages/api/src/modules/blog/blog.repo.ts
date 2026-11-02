@@ -67,7 +67,9 @@ const publicCardSelection = {
   heroWidth: blogMedia.width,
   heroHeight: blogMedia.height,
   heroAlt: blogArticleVersion.heroAlt,
-  tutorName: user.name,
+  tutorName: sql<
+    string | null
+  >`coalesce(${user.name}, ${blogArticle.featuredTutorName})`,
 } as const;
 
 export function createBlogRepo(db: DbType) {
@@ -112,7 +114,7 @@ export function createBlogRepo(db: DbType) {
           archivedAt: blogArticle.archivedAt,
         })
         .from(blogArticle)
-        .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
+        .leftJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
         .where(and(statusFilter, afterCursor(input.cursor)))
         .orderBy(desc(blogArticle.updatedAt), desc(blogArticle.id))
         .limit(input.limit + 1);
@@ -432,6 +434,8 @@ export function createBlogRepo(db: DbType) {
       const [row] = await db
         .select({
           ...publicCardSelection,
+          reviewedByTutorId: blogArticle.reviewedByTutorId,
+          reviewedByName: blogArticle.reviewedByName,
           lead: blogArticleVersion.lead,
           seoTitle: blogArticleVersion.seoTitle,
           metaDescription: blogArticleVersion.metaDescription,
@@ -683,6 +687,40 @@ export function createBlogRepo(db: DbType) {
         )
         .limit(1);
       return !!row;
+    },
+
+    async categoryHasChildren(categoryId: string) {
+      const rows = await db
+        .select({ id: blogCategory.id })
+        .from(blogCategory)
+        .where(eq(blogCategory.parentId, categoryId))
+        .limit(1);
+      return rows.length > 0;
+    },
+    async categoryHasArticles(categoryId: string) {
+      const rows = await db
+        .select({ id: blogArticle.id })
+        .from(blogArticle)
+        .where(
+          or(
+            eq(blogArticle.categoryId, categoryId),
+            eq(blogArticle.subcategoryId, categoryId),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
+    },
+    async deleteCategoryIfVersion(categoryId: string, expectedVersion: number) {
+      const rows = await db
+        .delete(blogCategory)
+        .where(
+          and(
+            eq(blogCategory.id, categoryId),
+            eq(blogCategory.version, expectedVersion),
+          ),
+        )
+        .returning({ id: blogCategory.id });
+      return rows[0];
     },
 
     async categorySlugOwner(

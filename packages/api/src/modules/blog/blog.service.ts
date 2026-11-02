@@ -292,7 +292,7 @@ export function createBlogService(deps: {
   }
 
   async function ensureSubcategory(
-    categoryId: string,
+    categoryId: string | null | undefined,
     subcategoryId: string | null | undefined,
   ) {
     if (!subcategoryId) return;
@@ -420,7 +420,9 @@ export function createBlogService(deps: {
     async getAdmin(articleId: string): Promise<AdminBlogArticleDto> {
       const article = await repo.articleById(articleId);
       if (!article) throw new BlogNotFoundError(articleId);
-      const category = await ensureCategory(article.categoryId);
+      const category = article.categoryId
+        ? await ensureCategory(article.categoryId)
+        : null;
       const subcategory = article.subcategoryId
         ? await repo.categoryById(article.subcategoryId)
         : undefined;
@@ -435,6 +437,13 @@ export function createBlogService(deps: {
       const tutors = await repo.tutorsByIds(tutorIds);
       const versions = await repo.versionsForArticle(article.id);
       const relatedArticleIds = await repo.relatedIds(article.id);
+      const bodyMedia = await repo.mediaByIds([
+        ...new Set(
+          versions.flatMap((version) =>
+            bodyMediaIds(version.body as BlogBlock[]),
+          ),
+        ),
+      ]);
 
       const toTutor = (id: string | null): BlogTutorRefDto | null => {
         if (!id) return null;
@@ -444,15 +453,18 @@ export function createBlogService(deps: {
 
       return {
         id: article.id,
-        category: categoryRef(category),
+        category: category ? categoryRef(category) : null,
         subcategory: subcategory ? categoryRef(subcategory) : null,
         heroMedia: hero ? mediaDto(hero) : null,
+        bodyMedia: bodyMedia.map(mediaDto),
         gallery: gallery.map((row) => ({
           ...mediaDto(row.media),
           sortOrder: row.sortOrder,
           altId: row.altId,
           altEn: row.altEn,
         })),
+        featuredTutorName: article.featuredTutorName ?? null,
+        reviewedByName: article.reviewedByName ?? null,
         featuredTutor: toTutor(article.featuredTutorId),
         reviewedByTutor: toTutor(article.reviewedByTutorId),
         relatedArticleIds,
@@ -473,7 +485,7 @@ export function createBlogService(deps: {
     },
 
     async createArticle(input: CreateBlogArticleInput, actorId: string) {
-      await ensureCategory(input.categoryId);
+      if (input.categoryId) await ensureCategory(input.categoryId);
       await ensureSubcategory(input.categoryId, input.subcategoryId);
       if (input.heroMediaId) {
         const media = await repo.mediaById(input.heroMediaId);
@@ -485,9 +497,11 @@ export function createBlogService(deps: {
         ...(input.reviewedByTutorId ? [input.reviewedByTutorId] : []),
       ]);
       const row = await repo.createArticle({
-        categoryId: input.categoryId,
+        categoryId: input.categoryId ?? null,
         subcategoryId: input.subcategoryId ?? null,
         heroMediaId: input.heroMediaId ?? null,
+        featuredTutorName: input.featuredTutorName ?? null,
+        reviewedByName: input.reviewedByName ?? null,
         featuredTutorId: input.featuredTutorId ?? null,
         reviewedByTutorId: input.reviewedByTutorId ?? null,
         internalNotes: input.internalNotes ?? null,
@@ -501,9 +515,21 @@ export function createBlogService(deps: {
       const article = await repo.articleById(input.articleId);
       if (!article) throw new BlogNotFoundError(input.articleId);
       if (article.archivedAt) throw new BlogArticleArchivedError(article.id);
-      const categoryId = input.categoryId ?? article.categoryId;
-      await ensureCategory(categoryId);
-      await ensureSubcategory(categoryId, input.subcategoryId);
+      const categoryId =
+        input.categoryId === undefined ? article.categoryId : input.categoryId;
+      if (!categoryId) {
+        const existingVersions = await repo.versionsForArticle(article.id);
+        if (existingVersions.some((version) => version.status === "published"))
+          throw new BlogPublishInvalidError(["categoryId"]);
+      }
+      if (categoryId) await ensureCategory(categoryId);
+      const subcategoryId =
+        input.subcategoryId === undefined
+          ? categoryId === article.categoryId
+            ? article.subcategoryId
+            : null
+          : input.subcategoryId;
+      await ensureSubcategory(categoryId, subcategoryId);
       if (input.heroMediaId) {
         const media = await repo.mediaById(input.heroMediaId);
         if (!media)
@@ -518,11 +544,31 @@ export function createBlogService(deps: {
         input.expectedVersion,
         {
           categoryId,
-          subcategoryId: input.subcategoryId ?? null,
-          heroMediaId: input.heroMediaId ?? null,
-          featuredTutorId: input.featuredTutorId ?? null,
-          reviewedByTutorId: input.reviewedByTutorId ?? null,
-          internalNotes: input.internalNotes ?? null,
+          subcategoryId: subcategoryId ?? null,
+          heroMediaId:
+            input.heroMediaId === undefined
+              ? article.heroMediaId
+              : input.heroMediaId,
+          featuredTutorName:
+            input.featuredTutorName === undefined
+              ? article.featuredTutorName
+              : input.featuredTutorName,
+          reviewedByName:
+            input.reviewedByName === undefined
+              ? article.reviewedByName
+              : input.reviewedByName,
+          featuredTutorId:
+            input.featuredTutorId === undefined
+              ? article.featuredTutorId
+              : input.featuredTutorId,
+          reviewedByTutorId:
+            input.reviewedByTutorId === undefined
+              ? article.reviewedByTutorId
+              : input.reviewedByTutorId,
+          internalNotes:
+            input.internalNotes === undefined
+              ? article.internalNotes
+              : input.internalNotes,
           updatedBy: actorId,
         },
       );
@@ -632,6 +678,7 @@ export function createBlogService(deps: {
         heroMediaId: article.heroMediaId,
         gallery,
       });
+      if (!article.categoryId) missing.push("categoryId");
       if (missing.length > 0) throw new BlogPublishInvalidError(missing);
 
       const row = await repo.updateVersionIfVersion(
@@ -879,6 +926,45 @@ export function createBlogService(deps: {
       };
     },
 
+    async deleteCategory(input: {
+      categoryId: string;
+      expectedVersion: number;
+    }) {
+      const category = await repo.categoryById(input.categoryId);
+      if (!category) throw new BlogNotFoundError(input.categoryId);
+      if (await repo.categoryHasChildren(category.id))
+        throw new BlogCategoryInvalidError(
+          "Delete or move this category's subcategories first.",
+        );
+      if (await repo.categoryHasArticles(category.id))
+        throw new BlogCategoryInvalidError(
+          "Move articles out of this category before deleting it, including drafts and archived articles.",
+        );
+      let deleted;
+      try {
+        deleted = await repo.deleteCategoryIfVersion(
+          category.id,
+          input.expectedVersion,
+        );
+      } catch (error) {
+        if (
+          (error as { code?: string })?.code === "23503" ||
+          (error as { cause?: { code?: string } })?.cause?.code === "23503"
+        )
+          throw new BlogCategoryInvalidError(
+            "This category is now in use. Refresh and move its articles or subcategories first.",
+          );
+        throw error;
+      }
+      if (!deleted)
+        throw new BlogVersionConflictError(
+          category.id,
+          input.expectedVersion,
+          category.version,
+        );
+      return { id: deleted.id };
+    },
+
     async updateCategory(input: UpdateBlogCategoryInput) {
       const category = await repo.categoryById(input.categoryId);
       if (!category) throw new BlogNotFoundError(input.categoryId);
@@ -975,6 +1061,9 @@ export function createBlogService(deps: {
         mediaMap[media.id] = mediaDto(media);
       }
 
+      const reviewer = row.reviewedByTutorId
+        ? (await repo.tutorsByIds([row.reviewedByTutorId]))[0]
+        : undefined;
       const gallery = await repo.publishedGallery(row.articleId);
       const alternate = await repo.publishedAlternate(
         row.articleId,
@@ -998,6 +1087,7 @@ export function createBlogService(deps: {
 
       return {
         ...publicCard(row, input.locale),
+        reviewerName: reviewer?.name ?? row.reviewedByName ?? null,
         lead: row.lead,
         seoTitle: row.seoTitle,
         metaDescription: row.metaDescription,

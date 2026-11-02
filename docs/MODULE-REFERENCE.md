@@ -6,11 +6,11 @@ Academy schema migration 0085 drops the alternate class/session content columns.
 
 ## Compact class administration controls (1 November 2026)
 
-`ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ClassActionReason` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
+`ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ActionReasonDialog` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
 
 ## Academy class action presentation (1 November 2026)
 
-Admin session actions are mounted in the corresponding curriculum accordion. `ClassActionReason` collects and submits a reason after a schedule, tutor, meeting or minimum-decision action is chosen. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
+Admin session actions are mounted in the corresponding curriculum accordion. `ActionReasonDialog` collects the reason and submits the schedule, tutor, meeting or minimum-decision action from its confirmation button. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
 
 ## Class and booking detail composition (1 November 2026)
 
@@ -18,11 +18,11 @@ Admin session actions are mounted in the corresponding curriculum accordion. `Cl
 
 The canonical booking route selects the complete `AdminBookingDetailPage` for admins and `BookingDetailPage` for student/tutor viewers. Admin extensions share the booking presentation rather than a second detail layout. Operations retains its queue, wallet lookup and room operations; queue/room links target `/bookings/$bookingId`.
 
-## Shared reason controls (1 November 2026)
+## Shared reason action dialog (2 November 2026)
 
-Web `ReasonField` composes Selia controls to collect inline audit/action reasons on demand. It uses a dialog at widths >=640px and a bottom drawer below that breakpoint, with caller-supplied minimum/maximum lengths. A local draft is committed only by Use reason; Cancel, Escape and outside dismissal preserve the previously committed value. It never submits the enclosing action. Named controls retain a hidden form value for KOL adjustment FormData; the adjustment action stays disabled until its required reason is valid. Existing retry payload identity and service validation remain intact.
+Web `ActionReasonDialog` composes Selia controls so an action trigger opens a dialog with the reason field and a confirmation button. Confirmation submits the action with the trimmed reason; Cancel, Escape and outside dismissal close the dialog without submitting. Callers supply minimum/maximum lengths, description, confirm label and confirm-disabled state. The dialog shows progress while the confirmation promise runs and keeps validation errors in place. It replaces `ReasonField` and `ClassActionReason` for tax configuration, V3 economy draft/activation, KOL adjustments, class lifecycle decisions and session changes. Existing retry payload identity and service validation remain intact.
 
-Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. DrawerPopup accepts an optional `layerClassName` for the reason drawer's backdrop/viewport above an existing overlay. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
+Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
 
 ## Integrated release branch validation (30 October 2026)
 
@@ -2885,3 +2885,20 @@ Admin booking detail exposes an icon-only retry action when an online booking is
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
 
 Admin Referrals composition (2026-11-01): `AdminReferralsPage` owns the Activity/Campaigns/Commissions navigation through validated route search state. Activity and campaign queries are enabled only on their active tab; campaign drafts remain mounted when changing tabs. `AdminKolCommissionsPage` is composed as a section with a level-two heading and mounts on Commissions; existing decision pagination, export and `KolSettlementPanel` are reused. Admin-created campaign codes and student-owned friend codes remain separate. This checkout exposes KOL campaign creation and pause/resume; the Campaigns tab does not imply promotion support. The commission table remains one row per KOL decision, with cash balances in settlement details.
+
+
+### Blog rich text authoring (2 November 2026)
+
+Blog authoring uses TipTap and converts to the existing BlogBlock contract. Inline images use registered media IDs with locale-specific alt text and captions; preview URLs are not persisted in body JSON. Admin reads resolve body media independently of the hero and gallery.
+
+
+Blog draft creation does not require taxonomy. Admin listings use a left join so uncategorized drafts remain visible; public publish validation requires a root category. Category removal is blocked while any language is published. Save article saves shared settings and the active language; the other language keeps its own draft.
+
+
+Blog category deletion checks for children and any article reference, then deletes with the expected version. Foreign-key restrictions also protect concurrent reference creation; reference conflicts map to a category validation error. No recursive deletion or article deletion occurs.
+
+
+Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
+
+
+Blog people references remain optional. Manual featured/reviewer names are shared across locales and persisted separately from tutor IDs. Linked identities take display precedence. The editor defaults to Indonesian-first per the client spec, derives an empty SEO title from that language title, generates an unpublished draft slug when necessary, and never copies Indonesian prose into English.

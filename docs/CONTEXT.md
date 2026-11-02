@@ -4,7 +4,7 @@
 
 The bilingual blog now has an app-managed data and API path on branch `feat/bilingual-blog`. PostgreSQL stores `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`; migration `0086_fresh_spirit.sql` is additive. Each article has shared fields and at most two locale versions, and each version publishes independently. A slug locks after its first publish. The publish gate checks required editorial fields, hero media and alt text, key facts, and locale gallery alt text.
 
-Admins manage content at `/admin-blog` and `/admin-blog/$articleId`. The editor uses structured blocks rather than HTML; images are normalized to WebP in the browser before upload and registered under the admin's upload prefix. New RPC surfaces are `adminBlog.*` and unauthenticated `publicContent.blog.list/get/categories/sitemap`, with separate public rate limits of 120 requests per minute for reads and 12 for the sitemap.
+Admins manage content at `/admin-blog` and `/admin-blog/$articleId`. The editor uses TipTap rich text with images inserted between paragraphs, editable alt text and captions, and structured block JSON storage; images are normalized to WebP in the browser before upload and registered under the admin's upload prefix. New RPC surfaces are `adminBlog.*` and unauthenticated `publicContent.blog.list/get/categories/sitemap`, with separate public rate limits of 120 requests per minute for reads and 12 for the sitemap.
 
 The marketing renderer in `cogito-acad` is implemented on branch `feat/bilingual-blog` (PR `cogitoacademy/website#18`): public blog index, article pages, Indonesian and English category hubs, generated OG cards, JSON-LD, click-to-load social embeds, and a hand-built `/blog-sitemap.xml` with `xhtml:link` alternates. Marketing tests pass 10/10 and `next build` completes with zero published articles. The renderer depends on the app public procedures, so deploy it after the app change.
 
@@ -97,7 +97,7 @@ Admin class details place cancellation of the whole class beside the class badge
 
 Reason labels show a red trailing asterisk when required and `(optional)` when optional. Required inputs also expose `aria-required`; markers follow the current API/service rules, including mandatory Knowledge Bank reasons and optional invite-decline/withdrawal reasons. This UI change does not relax API requirements.
 
-Inline reasons for tax configuration, economy draft/activation and KOL adjustments use the shared `ReasonField`: an explicit Add/Edit button opens a desktop dialog or a bottom drawer below 640px. Cancel/dismiss discards only the unsaved reason draft; Use reason applies it without submitting the surrounding action. Reasons already inside an editor dialog/drawer retain that flow. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
+Action buttons that require an audit reason open the shared `ActionReasonDialog` directly. The dialog collects the reason and submits the action only from its confirmation button; Cancel, Escape and outside dismissal close it without submitting. Tax configuration, V3 economy activation and draft saves, KOL adjustments, class lifecycle decisions and session changes use this flow. Reasons embedded in an existing editor dialog or drawer keep their inline field. Shared confirmation dialogs keep Cancel available when confirmation is disabled and enforce `confirmDisabled` on the confirmation button.
 
 Verification and limits are recorded in RUNBOOK and the active UI controls audit. No schema, migration, environment or provider changes are needed.
 
@@ -3791,3 +3791,23 @@ KOL campaign create and icon-only refresh controls sit beside the referral tabs 
 Admin dashboard greeting uses plain title and description above the operations metric strip; Tutor payouts is a linked metric in that strip.
 
 Admin referrals navigation (2026-11-01): one Finance sidebar entry, Referrals, opens `/admin-referrals`. Activity (default), Campaigns and Commissions are URL-backed tabs (`?view=activity|campaigns|commissions`); invalid views fall back to Activity. Campaign records use a compact table. Commissions reuses the existing per-student KOL decision table, CSV export and settlement controls; it is not a campaign-level aggregate. `/admin-kol-commissions` redirects admins to the Commissions tab; non-admin access remains rejected. Activity tracks saved student referral choices; Campaigns currently supports admin-created KOL codes only. Cogito promotion campaigns remain unimplemented in this checkout.
+
+
+Blog studio uses the full available editor width, with an All articles back action, icon formatting toolbar and sticky save/publish actions. New draft creates immediately without a category. Category selection is required at publish time. The list places status/language filters next to the tabs; category management follows the Competition catalog pattern: searchable expandable parent rows, nested subcategories, per-row edit and add-subcategory actions, and a side drawer with a parent selector.
+
+Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
+
+
+Blog Categories now uses compact parent/child rows with aligned Edit, Add subcategory and Delete actions. Deletion requires confirmation and is available through adminBlog.categories.delete for empty categories/subcategories.
+
+
+Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
+
+
+Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
+
+
+Blog authoring now pairs Indonesia and English vertically per field. Indonesia is the initial language; + English reveals each secondary field. Save article saves shared settings and all authored languages; publish still targets one explicitly selected language. Search and article settings use Selia Accordion. Featured tutor and reviewer support linked tutors, manual names, or none. Manual names are stored on the shared article and rendered as public byline text.
+
+
+Rich-text inline controls use Selia Field/FieldLabel for image alt/caption, quote attribution, callout titles, embed URLs and shared link addresses. Action rows have separate spacing and responsive wrapping across Blog, FAQ and Activities.

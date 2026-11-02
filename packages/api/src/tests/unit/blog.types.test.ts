@@ -175,3 +175,23 @@ describe("blog type schemas", () => {
     ).toBe(false);
   });
 });
+
+test("preserves spaces around formatted blog runs", async () => {
+  expect(blogRunSchema.parse({ text: "Learn " }).text).toBe("Learn ");
+  expect(blogRunSchema.parse({ text: " together" }).text).toBe(" together");
+});
+
+test("manual blog names are optional, bounded and normalize blank values", async () => {
+  const { createBlogArticleInput } =
+    await import("../../modules/blog/blog.types");
+  expect(
+    createBlogArticleInput.parse({
+      featuredTutorName: "  Kak Gita  ",
+      reviewedByName: " ",
+    }),
+  ).toMatchObject({ featuredTutorName: "Kak Gita", reviewedByName: null });
+  expect(
+    createBlogArticleInput.safeParse({ featuredTutorName: "a".repeat(201) })
+      .success,
+  ).toBe(false);
+});

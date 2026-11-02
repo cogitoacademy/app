@@ -8,6 +8,7 @@ import {
   archiveBlogArticleInput,
   createBlogArticleInput,
   createBlogCategoryInput,
+  deleteBlogCategoryInput,
   getAdminBlogArticleInput,
   getPublicBlogArticleInput,
   listAdminBlogArticlesInput,
@@ -47,6 +48,11 @@ export function createBlogHandler(service: BlogService) {
     }: {
       input: z.infer<typeof updateBlogCategoryInput>;
     }) => withDomainMap(() => service.updateCategory(input), mapBlogError),
+    deleteCategory: ({
+      input,
+    }: {
+      input: z.infer<typeof deleteBlogCategoryInput>;
+    }) => withDomainMap(() => service.deleteCategory(input), mapBlogError),
     reorderCategories: ({
       input,
     }: {

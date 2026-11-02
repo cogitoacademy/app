@@ -28,7 +28,7 @@ Branch `feat/bilingual-blog` in `cogito-acad` contains the renderer and the Phas
 
 Deviations from the original Phase 3 sketch:
 
-- The body editor is a structured block editor built from Selia fields, not TipTap. It stores the same block JSON and avoids a new rich-text dependency.
+- The body editor uses the installed TipTap rich text editor with Selia toolbar controls, inline image uploads, alt text and captions. It serializes to the validated block JSON used by the public renderer.
 - The shared panel, version panel, and publish panel are composed inside `blog-editor-page.tsx`; separate panel files were not needed.
 - F.A.Q. and related-article editing are supported by the API but have no admin controls yet.
 - The marketing renderer lives in its own branch and PR because it is a separate repository and deployment.
@@ -623,3 +623,25 @@ Total: roughly 19 to 22 engineering days, plus content review. This is larger th
 4. Is 60-second staleness acceptable, or is a publish webhook required?
 5. Which analytics tool will read consultation clicks, and who owns the dashboard?
 6. When does full Sanity removal start, and does it cover competitions and student resources in the same migration?
+
+
+Blog studio UI revision: immediate uncategorized drafts, category required before publication, full-width editor with an All articles back action, icon rich text toolbar, combined shared/locale save, adjacent list filters, and category creation drawer with parent selection. Migration 0087 applied to development localhost:6767/cogito-app; browser acceptance remains pending.
+
+Blog taxonomy seed: `bun --env-file=apps/server/.env apps/server/src/seed/seed-blog-categories.ts`. The normal seed calls this too. Stable seed IDs preserve renamed titles and slugs. Seeded locally: 4 roots and 17 subcategories from the supplied developer spec; English subcategory labels are editorial adaptations.
+
+Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
+
+
+Category management refinement: compact Competition-style rows and aligned actions, plus confirmed version-checked deletion of unused categories/subcategories. Article/child references block deletion, including concurrent references guarded by database foreign keys.
+
+
+Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
+
+
+Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
+
+
+Authoring refinement: paired per-field translations with Indonesian-first defaults and compact + English controls, Selia Accordions, save all authored language drafts, independent locale publication, manual featured/reviewer names and marketing byline rendering. The pilot spec provides no article-specific prose defaults; content stays blank until authored.
+
+
+Rich-text inline controls use Selia Field/FieldLabel for image alt/caption, quote attribution, callout titles, embed URLs and shared link addresses. Action rows have separate spacing and responsive wrapping across Blog, FAQ and Activities.

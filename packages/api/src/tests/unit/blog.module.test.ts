@@ -29,6 +29,7 @@ describe("blog module wiring", () => {
       "list",
       "create",
       "update",
+      "delete",
       "reorder",
     ]);
     expect(Object.keys(router.publicContent.blog)).toEqual([
