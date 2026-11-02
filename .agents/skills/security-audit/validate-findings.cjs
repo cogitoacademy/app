@@ -319,7 +319,7 @@ function collectSchemaErrors(schema, location = "schema") {
       } else {
         try {
           new RegExp(node.pattern);
-        } catch (error) {
+        } catch {
           errors.push(`${p}.pattern: invalid regular expression`);
         }
       }
