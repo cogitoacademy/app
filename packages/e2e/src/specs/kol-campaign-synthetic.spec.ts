@@ -256,9 +256,7 @@ for (const width of [320, 390, 768, 1440])
     await expect(
       page.getByRole("table", { name: "Saved KOL campaigns" }),
     ).toBeVisible();
-    const panel = page
-      .getByRole("heading", { name: "KOL campaigns", exact: true })
-      .locator('xpath=ancestor::*[@data-slot="card"]');
+    const panel = page.locator("#kol-campaigns-section");
     expect(
       await panel.evaluate((element) => {
         const bounds = element.getBoundingClientRect();

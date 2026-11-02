@@ -4,6 +4,7 @@ import Loader from "@/components/loader";
 
 import { createPortal } from "react-dom";
 import {
+  IconAlertTriangle,
   IconPlayerPause,
   IconPlayerPlay,
   IconRefresh,
@@ -14,13 +15,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
   Table,
@@ -52,9 +48,14 @@ const labels = {
   flatAmountIdr: "Flat commission (IDR)",
   percent: "Commission (%)",
 };
-const date = (value: Date | string) =>
-  new Date(value).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" }) +
-  " WIB";
+const wibDate = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeZone: "Asia/Jakarta",
+});
+const wibTime = new Intl.DateTimeFormat("en-GB", {
+  timeStyle: "short",
+  timeZone: "Asia/Jakarta",
+});
 
 export function KolCampaignsSection({
   actionsContainer,
@@ -118,7 +119,11 @@ export function KolCampaignsSection({
   );
 
   return (
-    <Card className="min-w-0 [overflow-wrap:anywhere]">
+    <section
+      id="kol-campaigns-section"
+      aria-labelledby="kol-campaigns-heading"
+      className="min-w-0 [overflow-wrap:anywhere]"
+    >
       {actionsContainer
         ? createPortal(
             <>
@@ -146,15 +151,17 @@ export function KolCampaignsSection({
             actionsContainer,
           )
         : null}
-      <CardHeader>
-        <CardTitle level={2}>KOL campaigns</CardTitle>
-      </CardHeader>
-      <CardBody className="space-y-5">
-        <Text className="text-muted">
+      <div className="space-y-1">
+        <Heading id="kol-campaigns-heading" level={2} size="sm">
+          KOL campaigns
+        </Heading>
+        <Text className="max-w-2xl text-sm text-muted">
           Choose a KOL code for new registrations only. Saved campaign terms
           cannot be edited. Student friend codes are separate and available to
           verified students on their My referrals page.
         </Text>
+      </div>
+      <div className="mt-5 space-y-5">
         <form
           id="kol-campaign-form"
           hidden={!open}
@@ -263,49 +270,66 @@ export function KolCampaignsSection({
             </Text>
           ) : null}
         </form>
-        <div className="space-y-3">
-          {query.isPending ? (
-            <Loader />
-          ) : query.isError ? (
-            <div className="space-y-3">
-              <Text role="alert">We couldn't load KOL campaigns.</Text>
-              <Button variant="secondary" onClick={() => void query.refetch()}>
-                Retry campaigns
-              </Button>
+        {query.isPending ? (
+          <Loader />
+        ) : query.isError ? (
+          <>
+            <div role="alert" className="sr-only">
+              KOL campaign list failed to load.
             </div>
-          ) : !query.data?.length ? (
             <EmptyState
               className="rounded-lg border border-dashed border-border"
-              icon={<IconSpeakerphone />}
-              title="No KOL campaigns yet."
-              description="Create a campaign to give your partner a registration code and saved commission terms."
-              size="compact"
-              tone="secondary"
+              icon={<IconAlertTriangle />}
+              title="We couldn't load KOL campaigns."
+              description="Try again. Saved campaigns are unchanged."
+              tone="danger"
+              size="inline"
               action={
-                !open ? (
-                  <Button variant="secondary" onClick={() => setOpen(true)}>
-                    Create your first campaign
-                  </Button>
-                ) : undefined
+                <Button
+                  variant="secondary"
+                  onClick={() => void query.refetch()}
+                >
+                  Retry campaigns
+                </Button>
               }
             />
-          ) : (
-            <TableContainer>
-              <Table aria-label="Saved KOL campaigns" className="min-w-max">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Campaign</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Activation (WIB)</TableHead>
-                    <TableHead>Expiry (WIB)</TableHead>
-                    <TableHead>Attribution window</TableHead>
-                    <TableHead>Commission</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {query.data.map((campaign) => (
+          </>
+        ) : !query.data?.length ? (
+          <EmptyState
+            className="rounded-lg border border-dashed border-border"
+            icon={<IconSpeakerphone />}
+            title="No KOL campaigns yet."
+            description="Create a code with saved commission terms."
+            size="inline"
+            tone="secondary"
+            action={
+              !open ? (
+                <Button variant="secondary" onClick={() => setOpen(true)}>
+                  Create your first campaign
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <TableContainer>
+            <Table aria-label="Saved KOL campaigns" className="min-w-max">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Campaign</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Activation</TableHead>
+                  <TableHead>Expiry</TableHead>
+                  <TableHead>Attribution</TableHead>
+                  <TableHead>Commission</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {query.data.map((campaign) => {
+                  const activationAt = new Date(campaign.activationAt);
+                  const expiresAt = new Date(campaign.expiresAt);
+                  return (
                     <TableRow key={campaign.id}>
                       <TableCell className="font-medium">
                         {campaign.name}
@@ -313,14 +337,28 @@ export function KolCampaignsSection({
                       <TableCell className="font-mono">
                         {campaign.code}
                       </TableCell>
-                      <TableCell>{date(campaign.activationAt)}</TableCell>
-                      <TableCell>{date(campaign.expiresAt)}</TableCell>
+                      <TableCell>
+                        <div>{wibDate.format(activationAt)}</div>
+                        <Text className="text-sm text-muted">
+                          {wibTime.format(activationAt)} WIB
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        <div>{wibDate.format(expiresAt)}</div>
+                        <Text className="text-sm text-muted">
+                          {wibTime.format(expiresAt)} WIB
+                        </Text>
+                      </TableCell>
                       <TableCell>
                         {campaign.attributionWindowDays} days
                       </TableCell>
                       <TableCell>
-                        Rp{campaign.flatAmountIdr.toLocaleString("id-ID")} +{" "}
-                        {campaign.percentBps / 100}%
+                        <div>
+                          Rp{campaign.flatAmountIdr.toLocaleString("id-ID")}
+                        </div>
+                        <Text className="text-sm text-muted">
+                          + {campaign.percentBps / 100}%
+                        </Text>
                       </TableCell>
                       <TableCell>
                         {campaign.pausedAt ? (
@@ -353,13 +391,13 @@ export function KolCampaignsSection({
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </div>
-      </CardBody>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </div>
       <ConfirmationDialog
         open={pauseTarget !== null}
         onOpenChange={(nextOpen) => {
@@ -411,6 +449,6 @@ export function KolCampaignsSection({
           </Text>
         ) : null}
       </ConfirmationDialog>
-    </Card>
+    </section>
   );
 }
