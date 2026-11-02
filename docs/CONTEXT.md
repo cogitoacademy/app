@@ -3792,23 +3792,17 @@ Admin dashboard greeting uses plain title and description above the operations m
 
 Admin referrals navigation (2026-11-01): one Finance sidebar entry, Referrals, opens `/admin-referrals`. Activity (default), Campaigns and Commissions are URL-backed tabs (`?view=activity|campaigns|commissions`); invalid views fall back to Activity. Campaign records use a compact table. Commissions reuses the existing per-student KOL decision table, CSV export and settlement controls; it is not a campaign-level aggregate. `/admin-kol-commissions` redirects admins to the Commissions tab; non-admin access remains rejected. Activity tracks saved student referral choices; Campaigns currently supports admin-created KOL codes only. Cogito promotion campaigns remain unimplemented in this checkout.
 
-
 Blog studio uses the full available editor width, with an All articles back action, icon formatting toolbar and sticky save/publish actions. New draft creates immediately without a category. Category selection is required at publish time. The list places status/language filters next to the tabs; category management follows the Competition catalog pattern: searchable expandable parent rows, nested subcategories, per-row edit and add-subcategory actions, and a side drawer with a parent selector.
 
 Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
 
-
 Blog Categories now uses compact parent/child rows with aligned Edit, Add subcategory and Delete actions. Deletion requires confirmation and is available through adminBlog.categories.delete for empty categories/subcategories.
-
 
 Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
 
-
 Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
 
-
 Blog authoring pairs Indonesia and English through a single language switch in the sticky action bar. The switch is a Selia Tabs control; every per-field editor renders only the active language. The bar also shows per-language publish-gate progress. Save all languages saves shared settings and every authored language; publish and unpublish still target the language selected in the switch, and publish stays disabled while that language has open required fields. Search and article settings use Selia Accordion. Featured tutor and reviewer support linked tutors, manual names, or none. Manual names are stored on the shared article and rendered as public byline text.
-
 
 Rich-text inline controls use Selia Field/FieldLabel for image alt/caption, quote attribution, callout titles, embed URLs and shared link addresses. Action rows have separate spacing and responsive wrapping across Blog, FAQ and Activities.
 

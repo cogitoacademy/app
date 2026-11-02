@@ -2848,16 +2848,12 @@ Referral page (1 November 2026): displays signup-to-reward flow, configured welc
 
 Admin Referrals tabs (2026-11-01): this navigation change adds no RPC inputs or outputs. Activity uses `/rpc/adminReferral/listUsage`, Campaigns uses `listKolCampaigns` / `createKolCampaign`, and Commissions uses the existing KOL decisions, monthly CSV and settlement procedures under `/rpc/adminReferral/`. Request/response envelopes and financial rules are unchanged. `view` is a web route search parameter, not an RPC field.
 
-
 ### Blog rich text authoring (2 November 2026)
 
 Blog admin article responses include `bodyMedia: BlogMediaDto[]` for image and embed-poster references in either language body. Body runs preserve whitespace around formatted text.
 
-
 `adminBlog.createArticle` accepts `{}` and stores a nullable category for drafts. Admin article `category` and list `categoryId` can be null. `adminBlog.updateArticle` accepts null category for unpublished drafts; publishing requires categoryId. Category create accepts parentId for one-level subcategories. Partial shared-detail updates preserve omitted cover, people and notes fields.
 
-
 POST `/rpc/adminBlog/categories/delete` accepts `{"json":{"categoryId":"...","expectedVersion":1}}` and returns the deleted id in the standard envelope. Admin-only. Deletes only categories without article references (including drafts/archived articles) or child categories. Stale versions return VERSION_CONFLICT; referenced categories return BLOG_CATEGORY_INVALID.
-
 
 adminBlog.createArticle/updateArticle accept optional nullable featuredTutorName and reviewedByName (trimmed, max 200 characters). Admin get returns both manual fields; public cards tutorName falls back to the manual featured name. Public article get adds reviewerName, preferring the linked reviewer name then the manual value. Manual names do not create tutor accounts or profile links.

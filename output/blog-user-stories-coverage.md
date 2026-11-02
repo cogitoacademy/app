@@ -980,18 +980,18 @@ Status: FAIL.
 
 ## Coverage summary
 
-| Epic | Stories | Pass | Partial | Fail | Deferred | Unverified |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| A. Public discovery | 8 | 3 | 3 | 1 | 1 | 0 |
-| B. Blog home and hubs | 8 | 1 | 4 | 3 | 0 | 0 |
-| C. Article page | 14 | 4 | 6 | 4 | 0 | 0 |
-| D. Bilingual and technical SEO | 13 | 8 | 1 | 2 | 1 | 1 |
-| E. Admin authoring | 24 | 9 | 6 | 9 | 0 | 0 |
-| F. Publishing rules | 9 | 4 | 2 | 2 | 1 | 0 |
-| G. Media | 6 | 3 | 2 | 1 | 0 | 0 |
-| H. Categories and integrity | 6 | 4 | 2 | 0 | 0 | 0 |
-| I. Testing and operations | 8 | 1 | 1 | 5 | 0 | 1 |
-| **Total** | **96** | **37** | **27** | **27** | **3** | **2** |
+| Epic                           | Stories |   Pass | Partial |   Fail | Deferred | Unverified |
+| ------------------------------ | ------: | -----: | ------: | -----: | -------: | ---------: |
+| A. Public discovery            |       8 |      3 |       3 |      1 |        1 |          0 |
+| B. Blog home and hubs          |       8 |      1 |       4 |      3 |        0 |          0 |
+| C. Article page                |      14 |      4 |       6 |      4 |        0 |          0 |
+| D. Bilingual and technical SEO |      13 |      8 |       1 |      2 |        1 |          1 |
+| E. Admin authoring             |      24 |      9 |       6 |      9 |        0 |          0 |
+| F. Publishing rules            |       9 |      4 |       2 |      2 |        1 |          0 |
+| G. Media                       |       6 |      3 |       2 |      1 |        0 |          0 |
+| H. Categories and integrity    |       6 |      4 |       2 |      0 |        0 |          0 |
+| I. Testing and operations      |       8 |      1 |       1 |      5 |        0 |          1 |
+| **Total**                      |  **96** | **37** |  **27** | **27** |    **3** |      **2** |
 
 ## Defects and gaps by priority
 

@@ -624,25 +624,19 @@ Total: roughly 19 to 22 engineering days, plus content review. This is larger th
 5. Which analytics tool will read consultation clicks, and who owns the dashboard?
 6. When does full Sanity removal start, and does it cover competitions and student resources in the same migration?
 
-
 Blog studio UI revision: immediate uncategorized drafts, category required before publication, full-width editor with an All articles back action, icon rich text toolbar, combined shared/locale save, adjacent list filters, and category creation drawer with parent selection. Migration 0087 applied to development localhost:6767/cogito-app; browser acceptance remains pending.
 
 Blog taxonomy seed: `bun --env-file=apps/server/.env apps/server/src/seed/seed-blog-categories.ts`. The normal seed calls this too. Stable seed IDs preserve renamed titles and slugs. Seeded locally: 4 roots and 17 subcategories from the supplied developer spec; English subcategory labels are editorial adaptations.
 
 Blog Categories follows the Competition catalog UI: search, expandable parent groups with child counts, nested subcategory rows, row actions to edit or add a subcategory, and a Selia side drawer for create/edit with footer actions. API contracts are unchanged.
 
-
 Category management refinement: compact Competition-style rows and aligned actions, plus confirmed version-checked deletion of unused categories/subcategories. Article/child references block deletion, including concurrent references guarded by database foreign keys.
-
 
 Blog editor archive and unsaved-navigation confirmations use Selia dialogs. Cancel preserves the editor and pending navigation; discard proceeds only when save/publish is not pending. Browser refresh/tab-close protection still uses the browser-required beforeunload prompt.
 
-
 Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
 
-
 Authoring refinement: a sticky Selia Tabs language switch scopes every field editor to Indonesia or English, reports per-language publish-gate progress, and keeps publish disabled until the active language passes the client gate. Save all languages saves every authored language draft, so publication stays independent per locale. Selia Accordions group search and article settings, and manual featured/reviewer names render as marketing bylines. The pilot spec provides no article-specific prose defaults; content stays blank until authored.
-
 
 Rich-text inline controls use Selia Field/FieldLabel for image alt/caption, quote attribution, callout titles, embed URLs and shared link addresses. Action rows have separate spacing and responsive wrapping across Blog, FAQ and Activities.
 

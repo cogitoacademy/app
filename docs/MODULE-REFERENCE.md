@@ -2886,19 +2886,14 @@ Referral page (1 November 2026): displays signup-to-reward flow, configured welc
 
 Admin Referrals composition (2026-11-01): `AdminReferralsPage` owns the Activity/Campaigns/Commissions navigation through validated route search state. Activity and campaign queries are enabled only on their active tab; campaign drafts remain mounted when changing tabs. `AdminKolCommissionsPage` is composed as a section with a level-two heading and mounts on Commissions; existing decision pagination, export and `KolSettlementPanel` are reused. Admin-created campaign codes and student-owned friend codes remain separate. This checkout exposes KOL campaign creation and pause/resume; the Campaigns tab does not imply promotion support. The commission table remains one row per KOL decision, with cash balances in settlement details.
 
-
 ### Blog rich text authoring (2 November 2026)
 
 Blog authoring uses TipTap and converts to the existing BlogBlock contract. Inline images use registered media IDs with locale-specific alt text and captions; preview URLs are not persisted in body JSON. Admin reads resolve body media independently of the hero and gallery.
 
-
 Blog draft creation does not require taxonomy. Admin listings use a left join so uncategorized drafts remain visible; public publish validation requires a root category. Category removal is blocked while any language is published. Save all languages saves shared settings and every authored language; publish and unpublish target the language selected in the editor's sticky Tabs control. The client publish gate mirrors the server check for the active language.
-
 
 Blog category deletion checks for children and any article reference, then deletes with the expected version. Foreign-key restrictions also protect concurrent reference creation; reference conflicts map to a category validation error. No recursive deletion or article deletion occurs.
 
-
 Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, compact icon toolbar and selection-preserving link controls. Blog adds heading/quote/image tools and groups callout/social embeds/undo/redo in More article tools. Existing FAQ and blog storage schemas remain unchanged; blog links remain HTTP(S)-only.
-
 
 Blog people references remain optional. Manual featured/reviewer names are shared across locales and persisted separately from tutor IDs. Linked identities take display precedence. The editor defaults to Indonesian-first per the client spec, derives an empty SEO title from that language title, generates an unpublished draft slug when necessary, and never copies Indonesian prose into English.
