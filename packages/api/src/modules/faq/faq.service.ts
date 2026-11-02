@@ -24,6 +24,7 @@ function toAdminFaqDto(row: FaqRow): AdminFaqDto {
     questionIdRich: row.questionIdRich,
     answerEnRich: row.answerEnRich,
     answerIdRich: row.answerIdRich,
+    category: row.category as AdminFaqDto["category"],
     isActive: row.isActive,
     showOnLanding: row.showOnLanding,
     version: row.version,
@@ -51,6 +52,7 @@ function toPublicFaqDto(
     | "answerId"
     | "answerEnRich"
     | "answerIdRich"
+    | "category"
     | "sortOrder"
   >,
   locale: "en" | "id",
@@ -69,6 +71,7 @@ function toPublicFaqDto(
       locale === "id" && answerId && row.answerIdRich
         ? row.answerIdRich
         : row.answerEnRich,
+    category: row.category as PublicFaqDto["category"],
     sortOrder: row.sortOrder,
   };
 }
@@ -85,6 +88,7 @@ function normalizedFields(input: CreateFaqInput | UpdateFaqInput) {
     questionIdRich,
     answerEnRich: input.answerEnRich,
     answerIdRich,
+    category: input.category,
     isActive: input.isActive,
     showOnLanding: input.isActive && input.showOnLanding,
   };

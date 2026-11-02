@@ -4,6 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { IconPlus } from "@tabler/icons-react";
 import type { FaqAnswerBlock } from "@cogito-app/api/modules/faq/faq.types";
 import {
+  FAQ_CATEGORY_KEYS,
+  FAQ_CATEGORY_LABELS,
+} from "@cogito-app/api/modules/faq/faq-categories";
+import {
   Accordion,
   AccordionHeader,
   AccordionItem,
@@ -76,37 +80,55 @@ export function FaqReadOnlyPage() {
         ) : faqQuery.data.length === 0 ? (
           <p className="text-muted">There are no FAQs available yet.</p>
         ) : (
-          <Accordion className="w-full gap-3">
-            {faqQuery.data.map((faq) => (
-              <AccordionItem
-                key={faq.id}
-                value={faq.id}
-                className="group rounded-3xl border border-transparent last:border-b bg-accent transition-colors data-[open]:border-card-border data-[open]:bg-card motion-reduce:transition-none"
-              >
-                <AccordionHeader>
-                  <AccordionTrigger
-                    expandableIndicator={false}
-                    className="gap-4 rounded-3xl py-2 pl-5 pr-2 sm:pl-6"
-                  >
-                    <span className="min-w-0 flex-1 break-words py-2">
-                      {faq.question}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-card group-data-[open]:bg-accent"
-                    >
-                      <IconPlus className="size-4 transition-transform group-data-[open]:rotate-45 motion-reduce:transition-none" />
-                    </span>
-                  </AccordionTrigger>
-                </AccordionHeader>
-                <AccordionPanel className="transition-[height] duration-250 ease-in-out motion-reduce:transition-none">
-                  <div className="px-5 pb-3 sm:px-6">
-                    <FaqAnswer blocks={faq.answer} />
-                  </div>
-                </AccordionPanel>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <Stack spacing="lg">
+            {FAQ_CATEGORY_KEYS.map((category) => {
+              const items = faqQuery.data.filter(
+                (faq) => faq.category === category,
+              );
+              if (items.length === 0) return null;
+              return (
+                <section
+                  key={category}
+                  aria-labelledby={`faq-category-${category}`}
+                >
+                  <Heading level={2} size="sm" id={`faq-category-${category}`}>
+                    {FAQ_CATEGORY_LABELS[category].en}
+                  </Heading>
+                  <Accordion className="w-full gap-3 mt-3">
+                    {items.map((faq) => (
+                      <AccordionItem
+                        key={faq.id}
+                        value={faq.id}
+                        className="group rounded-3xl border border-transparent last:border-b bg-accent transition-colors data-[open]:border-card-border data-[open]:bg-card motion-reduce:transition-none"
+                      >
+                        <AccordionHeader>
+                          <AccordionTrigger
+                            expandableIndicator={false}
+                            className="gap-4 rounded-3xl py-2 pl-5 pr-2 sm:pl-6"
+                          >
+                            <span className="min-w-0 flex-1 break-words py-2">
+                              {faq.question}
+                            </span>
+                            <span
+                              aria-hidden="true"
+                              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-card group-data-[open]:bg-accent"
+                            >
+                              <IconPlus className="size-4 transition-transform group-data-[open]:rotate-45 motion-reduce:transition-none" />
+                            </span>
+                          </AccordionTrigger>
+                        </AccordionHeader>
+                        <AccordionPanel className="transition-[height] duration-250 ease-in-out motion-reduce:transition-none">
+                          <div className="px-5 pb-3 sm:px-6">
+                            <FaqAnswer blocks={faq.answer} />
+                          </div>
+                        </AccordionPanel>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </section>
+              );
+            })}
+          </Stack>
         )}
       </Stack>
     </main>

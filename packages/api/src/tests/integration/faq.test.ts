@@ -72,14 +72,38 @@ function context(role: "admin" | null): Context {
 
 describe("FAQ Postgres integration", () => {
   const fixtureIds: string[] = [];
-  let originalLandingSelection: { id: string }[] = [];
+  let originalContentState: {
+    id: string;
+    isActive: boolean;
+    showOnLanding: boolean;
+  }[] = [];
   let safeToCleanup = false;
   let clients: ReturnType<typeof createClients>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     assertDedicatedTestDatabase();
     safeToCleanup = true;
     clients = createClients();
+    // The default seed now ships FAQ content. Park it for this suite so the
+    // assertions below isolate only the fixtures created here.
+    originalContentState = await db
+      .select({
+        id: faqEntry.id,
+        isActive: faqEntry.isActive,
+        showOnLanding: faqEntry.showOnLanding,
+      })
+      .from(faqEntry);
+    if (originalContentState.length > 0) {
+      await db
+        .update(faqEntry)
+        .set({ isActive: false, showOnLanding: false })
+        .where(
+          inArray(
+            faqEntry.id,
+            originalContentState.map(({ id }) => id),
+          ),
+        );
+    }
   });
 
   afterAll(async () => {
@@ -88,16 +112,11 @@ describe("FAQ Postgres integration", () => {
     if (fixtureIds.length > 0) {
       await db.delete(faqEntry).where(inArray(faqEntry.id, fixtureIds));
     }
-    if (originalLandingSelection.length > 0) {
+    for (const row of originalContentState) {
       await db
         .update(faqEntry)
-        .set({ showOnLanding: true })
-        .where(
-          inArray(
-            faqEntry.id,
-            originalLandingSelection.map(({ id }) => id),
-          ),
-        );
+        .set({ isActive: row.isActive, showOnLanding: row.showOnLanding })
+        .where(eq(faqEntry.id, row.id));
     }
   });
 
@@ -107,10 +126,12 @@ describe("FAQ Postgres integration", () => {
       questionIdRich: richParagraph("Pertanyaan berikutnya"),
       answerEnRich: richParagraph("English answer."),
       answerIdRich: richParagraph("Jawaban Indonesia."),
+      category: "accounts",
       isActive: true,
       showOnLanding: false,
     });
     fixtureIds.push(later.id);
+    expect(later.category).toBe("accounts");
     const landing = await clients.adminClient.adminFaq.create({
       questionEnRich: richParagraph("Landing question"),
       answerEnRich: richAnswer("First paragraph."),
@@ -257,7 +278,6 @@ describe("FAQ Postgres integration", () => {
       .where(
         and(eq(faqEntry.isActive, true), eq(faqEntry.showOnLanding, true)),
       );
-    originalLandingSelection = selected;
     if (selected.length > 0) {
       await db
         .update(faqEntry)

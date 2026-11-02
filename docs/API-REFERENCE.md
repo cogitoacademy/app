@@ -1876,21 +1876,21 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Auth:** Public; no session cookie is required
 - **HTTP request:** `POST /rpc/publicContent/faq/list` with `{"json":{"locale":"en","surface":"full"}}`
 - **Input:** `{ locale?: "en" | "id", surface?: "full" | "landing" }`; both default to `en` and `full`
-- **Output:** `Faq[]`, each item `{ id, question, answer, questionRich, answerRich, sortOrder }`; the legacy answer blocks remain `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`. Rich documents are `{ type: "doc", blocks }` with paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays.
-- **Description:** Returns active entries alphabetically by the question displayed for the requested locale (locale-aware comparison, ID tie-break). `sortOrder` remains in the backward-compatible DTO and is assigned the zero-based display position. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; rich and plain projections use the same locale fallback. Rich fields are additive; older consumers can ignore them, and the marketing adapter accepts their absence from an older API and renders the legacy text instead. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors. Public output still omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, requires the `json` field, accepts `meta` when absent or an array (the configured API may omit empty metadata), validates rich entries, and renders failures separately from a valid empty list.
+- **Output:** `Faq[]`, each item `{ id, question, answer, questionRich, answerRich, category, sortOrder }`; the legacy answer blocks remain `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`. Rich documents are `{ type: "doc", blocks }` with paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. `category` is one of `about`, `programs`, `tutors`, `accounts`, `marks`, `payments`, `progress`, `offline`, or `tutor-join`.
+- **Description:** Returns active entries in saved display order (`sortOrder` ascending, then creation time, then ID). `sortOrder` remains in the DTO and is assigned the zero-based display position. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; rich and plain projections use the same locale fallback. Rich fields are additive; older consumers can ignore them, and the marketing adapter accepts their absence from an older API and renders the legacy text instead. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors. Public output still omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, requires the `json` field, accepts `meta` when absent or an array (the configured API may omit empty metadata), validates rich entries, and renders failures separately from a valid empty list.
 
 ### `adminFaq.list`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/list` with `{"json":{}}`
 - **Input:** `{}` (strict empty object)
-- **Output:** All `AdminFaqDto` entries ordered alphabetically by the English question, then ID. Each item includes `id`, `questionEn`, `questionId`, legacy `answerEn`/`answerId` projections, `questionEnRich`, `questionIdRich`, `answerEnRich`, `answerIdRich`, `isActive`, `showOnLanding`, `version`, and ISO `modifiedAt`.
+- **Output:** All `AdminFaqDto` entries ordered by saved display order, then creation time and ID. Each item includes `id`, `questionEn`, `questionId`, legacy `answerEn`/`answerId` projections, `questionEnRich`, `questionIdRich`, `answerEnRich`, `answerIdRich`, `category`, `isActive`, `showOnLanding`, `version`, and ISO `modifiedAt`.
 
 ### `adminFaq.create`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/create` with the standard `{"json": <input>}` envelope
-- **Input:** `{ questionEnRich, questionIdRich?, answerEnRich, answerIdRich?, isActive?, showOnLanding? }`. English rich question and answer are required; Indonesian documents are optional or `null`. A document is `{ type: "doc", blocks }`; blocks are paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. Questions are limited to 500 plain-text characters; documents to 50 blocks. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors; unsafe protocols and raw HTML are rejected. Active defaults to true and landing visibility to false.
+- **Input:** `{ questionEnRich, questionIdRich?, answerEnRich, answerIdRich?, category?, isActive?, showOnLanding? }`. English rich question and answer are required; Indonesian documents are optional or `null`. A document is `{ type: "doc", blocks }`; blocks are paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. Questions are limited to 500 plain-text characters; documents to 50 blocks. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors; unsafe protocols and raw HTML are rejected. `category` defaults to `about`; the allowed keys are fixed. Active defaults to true and landing visibility to false.
 - **Output:** The created `AdminFaqDto`, initially at version 1 with `modifiedAt`. The service also derives the legacy plain-text question and answer fields used by the public DTO.
 - **Errors:** `BAD_REQUEST` when selecting the new entry would exceed the six-active-FAQ landing limit.
 
@@ -1898,7 +1898,7 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 
 The admin controls on `/faq` use the existing admin procedures; student/tutor
 views continue to use `publicContent.faq.list`. Saving refreshes both query
-families. No RPC input, output, or authorization contract changed.
+families and persists the category selector.
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/update` with the standard `{"json": <input>}` envelope

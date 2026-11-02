@@ -624,6 +624,13 @@
       "when": 1793598968662,
       "tag": "0088_easy_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793611978896,
+      "tag": "0089_faq_categories",
+      "breakpoints": true
     }
   ]
 }

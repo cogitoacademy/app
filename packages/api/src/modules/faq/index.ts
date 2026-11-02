@@ -21,5 +21,12 @@ export {
   faqQuestionRichTextSchema,
   faqRichTextDocumentSchema,
 } from "./faq-rich-text";
+export {
+  FAQ_CATEGORY_KEYS,
+  FAQ_CATEGORY_LABELS,
+  DEFAULT_FAQ_CATEGORY,
+  faqCategorySchema,
+} from "./faq-categories";
+export type { FaqCategoryKey } from "./faq-categories";
 export type { FaqAnswerBlock, AdminFaqDto, PublicFaqDto } from "./faq.types";
 export type { FaqRichTextDocument } from "@cogito-app/db/schema/faq";

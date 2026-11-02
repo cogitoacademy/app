@@ -51,6 +51,7 @@ type AdminFaqDto = {
   questionIdRich: FaqRichTextDocument | null;
   answerEnRich: FaqRichTextDocument;
   answerIdRich: FaqRichTextDocument | null;
+  category: string;
   isActive: boolean;
   showOnLanding: boolean;
   version: number;
@@ -125,6 +126,40 @@ async function adminFaqRpc<T>(
   return ((await response.json()) as { json: T }).json;
 }
 
+async function adminFaqList(context: APIRequestContext) {
+  const response = await context.post("/rpc/adminFaq/list", {
+    data: { json: {} },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `FAQ list returned ${response.status()}: ${await response.text()}`,
+    );
+  }
+  return ((await response.json()) as { json: AdminFaqDto[] }).json;
+}
+
+async function setLandingSelection(
+  context: APIRequestContext,
+  ids: string[],
+  showOnLanding: boolean,
+) {
+  const entries = await adminFaqList(context);
+  for (const entry of entries) {
+    if (!ids.includes(entry.id)) continue;
+    await adminFaqRpc<AdminFaqDto>(context, "update", {
+      id: entry.id,
+      expectedVersion: entry.version,
+      questionEnRich: entry.questionEnRich,
+      questionIdRich: entry.questionIdRich,
+      answerEnRich: entry.answerEnRich,
+      answerIdRich: entry.answerIdRich,
+      category: entry.category,
+      isActive: entry.isActive,
+      showOnLanding,
+    });
+  }
+}
+
 test("students and tutors can read FAQ entries but cannot edit them", async ({
   browser,
 }) => {
@@ -157,7 +192,10 @@ test("students and tutors can read FAQ entries but cannot edit them", async ({
         rolePage.getByRole("heading", { name: "FAQ", exact: true }),
       ).toBeVisible();
       await expect(
-        rolePage.getByText("There are no FAQs available yet.", { exact: true }),
+        rolePage.getByRole("heading", { name: "About Cogito", exact: true }),
+      ).toBeVisible();
+      await expect(
+        rolePage.getByText("What is Cogito Academy?", { exact: true }),
       ).toBeVisible();
       await expect(
         rolePage.getByRole("button", { name: "Add FAQ", exact: true }),
@@ -172,7 +210,7 @@ test("students and tutors can read FAQ entries but cannot edit them", async ({
   }
 });
 
-test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
+test("admins can create and edit rich, ordered FAQs", async ({ page }) => {
   assertDedicatedTestDatabase();
 
   await page.goto("/admin-faq");
@@ -181,11 +219,19 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
   const browser = page.context().browser();
   if (!browser) throw new Error("FAQ browser coverage needs a browser context");
   const fixtureIds: string[] = [];
+  const freedLandingIds: string[] = [];
   let adminApi: APIRequestContext | undefined;
   let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
   try {
     adminApi = await createAdminApiContext();
+    const existingLanding = (await adminFaqList(adminApi)).filter(
+      (entry) => entry.isActive && entry.showOnLanding,
+    );
+    freedLandingIds.push(...existingLanding.map(({ id }) => id));
+    if (freedLandingIds.length > 0) {
+      await setLandingSelection(adminApi, freedLandingIds, false);
+    }
     adminContext = await browser.newContext({
       storageState: await adminApi.storageState(),
     });
@@ -493,6 +539,9 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
           },
         );
         console.log(cleanupOutput.trim());
+      }
+      if (adminApi && freedLandingIds.length > 0) {
+        await setLandingSelection(adminApi, freedLandingIds, true);
       }
     } finally {
       try {

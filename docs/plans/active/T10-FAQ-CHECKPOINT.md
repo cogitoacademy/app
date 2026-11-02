@@ -1,7 +1,7 @@
 # T10 FAQ Checkpoint
 
-**Status: rich FAQ storage/API/admin editor and public rich rendering are implemented with additive DTO fields and legacy fallback; FAQ copy and tutor-site projection remain separately gated.**
-Updated 2026-10-19.
+**Status: rich FAQ storage/API/admin editor, public rich rendering, category grouping, and the 55-entry bilingual default seed are implemented; marketing grouping and shared/production migration remain separately gated.**
+Updated 2026-11-02.
 
 ## Delivered in the app
 
@@ -15,6 +15,14 @@ Updated 2026-10-19.
 - Admin-only `adminFaq.list/create/update` reads all rows and supports compare-and-swap updates using `expectedVersion`. Deactivation retains the record and removes it from public results; there is no destructive delete endpoint. At most six active rows may be selected for the landing surface; writes serialize that check in a transaction.
 - `/faq` is an English-chrome Selia admin page. English question and answer are mandatory; Indonesian fields are optional and hidden by default for new entries. The Tiptap editor supports bold, italic, safe links, and ordered/unordered lists. Rows are alphabetical and show `modifiedAt`.
 - Public responses retain the legacy plain-text `question`/`answer` fields and add locale-selected `questionRich`/`answerRich` documents. Admin flags/version stay private; API errors remain errors rather than being converted into empty results.
+
+## Default seed and categories (2026-11-02)
+
+- `apps/server/src/seed/faq-seed-content.ts` holds the client's 55 approved bilingual questions from the 2 Nov 2026 table. `seed-faq.ts` validates every document with the FAQ Zod schemas, derives the legacy columns, assigns stable IDs and `sortOrder`, and inserts with `onConflictDoNothing` so admin edits survive reruns.
+- The seed runs inside the default `seed.ts` before the `--defaults-only` return. It marks exactly six curated entries for the landing surface and leaves the remaining entries active but off-landing.
+- Migration `0089_faq_categories.sql` adds a non-null `category` column defaulting to `about`. `faq-categories.ts` defines the nine fixed keys and English/Indonesian labels. Admin create/update accepts the category with an `about` default, and public/admin DTOs return it.
+- The app read-only FAQ groups the full list by category in fixed category order. The admin editor adds a category selector and row badges.
+- Unresolved source placeholders were omitted: entry 46 stops at the street name, and entry 50 lists email and Instagram only. Add the house and WhatsApp numbers in the admin editor when the client supplies them.
 
 ## Delivered in the marketing site
 
@@ -41,6 +49,8 @@ Updated 2026-10-19.
   FAQ JSON-LD continues to use the legacy plain-text projection.
 
 ## Verification
+
+2026-11-02 seed/category slice: `bun run check-types` passed across the workspace, and the FAQ unit/handler suites passed (11 tests, 36 expectations). The seed guard suite passed its 13 non-database tests, including the 55-entry count, landing-six selection, and placeholder checks. The FAQ Postgres integration suite could not run in this checkout because the dedicated test database at `localhost:6769` was not running; it parks seeded rows before asserting fixture-only state and restores them afterward. Browser E2E was not run.
 
 2026-10-24 consolidated app UI: web typecheck, focused lint and formatting
 passed. Browser checks on the actual admin component with synthetic data and
@@ -125,7 +135,8 @@ Pop-Location
 
 ## Remaining T10 work and gates
 
-- Seed FAQ copy only after the approved M01 content inventory is available. The API currently returns an empty list until admin content is entered.
+- Migrate each shared environment through the approved release process before deploying API code that reads `faq_entry.category`, then run the default seed or `seed-faq.ts` with `SEED_ALLOWED_IN_PROD=true` where FAQ copy is wanted.
+- The marketing site accepts the additive `category` field but does not group by it yet. Add grouping there in a separate marketing-site change.
 - Configure `COGITO_APP_API_URL` in each marketing-site runtime. Verify its deployed value points to the app API before publishing the FAQ consumer.
 - Apply migrations 0058 and 0059 to any shared environment only through the approved release migration process, in that order and before deploying API code that queries the rich columns; local dev/test application does not imply deployment.
 - Website tutor cutover is a separate T10 consumer and remains gated on whether city-level filtering/display is retired or replaced by approved modality behavior. Never infer city from `modality`.

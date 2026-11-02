@@ -37,6 +37,7 @@ export function createFaqRepo(db: DbType) {
           answerId: faqEntry.answerId,
           answerEnRich: faqEntry.answerEnRich,
           answerIdRich: faqEntry.answerIdRich,
+          category: faqEntry.category,
           sortOrder: faqEntry.sortOrder,
         })
         .from(faqEntry)
