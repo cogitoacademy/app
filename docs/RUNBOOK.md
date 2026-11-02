@@ -1,5 +1,9 @@
 # Cogito Runbook
 
+## Tutor payout bank snapshot column repair (2 November 2026)
+
+Migration `0090_tutor_payout_bank_columns.sql` is additive and idempotent. It restores `tutor_payout.bank_account_number` and `tutor_payout.bank_account_holder_name` on databases where migration 0049 was skipped because the journal timestamp order placed it before migration 0048. The same change makes every journal timestamp strictly increasing and adds a unit guard. Apply it with the normal forward runner (`bun run db:migrate`); do not reset or reseed.
+
 ## Bilingual blog migration and verification (2 November 2026)
 
 Migration `0086_fresh_spirit.sql` is additive. It creates `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`. Apply it with the normal forward runner (`bun run db:migrate`) against the authorized target. Do not reset or reseed; the blog starts with no categories or articles.

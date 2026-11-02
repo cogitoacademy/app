@@ -1,4 +1,5 @@
 import { afterEach, describe, test, expect, mock } from "bun:test";
+import { readFileSync } from "node:fs";
 
 const mockEnv = {
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
@@ -113,4 +114,20 @@ test("production connections enable verified TLS", async () => {
   mockEnv.DB_SSL_REJECT_UNAUTHORIZED = true;
   createDb();
   expect(postgresOptions.at(-1)?.ssl).toEqual({ rejectUnauthorized: true });
+});
+
+test("migration journal timestamps strictly increase", () => {
+  const journal = JSON.parse(
+    readFileSync(
+      new URL("../../migrations/meta/_journal.json", import.meta.url),
+      "utf8",
+    ),
+  ) as { entries: Array<{ idx: number; tag: string; when: number }> };
+  const outOfOrder = journal.entries.filter(
+    (entry, index) =>
+      index > 0 && entry.when <= journal.entries[index - 1]!.when,
+  );
+  expect(
+    outOfOrder.map((entry) => `${entry.idx}:${entry.tag}:${entry.when}`),
+  ).toEqual([]);
 });
