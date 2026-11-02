@@ -91,4 +91,10 @@ describe("blog errors", () => {
       ).code,
     ).toBe("INTERNAL_SERVER_ERROR");
   });
+
+  test("falls back when publish details are missing", () => {
+    const error = new BlogPublishInvalidError(["title"]);
+    (error as { details?: Record<string, unknown> }).details = undefined;
+    expect(mapBlogError(error).data).toEqual({ missingFields: [] });
+  });
 });

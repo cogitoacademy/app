@@ -4,7 +4,9 @@ import {
   forbidden,
   unauthorized,
   conflict,
+  conflictWithData,
   badRequest,
+  badRequestWithData,
   internalServerError,
   serviceUnavailable,
 } from "../../lib/errors";
@@ -52,6 +54,24 @@ describe("Error helpers", () => {
     const err = badRequest("Missing parameter");
     expect(err.status).toBe(400);
     expect(err.message).toBe("Missing parameter");
+  });
+
+  test("conflictWithData attaches data without a cause", () => {
+    const err = conflictWithData("Version conflict", { actualVersion: 2 });
+    expect(err.status).toBe(409);
+    expect(err.message).toBe("Version conflict");
+    expect(err.data).toEqual({ actualVersion: 2 });
+    expect(err.cause).toBeUndefined();
+  });
+
+  test("badRequestWithData attaches data without a cause", () => {
+    const err = badRequestWithData("Publish invalid", {
+      missingFields: ["title"],
+    });
+    expect(err.status).toBe(400);
+    expect(err.message).toBe("Publish invalid");
+    expect(err.data).toEqual({ missingFields: ["title"] });
+    expect(err.cause).toBeUndefined();
   });
 
   test("internalServerError creates INTERNAL_SERVER_ERROR with default message", () => {
