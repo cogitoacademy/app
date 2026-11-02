@@ -464,7 +464,11 @@ Empty eligible sets still return 204, without creating a blank PDF.
 Migration `0075_kb_calendar_content` is applied to guarded TEST only. No dev/prod DB
 import/reset/seed, provider upload, production write or runtime activation ran.
 Extracted calendars/KB data, manifests and PDFs MUST remain ignored/local and
-must not be pushed to GitHub. Tooling tests contain synthetic content only.
+must not be pushed to GitHub. The approved competition calendar seed in
+`apps/server/src/seed/competition-calendar-seed-data.ts` is the exception: it
+carries only public event fields and stable source IDs, and the launch seed
+inserts it idempotently after the category catalog. Tooling tests contain
+synthetic content only.
 
 1. Keep `KB_SOURCE=sanity`, `CC_SOURCE=sanity`, `CONTENT_ADMIN_ENABLED=false`.
    Back up the exact destination and rehearse restore. Verify the migration
