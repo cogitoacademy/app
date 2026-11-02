@@ -1,5 +1,51 @@
 # UI controls and Card/Table audit (22 October 2026)
 
+## Native control sweep (1 November 2026)
+
+- Replaced the remaining browser dialogs with the shared Selia `ConfirmationDialog`: article deletion in Activities · Others and the unsaved-report discard prompt in the session reporting workspace. Both keep the previous action semantics; a failed article delete now closes the dialog and reports through the existing inline error.
+- Replaced every `<details>/<summary>` disclosure with Selia `Accordion`. Covered surfaces: referral technical details, competition catalog descriptions, display colors and move-specialization panels, and session report history. The display-colors panel keeps its forced-open state for parent competitions through a default value and a mode-scoped key.
+- Renamed the local `confirm` helper in the complete-session dialog to `submitFeedback` so it no longer shadows the browser dialog name.
+- Source scan after the change finds no `alert`, `confirm` or `prompt` calls and no `details`, `summary`, `dialog`, `select` or `textarea` elements in `apps/web/src`. Remaining native elements are intentional: hidden inputs for form submission, the hidden profile-image file chooser, native `progress` for the semester meter (no Selia equivalent), and native buttons used as custom widgets (calendar event cells, guide and diff row toggles, time-suggestion options, sidebar backdrop, badge removal).
+- `FilterTabBar` keeps its hand-rolled tab strip because the booking layout E2E asserts the scroll container and the shared strip intentionally omits Selia's sliding indicator.
+- Verification: web typecheck (`tsgo --noEmit --checkers 1`) passed, focused oxlint reported no findings, and changed files pass `oxfmt --check`. A new bun test asserts the admin report history renders through the Selia accordion instead of `details`/`summary`. Synthetic Edge/Chromium runs passed for the referral technical-details disclosure, the competition catalog palette and move panels (including the forced-open display-colors state for a new parent), and both catalog palette workflows. The DB-backed booking report spec was not run because no database was available, so the report-history accordion has only the unit-level check. No API, database, environment or dependency change.
+
+## Academy class draft reason dialog (1 November 2026)
+
+- [x] Remove the inline "Reason for this change" field from the Academy class draft editor.
+- [x] Collect the required audit reason in a confirmation dialog opened by Save draft or Publish class, matching the booking cancellation pattern.
+- [x] Keep native form validation ahead of the prompt; publishing a dirty draft still saves it first and reuses the same reason.
+- [x] Web and E2E typechecks passed; focused lint reported only the existing array-sort warning. Live API/provider acceptance remains separate.
+
+## Single-language Academy classes (1 November 2026)
+
+- [x] Remove alternate-language editor fields and API draft/read properties.
+- [x] Remove alternate-language class/session columns from schema with generated migration 0085.
+- [x] Apply only the authorized four-column removal to verified local development; leave unrelated pending migrations and their journal unchanged.
+- [x] Update Cogito Academy Activities adapter/title rendering for one class language.
+- [x] App web typecheck, 133 focused API unit tests and the single-input editor browser case passed. Website typecheck and 5 focused adapter/locale tests passed; website main was pushed at 060a4b532ce298304a20b801fdd3ea534394fba9. A stale website empty-state test and broader API test/report type errors remain outside this change. Cogito app remains local.
+
+## Compact Academy class detail follow-up (1 November 2026)
+
+- [x] Move the minimum enrollment check to Administration.
+- [x] Show compact session information with date and tutor icon actions, inputs and reason in dialogs.
+- [x] Reduce session cancellation to a button that opens the quote/confirmation dialog.
+- [x] Web typecheck and scoped lint passed; 10 focused synthetic Edge cases covered 320/390/768/1440 layout, minimum check placement, two-session selection, schedule/tutor changes and cancellation quote confirmation. Mobile and desktop captures were inspected. Live provider acceptance remains separate.
+
+## Academy class accordion follow-up (1 November 2026)
+
+- [x] Put session schedule, tutor replacement, absence history and session cancellation in their own accordion.
+- [x] Put whole-class cancellation beside the badges and collect action reasons after the action is selected.
+- [x] Preserve cancellation quote review before confirmation; keep minimum decisions scoped to the whole class.
+- [x] Focused synthetic Edge verification passed: responsive 320/390/768/1440 class details, schedule updates at 390/1440, tutor replacement, both cancellation quotes and a two-session selection. Web typecheck and scoped lint passed; live API/provider acceptance remains separate.
+
+## Shared details follow-up (1 November 2026)
+
+- [x] Reuse class description/pricing/curriculum/schedule presentation for student and admin details.
+- [x] Move existing admin class management from list drawers to class detail; preserve student enrollment and server role boundaries.
+- [x] Enrich admin class get with the same absence history and late counts as list.
+- [x] Route every admin booking entry to the full shared booking detail; retain Operations as the queue/wallet/room workspace.
+- [x] Focused verification: 135 API unit tests, 23 synthetic Edge cases (16 shared details/role/navigation, 6 reschedule, 1 absence/replacement), and web typecheck passed. Reviewed 390px and 1440px admin detail captures. Scoped frontend lint has only the existing array-sort warning; live provider acceptance remains separate.
+
 ## Competition types redesign (26 October 2026)
 
 Replaced the dense tree/permanent editor with a grouped competition directory and on-demand Selia drawer. Search/status, visible specializations, parent color identity, optional descriptions/colors/movement and dirty-close confirmation make the catalog manageable without changing backend contracts. All existing audit/version/impact/lifecycle controls remain. Dedicated synthetic Edge workflow covers the changed UI; current validation results are recorded in the PR and RUNBOOK. This does not close live DB, native zoom or assistive-technology gates.
@@ -192,6 +238,14 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+### Reason markers and on-demand entry (1 November 2026)
+
+Implemented required red asterisks and explicit optional labels for reason inputs, following existing API/service validation. Inline operational/finance reasons now use Add/Edit to open a desktop dialog or mobile bottom drawer; reasons in existing editor overlays retain their location. Use reason commits locally without submitting the action, and dismissing the prompt preserves the previous committed reason. ConfirmationDialog enforces its disabled confirmation state while leaving Cancel usable.
+
+Verification complete for this slice: focused mocked Edge cases passed for desktop/mobile KOL reason entry (2), reschedule/changed-session flows (6), economy activation (1) and catalog reason/lifecycle flows (4, across bounded invocations). Initial catalog navigation timeouts cleared on isolated reruns; its move test now expands the collapsed group before selecting a specialization. Reviewed desktop/mobile reason prompt screenshots. Web/E2E/UI typechecks pass with constrained memory; focused formatting and lint pass with existing warnings, and the CRLF-aware diff check passes. A concurrent web typecheck exhausted memory before the bounded serial rerun passed.
+
+Live Academy/enrollment/economy/booking specs were updated for the new reason prompts/selectors but were not run. No API policy change, DB/storage/provider acceptance or broader release readiness is implied.
 
 ### Tutor honorarium in booking detail (2026-10-29)
 
@@ -430,3 +484,7 @@ Bounded acceptance uses the existing mocked Edge KB/calendar harness on 3316/331
 Verification: 11/11 installed-Edge tests passed (40.1s); serial web/E2E TS-Go, focused lint and formatting passed. Resource list targets have a 40px minimum height.
 
 Parent integration check (26 October 2026): after merging release head 8945a6d6 into the feature, all 11 synthetic Edge cases passed again (1.2 minutes). Reviewed 320px screenshots for both editors. This is mocked UI/wire evidence, not DB, storage, provider or production proof.
+
+### Unified admin Referrals (2026-11-01)
+
+Implemented: single Referrals sidebar entry; URL-backed Activity, Campaigns and Commissions tabs; compact campaign table; existing KOL decision, CSV and settlement UI composed under Commissions; previous commission URL redirects. Activity/campaign requests are deferred to their tab. Financial RPC contracts and student friend-code ownership are unchanged. Campaign promotion support and campaign-level commission aggregation are outside this navigation change. Validation: 19 relevant synthetic browser cases passed across the two runs; lint passed. Four student referral expectations, two broader settlement checks and concurrent class-management type errors remain open; see RUNBOOK for scope.

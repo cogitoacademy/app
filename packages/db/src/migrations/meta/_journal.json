@@ -600,8 +600,15 @@
     {
       "idx": 85,
       "version": "7",
+      "when": 1793532529195,
+      "tag": "0085_academy_class_single_language",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
       "when": 1793573002422,
-      "tag": "0085_fresh_spirit",
+      "tag": "0086_fresh_spirit",
       "breakpoints": true
     }
   ]

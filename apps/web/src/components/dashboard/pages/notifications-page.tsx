@@ -40,12 +40,15 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
+import type { CogitoUser } from "@cogito-app/auth";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
 import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
+import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import { getNotificationTarget } from "@/lib/notification-destination";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
@@ -113,6 +116,8 @@ function getCategoryVariant(category: string) {
 export function NotificationsPage() {
   const now = useNow();
   const queryClient = useQueryClient();
+  const auth = authClient.useSession();
+  const role = (auth.data?.user as CogitoUser | undefined)?.role;
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -332,6 +337,7 @@ export function NotificationsPage() {
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
+                  role={role}
                   now={now}
                   selected={selectedIds.has(notification.id)}
                   isPending={
@@ -371,6 +377,7 @@ export function NotificationsPage() {
 
 function NotificationItem({
   notification,
+  role,
   now,
   selected,
   isPending,
@@ -378,6 +385,7 @@ function NotificationItem({
   onUpdateReadStatus,
 }: {
   notification: NotificationItemData;
+  role: string | undefined;
   now: number;
   selected: boolean;
   isPending: boolean;
@@ -386,6 +394,7 @@ function NotificationItem({
 }) {
   const date = toDate(notification.createdAt);
   const dateTime = date.toISOString();
+  const target = getNotificationTarget(notification, role);
 
   return (
     <Item
@@ -457,7 +466,7 @@ function NotificationItem({
         >
           {notification.isRead ? <IconMail /> : <IconMailOpened />}
         </Button>
-        {notification.bookingId ? (
+        {target.to === "/bookings/$bookingId" ? (
           <Button
             variant="plain"
             size="xs-icon"
@@ -465,7 +474,7 @@ function NotificationItem({
             render={
               <Link
                 to="/bookings/$bookingId"
-                params={{ bookingId: notification.bookingId }}
+                params={{ bookingId: target.bookingId }}
                 aria-label="View booking details"
               />
             }
@@ -473,7 +482,33 @@ function NotificationItem({
           >
             <IconExternalLink />
           </Button>
-        ) : notification.metadata?.action === "class-session-report" ? (
+        ) : target.to === "/classes/$classId" ? (
+          <Button
+            variant="plain"
+            size="xs-icon"
+            aria-label="View class details"
+            render={
+              <Link
+                to="/classes/$classId"
+                params={{ classId: target.classId }}
+                aria-label="View class details"
+              />
+            }
+            nativeButton={false}
+          >
+            <IconExternalLink />
+          </Button>
+        ) : target.to === "/my-classes" ? (
+          <Button
+            variant="plain"
+            size="xs-icon"
+            aria-label="View my classes"
+            render={<Link to="/my-classes" aria-label="View my classes" />}
+            nativeButton={false}
+          >
+            <IconExternalLink />
+          </Button>
+        ) : target.to === "/class-reports" ? (
           <Button
             variant="plain"
             size="xs-icon"

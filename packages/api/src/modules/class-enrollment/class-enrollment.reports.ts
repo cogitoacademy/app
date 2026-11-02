@@ -13,11 +13,13 @@ import {
 import {
   academyClass,
   academyClassEnrollmentAllocation,
+  academyClassMeeting,
   academyClassSession,
   academyClassSessionReport,
   academyClassSessionReportRevision,
   academyClassTutorAbsence,
   auditLog,
+  room as roomTable,
   tutorSessionFee,
   wallet as walletTable,
 } from "@cogito-app/db/schema";
@@ -488,6 +490,11 @@ export function createClassSessionReportService(deps: {
       : [];
     if (actorRole === "tutor")
       conditions.push(
+        inArray(academyClassSession.state, [
+          "scheduled",
+          "completed",
+          "cancelled",
+        ]),
         or(
           eq(academyClassSessionReport.deliveryTutorId, actorId),
           and(
@@ -514,15 +521,19 @@ export function createClassSessionReportService(deps: {
               ),
             ),
         ),
-        exists(
-          deps.db
-            .select({ one: sql`1` })
-            .from(academyClassSessionReport)
-            .where(
-              eq(academyClassSessionReport.sessionId, academyClassSession.id),
-            ),
-        ),
       );
+      if (!rawInput.includeUnreported) {
+        conditions.push(
+          exists(
+            deps.db
+              .select({ one: sql`1` })
+              .from(academyClassSessionReport)
+              .where(
+                eq(academyClassSessionReport.sessionId, academyClassSession.id),
+              ),
+          ),
+        );
+      }
     } else {
       conditions.push(
         inArray(academyClassSession.state, [
@@ -538,14 +549,20 @@ export function createClassSessionReportService(deps: {
         classTitle: academyClass.titleEn,
         classNumber: academyClass.classNumber,
         classKind: academyClass.kind,
+        classDescription: academyClass.descriptionEn,
         sessionId: academyClassSession.id,
         tutorId: academyClassSession.tutorId,
         sequenceNumber: academyClassSession.sequenceNumber,
         sessionTitle: academyClassSession.titleEn,
+        curriculumEn: academyClassSession.curriculumEn,
         startAt: academyClassSession.startAt,
         endAt: academyClassSession.endAt,
         mode: academyClassSession.mode,
         state: academyClassSession.state,
+        meetingStatus: academyClassMeeting.status,
+        meetingUrl: academyClassMeeting.meetingUrl,
+        roomName: roomTable.name,
+        roomLocation: roomTable.location,
         absenceReportedAt: academyClassTutorAbsence.reportedAt,
         absenceLate: academyClassTutorAbsence.late,
         tutorFeeIdr: academyClassSession.tutorFeeIdr,
@@ -574,6 +591,11 @@ export function createClassSessionReportService(deps: {
           ),
         ),
       )
+      .leftJoin(
+        academyClassMeeting,
+        eq(academyClassMeeting.sessionId, academyClassSession.id),
+      )
+      .leftJoin(roomTable, eq(roomTable.id, academyClassSession.roomId))
       .where(and(...conditions))
       .orderBy(
         asc(academyClassSession.startAt),
@@ -622,14 +644,30 @@ export function createClassSessionReportService(deps: {
       classTitle: row.classTitle,
       classNumber: row.classNumber,
       classKind: row.classKind as "cohort" | "masterclass",
+      classDescription: row.classDescription,
       sessionId: row.sessionId,
       tutorId: row.tutorId,
       sequenceNumber: row.sequenceNumber,
       sessionTitle: row.sessionTitle,
+      curriculumEn: row.curriculumEn,
       startAt: row.startAt,
       endAt: row.endAt,
       mode: row.mode as "online" | "in_person",
       state: row.state as "scheduled" | "completed" | "cancelled",
+      meeting: !row.meetingStatus
+        ? null
+        : {
+            status: row.meetingStatus as
+              | "pending"
+              | "processing"
+              | "created"
+              | "failed"
+              | "cancelled",
+            meetingUrl: row.meetingStatus === "created" ? row.meetingUrl : null,
+          },
+      room: !row.roomName
+        ? null
+        : { name: row.roomName, location: row.roomLocation ?? "" },
       absenceReportedAt: actorRole === "student" ? null : row.absenceReportedAt,
       absenceLate: actorRole === "student" ? null : row.absenceLate,
       report: row.reportId

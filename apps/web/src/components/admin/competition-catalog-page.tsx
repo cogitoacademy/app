@@ -29,7 +29,6 @@ import {
   IconChevronRight,
   IconCirclePlus,
   IconDeviceFloppy,
-  IconPalette,
   IconRefresh,
   IconRestore,
   IconSearch,
@@ -37,6 +36,13 @@ import {
 } from "@tabler/icons-react";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import {
@@ -62,6 +68,7 @@ import {
   DrawerDescription,
   DrawerBody,
   DrawerClose,
+  DrawerFooter,
 } from "@cogito-app/ui/components/selia/drawer";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -245,6 +252,9 @@ export function CompetitionCatalogPage() {
   const [actionReason, setActionReason] = useState("");
   const [moveTargetId, setMoveTargetId] = useState("");
   const [moveReason, setMoveReason] = useState("");
+  const [pendingDiscard, setPendingDiscard] = useState<(() => void) | null>(
+    null,
+  );
 
   const listQuery = useQuery({
     ...orpc.admin.listCompetitionCatalog.queryOptions({
@@ -507,49 +517,67 @@ export function CompetitionCatalogPage() {
     setVersionConflict(false);
   }, [detailQuery.data, editorMode, isDirty]);
 
-  const confirmDiscard = () =>
-    !(isDirty || moveReason.trim() || moveTargetId) ||
-    window.confirm("Discard your unsaved catalog changes?");
+  const hasUnsavedChanges = Boolean(
+    isDirty || moveReason.trim() || moveTargetId,
+  );
 
-  const selectEntry = (entry: CatalogEntry) => {
-    if (!confirmDiscard()) return;
-    setEditorOpen(true);
-    setSelectedId(entry.id);
-    setEditorMode(null);
-    setDraft(draftFromEntry(entry));
+  const runOrConfirmDiscard = (action: () => void) => {
+    if (!hasUnsavedChanges) {
+      action();
+      return;
+    }
+    setPendingDiscard(() => action);
+  };
+
+  const discardEditorState = () => {
+    setEditorOpen(false);
     setIsDirty(false);
-    setVersionConflict(false);
     setMoveTargetId("");
     setMoveReason("");
+  };
+
+  const selectEntry = (entry: CatalogEntry) => {
+    runOrConfirmDiscard(() => {
+      setEditorOpen(true);
+      setSelectedId(entry.id);
+      setEditorMode(null);
+      setDraft(draftFromEntry(entry));
+      setIsDirty(false);
+      setVersionConflict(false);
+      setMoveTargetId("");
+      setMoveReason("");
+    });
   };
 
   const startCreateParent = () => {
-    if (!confirmDiscard()) return;
-    setEditorOpen(true);
-    setMoveTargetId("");
-    setMoveReason("");
-    setSelectedId(null);
-    setEditorMode("parent");
-    setDraft(emptyDraft);
-    setIsDirty(false);
-    setVersionConflict(false);
+    runOrConfirmDiscard(() => {
+      setEditorOpen(true);
+      setMoveTargetId("");
+      setMoveReason("");
+      setSelectedId(null);
+      setEditorMode("parent");
+      setDraft(emptyDraft);
+      setIsDirty(false);
+      setVersionConflict(false);
+    });
   };
 
   const startCreateSpecialization = (parentId: string) => {
-    if (!confirmDiscard()) return;
-    setEditorOpen(true);
-    setMoveTargetId("");
-    setMoveReason("");
-    const parent = entries.find((entry) => entry.id === parentId);
-    setSelectedId(parentId);
-    setEditorMode("specialization");
-    setDraft({
-      ...emptyDraft,
-      parentId,
-      sortOrder: String((parent?.sortOrder ?? -1) + 1),
+    runOrConfirmDiscard(() => {
+      setEditorOpen(true);
+      setMoveTargetId("");
+      setMoveReason("");
+      const parent = entries.find((entry) => entry.id === parentId);
+      setSelectedId(parentId);
+      setEditorMode("specialization");
+      setDraft({
+        ...emptyDraft,
+        parentId,
+        sortOrder: String((parent?.sortOrder ?? -1) + 1),
+      });
+      setIsDirty(false);
+      setVersionConflict(false);
     });
-    setIsDirty(false);
-    setVersionConflict(false);
   };
 
   const updateDraft = (key: keyof CatalogDraft, value: string) => {
@@ -861,16 +889,17 @@ export function CompetitionCatalogPage() {
                         }
                       }}
                     >
-                      <TableCell className="py-2">
-                        <span className="inline-flex items-center gap-2.5 font-medium">
+                      <TableCell className="py-2 align-middle">
+                        <div className="flex items-center gap-2.5 font-medium">
                           <IconChevronRight
+                            aria-hidden="true"
                             className={`size-4 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
                           />
                           {parent.name}
                           <span className="font-normal text-muted">
                             ({types.length})
                           </span>
-                        </span>
+                        </div>
                       </TableCell>
                       <TableCell className="py-2">
                         <Badge variant={status.variant}>{status.label}</Badge>
@@ -1000,12 +1029,7 @@ export function CompetitionCatalogPage() {
             actionTarget
           )
             return;
-          if (confirmDiscard()) {
-            setEditorOpen(false);
-            setIsDirty(false);
-            setMoveTargetId("");
-            setMoveReason("");
-          }
+          runOrConfirmDiscard(discardEditorState);
         }}
       >
         <DrawerPopup className="max-w-2xl">
@@ -1143,37 +1167,43 @@ export function CompetitionCatalogPage() {
                     }
                   />
                 </Field>
-                <details className="sm:col-span-2">
-                  <summary className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-primary">
-                    Descriptions (optional)
-                  </summary>
-                  <div className="mt-4 space-y-4">
-                    <Field className="sm:col-span-2">
-                      <FieldLabel htmlFor="catalog-description">
-                        Description (English)
-                      </FieldLabel>
-                      <Textarea
-                        id="catalog-description"
-                        value={draft.description}
-                        onChange={(event) =>
-                          updateDraft("description", event.target.value)
-                        }
-                      />
-                    </Field>
-                    <Field className="sm:col-span-2">
-                      <FieldLabel htmlFor="catalog-description-id">
-                        Description (Indonesian)
-                      </FieldLabel>
-                      <Textarea
-                        id="catalog-description-id"
-                        value={draft.descriptionId}
-                        onChange={(event) =>
-                          updateDraft("descriptionId", event.target.value)
-                        }
-                      />
-                    </Field>
-                  </div>
-                </details>
+                <Accordion className="sm:col-span-2">
+                  <AccordionItem className="border-0">
+                    <AccordionHeader>
+                      <AccordionTrigger type="button" className="font-medium">
+                        Descriptions (optional)
+                      </AccordionTrigger>
+                    </AccordionHeader>
+                    <AccordionPanel>
+                      <div className="space-y-4">
+                        <Field className="sm:col-span-2">
+                          <FieldLabel htmlFor="catalog-description">
+                            Description (English)
+                          </FieldLabel>
+                          <Textarea
+                            id="catalog-description"
+                            value={draft.description}
+                            onChange={(event) =>
+                              updateDraft("description", event.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field className="sm:col-span-2">
+                          <FieldLabel htmlFor="catalog-description-id">
+                            Description (Indonesian)
+                          </FieldLabel>
+                          <Textarea
+                            id="catalog-description-id"
+                            value={draft.descriptionId}
+                            onChange={(event) =>
+                              updateDraft("descriptionId", event.target.value)
+                            }
+                          />
+                        </Field>
+                      </div>
+                    </AccordionPanel>
+                  </AccordionItem>
+                </Accordion>
                 <Field>
                   <FieldLabel htmlFor="catalog-sort">Display order</FieldLabel>
                   <SeliaNumberField
@@ -1217,83 +1247,93 @@ export function CompetitionCatalogPage() {
 
               {editorMode === "parent" ||
               (!editorMode && selectedEntry?.parentId === null) ? (
-                <details
-                  open={editorMode === "parent"}
-                  className="mt-7 border-t border-border pt-6"
-                  aria-labelledby="catalog-palette-title"
-                >
-                  <summary className="mb-4 cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">
-                    Display colors
-                  </summary>
-                  <div className="mb-4 flex items-center gap-2">
-                    <IconPalette className="size-5 text-muted" />
-                    <div>
-                      <Heading
-                        id="catalog-palette-title"
-                        level={2}
-                        className="text-base"
-                      >
-                        Display palette
-                      </Heading>
-                      <Text className="text-sm text-muted">
-                        Specializations inherit these four opaque color values.
-                      </Text>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {paletteFields.map(({ key, label }) => (
-                      <Field key={key}>
-                        <FieldLabel htmlFor={`palette-${key}`}>
-                          {label} *
-                        </FieldLabel>
-                        <Input
-                          id={`palette-${key}`}
-                          spellCheck={false}
-                          autoCapitalize="off"
-                          autoCorrect="off"
-                          value={draft[key]}
-                          onChange={(event) =>
-                            updateDraft(key, event.target.value)
-                          }
-                          aria-invalid={
-                            draft[key].length > 0 && !isValidColor(draft[key])
-                          }
-                          placeholder="oklch(0.5 0.02 250)"
-                        />
-                        <FieldDescription>
-                          Enter opaque <code>oklch(L C H)</code>.
-                        </FieldDescription>
-                      </Field>
-                    ))}
-                  </div>
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <PalettePreview title="Light theme" palette={palette} />
-                    <PalettePreview title="Dark theme" palette={palette} dark />
-                  </div>
-                  {!paletteIsValid && editorMode === "parent" ? (
-                    <Text role="alert" className="mt-3 text-sm text-danger">
-                      Enter all four valid OKLCH values before saving.
-                    </Text>
-                  ) : null}
-                  {contrastWarnings.length > 0 ? (
-                    <Text role="status" className="mt-3 text-sm text-warning">
-                      Contrast warning:{" "}
-                      {contrastWarnings
-                        .map(
-                          ({ theme, ratio }) =>
-                            `${theme} pair ${formatRatio(ratio)}`,
-                        )
-                        .join("; ")}{" "}
-                      is below 4.5:1. This is advisory and does not block
-                      saving.
-                    </Text>
-                  ) : null}
-                  {editorMode !== "parent" ? (
-                    <Text className="mt-3 text-sm text-muted">
-                      This specialization uses its parent’s current palette.
-                    </Text>
-                  ) : null}
-                </details>
+                <div className="mt-7 border-t border-border pt-6">
+                  <Accordion
+                    key={`palette-${editorMode ?? "view"}-${selectedEntry?.id ?? "new"}`}
+                    defaultValue={editorMode === "parent" ? ["colors"] : []}
+                  >
+                    <AccordionItem value="colors" className="border-0">
+                      <AccordionHeader>
+                        <AccordionTrigger
+                          type="button"
+                          className="font-semibold"
+                        >
+                          Display colors
+                        </AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {paletteFields.map(({ key, label }) => (
+                            <Field key={key}>
+                              <FieldLabel htmlFor={`palette-${key}`}>
+                                {label} *
+                              </FieldLabel>
+                              <Input
+                                id={`palette-${key}`}
+                                spellCheck={false}
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                value={draft[key]}
+                                onChange={(event) =>
+                                  updateDraft(key, event.target.value)
+                                }
+                                aria-invalid={
+                                  draft[key].length > 0 &&
+                                  !isValidColor(draft[key])
+                                }
+                                placeholder="oklch(0.5 0.02 250)"
+                              />
+                              <FieldDescription>
+                                Enter opaque <code>oklch(L C H)</code>.
+                              </FieldDescription>
+                            </Field>
+                          ))}
+                        </div>
+                        <div className="mt-5 grid gap-4 md:grid-cols-2">
+                          <PalettePreview
+                            title="Light theme"
+                            palette={palette}
+                          />
+                          <PalettePreview
+                            title="Dark theme"
+                            palette={palette}
+                            dark
+                          />
+                        </div>
+                        {!paletteIsValid && editorMode === "parent" ? (
+                          <Text
+                            role="alert"
+                            className="mt-3 text-sm text-danger"
+                          >
+                            Enter all four valid OKLCH values before saving.
+                          </Text>
+                        ) : null}
+                        {contrastWarnings.length > 0 ? (
+                          <Text
+                            role="status"
+                            className="mt-3 text-sm text-warning"
+                          >
+                            Contrast warning:{" "}
+                            {contrastWarnings
+                              .map(
+                                ({ theme, ratio }) =>
+                                  `${theme} pair ${formatRatio(ratio)}`,
+                              )
+                              .join("; ")}{" "}
+                            is below 4.5:1. This is advisory and does not block
+                            saving.
+                          </Text>
+                        ) : null}
+                        {editorMode !== "parent" ? (
+                          <Text className="mt-3 text-sm text-muted">
+                            This specialization uses its parent’s current
+                            palette.
+                          </Text>
+                        ) : null}
+                      </AccordionPanel>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
               ) : selectedEntry ? (
                 <section
                   className="mt-7 border-t border-border pt-6"
@@ -1316,78 +1356,100 @@ export function CompetitionCatalogPage() {
               {selectedEntry &&
               !editorMode &&
               selectedEntry.parentId !== null ? (
-                <details className="mt-7 border-t border-border pt-6">
-                  <summary className="mb-3 cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">
-                    Move specialization
-                  </summary>
-                  <Text className="mb-3 text-sm text-muted">
-                    Unused specializations can move between competitions. The
-                    server checks current references before moving.
-                  </Text>
-                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                    <Field>
-                      <FieldLabel htmlFor="move-parent">Destination</FieldLabel>
-                      <Select
-                        value={moveTargetId}
-                        onValueChange={(value) =>
-                          setMoveTargetId(String(value ?? ""))
-                        }
-                        items={parentEntries
-                          .filter(
-                            (parent) => parent.id !== selectedEntry.parentId,
-                          )
-                          .map((parent) => ({
-                            value: parent.id,
-                            label: parent.name,
-                          }))}
-                      >
-                        <SelectTrigger id="move-parent">
-                          <SelectValue placeholder="Choose destination" />
-                        </SelectTrigger>
-                        <SelectPopup>
-                          <SelectList>
-                            {parentEntries
-                              .filter(
-                                (parent) =>
-                                  parent.id !== selectedEntry.parentId,
-                              )
-                              .map((parent) => (
-                                <SelectItem key={parent.id} value={parent.id}>
-                                  {parent.name}
-                                </SelectItem>
-                              ))}
-                          </SelectList>
-                        </SelectPopup>
-                      </Select>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="move-reason">Reason</FieldLabel>
-                      <Input
-                        id="move-reason"
-                        value={moveReason}
-                        onChange={(event) => setMoveReason(event.target.value)}
-                      />
-                    </Field>
-                    <Button
-                      variant="secondary"
-                      onClick={move}
-                      progress={moveSpecialization.isPending}
-                      disabled={
-                        !moveTargetId ||
-                        !moveReason.trim() ||
-                        moveSpecialization.isPending
-                      }
-                    >
-                      Move
-                    </Button>
-                  </div>
-                </details>
+                <div className="mt-7 border-t border-border pt-6">
+                  <Accordion key={selectedEntry.id}>
+                    <AccordionItem className="border-0">
+                      <AccordionHeader>
+                        <AccordionTrigger
+                          type="button"
+                          className="font-semibold"
+                        >
+                          Move specialization
+                        </AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <Text className="mb-3 text-sm text-muted">
+                          Unused specializations can move between competitions.
+                          The server checks current references before moving.
+                        </Text>
+                        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                          <Field>
+                            <FieldLabel htmlFor="move-parent">
+                              Destination
+                            </FieldLabel>
+                            <Select
+                              value={moveTargetId}
+                              onValueChange={(value) =>
+                                setMoveTargetId(String(value ?? ""))
+                              }
+                              items={parentEntries
+                                .filter(
+                                  (parent) =>
+                                    parent.id !== selectedEntry.parentId,
+                                )
+                                .map((parent) => ({
+                                  value: parent.id,
+                                  label: parent.name,
+                                }))}
+                            >
+                              <SelectTrigger id="move-parent">
+                                <SelectValue placeholder="Choose destination" />
+                              </SelectTrigger>
+                              <SelectPopup>
+                                <SelectList>
+                                  {parentEntries
+                                    .filter(
+                                      (parent) =>
+                                        parent.id !== selectedEntry.parentId,
+                                    )
+                                    .map((parent) => (
+                                      <SelectItem
+                                        key={parent.id}
+                                        value={parent.id}
+                                      >
+                                        {parent.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectList>
+                              </SelectPopup>
+                            </Select>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="move-reason" required>
+                              Reason
+                            </FieldLabel>
+                            <Input
+                              id="move-reason"
+                              value={moveReason}
+                              onChange={(event) =>
+                                setMoveReason(event.target.value)
+                              }
+                              aria-required="true"
+                            />
+                          </Field>
+                          <Button
+                            variant="secondary"
+                            onClick={move}
+                            progress={moveSpecialization.isPending}
+                            disabled={
+                              !moveTargetId ||
+                              !moveReason.trim() ||
+                              moveSpecialization.isPending
+                            }
+                          >
+                            Move
+                          </Button>
+                        </div>
+                      </AccordionPanel>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
               ) : null}
 
               <div className="mt-7 border-t border-border pt-6">
                 <Field>
-                  <FieldLabel htmlFor="catalog-reason">
-                    Change reason *
+                  <FieldLabel htmlFor="catalog-reason" required>
+                    Change reason
                   </FieldLabel>
                   <Textarea
                     id="catalog-reason"
@@ -1396,91 +1458,102 @@ export function CompetitionCatalogPage() {
                       updateDraft("reason", event.target.value)
                     }
                     placeholder="Required for the audit record"
+                    aria-required="true"
                   />
                   <FieldDescription>
                     Every catalog write is recorded with this reason.
                   </FieldDescription>
                 </Field>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Button
-                    onClick={save}
-                    progress={isSaving}
-                    disabled={
-                      isSaving ||
-                      (!editorMode && !hasCatalogChanges) ||
-                      !draft.reason.trim() ||
-                      !draft.name.trim() ||
-                      (editingParentPalette &&
-                        (!draft.slug.trim() || !paletteIsValid)) ||
-                      (editorMode === "specialization" &&
-                        (!draft.slug.trim() || !draft.parentId))
-                    }
-                  >
-                    <IconDeviceFloppy />{" "}
-                    {editorMode ? "Create entry" : "Save changes"}
-                  </Button>
-                  {selectedEntry && !editorMode ? (
-                    <Button
-                      variant="plain"
-                      onClick={() => {
-                        setDraft(draftFromEntry(selectedEntry));
-                        setIsDirty(false);
-                        setVersionConflict(false);
-                      }}
-                      disabled={isSaving}
-                    >
-                      Discard draft
-                    </Button>
-                  ) : null}
-                  {detailQuery.isFetching && selectedId ? (
-                    <Text className="text-sm text-muted">
-                      Refreshing current version…
-                    </Text>
-                  ) : null}
-                </div>
               </div>
-              {selectedEntry && !editorMode ? (
-                <details className="mt-7 border-t border-border pt-5">
-                  <summary className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-primary">
-                    Availability and deletion
-                  </summary>
-                  <Text className="my-3 text-sm text-muted">
-                    Archive to stop new selections while keeping history.
-                    Deletion is available only for unused entries.
-                  </Text>
-                  <div className="flex flex-wrap gap-2">
-                    {" "}
-                    {selectedEntry.isActive ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => openAction(selectedEntry, "archive")}
-                      >
-                        <IconArchive /> Archive
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        onClick={() => openAction(selectedEntry, "restore")}
-                        disabled={
-                          !selectedEntry.rateConfigured ||
-                          (selectedEntry.parentId !== null &&
-                            selectedEntry.parent?.isActive !== true)
-                        }
-                      >
-                        <IconRestore /> Restore
-                      </Button>
-                    )}
-                    <Button
-                      variant="danger"
-                      onClick={() => openAction(selectedEntry, "delete")}
-                    >
-                      <IconTrash /> Delete
-                    </Button>
-                  </div>
-                </details>
-              ) : null}
             </div>
           </DrawerBody>
+          <DrawerFooter className="flex-col items-stretch gap-3 text-left">
+            {selectedEntry && !editorMode ? (
+              <div>
+                <Heading
+                  id="catalog-availability-title"
+                  level={2}
+                  className="text-base"
+                >
+                  Availability and deletion
+                </Heading>
+                <Text className="text-sm text-muted">
+                  Archive to stop new selections while keeping history. Deletion
+                  is available only for unused entries.
+                </Text>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+              {selectedEntry && !editorMode ? (
+                <>
+                  {selectedEntry.isActive ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => openAction(selectedEntry, "archive")}
+                    >
+                      <IconArchive /> Archive
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      onClick={() => openAction(selectedEntry, "restore")}
+                      disabled={
+                        !selectedEntry.rateConfigured ||
+                        (selectedEntry.parentId !== null &&
+                          selectedEntry.parent?.isActive !== true)
+                      }
+                    >
+                      <IconRestore /> Restore
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    size="icon"
+                    aria-label="Delete"
+                    title="Delete"
+                    onClick={() => openAction(selectedEntry, "delete")}
+                  >
+                    <IconTrash aria-hidden="true" />
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                onClick={save}
+                progress={isSaving}
+                disabled={
+                  isSaving ||
+                  (!editorMode && !hasCatalogChanges) ||
+                  !draft.reason.trim() ||
+                  !draft.name.trim() ||
+                  (editingParentPalette &&
+                    (!draft.slug.trim() || !paletteIsValid)) ||
+                  (editorMode === "specialization" &&
+                    (!draft.slug.trim() || !draft.parentId))
+                }
+              >
+                <IconDeviceFloppy />{" "}
+                {editorMode ? "Create entry" : "Save changes"}
+              </Button>
+              {selectedEntry && !editorMode ? (
+                <Button
+                  variant="plain"
+                  onClick={() => {
+                    setDraft(draftFromEntry(selectedEntry));
+                    setIsDirty(false);
+                    setVersionConflict(false);
+                  }}
+                  disabled={isSaving}
+                >
+                  Discard draft
+                </Button>
+              ) : null}
+              {detailQuery.isFetching && selectedId ? (
+                <Text className="text-sm text-muted">
+                  Refreshing current version…
+                </Text>
+              ) : null}
+            </div>
+          </DrawerFooter>
         </DrawerPopup>
       </Drawer>
 
@@ -1516,12 +1589,15 @@ export function CompetitionCatalogPage() {
               />
             ) : null}
             <Field className="mt-4">
-              <FieldLabel htmlFor="catalog-action-reason">Reason *</FieldLabel>
+              <FieldLabel htmlFor="catalog-action-reason" required>
+                Reason
+              </FieldLabel>
               <Textarea
                 id="catalog-action-reason"
                 value={actionReason}
                 onChange={(event) => setActionReason(event.target.value)}
                 placeholder="Required for the audit record"
+                aria-required="true"
               />
             </Field>
           </DialogBody>
@@ -1545,6 +1621,37 @@ export function CompetitionCatalogPage() {
                 : actionTarget?.action === "restore"
                   ? "Restore"
                   : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={pendingDiscard !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDiscard(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <div>
+              <DialogTitle>Discard unsaved changes?</DialogTitle>
+              <DialogDescription>
+                Your changes will be lost if you continue.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose>Keep editing</DialogClose>
+            <Button
+              variant="danger"
+              onClick={() => {
+                const action = pendingDiscard;
+                setPendingDiscard(null);
+                action?.();
+              }}
+            >
+              Discard
             </Button>
           </DialogFooter>
         </DialogPopup>

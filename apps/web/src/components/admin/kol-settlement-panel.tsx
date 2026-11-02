@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ReasonField } from "@/components/reason-field";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -9,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -35,6 +37,8 @@ export function KolSettlementPanel({
   const query = useQuery(
     orpc.adminReferral.getKolSettlement.queryOptions({ input: { decisionId } }),
   );
+  const [paidAt, setPaidAt] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
   const [formVersion, setFormVersion] = useState(0);
   const [command, setCommand] = useState<Command | null>(null);
   const mutation = useMutation({
@@ -44,6 +48,7 @@ export function KolSettlementPanel({
         : client.adminReferral.adjustKolCommission(value.input),
     onSuccess: async () => {
       setCommand(null);
+      setAdjustmentReason("");
       setFormVersion((version) => version + 1);
       await query.refetch();
     },
@@ -64,6 +69,7 @@ export function KolSettlementPanel({
       mutation.mutate(command);
       return;
     }
+    if (kind === "adjustment" && adjustmentReason.trim().length < 3) return;
     const values = new FormData(form);
     const base = {
       decisionId,
@@ -193,7 +199,13 @@ export function KolSettlementPanel({
           </Field>
           <Field>
             <FieldLabel>Actual payment date (WIB)</FieldLabel>
-            <Input name="paidAt" type="date" required disabled={locked} />
+            <DatePicker
+              value={paidAt}
+              onChange={setPaidAt}
+              required
+              disabled={locked}
+            />
+            <input type="hidden" name="paidAt" value={paidAt} />
           </Field>
           <Field>
             <FieldLabel>Transfer reference</FieldLabel>
@@ -232,16 +244,16 @@ export function KolSettlementPanel({
               disabled={locked}
             />
           </Field>
-          <Field>
-            <FieldLabel>Correction reason (required)</FieldLabel>
-            <Input
-              name="reason"
-              required
-              minLength={3}
-              maxLength={600}
-              disabled={locked}
-            />
-          </Field>
+          <ReasonField
+            label="Correction reason"
+            name="reason"
+            value={adjustmentReason}
+            onChange={setAdjustmentReason}
+            required
+            minLength={3}
+            maxLength={600}
+            disabled={locked}
+          />
           <Text className="text-muted">
             Positive increases the obligation; negative decreases it. This
             preserves the student's choice and every settled transfer. Correct
@@ -252,6 +264,7 @@ export function KolSettlementPanel({
             type="submit"
             disabled={
               locked ||
+              adjustmentReason.trim().length < 3 ||
               data.decision.paymentStatusSnapshot === "REFUNDED" ||
               data.decision.providerSuccessTimeState === "unresolved"
             }

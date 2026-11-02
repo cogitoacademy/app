@@ -567,7 +567,9 @@ export function ContentPage({
         </label>
         {kind === "resource" ? (
           <Field>
-            <FieldLabel htmlFor="content-reason">Reason for change</FieldLabel>
+            <FieldLabel htmlFor="content-reason" required>
+              Reason for change
+            </FieldLabel>
             <Input
               id="content-reason"
               required
@@ -575,6 +577,7 @@ export function ContentPage({
               maxLength={600}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              aria-required="true"
             />
           </Field>
         ) : null}

@@ -1,5 +1,29 @@
 # Cogito API Reference
 
+## Single-language class content (1 November 2026)
+
+Academy class draft inputs and admin/public outputs have one content value per field: class `titleEn`, `descriptionEn`; session `titleEn`, `curriculumEn`. Removed `titleId`, `descriptionId`, and session `curriculumId` are no longer part of these contracts or database tables. Existing Zod unknown-key stripping applies to obsolete input properties. No locale-specific class read fallback is used.
+
+## Compact class detail controls (1 November 2026)
+
+Moving the minimum check to Administration and opening session changes in dialogs changes no RPC contracts. Schedule and tutor updates still submit their expected session version and required reason; cancellation retains its preview, quote version, request key and confirmation.
+
+## Academy class action confirmation UI (1 November 2026)
+
+Class/session cancellation still use their existing preview and confirm RPCs, quote versions and request keys. Reschedule, tutor replacement, meeting retry and minimum decision RPC contracts are unchanged; reasons are collected after the admin chooses an action.
+
+## Shared detail data (1 November 2026)
+
+`admin/getAcademyClass` remains admin-only with `{json: {id}}` input. Its sessions now include `tutorAbsence` (matching current tutor and assignment version, or null) and `tutorLateNoticeCount` on each absence history entry, using the same enrichment as `admin/listAcademyClasses`. The count covers the tutor's late notices across classes. Public `classes/get` remains a redacted catalog response; no admin fields or management procedures are exposed to students. Booking detail consolidation adds no RPC or input changes.
+
+## Public class session status (1 November 2026)
+
+Public `classes/list` and `classes/get` responses now include `endAt` and `state` on each session. The class detail page uses these fields to show an `Upcoming`, `In progress`, `Completed`, or `Cancelled` badge in the curriculum and schedule accordion. The badge sits at the end of the trigger row, directly before the expand indicator. No new procedure or input is added.
+
+## Reason entry UI (1 November 2026)
+
+Request/response contracts and reason requirements are unchanged. UI markers reflect existing validation: required reasons show a red asterisk; optional reasons show `(optional)`. In particular, `adminContent/create`, `update` and `remove` still require a reason for `resource` entries in the service even though their shared input schema permits omission for calendar entries. Invite-decline/withdrawal reasons remain optional. Moving inline input into a dialog/drawer does not submit an RPC; the existing action submits the saved reason in the normal `{json: input}` envelope.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
@@ -251,7 +275,9 @@ links must be HTTP(S) without credentials. New categories must be active catalog
 parents; existing archived categories may be retained on edits.
 
 `content.listCompetitions` remains authenticated. `content.listStudentResources`
-retains its wallet gate and metadata-only projection. File route/IDs are unchanged:
+retains its wallet gate and metadata-only projection. DB mode returns the stable
+`category` ID plus `categoryName` resolved from the parent competition, so the
+student card and filter show a readable label. File route/IDs are unchanged:
 `/content/knowledge-bank/:resourceId/file` independently authenticates, checks
 role + 35-Mark/admin-grant eligibility, and returns private/no-store PDF bytes.
 DB mode includes no Sanity URL, storage key or raw source fields in these DTOs.
@@ -354,7 +380,11 @@ reason }`; creates an audited settings revision.
 flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
   globally unique, and at least one commission term is positive.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
-  campaign dates, code, attribution window, and saved terms.
+  campaign dates, code, attribution window, saved terms, and `pausedAt`.
+- `POST /rpc/adminReferral/setKolCampaignPaused` — admin; input
+  `{ id, paused, reason }`. Pausing stores `pausedAt` and stops new sign-ups
+  only; existing referral choices keep their attribution window. Resuming
+  clears `pausedAt`. The action is audited and idempotent.
 
 `POST /rpc/adminReferral/listKolCommissions` — admin; input
 `{ limit?: 1..100 (default 50), cursor?: string }`; returns
@@ -1471,10 +1501,10 @@ used to retrieve production OTPs.
 
 - **RPC paths:** `/rpc/admin/listAcademyClasses`, `/rpc/admin/getAcademyClass`, `/rpc/admin/saveAcademyClassDraft`
 - **Auth:** Admin
-- **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, optional Indonesian fields, optional `coverKey`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
+- **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
 - **Output:** Admin class/session rows with competition, tutor, and managed-room labels. Save returns the saved class and ordered sessions.
 - **Admin view refresh:** The page combines separate published and postponed list results by class ID and keeps the highest-version record while those query snapshots refresh. This client-side rule does not change either RPC's input or output.
-- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; approved class assets remain pending. Drafts are not public and do not reserve rooms.
+- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. Drafts are not public and do not reserve rooms.
 - **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session; tutor fee defaults to Rp400,000 per session in either delivery mode and is editable per class. Masterclasses default to 5 Marks and Rp300,000 tutor fee, also editable per class. Publication requires each session's fee snapshot to match the class fee; reassignment does not change it.
 - **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
 
@@ -1508,7 +1538,7 @@ used to retrieve production OTPs.
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
+- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, session lifecycle state, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
 - **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment data is never included in this public read contract.
 
 ### `classes.getMyEnrollments`, `classes.createEnrollment`
@@ -1556,11 +1586,11 @@ used to retrieve production OTPs.
 
 - **RPC path:** `/rpc/classes/listSessionReports` (oRPC procedure key `classes.listSessionReports`)
 - **OpenAPI route:** `/classes/sessions/reports/list`
-- **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat and a report exists; admins can list all class sessions.
-- **Input:** `{ classId? }`.
-- **Output:** Ordered session rows containing class/session titles and IDs, class kind, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields.
+- **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat; admins can list all class sessions. Tutor results exclude draft sessions, so pre-publication assignments stay hidden until the class is published.
+- **Input:** `{ classId?, includeUnreported? }`. Students normally receive only sessions with a report; `includeUnreported: true` also returns their funded scheduled sessions for enrollment-guarded meeting access. The class detail uses this flag; the report workspace does not.
+- **Output:** Ordered session rows containing class/session titles and IDs, class kind, class description, curriculum, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields. `meeting` (`{ status, meetingUrl }`, URL only once created) and `room` (`{ name, location }`) are returned to every role for sessions the caller may access, including a funded student seat. A student without a funded allocation receives no row.
   `settlement` is `{ deductedMarks, tutorFeeIdr, settled }` for tutors/admins and `null` for students; before submission it previews the remaining funded-Mark deduction and fee, and after settlement it reflects persisted values.
-- **Privacy:** The DTO contains no student identity/roster or private meeting URL. A released/unfunded seat does not grant report access; funded students retain access to a report after settlement spends the allocation.
+- **Privacy:** The DTO contains no student identity/roster. A released/unfunded seat does not grant session or meeting access; funded students retain access to a report after settlement spends the allocation. Admins can read all sessions.
 - **Reminder behavior:** For an ended, still-scheduled cohort or masterclass session with no report, the existing scheduler sends a deduplicated action notification and email to the assigned tutor at `endAt` and once per 24 elapsed hours while the report remains pending. Catch-up queues only the current due period. A cancelled parent class remains eligible for a retained past session while that session is still scheduled; a cancelled/completed session, completed class, or submitted report stops reminders. The private action link opens `/class-reports`; the reminder does not change delivery or financial state, and no-show expiry alone does not complete a session. The same one-minute scheduler also runs the solo/group/series report-reminder worker: one identity per solo/group booking or series child, assigned-tutor-only notification and email, due at session end and every 24 elapsed hours, with current-period catch-up and a 100-candidate pass limit. Booking and child locks recheck tutor, schedule, report and state before the atomic notification/outbox write. A volatile keyset cursor rotates past failed candidates and resets on process restart; only the pagination key normalizes timestamps to milliseconds; SQL eligibility, current-period selection, and locked schedule fingerprints retain full stored timestamp precision. Separate scheduler counters are `bookingReportRemindersQueued` and `bookingReportRemindersFailed`. The existing global report scan runs in the shared one-minute job alongside second-installment reminders; its `reportRemindersQueued`/`reportRemindersFailed` counters remain separate from installment `remindersQueued`.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
@@ -2495,14 +2525,14 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. The room must be active and its capacity must cover the booking's target group size; an undersized room returns a validation error. Any prior requested room row is marked relocated before the confirmed row is inserted. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
 - **Auth:** Protected
 - **Input:** `{ roomId, startAt, endAt }`
 - **Output:** `{ available: boolean }`
-- **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation (tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+- **Description:** Returns whether a room is free for a time slot. Booking creation performs its own capacity/overlap request inside the booking transaction; this read-only check remains available for admin room controls.
 
 ### `room.relocate`
 
@@ -2511,7 +2541,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Moves a booking to a different room, freeing the previous one. The admin UI invokes this from the booking detail Offline room card after the operator selects the booking contextually.
+- **Description:** Moves a booking to a different room, freeing the previous one. The destination room must be active, at least as large as the booking's target group size, and free for the slot; otherwise the move is rejected. The admin UI invokes this from the booking detail Offline room card after the operator selects the booking contextually.
 
 ### `room.cancelBooking`
 
@@ -2815,3 +2845,5 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 `POST /rpc/adminBooking/retryMeeting` accepts `{"json":{"bookingId":"..."}}`. Admin only. It retries Google Meet creation for one confirmed online booking with a recorded failed Google Meet attempt, audits the action, and returns `{bookingId, scheduled}`. A failed retry leaves the booking confirmed for another attempt or manual-link setup.
 
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
+
+Admin Referrals tabs (2026-11-01): this navigation change adds no RPC inputs or outputs. Activity uses `/rpc/adminReferral/listUsage`, Campaigns uses `listKolCampaigns` / `createKolCampaign`, and Commissions uses the existing KOL decisions, monthly CSV and settlement procedures under `/rpc/adminReferral/`. Request/response envelopes and financial rules are unchanged. `view` is a web route search parameter, not an RPC field.

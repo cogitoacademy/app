@@ -83,3 +83,22 @@ test("validates draft version and session scheduling invariants", () => {
     );
   }
 });
+
+test("class drafts contain one content language", () => {
+  const input = validDraft();
+  const parsed = saveAcademyClassDraftInput.parse({
+    ...input,
+    titleId: "Removed",
+    descriptionId: "Removed",
+    sessions: input.sessions.map((session) => ({
+      ...session,
+      titleId: "Removed",
+      curriculumId: "Removed",
+    })),
+  });
+  expect(parsed).not.toHaveProperty("titleId");
+  expect(parsed).not.toHaveProperty("descriptionId");
+  expect(parsed.sessions[0]).not.toHaveProperty("titleId");
+  expect(parsed.sessions[0]).not.toHaveProperty("curriculumId");
+  expect(parsed.titleEn).toBe(input.titleEn);
+});

@@ -12,6 +12,8 @@ record; plan-file archives are not maintained.
 
 T10 implementation checkpoints: [public tutor API](active/T10-PUBLIC-TUTORS-API.md) and [FAQ admin/public API](active/T10-FAQ-CHECKPOINT.md).
 
+Automated UAT evidence: [test record with diagrams](active/V3-UAT-AUTOMATED-EVIDENCE.md), [story coverage](active/V3-USER-STORIES-COVERAGE.md), and [final-scope gap analysis](active/FINAL-SCOPE-V3-GAP-ANALYSIS.md).
+
 ## Active
 
 Release v3 implementation package (2026-10-18):

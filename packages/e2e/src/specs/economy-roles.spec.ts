@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { fillReasonPrompt } from "../helpers/reason-prompt";
 
 import {
   ADMIN_EMAIL,
@@ -191,9 +192,11 @@ test("admin can save and reload competition-based V3 draft rates", async ({
   try {
     await startEconomyEditing(page);
     await replaceNumberFieldValue(amount, original + 1);
-    await page
-      .getByLabel("Reason for this revision")
-      .fill("E2E V3 rate editing");
+    await fillReasonPrompt(
+      page,
+      "Reason for this revision",
+      "E2E V3 rate editing",
+    );
     await page
       .getByRole("button", { name: "Save draft revision", exact: true })
       .click();
@@ -206,9 +209,11 @@ test("admin can save and reload competition-based V3 draft rates", async ({
     await page.goto("/admin-economy");
     await startEconomyEditing(page);
     await replaceNumberFieldValue(amount, original);
-    await page
-      .getByLabel("Reason for this revision")
-      .fill("Restore E2E V3 rate");
+    await fillReasonPrompt(
+      page,
+      "Reason for this revision",
+      "Restore E2E V3 rate",
+    );
     await page
       .getByRole("button", { name: "Save draft revision", exact: true })
       .click();
@@ -230,9 +235,11 @@ test("admin blocks negative V3 rates without persisting them", async ({
   await expectNumberFieldValue(amount, 50);
   await startEconomyEditing(page);
   await replaceNumberFieldValue(amount, -5);
-  await page
-    .getByLabel("Reason for this revision")
-    .fill("Invalid negative rate");
+  await fillReasonPrompt(
+    page,
+    "Reason for this revision",
+    "Invalid negative rate",
+  );
   await expect(
     page.getByRole("button", { name: "Save draft revision", exact: true }),
   ).toBeDisabled();

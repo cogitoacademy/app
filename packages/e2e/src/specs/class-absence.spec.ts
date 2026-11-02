@@ -235,7 +235,6 @@ test("admin sees absence history and replaces the tutor without changing the ses
     titleId: null,
     descriptionEn: "A synthetic class for browser acceptance.",
     descriptionId: null,
-    coverKey: null,
     tutorFeeIdr: 400_000,
     minimumEnrollment: 1,
     minimumCheckAt: null,
@@ -329,7 +328,8 @@ test("admin sees absence history and replaces the tutor without changing the ses
     } else if (procedure.endsWith("listAcademyClasses")) {
       const state = body.json?.state;
       data = state === "published" ? [record] : [];
-    } else if (procedure.endsWith("listTutorProfiles")) {
+    } else if (procedure.endsWith("getAcademyClass")) data = record;
+    else if (procedure.endsWith("listTutorProfiles")) {
       data = [
         {
           userId: originalTutorId,
@@ -362,17 +362,32 @@ test("admin sees absence history and replaces the tutor without changing the ses
   await page.goto("/admin-classes");
   const card = page.getByTestId(`published-class-${classId}`);
   await expect(card).toBeVisible();
+  await card
+    .getByRole("link", {
+      name: "View class details for Synthetic absence class",
+    })
+    .click();
+  await page.getByRole("button", { name: /Absence workflow session/ }).click();
+  const detail = page
+    .getByRole("region", { name: "Class management", exact: true })
+    .first();
   await expect(
-    card.getByRole("region", { name: "Tutor absence notices" }),
+    detail.getByRole("region", { name: "Tutor absence notices" }),
   ).toContainText("Tutor absence history (1)");
-  await expect(card).toContainText("2 late notice(s) for this tutor");
-  const replacement = card.getByRole("combobox", { name: "Replacement tutor" });
+  await expect(detail).toContainText("2 late notice(s) for this tutor");
+  await detail
+    .getByRole("button", { name: "Change tutor for Absence workflow session" })
+    .click();
+  const prompt = page.getByRole("dialog", { name: "Replace tutor" });
+  const replacement = prompt.getByRole("combobox", {
+    name: "Replacement tutor",
+  });
   await replacement.click();
   await page.getByRole("option", { name: "Replacement Tutor" }).click();
-  await card
+  await prompt
     .getByRole("textbox", { name: "Admin reason" })
     .fill("Cover the session while keeping its published schedule");
-  await card.getByRole("button", { name: "Replace tutor" }).click();
+  await prompt.getByRole("button", { name: "Confirm replace tutor" }).click();
 
   await expect(page.getByText("Tutor replaced")).toBeVisible();
   const replaceCall = calls.find((call) =>

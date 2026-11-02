@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { formatBookingDate } from "./booking-ui";
 
@@ -108,55 +115,69 @@ export function SessionCompletionFeedbackCard({
                   <BulletList items={fb.improvements} />
                 </div>
                 {adminHistory ? (
-                  <details className="border-t border-border pt-3">
-                    <summary className="cursor-pointer text-sm font-medium text-foreground">
-                      Report history ({history.length})
-                    </summary>
-                    {history.length > 0 ? (
-                      <ol className="mt-3 space-y-3">
-                        {history.map((entry) => (
-                          <li
-                            key={entry.id}
-                            className="space-y-2 rounded-md border border-border bg-card p-3"
+                  <div className="border-t border-border pt-3">
+                    <Accordion>
+                      <AccordionItem className="border-0">
+                        <AccordionHeader>
+                          <AccordionTrigger
+                            type="button"
+                            className="py-0 text-sm font-medium text-foreground"
                           >
-                            <Text className="text-xs font-medium text-foreground">
-                              Version {entry.version} · {entry.status} ·{" "}
-                              {`${entry.actorRole} (${entry.actorId ?? "unknown actor"})`}
-                              {" · "}
-                              {formatBookingDate(entry.createdAt, timezone)}
+                            Report history ({history.length})
+                          </AccordionTrigger>
+                        </AccordionHeader>
+                        <AccordionPanel>
+                          {history.length > 0 ? (
+                            <ol className="mt-2 space-y-3">
+                              {history.map((entry) => (
+                                <li
+                                  key={entry.id}
+                                  className="space-y-2 rounded-md border border-border bg-card p-3"
+                                >
+                                  <Text className="text-xs font-medium text-foreground">
+                                    Version {entry.version} · {entry.status} ·{" "}
+                                    {`${entry.actorRole} (${entry.actorId ?? "unknown actor"})`}
+                                    {" · "}
+                                    {formatBookingDate(
+                                      entry.createdAt,
+                                      timezone,
+                                    )}
+                                  </Text>
+                                  {entry.reason ? (
+                                    <Text className="text-sm text-muted">
+                                      Reason: {entry.reason}
+                                    </Text>
+                                  ) : null}
+                                  <div>
+                                    <Text className="mb-1 text-xs font-medium text-muted">
+                                      Session discussion
+                                    </Text>
+                                    <BulletList items={entry.discussion} />
+                                  </div>
+                                  <div>
+                                    <Text className="mb-1 text-xs font-medium text-muted">
+                                      Strengths observed
+                                    </Text>
+                                    <BulletList items={entry.strengths} />
+                                  </div>
+                                  <div>
+                                    <Text className="mb-1 text-xs font-medium text-muted">
+                                      Areas for improvement
+                                    </Text>
+                                    <BulletList items={entry.improvements} />
+                                  </div>
+                                </li>
+                              ))}
+                            </ol>
+                          ) : (
+                            <Text className="text-sm text-muted">
+                              Report history is unavailable.
                             </Text>
-                            {entry.reason ? (
-                              <Text className="text-sm text-muted">
-                                Reason: {entry.reason}
-                              </Text>
-                            ) : null}
-                            <div>
-                              <Text className="mb-1 text-xs font-medium text-muted">
-                                Session discussion
-                              </Text>
-                              <BulletList items={entry.discussion} />
-                            </div>
-                            <div>
-                              <Text className="mb-1 text-xs font-medium text-muted">
-                                Strengths observed
-                              </Text>
-                              <BulletList items={entry.strengths} />
-                            </div>
-                            <div>
-                              <Text className="mb-1 text-xs font-medium text-muted">
-                                Areas for improvement
-                              </Text>
-                              <BulletList items={entry.improvements} />
-                            </div>
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <Text className="mt-2 text-sm text-muted">
-                        Report history is unavailable.
-                      </Text>
-                    )}
-                  </details>
+                          )}
+                        </AccordionPanel>
+                      </AccordionItem>
+                    </Accordion>
+                  </div>
                 ) : null}
               </section>
             );

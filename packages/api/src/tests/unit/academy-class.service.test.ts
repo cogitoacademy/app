@@ -13,7 +13,6 @@ const published = {
   kind: "cohort",
   titleEn: "Class",
   descriptionEn: "Description",
-  coverKey: null,
   cohortFullRateMarks: 20,
   cohortHalfRateMarks: 22,
   cohortSingleRateMarks: 25,
@@ -459,7 +458,7 @@ describe("academy class service reads and meeting recovery", () => {
     ).rejects.toMatchObject({ code });
     expect(f.audit.record).not.toHaveBeenCalled();
   });
-  test("admin list matches absence notices to current assignment and counts late history", async () => {
+  test("admin list and detail match absence notices to current assignment and counts late history", async () => {
     const current = { id: "current", tutorId: "tutor-a", assignmentVersion: 2 };
     const prior = { id: "prior", tutorId: "tutor-a", assignmentVersion: 1 };
     const other = { id: "other", tutorId: "tutor-b", assignmentVersion: 2 };
@@ -486,7 +485,7 @@ describe("academy class service reads and meeting recovery", () => {
         { id: "s3", tutorId: "tutor-d", version: 1, tutorAbsences: [] },
       ],
     };
-    const f = fixture([], [], [[record]], [], undefined, [
+    const f = fixture([], [record], [[record]], [], undefined, [
       { tutorId: "tutor-a", count: 3 },
     ]);
     const rows = await f.service.list({});
@@ -504,6 +503,7 @@ describe("academy class service reads and meeting recovery", () => {
       tutorLateNoticeCount: 0,
     });
     expect(rows[0]?.sessions[2]?.tutorAbsence).toBeNull();
+    expect(await f.service.get(record.id)).toEqual(rows[0]);
   });
   test("getPublished returns published catalog records and hides drafts", async () => {
     const f = fixture([], [published]);
@@ -1034,7 +1034,6 @@ describe("academy class service reads and meeting recovery", () => {
       createdAt: new Date("2026-10-03"),
       titleId: undefined,
       descriptionId: null,
-      coverKey: "cover/key",
       cohortFullRateMarks: null,
       cohortHalfRateMarks: 0,
       cohortSingleRateMarks: null,
@@ -1046,9 +1045,6 @@ describe("academy class service reads and meeting recovery", () => {
     const rows = await f.service.listPublished();
     expect(rows[0]).toMatchObject({
       id: "optional",
-      titleId: null,
-      descriptionId: null,
-      coverKey: "cover/key",
       cohortFullRateMarks: null,
       cohortHalfRateMarks: 0,
       cohortSingleRateMarks: null,

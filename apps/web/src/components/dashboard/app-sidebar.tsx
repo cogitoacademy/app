@@ -100,6 +100,7 @@ const tutorNavGroups = [
   {
     label: "Teaching",
     items: [
+      { to: "/my-classes", label: "Classes", icon: IconSchool },
       { to: "/bookings", label: "Bookings", icon: IconCalendarCheck },
       {
         to: "/class-reports",
@@ -141,12 +142,7 @@ const adminNavGroups = [
     label: "Finance",
     items: [
       { to: "/admin-tutor-payouts", label: "Tutor Payouts", icon: IconWallet },
-      { to: "/admin-referrals", label: "Referral Activity", icon: IconUsers },
-      {
-        to: "/admin-kol-commissions",
-        label: "KOL Commissions",
-        icon: IconCoins,
-      },
+      { to: "/admin-referrals", label: "Referrals", icon: IconUsers },
       {
         to: "/admin-economy",
         label: "Economy Settings",

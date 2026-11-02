@@ -14,6 +14,7 @@ import {
   insertRoomBooking,
   findRequestedRoomBookingByBookingId,
   findBookingStateById,
+  findBookingRoomRequirementById,
 } from "../../modules/room/room.repo";
 
 function makeSelectConn(rows: any[] = [], hasLimit = false) {
@@ -391,6 +392,35 @@ describe("findBookingStateById", () => {
     const conn = { select, from, where, limit } as any;
 
     const result = await findBookingStateById(conn, "missing");
+    expect(result).toBeNull();
+  });
+});
+
+describe("findBookingRoomRequirementById", () => {
+  test("returns the booking requirement", async () => {
+    const row = {
+      currentState: "awaiting_admin_room_approval",
+      targetGroupSize: 2,
+      confirmedHeadcount: 1,
+    };
+    const limit = mock(async () => [row]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select, from, where, limit } as any;
+
+    const result = await findBookingRoomRequirementById(conn, "b1");
+    expect(result).toEqual(row);
+  });
+
+  test("returns null when the booking does not exist", async () => {
+    const limit = mock(async () => []);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select, from, where, limit } as any;
+
+    const result = await findBookingRoomRequirementById(conn, "missing");
     expect(result).toBeNull();
   });
 });

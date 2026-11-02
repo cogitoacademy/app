@@ -110,7 +110,6 @@ async function createPublishedReportClass(
     titleId: null,
     descriptionEn: "Synthetic class for the T07 report browser journey.",
     descriptionId: null,
-    coverKey: null,
     tutorFeeIdr: 400_000,
     reason: "Create a private class report E2E fixture",
     minimumEnrollment: 1,

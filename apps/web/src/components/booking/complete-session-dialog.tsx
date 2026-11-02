@@ -126,7 +126,7 @@ export function CompleteSessionDialog({
     setLastSubmission(null);
   }
 
-  function confirm() {
+  function submitFeedback() {
     const feedback = {
       discussion: cleanDiscussion,
       strengths: cleanStrengths,
@@ -227,7 +227,7 @@ export function CompleteSessionDialog({
                 </label>
               </div>
               <Field>
-                <FieldLabel htmlFor="admin-report-reason">
+                <FieldLabel htmlFor="admin-report-reason" required>
                   Audit reason
                 </FieldLabel>
                 <Textarea
@@ -237,6 +237,7 @@ export function CompleteSessionDialog({
                   maxLength={1200}
                   disabled={pending}
                   aria-describedby="admin-report-reason-description"
+                  aria-required="true"
                 />
                 <FieldDescription id="admin-report-reason-description">
                   Required, up to 600 characters.
@@ -263,7 +264,7 @@ export function CompleteSessionDialog({
             type="button"
             disabled={!valid || pending}
             progress={pending}
-            onClick={() => confirm()}
+            onClick={() => submitFeedback()}
             className="w-full sm:w-auto"
           >
             {adminMode

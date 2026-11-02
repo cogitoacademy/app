@@ -151,11 +151,8 @@ export function ReferralsPage() {
           ))}
         </ol>
       </section>
-      <section
-        aria-label="Semester rewards"
-        className="grid gap-5 border-b border-border pb-6 sm:grid-cols-3"
-      >
-        <div className="space-y-3 sm:col-span-3">
+      <section aria-label="Semester rewards" className="space-y-5">
+        <div className="space-y-3">
           <Heading level={2} size="sm">
             Semester progress
           </Heading>
@@ -175,23 +172,27 @@ export function ReferralsPage() {
                 : `${data.semester.remainingMarks} Marks available`}
           </Text>
         </div>
-        <div className="space-y-1">
-          <Text className="text-muted">Earned this semester</Text>
-          <Text className="text-2xl font-semibold">
-            <CogitoMarks value={data.semester.earnedMarks} />
-          </Text>
-        </div>
-        <div className="space-y-1">
-          <Text className="text-muted">Remaining reward allowance</Text>
-          <Text className="text-2xl font-semibold">
-            <CogitoMarks value={data.semester.remainingMarks} />
-          </Text>
-        </div>
-        <div className="space-y-1">
-          <Text className="text-muted">Semester ends</Text>
-          <Text className="text-lg font-medium">
-            {formatSemesterEnd(data.semester.endsAt)}
-          </Text>
+        <div className="flex flex-col overflow-hidden rounded-xl border border-border sm:flex-row sm:divide-x sm:divide-border">
+          <div className="min-w-0 flex-1 space-y-1 border-b border-border p-4 last:border-b-0 sm:border-b-0">
+            <Text className="text-sm text-muted">Earned this semester</Text>
+            <Text className="text-3xl font-medium tabular-nums">
+              <CogitoMarks value={data.semester.earnedMarks} />
+            </Text>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1 border-b border-border p-4 last:border-b-0 sm:border-b-0">
+            <Text className="text-sm text-muted">
+              Remaining reward allowance
+            </Text>
+            <Text className="text-3xl font-medium tabular-nums">
+              <CogitoMarks value={data.semester.remainingMarks} />
+            </Text>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1 border-b border-border p-4 last:border-b-0 sm:border-b-0">
+            <Text className="text-sm text-muted">Semester ends</Text>
+            <Text className="text-lg font-medium">
+              {formatSemesterEnd(data.semester.endsAt)}
+            </Text>
+          </div>
         </div>
       </section>
       <section

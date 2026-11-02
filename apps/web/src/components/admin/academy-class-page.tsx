@@ -9,14 +9,14 @@ import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-inpu
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
 
 import { useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
+import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconDeviceFloppy,
   IconEdit,
   IconMapPin,
   IconPlus,
-  IconRefresh,
   IconTrash,
 } from "@tabler/icons-react";
 import {
@@ -47,16 +47,6 @@ import {
   TabsItem,
   TabsPanel,
 } from "@cogito-app/ui/components/selia/tabs";
-import {
-  Drawer,
-  DrawerTrigger,
-  DrawerPopup,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-  DrawerBody,
-  DrawerClose,
-} from "@cogito-app/ui/components/selia/drawer";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -71,38 +61,28 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { getUserFacingError } from "@/lib/error-message";
-import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 
 import { mergeAcademyClassQueryResults } from "./academy-class-page-utils";
-import { ClassAdminCancellationPanel } from "./class-admin-cancellation-panel";
-import { ClassAdminLifecyclePanel } from "./class-admin-lifecycle-panel";
 
-type ClassRecord = Awaited<ReturnType<typeof client.admin.getAcademyClass>>;
+type ClassRecord = Awaited<
+  ReturnType<typeof client.admin.saveAcademyClassDraft>
+>;
 type ClassKind = "cohort" | "masterclass";
 type SessionMode = "online" | "in_person";
 type SessionForm = {
   id?: string;
   capacity: string;
   titleEn: string;
-  titleId: string;
   curriculumEn: string;
-  curriculumId: string;
   startAt: string;
   durationMinutes: string;
   mode: SessionMode;
   roomId: string;
   tutorId: string;
 };
-const COVER_IMAGE_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-] as const;
-const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024;
-type CoverImageType = (typeof COVER_IMAGE_TYPES)[number];
 
 type DraftForm = {
   id?: string;
@@ -110,10 +90,7 @@ type DraftForm = {
   kind: ClassKind;
   competitionId: string;
   titleEn: string;
-  titleId: string;
   descriptionEn: string;
-  descriptionId: string;
-  coverKey: string;
   tutorFeeIdr: string;
   minimumEnrollment: string;
   minimumCheckAt: string;
@@ -121,16 +98,13 @@ type DraftForm = {
   halfRateMarks: string;
   singleRateMarks: string;
   masterclassRateMarks: string;
-  reason: string;
   sessions: SessionForm[];
 };
 
 const emptySession = (): SessionForm => ({
   capacity: "",
   titleEn: "",
-  titleId: "",
   curriculumEn: "",
-  curriculumId: "",
   startAt: "",
   durationMinutes: "60",
   mode: "online",
@@ -142,10 +116,7 @@ const emptyDraft = (kind: ClassKind = "cohort"): DraftForm => ({
   kind,
   competitionId: "",
   titleEn: "",
-  titleId: "",
   descriptionEn: "",
-  descriptionId: "",
-  coverKey: "",
   tutorFeeIdr: kind === "cohort" ? "400000" : "300000",
   minimumEnrollment: "",
   minimumCheckAt: "",
@@ -153,7 +124,6 @@ const emptyDraft = (kind: ClassKind = "cohort"): DraftForm => ({
   halfRateMarks: "22",
   singleRateMarks: "25",
   masterclassRateMarks: "5",
-  reason: "",
   sessions: [emptySession()],
 });
 
@@ -165,30 +135,6 @@ function toLocalDateTime(value: Date | string | null) {
   return local.toISOString().slice(0, 16);
 }
 
-function toWibDateTimeInput(value: Date | string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: "Asia/Jakarta",
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
-}
-
-function fromWibDateTimeInput(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}:00+07:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function draftFromRecord(record: ClassRecord): DraftForm {
   return {
     id: record.id,
@@ -196,10 +142,7 @@ function draftFromRecord(record: ClassRecord): DraftForm {
     kind: record.kind as ClassKind,
     competitionId: record.competitionId,
     titleEn: record.titleEn,
-    titleId: record.titleId ?? "",
     descriptionEn: record.descriptionEn,
-    descriptionId: record.descriptionId ?? "",
-    coverKey: record.coverKey ?? "",
     tutorFeeIdr: String(record.tutorFeeIdr),
     minimumEnrollment: String(record.minimumEnrollment ?? ""),
     minimumCheckAt: toLocalDateTime(record.minimumCheckAt),
@@ -207,14 +150,11 @@ function draftFromRecord(record: ClassRecord): DraftForm {
     halfRateMarks: String(record.cohortHalfRateMarks ?? ""),
     singleRateMarks: String(record.cohortSingleRateMarks ?? ""),
     masterclassRateMarks: String(record.masterclassRateMarks ?? ""),
-    reason: "",
     sessions: record.sessions.map((session) => ({
       id: session.id,
       capacity: String(session.capacity),
       titleEn: session.titleEn,
-      titleId: session.titleId ?? "",
       curriculumEn: session.curriculumEn ?? "",
-      curriculumId: session.curriculumId ?? "",
       startAt: toLocalDateTime(session.startAt),
       durationMinutes: String(
         (new Date(session.endAt).getTime() -
@@ -348,20 +288,11 @@ export function AcademyClassPage() {
   const [openSessions, setOpenSessions] = useState<number[]>([0]);
   const [workspace, setWorkspace] = useState("published");
   const [showDrafts, setShowDrafts] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
-  const [meetingRetryReasons, setMeetingRetryReasons] = useState<
-    Record<string, string>
-  >({});
-  const [replacementTutorIds, setReplacementTutorIds] = useState<
-    Record<string, string>
-  >({});
-  const [replacementReasons, setReplacementReasons] = useState<
-    Record<string, string>
-  >({});
-  const [rescheduleValues, setRescheduleValues] = useState<
-    Record<string, { startAt: string; reason: string }>
-  >({});
+  const [reasonAction, setReasonAction] = useState<"save" | "publish" | null>(
+    null,
+  );
+  const [actionReason, setActionReason] = useState("");
+  const [reasonSubmitting, setReasonSubmitting] = useState(false);
   const classesQuery = useQuery(
     orpc.admin.listAcademyClasses.queryOptions({ input: { state: "draft" } }),
   );
@@ -442,113 +373,6 @@ export function AcademyClassPage() {
       },
     }),
   );
-  const retryClassMeetings = useMutation(
-    orpc.admin.retryAcademyClassMeetings.mutationOptions({
-      onSuccess: async (record) => {
-        setMeetingRetryReasons((current) => ({
-          ...current,
-          [record.id]: "",
-        }));
-        await queryClient.invalidateQueries({
-          queryKey: orpc.admin.listAcademyClasses.key({
-            input: { state: "published" },
-          }),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: orpc.admin.listAcademyClasses.key({
-            input: { state: "postponed" },
-          }),
-        });
-        const onlineSessions = record.sessions.filter(
-          (session) => session.mode === "online",
-        );
-        const failed = onlineSessions.filter(
-          (session) => session.meeting?.status === "failed",
-        ).length;
-        const ready = onlineSessions.filter(
-          (session) => session.meeting?.status === "created",
-        ).length;
-        const pending = onlineSessions.length - failed - ready;
-        toastManager.add({
-          title: failed
-            ? ready
-              ? "Some meeting links could not be created"
-              : "Meeting links could not be created"
-            : pending
-              ? "Meeting links are still pending"
-              : "Meeting links created",
-          description: `${record.titleEn}: ${ready} ready${failed ? ` · ${failed} failed` : ""}${pending ? ` · ${pending} pending` : ""}.`,
-          type: failed ? "error" : pending ? "info" : "success",
-        });
-      },
-      onError: (error: Error) => {
-        toastManager.add({
-          title: "Meeting link could not be created",
-          description: getUserFacingError(error),
-          type: "error",
-        });
-      },
-    }),
-  );
-  const replaceAbsentTutor = useMutation(
-    orpc.admin.replaceAbsentClassTutor.mutationOptions({
-      onSuccess: async () => {
-        await Promise.all(
-          ["published", "postponed"].map((state) =>
-            queryClient.invalidateQueries({
-              queryKey: orpc.admin.listAcademyClasses.key({
-                input: { state: state as "published" | "postponed" },
-              }),
-            }),
-          ),
-        );
-        toastManager.add({
-          title: "Tutor replaced",
-          description: "The session time and class fee stayed the same.",
-          type: "success",
-        });
-      },
-      onError: (error: Error) =>
-        toastManager.add({
-          title: "Tutor replacement failed",
-          description: getUserFacingError(error),
-          type: "error",
-        }),
-    }),
-  );
-  const rescheduleSession = useMutation(
-    orpc.admin.rescheduleClassSession.mutationOptions({
-      onSuccess: async (record) => {
-        await Promise.all(
-          ["published", "postponed"].map((state) =>
-            queryClient.invalidateQueries({
-              queryKey: orpc.admin.listAcademyClasses.key({
-                input: { state: state as "published" | "postponed" },
-              }),
-            }),
-          ),
-        );
-        setRescheduleValues((current) => {
-          const next = { ...current };
-          for (const session of record.sessions) delete next[session.id];
-          return next;
-        });
-        toastManager.add({
-          title: "Session time updated",
-          description:
-            "Enrolled students can review the schedule-change exit window.",
-          type: "success",
-        });
-      },
-      onError: (error: Error) =>
-        toastManager.add({
-          title: "Session time could not be updated",
-          description: getUserFacingError(error),
-          type: "error",
-        }),
-    }),
-  );
-
   const classes = classesQuery.data ?? [];
   const publishedClasses = mergeAcademyClassQueryResults(
     publishedClassesQuery.data ?? [],
@@ -597,90 +421,12 @@ export function AcademyClassPage() {
     }));
   }
 
-  async function uploadCover(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    if (!COVER_IMAGE_TYPES.includes(file.type as CoverImageType)) {
-      toastManager.add({
-        title: "Unsupported cover image",
-        description: "Choose a PNG, JPEG, WebP, or GIF image.",
-        type: "error",
-      });
-      input.value = "";
-      return;
-    }
-    if (file.size > MAX_COVER_IMAGE_BYTES) {
-      toastManager.add({
-        title: "Cover image is too large",
-        description: "Choose an image up to 5 MB.",
-        type: "error",
-      });
-      input.value = "";
-      return;
-    }
-
-    setCoverUploading(true);
-    try {
-      const signed = await client.upload.createUploadUrl({
-        filename: file.name,
-        contentType: file.type as CoverImageType,
-        contentLength: file.size,
-      });
-      const uploadUrl =
-        resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
-      const isLocalUpload = signed.uploadUrl.startsWith("/");
-      const fields = signed.fields ?? {};
-      let response: Response;
-
-      if (Object.keys(fields).length > 0) {
-        const body = new FormData();
-        Object.entries(fields).forEach(([key, value]) =>
-          body.append(key, value),
-        );
-        body.append("file", file, file.name);
-        response = await fetch(uploadUrl, {
-          method: signed.method,
-          body,
-        });
-      } else {
-        response = await fetch(uploadUrl, {
-          method: signed.method,
-          credentials: isLocalUpload ? "include" : "omit",
-          headers: { "content-type": file.type },
-          body: file,
-        });
-      }
-
-      if (!response.ok) throw new Error("Cover image upload failed.");
-      setForm((current) => ({ ...current, coverKey: signed.key }));
-      setCoverPreviewUrl(resolveProfileImageUrl(signed.publicUrl) ?? null);
-      toastManager.add({
-        title: "Cover image uploaded",
-        description: "Save the draft to attach this cover image.",
-        type: "success",
-      });
-    } catch (error) {
-      toastManager.add({
-        title: "Cover image could not be uploaded",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    } finally {
-      setCoverUploading(false);
-      input.value = "";
-    }
-  }
-
-  function draftInputFromForm() {
+  function draftInputFromForm(reason: string) {
     const sessions = form.sessions.map((session) => ({
       ...(session.id ? { id: session.id } : {}),
       capacity: Number(session.capacity),
       titleEn: session.titleEn,
-      titleId: session.titleId,
       curriculumEn: session.curriculumEn,
-      curriculumId: session.curriculumId,
       startAt: new Date(session.startAt).toISOString(),
       endAt: new Date(
         new Date(session.startAt).getTime() +
@@ -696,12 +442,9 @@ export function AcademyClassPage() {
         : {}),
       competitionId: form.competitionId,
       titleEn: form.titleEn,
-      titleId: form.titleId,
       descriptionEn: form.descriptionEn,
-      descriptionId: form.descriptionId,
-      coverKey: form.coverKey,
       tutorFeeIdr: Number(form.tutorFeeIdr),
-      reason: form.reason,
+      reason,
       sessions,
     };
     const input =
@@ -727,16 +470,13 @@ export function AcademyClassPage() {
     if (!form.id) return true;
     const saved = classes.find((record) => record.id === form.id);
     if (!saved) return true;
-    return (
-      JSON.stringify({ ...form, reason: "" }) !==
-      JSON.stringify({ ...draftFromRecord(saved), reason: "" })
-    );
+    return JSON.stringify(form) !== JSON.stringify(draftFromRecord(saved));
   }
 
   async function publishCurrentDraft(
     input: ReturnType<typeof draftInputFromForm>,
   ) {
-    if (!form.id) return;
+    if (!form.id) return false;
     try {
       const saved = hasUnsavedDraftChanges()
         ? await saveDraft.mutateAsync(input)
@@ -746,24 +486,47 @@ export function AcademyClassPage() {
         expectedVersion: saved.version,
         reason: input.reason,
       });
+      return true;
     } catch {
       // Each mutation displays its own actionable error toast.
+      return false;
     }
   }
 
   function submitDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const input = draftInputFromForm();
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    if (
+    const action =
       submitter instanceof HTMLButtonElement &&
       submitter.name === "class-action" &&
       submitter.value === "publish"
-    ) {
-      void publishCurrentDraft(input);
-      return;
+        ? "publish"
+        : "save";
+    setActionReason("");
+    setReasonAction(action);
+  }
+
+  async function confirmReasonAction() {
+    if (!reasonAction || reasonSubmitting) return;
+    const reason = actionReason.trim();
+    if (reason.length < 3) return;
+    const input = draftInputFromForm(reason);
+    setReasonSubmitting(true);
+    try {
+      const success =
+        reasonAction === "publish"
+          ? await publishCurrentDraft(input)
+          : await saveDraft
+              .mutateAsync(input)
+              .then(() => true)
+              .catch(() => false);
+      if (success) {
+        setReasonAction(null);
+        setActionReason("");
+      }
+    } finally {
+      setReasonSubmitting(false);
     }
-    saveDraft.mutate(input);
   }
 
   return (
@@ -786,7 +549,7 @@ export function AcademyClassPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList
             aria-label="Class studio workspace"
-            className="w-full sm:w-fit"
+            className="w-full sm:w-80"
           >
             <TabsItem value="published" className="whitespace-nowrap">
               Published classes
@@ -811,10 +574,8 @@ export function AcademyClassPage() {
               type="button"
               size="icon"
               aria-label="New class"
-              disabled={coverUploading}
               onClick={() => {
                 setForm(emptyDraft());
-                setCoverPreviewUrl(null);
                 setWorkspace("drafts");
                 setShowDrafts(false);
               }}
@@ -850,19 +611,15 @@ export function AcademyClassPage() {
                 const createdMeetings = onlineSessions.filter(
                   (session) => session.meeting?.status === "created",
                 );
-                const absenceNotices = record.sessions.flatMap((session) =>
-                  session.tutorAbsences.map((notice) => ({ session, notice })),
-                );
                 const pendingMeetings =
                   onlineSessions.length -
                   failedMeetings.length -
                   createdMeetings.length;
-                const retryReason = meetingRetryReasons[record.id] ?? "";
                 return (
                   <Card
                     key={record.id}
                     data-testid={`published-class-${record.id}`}
-                    className="min-w-0 p-4"
+                    className="min-w-0 p-4 flex flex-col"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -953,397 +710,21 @@ export function AcademyClassPage() {
                         </Text>
                       </div>
                     </div>
-                    {failedMeetings.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap items-end gap-3">
-                        <Field className="w-full min-w-0 flex-1 sm:min-w-64">
-                          <FieldLabel htmlFor={`meeting-retry-${record.id}`}>
-                            Retry reason
-                          </FieldLabel>
-                          <Input
-                            id={`meeting-retry-${record.id}`}
-                            maxLength={500}
-                            value={retryReason}
-                            onChange={(event) =>
-                              setMeetingRetryReasons((current) => ({
-                                ...current,
-                                [record.id]: event.target.value,
-                              }))
-                            }
-                          />
-                        </Field>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="xs"
-                          aria-label="Retry failed meeting setup"
-                          title="Retry failed meeting setup"
-                          disabled={
-                            retryClassMeetings.isPending ||
-                            retryReason.trim().length < 3
-                          }
-                          onClick={() =>
-                            retryClassMeetings.mutate({
-                              id: record.id,
-                              reason: retryReason,
-                            })
-                          }
-                        >
-                          <IconRefresh aria-hidden="true" />
-                        </Button>
-                      </div>
-                    ) : pendingMeetings > 0 ? (
-                      <Text className="mt-3 text-sm text-muted">
-                        Meeting work is queued or running. Failed attempts are
-                        retried automatically.
-                      </Text>
-                    ) : null}
-                    {record.sessions.some(
-                      (session) => session.state === "scheduled",
-                    ) ? (
-                      <section
-                        className="mt-4 space-y-3"
-                        aria-label="Change scheduled session time"
-                      >
-                        <Heading level={3} size="sm">
-                          Change session time
-                        </Heading>
-                        {record.sessions
-                          .filter((session) => session.state === "scheduled")
-                          .map((session) => {
-                            const edit = rescheduleValues[session.id] ?? {
-                              startAt: toWibDateTimeInput(session.startAt),
-                              reason: "",
-                            };
-                            const duration =
-                              new Date(session.endAt).getTime() -
-                              new Date(session.startAt).getTime();
-                            const nextStart = fromWibDateTimeInput(
-                              edit.startAt,
-                            );
-                            const nextEnd =
-                              nextStart && !Number.isNaN(nextStart.getTime())
-                                ? new Date(nextStart.getTime() + duration)
-                                : null;
-                            return (
-                              <div
-                                key={session.id}
-                                className="grid min-w-0 gap-3 rounded-md border border-border p-3 sm:grid-cols-2"
-                              >
-                                <Text className="sm:col-span-2">
-                                  {session.titleEn} · currently{" "}
-                                  {new Intl.DateTimeFormat("en", {
-                                    dateStyle: "medium",
-                                    timeStyle: "short",
-                                    timeZone: "Asia/Jakarta",
-                                  }).format(new Date(session.startAt))}{" "}
-                                  WIB
-                                </Text>
-                                <Field className="sm:col-span-2">
-                                  <FieldLabel
-                                    htmlFor={`reschedule-${session.id}`}
-                                  >
-                                    New date and start time
-                                  </FieldLabel>
-                                  <CrossBrowserDateTimeInput
-                                    id={`reschedule-${session.id}`}
-                                    value={edit.startAt}
-                                    min={toWibDateTimeInput(new Date())}
-                                    onChange={(startAt) =>
-                                      setRescheduleValues((current) => ({
-                                        ...current,
-                                        [session.id]: { ...edit, startAt },
-                                      }))
-                                    }
-                                    disabled={rescheduleSession.isPending}
-                                  />
-                                  <FieldDescription>
-                                    Duration, tutor, room, mode, and class fee
-                                    stay the same.
-                                  </FieldDescription>
-                                </Field>
-                                <Field className="sm:col-span-2">
-                                  <FieldLabel
-                                    htmlFor={`reschedule-reason-${session.id}`}
-                                  >
-                                    Reason for students
-                                  </FieldLabel>
-                                  <Input
-                                    id={`reschedule-reason-${session.id}`}
-                                    maxLength={500}
-                                    value={edit.reason}
-                                    onChange={(event) =>
-                                      setRescheduleValues((current) => ({
-                                        ...current,
-                                        [session.id]: {
-                                          ...edit,
-                                          reason: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                </Field>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  className="sm:col-span-2"
-                                  disabled={
-                                    rescheduleSession.isPending ||
-                                    !edit.startAt ||
-                                    !nextEnd ||
-                                    nextStart?.getTime() ===
-                                      new Date(session.startAt).getTime() ||
-                                    edit.reason.trim().length < 3
-                                  }
-                                  onClick={() =>
-                                    nextStart &&
-                                    nextEnd &&
-                                    rescheduleSession.mutate({
-                                      sessionId: session.id,
-                                      expectedVersion: session.version,
-                                      startAt: nextStart.toISOString(),
-                                      endAt: nextEnd.toISOString(),
-                                      reason: edit.reason.trim(),
-                                    })
-                                  }
-                                >
-                                  {rescheduleSession.isPending
-                                    ? "Updating schedule…"
-                                    : "Update session time"}
-                                </Button>
-                              </div>
-                            );
-                          })}
-                      </section>
-                    ) : null}
-                    {record.sessions.some(
-                      (session) => session.state === "scheduled",
-                    ) ? (
-                      <section
-                        className="mt-4 space-y-3"
-                        aria-label="Same-time tutor replacement"
-                      >
-                        <Heading level={3} size="sm">
-                          Same-time tutor replacement
-                        </Heading>
-                        {record.sessions
-                          .filter((session) => session.state === "scheduled")
-                          .map((session) => (
-                            <div
-                              key={session.id}
-                              className="grid min-w-0 gap-3 rounded-md border border-border p-3 sm:grid-cols-2"
-                            >
-                              <Text className="sm:col-span-2">
-                                {session.titleEn} ·{" "}
-                                {session.tutor?.name ?? "Current tutor"}
-                                {session.tutorAbsence
-                                  ? " · Absence reported"
-                                  : ""}
-                              </Text>
-                              <Field>
-                                <FieldLabel
-                                  htmlFor={`replacement-${session.id}`}
-                                >
-                                  Replacement tutor
-                                </FieldLabel>
-                                <Select
-                                  value={replacementTutorIds[session.id] ?? ""}
-                                  onValueChange={(value) =>
-                                    setReplacementTutorIds((current) => ({
-                                      ...current,
-                                      [session.id]: String(value ?? ""),
-                                    }))
-                                  }
-                                  items={tutors
-                                    .filter(
-                                      (tutor) =>
-                                        tutor.userId !== session.tutorId,
-                                    )
-                                    .map((tutor) => ({
-                                      value: tutor.userId,
-                                      label: tutor.user.name,
-                                    }))}
-                                >
-                                  <SelectTrigger
-                                    id={`replacement-${session.id}`}
-                                  >
-                                    <SelectValue placeholder="Choose a published tutor" />
-                                  </SelectTrigger>
-                                  <SelectPopup>
-                                    <SelectList>
-                                      {tutors
-                                        .filter(
-                                          (tutor) =>
-                                            tutor.userId !== session.tutorId,
-                                        )
-                                        .map((tutor) => (
-                                          <SelectItem
-                                            key={tutor.userId}
-                                            value={tutor.userId}
-                                          >
-                                            {tutor.user.name}
-                                          </SelectItem>
-                                        ))}
-                                    </SelectList>
-                                  </SelectPopup>
-                                </Select>
-                              </Field>
-                              <Field>
-                                <FieldLabel
-                                  htmlFor={`replacement-reason-${session.id}`}
-                                >
-                                  Admin reason
-                                </FieldLabel>
-                                <Input
-                                  id={`replacement-reason-${session.id}`}
-                                  maxLength={500}
-                                  value={replacementReasons[session.id] ?? ""}
-                                  onChange={(event) =>
-                                    setReplacementReasons((current) => ({
-                                      ...current,
-                                      [session.id]: event.target.value,
-                                    }))
-                                  }
-                                />
-                                <FieldDescription>
-                                  This keeps the session time, fee, and student
-                                  allocations unchanged. It does not create a
-                                  schedule-change exit window.
-                                </FieldDescription>
-                              </Field>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                className="sm:col-span-2"
-                                disabled={
-                                  replaceAbsentTutor.isPending ||
-                                  !replacementTutorIds[session.id] ||
-                                  (replacementReasons[session.id] ?? "").trim()
-                                    .length < 3
-                                }
-                                onClick={() =>
-                                  replaceAbsentTutor.mutate({
-                                    sessionId: session.id,
-                                    expectedVersion: session.version,
-                                    replacementTutorId:
-                                      replacementTutorIds[session.id]!,
-                                    reason:
-                                      replacementReasons[session.id]!.trim(),
-                                  })
-                                }
-                              >
-                                Replace tutor
-                              </Button>
-                            </div>
-                          ))}
-                      </section>
-                    ) : null}
-                    {absenceNotices.length > 0 ? (
-                      <section
-                        className="mt-4 space-y-2"
-                        aria-label="Tutor absence notices"
-                      >
-                        <Heading level={3} size="sm">
-                          Tutor absence history ({absenceNotices.length})
-                        </Heading>
-                        {absenceNotices.map(({ session, notice }) => (
-                          <div
-                            key={notice.id}
-                            className="rounded-md border border-warning-border bg-warning/10 p-3 text-sm"
-                          >
-                            <Text className="font-medium">
-                              {session.titleEn} · {notice.tutor.name ?? "Tutor"}
-                              {notice.late ? " · Late notice" : ""}
-                            </Text>
-                            <Text className="text-muted">
-                              Reported{" "}
-                              {new Intl.DateTimeFormat("en", {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                                timeZone: "Asia/Jakarta",
-                              }).format(new Date(notice.reportedAt))}{" "}
-                              WIB · {notice.reason} ·{" "}
-                              {notice.tutorLateNoticeCount} late notice(s) for
-                              this tutor
-                            </Text>
-                          </div>
-                        ))}
-                      </section>
-                    ) : null}
-                    <Drawer>
-                      <DrawerTrigger
-                        render={
-                          <Button
-                            variant="secondary"
-                            className="mt-4"
-                            aria-label="Manage class"
-                          />
-                        }
-                      >
-                        Manage class
-                      </DrawerTrigger>
-                      <DrawerPopup direction="right">
-                        <DrawerHeader>
-                          <div className="min-w-0 flex-1">
-                            <DrawerTitle className="wrap-anywhere">
-                              {record.titleEn}
-                            </DrawerTitle>
-                            <DrawerDescription>
-                              Manage class schedule, enrollment, and lifecycle.
-                            </DrawerDescription>
-                          </div>
-                          <DrawerClose aria-label="Close class management">
-                            Close
-                          </DrawerClose>
-                        </DrawerHeader>
-                        <DrawerBody>
-                          <div className="space-y-4 pb-4">
-                            <ClassAdminCancellationPanel
-                              classId={record.id}
-                              expectedVersion={record.version}
-                              onChanged={() =>
-                                Promise.all([
-                                  queryClient.invalidateQueries({
-                                    queryKey: orpc.admin.listAcademyClasses.key(
-                                      {
-                                        input: { state: "published" },
-                                      },
-                                    ),
-                                  }),
-                                  queryClient.invalidateQueries({
-                                    queryKey: orpc.admin.listAcademyClasses.key(
-                                      {
-                                        input: { state: "postponed" },
-                                      },
-                                    ),
-                                  }),
-                                ])
-                              }
-                            />
-                            <ClassAdminLifecyclePanel
-                              classRecord={record}
-                              onChanged={() =>
-                                Promise.all([
-                                  queryClient.invalidateQueries({
-                                    queryKey: orpc.admin.listAcademyClasses.key(
-                                      {
-                                        input: { state: "published" },
-                                      },
-                                    ),
-                                  }),
-                                  queryClient.invalidateQueries({
-                                    queryKey: orpc.admin.listAcademyClasses.key(
-                                      {
-                                        input: { state: "postponed" },
-                                      },
-                                    ),
-                                  }),
-                                ])
-                              }
-                            />
-                          </div>
-                        </DrawerBody>
-                      </DrawerPopup>
-                    </Drawer>
+                    <Button
+                      role="link"
+                      variant="primary"
+                      nativeButton={false}
+                      className="mt-4 self-end"
+                      render={
+                        <Link
+                          to="/classes/$classId"
+                          params={{ classId: record.id }}
+                          aria-label={`View class details for ${record.titleEn}`}
+                        />
+                      }
+                    >
+                      View class details
+                    </Button>
                   </Card>
                 );
               })
@@ -1398,12 +779,10 @@ export function AcademyClassPage() {
                             type="button"
                             variant="plain"
                             size="sm"
-                            disabled={coverUploading}
                             aria-label={`Edit ${record.titleEn}`}
                             onClick={() => {
                               setForm(draftFromRecord(record));
                               setShowDrafts(false);
-                              setCoverPreviewUrl(null);
                             }}
                           >
                             <IconEdit />
@@ -1424,7 +803,7 @@ export function AcademyClassPage() {
                   </CardHeader>
                   <CardBody>
                     <div className="flex min-w-0 flex-col gap-5">
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         <Field>
                           <FieldLabel htmlFor="class-kind">
                             Class type
@@ -1485,29 +864,17 @@ export function AcademyClassPage() {
                             </SelectPopup>
                           </Select>
                         </Field>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
                         <TextField
                           id="class-title-en"
-                          label="Title (English)"
+                          label="Title"
                           value={form.titleEn}
                           onChange={(value) => updateForm("titleEn", value)}
                           required
                           maxLength={200}
                         />
-                        <TextField
-                          id="class-title-id"
-                          label="Title (Indonesian, optional)"
-                          value={form.titleId}
-                          onChange={(value) => updateForm("titleId", value)}
-                          maxLength={200}
-                        />
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
                         <TextareaField
                           id="class-description-en"
-                          label="Description (English)"
+                          label="Description"
                           value={form.descriptionEn}
                           onChange={(value) =>
                             updateForm("descriptionEn", value)
@@ -1515,45 +882,7 @@ export function AcademyClassPage() {
                           required
                           maxLength={5_000}
                         />
-                        <TextareaField
-                          id="class-description-id"
-                          label="Description (Indonesian, optional)"
-                          value={form.descriptionId}
-                          onChange={(value) =>
-                            updateForm("descriptionId", value)
-                          }
-                          maxLength={5_000}
-                        />
                       </div>
-                      <Field>
-                        <FieldLabel htmlFor="class-cover">
-                          Cover image
-                        </FieldLabel>
-                        <Input
-                          id="class-cover"
-                          type="file"
-                          accept={COVER_IMAGE_TYPES.join(",")}
-                          disabled={coverUploading}
-                          onChange={(event) => void uploadCover(event)}
-                        />
-                        <FieldDescription>
-                          {coverUploading
-                            ? "Uploading cover image…"
-                            : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
-                        </FieldDescription>
-                        <Text className="text-muted text-sm">
-                          {form.coverKey
-                            ? "A cover image is attached to this draft. Save to keep it."
-                            : "No cover image is attached yet."}
-                        </Text>
-                        {coverPreviewUrl ? (
-                          <img
-                            src={coverPreviewUrl}
-                            alt=""
-                            className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
-                          />
-                        ) : null}
-                      </Field>
                     </div>
                   </CardBody>
                 </Card>
@@ -1565,7 +894,7 @@ export function AcademyClassPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardBody className="flex min-w-0 flex-col gap-5">
-                    <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       <NumberField
                         id="class-tutor-fee"
                         label="Flat tutor fee per session (IDR)"
@@ -1599,20 +928,22 @@ export function AcademyClassPage() {
                           description="Default: 5 Marks for the single session."
                         />
                       )}
+                      {form.kind === "cohort" ? (
+                        <TextField
+                          id="class-minimum-check-at"
+                          label="Minimum-enrollment check date"
+                          type="datetime-local"
+                          value={form.minimumCheckAt}
+                          onChange={(value) =>
+                            updateForm("minimumCheckAt", value)
+                          }
+                          required
+                        />
+                      ) : null}
                     </div>
                     {form.kind === "cohort" ? (
                       <div className="flex flex-col gap-4">
                         <div className="grid items-start gap-4">
-                          <TextField
-                            id="class-minimum-check-at"
-                            label="Minimum-enrollment check date"
-                            type="datetime-local"
-                            value={form.minimumCheckAt}
-                            onChange={(value) =>
-                              updateForm("minimumCheckAt", value)
-                            }
-                            required
-                          />
                           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
                             <NumberField
                               id="class-full-rate"
@@ -1693,10 +1024,10 @@ export function AcademyClassPage() {
                           </AccordionHeader>
                           <AccordionPanel keepMounted>
                             <div className="space-y-4 px-0.5 pt-0.5 pb-3">
-                              <div className="grid gap-4 sm:grid-cols-2">
+                              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                 <TextField
                                   id={`session-${index}-title-en`}
-                                  label="Session title (English)"
+                                  label="Session title"
                                   value={session.titleEn}
                                   onChange={(value) =>
                                     updateSession(index, { titleEn: value })
@@ -1704,44 +1035,22 @@ export function AcademyClassPage() {
                                   required
                                   maxLength={200}
                                 />
-                                <TextField
-                                  id={`session-${index}-title-id`}
-                                  label="Session title (Indonesian, optional)"
-                                  value={session.titleId}
-                                  onChange={(value) =>
-                                    updateSession(index, { titleId: value })
-                                  }
-                                  maxLength={200}
-                                />
-                              </div>
-                              {form.kind === "cohort" ? (
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                  <TextareaField
-                                    id={`session-${index}-curriculum-en`}
-                                    label="Curriculum description (English)"
-                                    value={session.curriculumEn}
-                                    onChange={(value) =>
-                                      updateSession(index, {
-                                        curriculumEn: value,
-                                      })
-                                    }
-                                    required
-                                    maxLength={5_000}
-                                  />
-                                  <TextareaField
-                                    id={`session-${index}-curriculum-id`}
-                                    label="Curriculum description (Indonesian, optional)"
-                                    value={session.curriculumId}
-                                    onChange={(value) =>
-                                      updateSession(index, {
-                                        curriculumId: value,
-                                      })
-                                    }
-                                    maxLength={5_000}
-                                  />
-                                </div>
-                              ) : null}
-                              <div className="grid gap-4 sm:grid-cols-2">
+                                {form.kind === "cohort" ? (
+                                  <div className="grid gap-4">
+                                    <TextareaField
+                                      id={`session-${index}-curriculum-en`}
+                                      label="Curriculum description"
+                                      value={session.curriculumEn}
+                                      onChange={(value) =>
+                                        updateSession(index, {
+                                          curriculumEn: value,
+                                        })
+                                      }
+                                      required
+                                      maxLength={5_000}
+                                    />
+                                  </div>
+                                ) : null}
                                 <TextField
                                   id={`session-${index}-start`}
                                   label="Start"
@@ -1764,8 +1073,6 @@ export function AcademyClassPage() {
                                   }
                                   required
                                 />
-                              </div>
-                              <div className="grid gap-4 sm:grid-cols-2">
                                 <NumberField
                                   id={`session-${index}-capacity`}
                                   label="Session capacity"
@@ -1812,8 +1119,6 @@ export function AcademyClassPage() {
                                     </SelectPopup>
                                   </Select>
                                 </Field>
-                              </div>
-                              <div className="grid gap-4 sm:grid-cols-2">
                                 <Field>
                                   <FieldLabel
                                     htmlFor={`session-${index}-tutor`}
@@ -1943,26 +1248,6 @@ export function AcademyClassPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-
-                    <Field>
-                      <FieldLabel htmlFor="class-audit-reason">
-                        Reason for this change
-                      </FieldLabel>
-                      <Textarea
-                        id="class-audit-reason"
-                        required
-                        minLength={3}
-                        maxLength={500}
-                        value={form.reason}
-                        onChange={(event) =>
-                          updateForm("reason", event.target.value)
-                        }
-                        rows={2}
-                      />
-                      <FieldDescription>
-                        Saved with the admin actor and before/after snapshot.
-                      </FieldDescription>
-                    </Field>
                   </CardBody>
                   <CardFooter className="flex-wrap justify-end gap-3">
                     {form.id ? (
@@ -1970,11 +1255,7 @@ export function AcademyClassPage() {
                         type="submit"
                         name="class-action"
                         value="publish"
-                        disabled={
-                          saveDraft.isPending ||
-                          publishClass.isPending ||
-                          coverUploading
-                        }
+                        disabled={saveDraft.isPending || publishClass.isPending}
                       >
                         {publishClass.isPending
                           ? "Publishing…"
@@ -1985,14 +1266,9 @@ export function AcademyClassPage() {
                       <Button
                         type="button"
                         variant="secondary"
-                        disabled={
-                          coverUploading ||
-                          saveDraft.isPending ||
-                          publishClass.isPending
-                        }
+                        disabled={saveDraft.isPending || publishClass.isPending}
                         onClick={() => {
                           setForm(emptyDraft());
-                          setCoverPreviewUrl(null);
                         }}
                       >
                         Cancel edit
@@ -2000,17 +1276,62 @@ export function AcademyClassPage() {
                     ) : null}
                     <Button
                       type="submit"
-                      disabled={
-                        saveDraft.isPending ||
-                        publishClass.isPending ||
-                        coverUploading
-                      }
+                      disabled={saveDraft.isPending || publishClass.isPending}
                     >
                       <IconDeviceFloppy />
                       {saveDraft.isPending ? "Saving…" : "Save draft"}
                     </Button>
                   </CardFooter>
                 </Card>
+                <ConfirmationDialog
+                  open={reasonAction !== null}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setReasonAction(null);
+                      setActionReason("");
+                    }
+                  }}
+                  title={
+                    reasonAction === "publish"
+                      ? "Publish this class?"
+                      : "Save this draft?"
+                  }
+                  description={
+                    reasonAction === "publish"
+                      ? "Publishing makes this class visible in the student catalog."
+                      : "This draft is not public and does not reserve a room."
+                  }
+                  confirmLabel={
+                    reasonAction === "publish" ? "Publish class" : "Save draft"
+                  }
+                  pending={
+                    reasonSubmitting ||
+                    saveDraft.isPending ||
+                    publishClass.isPending
+                  }
+                  confirmDisabled={actionReason.trim().length < 3}
+                  onConfirm={() => void confirmReasonAction()}
+                >
+                  <Field>
+                    <FieldLabel htmlFor="class-audit-reason" required>
+                      Reason for this change
+                    </FieldLabel>
+                    <Textarea
+                      id="class-audit-reason"
+                      required
+                      minLength={3}
+                      maxLength={500}
+                      value={actionReason}
+                      onChange={(event) => setActionReason(event.target.value)}
+                      rows={4}
+                      aria-required="true"
+                      placeholder="Explain what changed and why."
+                    />
+                    <FieldDescription>
+                      Saved with the admin actor and before/after snapshot.
+                    </FieldDescription>
+                  </Field>
+                </ConfirmationDialog>
               </form>
             )}
           </div>

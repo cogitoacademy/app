@@ -54,8 +54,10 @@ export function createContentAdminRepo(db: DbType, audit: AuditPort) {
           title: kbResource.title,
           description: kbResource.description,
           category: kbResource.category,
+          categoryName: subjectCategory.name,
         })
         .from(kbResource)
+        .leftJoin(subjectCategory, eq(subjectCategory.id, kbResource.category))
         .where(eq(kbResource.isActive, true))
         .orderBy(
           asc(kbResource.sortOrder),

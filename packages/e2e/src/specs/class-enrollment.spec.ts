@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { fillReasonPrompt } from "../helpers/reason-prompt";
 import {
   expect,
   request,
@@ -161,7 +162,6 @@ async function createPublishedCohort(
     titleId: null,
     descriptionEn: "Synthetic cohort for T05 enrollment browser coverage.",
     descriptionId: null,
-    coverKey: null,
     tutorFeeIdr: 400_000,
     reason: "Create a dedicated enrollment browser-test fixture",
     minimumEnrollment: options.minimumEnrollment ?? 1,
@@ -713,9 +713,12 @@ test("admin cancels a class with an exact future-hold return and retained studen
     await card
       .getByRole("button", { name: "Manage class", exact: true })
       .click();
-    await card
-      .getByLabel("Class cancellation reason")
-      .fill("Class cancellation browser acceptance");
+    await fillReasonPrompt(
+      adminPage,
+      "Class cancellation reason",
+      "Class cancellation browser acceptance",
+      card,
+    );
     await card
       .getByRole("button", { name: "Review class cancellation", exact: true })
       .click();
@@ -836,9 +839,12 @@ test("admin cancels one session, postpones once, and student confirms the exact 
       .getByRole("button", { name: "Review cancellation" })
       .first()
       .click();
-    await card
-      .getByLabel("Cancellation reason", { exact: true })
-      .fill("Cancel the first future session for lifecycle acceptance");
+    await fillReasonPrompt(
+      adminPage,
+      "Cancellation reason",
+      "Cancel the first future session for lifecycle acceptance",
+      card,
+    );
     await card.getByRole("button", { name: "Preview exact return" }).click();
     const cancelReview = card.getByRole("region", {
       name: "Session cancellation review",
@@ -881,9 +887,12 @@ test("admin cancels one session, postpones once, and student confirms the exact 
         replacement.startAt,
       );
     }
-    await card
-      .getByLabel("Decision reason")
-      .fill("Postpone once to meet the minimum enrollment policy");
+    await fillReasonPrompt(
+      adminPage,
+      "Decision reason",
+      "Postpone once to meet the minimum enrollment policy",
+      card,
+    );
     await card
       .getByRole("button", { name: "Review one-time postponement" })
       .click();

@@ -2,10 +2,17 @@
 
 import Loader from "@/components/loader";
 
-import { IconSpeakerphone } from "@tabler/icons-react";
+import { createPortal } from "react-dom";
+import {
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconRefresh,
+  IconSpeakerphone,
+} from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -15,8 +22,19 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 import { orpc } from "@/utils/orpc";
 import {
@@ -38,17 +56,53 @@ const date = (value: Date | string) =>
   new Date(value).toLocaleString("en-GB", { timeZone: "Asia/Jakarta" }) +
   " WIB";
 
-export function KolCampaignsSection() {
+export function KolCampaignsSection({
+  actionsContainer,
+  enabled = true,
+}: {
+  actionsContainer: HTMLElement | null;
+  enabled?: boolean;
+}) {
   const queryClient = useQueryClient();
   const query = useQuery({
     ...orpc.adminReferral.listKolCampaigns.queryOptions(),
     retry: false,
+    enabled,
   });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ ...emptyCampaignDraft });
   const [errors, setErrors] = useState<
     Partial<Record<keyof CampaignDraft, string>>
   >({});
+  const [pauseTarget, setPauseTarget] = useState<{
+    id: string;
+    name: string;
+    paused: boolean;
+  } | null>(null);
+  const [pauseReason, setPauseReason] = useState("");
+  const [pauseError, setPauseError] = useState<string | null>(null);
+  const pauseMutation = useMutation(
+    orpc.adminReferral.setKolCampaignPaused.mutationOptions({
+      retry: false,
+      onSuccess: () => {
+        const wasPaused = pauseTarget?.paused;
+        setPauseTarget(null);
+        setPauseReason("");
+        setPauseError(null);
+        toastManager.add({
+          title: wasPaused ? "KOL campaign resumed" : "KOL campaign paused",
+          description: wasPaused
+            ? "New signups can use this code again."
+            : "Existing signups keep their earned commission window.",
+          type: "success",
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminReferral.listKolCampaigns.key(),
+        });
+      },
+      onError: (error) => setPauseError(error.message),
+    }),
+  );
   const create = useMutation(
     orpc.adminReferral.createKolCampaign.mutationOptions({
       retry: false,
@@ -65,6 +119,33 @@ export function KolCampaignsSection() {
 
   return (
     <Card className="min-w-0 [overflow-wrap:anywhere]">
+      {actionsContainer
+        ? createPortal(
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={open}
+                aria-controls="kol-campaign-form"
+                onClick={() => setOpen(!open)}
+              >
+                {open ? "Hide creation form" : "Create KOL campaign"}
+              </Button>
+              <Button
+                type="button"
+                variant="plain"
+                size="icon"
+                aria-label="Refresh campaigns"
+                title="Refresh campaigns"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                <IconRefresh aria-hidden />
+              </Button>
+            </>,
+            actionsContainer,
+          )
+        : null}
       <CardHeader>
         <CardTitle level={2}>KOL campaigns</CardTitle>
       </CardHeader>
@@ -74,15 +155,6 @@ export function KolCampaignsSection() {
           cannot be edited. Student friend codes are separate and available to
           verified students on their My referrals page.
         </Text>
-        <Button
-          type="button"
-          variant="secondary"
-          aria-expanded={open}
-          aria-controls="kol-campaign-form"
-          onClick={() => setOpen(!open)}
-        >
-          {open ? "Hide creation form" : "Create KOL campaign"}
-        </Button>
         <form
           id="kol-campaign-form"
           hidden={!open}
@@ -192,14 +264,6 @@ export function KolCampaignsSection() {
           ) : null}
         </form>
         <div className="space-y-3">
-          <Button
-            type="button"
-            variant="plain"
-            disabled={query.isFetching}
-            onClick={() => void query.refetch()}
-          >
-            Refresh campaigns
-          </Button>
           {query.isPending ? (
             <Loader />
           ) : query.isError ? (
@@ -211,6 +275,7 @@ export function KolCampaignsSection() {
             </div>
           ) : !query.data?.length ? (
             <EmptyState
+              className="rounded-lg border border-dashed border-border"
               icon={<IconSpeakerphone />}
               title="No KOL campaigns yet."
               description="Create a campaign to give your partner a registration code and saved commission terms."
@@ -225,44 +290,127 @@ export function KolCampaignsSection() {
               }
             />
           ) : (
-            <ul className="space-y-4" aria-label="Saved KOL campaigns">
-              {query.data.map((campaign) => (
-                <li
-                  key={campaign.id}
-                  className="space-y-2 rounded border border-border p-4"
-                >
-                  <h3 className="font-semibold">
-                    {campaign.name} ·{" "}
-                    <span className="font-mono">{campaign.code}</span>
-                  </h3>
-                  <dl className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Activation", date(campaign.activationAt)],
-                      ["Expiry", date(campaign.expiresAt)],
-                      [
-                        "Attribution window",
-                        `${campaign.attributionWindowDays} days`,
-                      ],
-                      [
-                        "Commission",
-                        `Rp${campaign.flatAmountIdr.toLocaleString("id-ID")} + ${campaign.percentBps / 100}%`,
-                      ],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <dt className="text-sm text-muted">{label}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <Text className="text-sm text-muted">
-                    Saved terms · immutable
-                  </Text>
-                </li>
-              ))}
-            </ul>
+            <TableContainer>
+              <Table aria-label="Saved KOL campaigns" className="min-w-max">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Activation (WIB)</TableHead>
+                    <TableHead>Expiry (WIB)</TableHead>
+                    <TableHead>Attribution window</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {query.data.map((campaign) => (
+                    <TableRow key={campaign.id}>
+                      <TableCell className="font-medium">
+                        {campaign.name}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {campaign.code}
+                      </TableCell>
+                      <TableCell>{date(campaign.activationAt)}</TableCell>
+                      <TableCell>{date(campaign.expiresAt)}</TableCell>
+                      <TableCell>
+                        {campaign.attributionWindowDays} days
+                      </TableCell>
+                      <TableCell>
+                        Rp{campaign.flatAmountIdr.toLocaleString("id-ID")} +{" "}
+                        {campaign.percentBps / 100}%
+                      </TableCell>
+                      <TableCell>
+                        {campaign.pausedAt ? (
+                          <Badge variant="warning">Paused</Badge>
+                        ) : (
+                          <Badge variant="success">Active</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="sm"
+                          onClick={() => {
+                            setPauseTarget({
+                              id: campaign.id,
+                              name: campaign.name,
+                              paused: Boolean(campaign.pausedAt),
+                            });
+                            setPauseReason("");
+                            setPauseError(null);
+                          }}
+                        >
+                          {campaign.pausedAt ? (
+                            <IconPlayerPlay />
+                          ) : (
+                            <IconPlayerPause />
+                          )}
+                          {campaign.pausedAt ? "Resume" : "Pause"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </div>
       </CardBody>
+      <ConfirmationDialog
+        open={pauseTarget !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && pauseMutation.isPending) return;
+          if (!nextOpen) {
+            setPauseTarget(null);
+            setPauseReason("");
+            setPauseError(null);
+          }
+        }}
+        title={
+          pauseTarget?.paused
+            ? `Resume ${pauseTarget.name}?`
+            : `Pause ${pauseTarget?.name ?? "campaign"}?`
+        }
+        description={
+          pauseTarget?.paused
+            ? "New signups can use this code again. Existing referral choices are unchanged."
+            : "Only new signups stop. Students already signed up keep their commission window."
+        }
+        confirmLabel={
+          pauseTarget?.paused ? "Resume campaign" : "Pause campaign"
+        }
+        pending={pauseMutation.isPending}
+        confirmDisabled={pauseReason.trim().length < 3}
+        onConfirm={() => {
+          if (!pauseTarget) return;
+          pauseMutation.mutate({
+            id: pauseTarget.id,
+            paused: !pauseTarget.paused,
+            reason: pauseReason.trim(),
+          });
+        }}
+      >
+        <Field>
+          <FieldLabel htmlFor="kol-pause-reason">Reason</FieldLabel>
+          <Textarea
+            id="kol-pause-reason"
+            value={pauseReason}
+            minLength={3}
+            maxLength={600}
+            required
+            onChange={(event) => setPauseReason(event.target.value)}
+          />
+        </Field>
+        {pauseError ? (
+          <Text className="mt-2 text-sm text-danger-foreground" role="alert">
+            {pauseError}
+          </Text>
+        ) : null}
+      </ConfirmationDialog>
     </Card>
   );
 }

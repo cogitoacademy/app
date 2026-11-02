@@ -1,5 +1,29 @@
 # Cogito Module Reference
 
+## Single-language Academy storage (1 November 2026)
+
+Academy schema migration 0085 drops the alternate class/session content columns. Draft persistence, publish snapshots and audit snapshots reference only the remaining canonical fields. There is no alternate-content response mapper. Cogito Academy Activities consumes the same class title on both localized page routes; surrounding navigation and non-class content remain localized.
+
+## Compact class administration controls (1 November 2026)
+
+`ClassAdminLifecyclePanel` mounts the full-class minimum decision in Administration and session cancellation inside the selected session. `ClassActionReason` hosts the date/tutor input and reason together in the action dialog; reopening clears the unsubmitted date or tutor draft. Class-wide meeting retry remains available when necessary. The empty management section is suppressed when no meeting setup requires attention.
+
+## Academy class action presentation (1 November 2026)
+
+Admin session actions are mounted in the corresponding curriculum accordion. `ClassActionReason` collects and submits a reason after a schedule, tutor, meeting or minimum-decision action is chosen. Class and session cancellation retain their quote and explicit final confirmation in a dialog. The minimum-decision panel receives the full class and its scheduled sessions; per-session cancellation receives only its selected session.
+
+## Class and booking detail composition (1 November 2026)
+
+`ClassDetailView` owns common class presentation. Student `ClassDetailPage` fetches the public catalog record and mounts enrollment; `AdminClassDetailPage` uses the guarded admin record and mounts administration/session details plus `ClassAdminManagement`. Management preserves existing reason validation, expected versions, cancellation quotes and idempotency keys. Academy service `withAbsenceHistory` enriches both admin list and get; public serialization stays separate. Admin actions invalidate the admin detail/list and classes query families.
+
+The canonical booking route selects the complete `AdminBookingDetailPage` for admins and `BookingDetailPage` for student/tutor viewers. Admin extensions share the booking presentation rather than a second detail layout. Operations retains its queue, wallet lookup and room operations; queue/room links target `/bookings/$bookingId`.
+
+## Shared reason controls (1 November 2026)
+
+Web `ReasonField` composes Selia controls to collect inline audit/action reasons on demand. It uses a dialog at widths >=640px and a bottom drawer below that breakpoint, with caller-supplied minimum/maximum lengths. A local draft is committed only by Use reason; Cancel, Escape and outside dismissal preserve the previously committed value. It never submits the enclosing action. Named controls retain a hidden form value for KOL adjustment FormData; the adjustment action stays disabled until its required reason is valid. Existing retry payload identity and service validation remain intact.
+
+Selia `FieldLabel` supports explicit `required`/`optional` markers. Required stars are hidden from assistive technology while inputs carry `aria-required`; optional status remains part of the label. DrawerPopup accepts an optional `layerClassName` for the reason drawer's backdrop/viewport above an existing overlay. Shared ConfirmationDialog applies `confirmDisabled` to Confirm rather than Cancel. No service, event key or business rule changed.
+
 ## Integrated release branch validation (30 October 2026)
 
 Merged remote `8daf883d` into the latest local V3 snapshot, retaining final Q04/Q15 decisions, plaintext reports, fee-event-only payouts and migrations 0079–0082. Remote pending half-plan checkout cancellation and strict Istanbul coverage collection are integrated. Local safe API units pass 3,203 tests / 7,881 assertions across 210 files (only verification-gate and role-scope-drift reset suites excluded); collector tests pass 18 / 189. Four typecheck tasks, lint baseline, web build and bounded server build pass. Initial server bundling exhausted memory; bounded retry passed. No database reset/migration or provider calls were performed. Hosted 100% coverage and release/UAT/OPS01 acceptance remain open; prior hosted evidence below is historical.
@@ -1006,8 +1030,16 @@ unverified.
 `classes.listSessionReports`. The shared booking feedback schema normalizes the
 three bullet fields and enforces the 600-code-point per-field limit. Only the
 assigned tutor or an admin can submit/correct; admin writes require a reason.
-Student reads require a funded seat and an existing report, and the read DTO
-does not expose student identities or private meeting links.
+Student reads require a funded seat; by default they also require an existing
+report, while `includeUnreported: true` returns the student's funded scheduled
+sessions for enrollment-guarded meeting access. The read DTO does not expose
+student identities. Tutor reads return only scheduled, completed, or cancelled
+sessions; draft session assignments are excluded until publication. Every role
+receives the class description, session curriculum, meeting status/URL once
+created, and assigned room name/location for sessions the caller may access.
+The class detail uses the same protected read to render a Join meeting action
+only when the student holds a funded allocation; cancelled or non-enrolled
+students receive no meeting or room data.
 
 Settlement locks class, session, report, allocations sorted by ID, then wallets
 sorted by ID, and reads the current time only after those locks. Initial report,
@@ -1064,7 +1096,7 @@ coverage were pending; see the current Report Export Module status below.
 
 `academy-class` owns the admin-only draft boundary. Migration `0061_academy_class_drafts.sql` adds `academy_class` and `academy_class_session`; session capacity, tutor, mode, room, dates, and tutor-fee snapshot are session-level. Class rows retain localized metadata, active competition identity, cohort minimum/check date and plan-rate defaults, masterclass seat-rate default, state, postponement count, and optimistic version.
 
-`admin.listAcademyClasses`, `admin.getAcademyClass`, and `admin.saveAcademyClassDraft` expose the current slice. Save creates or version-checks a draft and requires an audit reason. Audit actions are `academy_class.draft_created` and `academy_class.draft_updated`; snapshots include class/session terms but exclude tutor account data. Existing session IDs survive draft edits and sequence changes. Only draft classes are editable. The admin view combines its published and postponed reads by class ID and keeps the highest-version snapshot during refresh, preserving one current class card for its existing lifecycle actions.
+`admin.listAcademyClasses`, `admin.getAcademyClass`, and `admin.saveAcademyClassDraft` expose the current slice. Save creates or version-checks a draft and requires an audit reason. The editor collects that reason in a confirmation dialog opened by Save draft or Publish class; browser form validation runs before the prompt. Audit actions are `academy_class.draft_created` and `academy_class.draft_updated`; snapshots include class/session terms but exclude tutor account data. Existing session IDs survive draft edits and sequence changes. Only draft classes are editable. The admin view combines its published and postponed reads by class ID and keeps the highest-version snapshot during refresh, preserving one current class card for its existing lifecycle actions.
 
 Server validation requires an active competition (including an active parent for a specialization), a published tutor profile supporting the mode, an active managed room with sufficient capacity for in-person sessions, valid non-overlapping session times, English cohort curriculum, and a minimum-check date before the first cohort session. Masterclasses contain exactly one session. Approved draft defaults are cohort 20/22/25 Marks for full/half/single sessions and Rp400,000 tutor fee per session; masterclass 5 Marks and Rp300,000 tutor fee. Admin can edit draft values.
 
@@ -1561,7 +1593,7 @@ English question and answer documents are required; Indonesian documents are opt
 **Files:**
 
 - `packages/db/src/schema/blog.ts` — `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`
-- `packages/db/src/migrations/0085_fresh_spirit.sql` — additive blog tables, constraints, and indexes
+- `packages/db/src/migrations/0086_fresh_spirit.sql` — additive blog tables, constraints, and indexes
 - `blog.types.ts` — Zod input contracts, block/run/F.A.Q. shapes, embed URL validation, and admin/public DTOs
 - `blog.errors.ts` — domain errors and their oRPC mapping
 - `blog.repo.ts` — Drizzle reads and compare-and-swap writes
@@ -2394,7 +2426,7 @@ contracts.
 **Files:**
 
 - `room.types.ts` — Zod schemas for list/pending-approval/create/update/deactivate/assign/check-availability/relocate/cancel inputs
-- `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
+- `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`, `RoomCapacityError`
 - `room.repo.ts` — room queries, pending approval lookup, room-booking insert/update/find
 - `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `updateRoom`, `deactivateRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`, `syncRoomBookingScheduleForBooking`, `resyncRoomBookingToSchedule`
 - `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `update`, `deactivate`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
@@ -2407,9 +2439,9 @@ contracts.
 - `createRoom({ name, location, capacity })` — Creates a room
 - `updateRoom({ id, name, location, capacity })` — Updates an active or inactive room's editable catalog details
 - `deactivateRoom(id)` — Soft-deactivates a room so it cannot be selected for new offline bookings while historical assignments remain intact; repeated deactivation is a no-op
-- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, including the `Site: {location}` / `Room: {name}` description heading, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict and capacity checks; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, marks any prior requested row relocated, then best-effort creates/refreshes its non-Meet Calendar event after commit, including the `Site: {location}` / `Room: {name}` description heading, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows). A room smaller than the booking target group throws `ROOM_CAPACITY_EXCEEDED`.
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location and Site/Room description heading after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; destination room capacity must cover the booking target group size and the slot must be free; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location and Site/Room description heading after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
 - `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
 - `syncRoomBookingScheduleForBooking(bookingId, startAt, endAt)` — Updates the active confirmed room assignment when the target window is free; returns `missing` without an active assignment or `conflict` after cancelling the assignment when another confirmed room booking overlaps
 - `resyncRoomBookingToSchedule(conn, bookingId, { startAt, endAt })` — **N3:** moves a booking's confirmed roomBooking row back to a schedule (no-op when the times already match or no confirmed row exists). Called by the booking module when a reschedule proposal is rejected or expires so a pre-assigned room cannot remain blocked for the cancelled proposal window
@@ -2423,8 +2455,10 @@ contracts.
 - The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
 - Room catalog and pending-approval tables use ordered `limit`/`offset` queries and a one-row sentinel in the web UI; room selectors intentionally use the unpaginated compatibility path.
 - G14 (assign → scheduled + notifications) fixed in #46
+- Room capacity must cover the booking target group size at creation request, admin assign, and relocation; an undersized room is not reserved.
+- Booking creation checks the requested room's capacity and time overlap; a failed request leaves the booking for admin room approval instead of inserting a room row.
 - Offline booking-level reschedules keep the room assignment aligned with the booking schedule; conflict/missing results remain in the admin room-approval queue rather than reserving a room at a stale time
-- Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- `checkAvailability` remains the read-only room availability check used by admin room controls; booking creation performs its own capacity and overlap check inside the creation transaction.
 
 ---
 
@@ -2849,3 +2883,5 @@ FAQ ordering: admin FAQ entries support drag ordering (or ArrowUp/ArrowDown on M
 Admin booking detail exposes an icon-only retry action when an online booking is confirmed, has no meeting URL, and its meeting status is failed. The admin procedure verifies those conditions under a booking row lock, retries using the existing meeting finalization flow, records the state transition as admin when successful, and audits the retry result. Academy Classes retains its class-level failed-meeting retry action, now shown as an accessible retry icon.
 
 Referral page (1 November 2026): displays signup-to-reward flow, configured welcome/referrer rewards, semester cap progress, code/message copy, and one Referrals table covering users and reward history with separate status and completion-date columns. API contracts, reward rules and operations are unchanged.
+
+Admin Referrals composition (2026-11-01): `AdminReferralsPage` owns the Activity/Campaigns/Commissions navigation through validated route search state. Activity and campaign queries are enabled only on their active tab; campaign drafts remain mounted when changing tabs. `AdminKolCommissionsPage` is composed as a section with a level-two heading and mounts on Commissions; existing decision pagination, export and `KolSettlementPanel` are reused. Admin-created campaign codes and student-owned friend codes remain separate. This checkout exposes KOL campaign creation and pause/resume; the Campaigns tab does not imply promotion support. The commission table remains one row per KOL decision, with cash balances in settlement details.

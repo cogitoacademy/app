@@ -23,6 +23,8 @@ const competition = {
 const cohort = {
   id: classId,
   version: 1,
+  tutorFeeIdr: 400000,
+  createdAt: past,
   kind: "cohort",
   state: "published",
   titleEn: "Olympiad problem solving: algebra and number theory",
@@ -31,7 +33,6 @@ const cohort = {
     "Build a confident approach to challenging competition problems with guided practice, discussion, and feedback.",
   competition,
   competitionId: competition.id,
-  coverKey: null,
   cohortFullRateMarks: 20,
   cohortHalfRateMarks: 22,
   cohortSingleRateMarks: 25,
@@ -52,6 +53,8 @@ const cohort = {
       state: "scheduled",
       version: 1,
       tutor: { name: "Alexandra Putri" },
+      tutorId: "tutor-fixture",
+      tutorAbsences: [],
       meeting: { status: "created" },
     },
   ],
@@ -108,7 +111,11 @@ async function mockClasses(page: Page, role: "student" | "tutor" | "admin") {
         },
       ];
     else if (procedure === "classes/list") data = [cohort, masterclass];
-    else if (procedure === "classes/get") data = cohort;
+    else if (
+      procedure === "classes/get" ||
+      procedure === "admin/getAcademyClass"
+    )
+      data = cohort;
     else if (procedure === "classes/getMyEnrollments")
       data = {
         classId,
@@ -333,13 +340,52 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(card).toBeVisible();
     await expect(page.getByLabel("Class type", { exact: true })).toBeHidden();
     await card
-      .getByRole("button", { name: "Manage class", exact: true })
+      .getByRole("link", {
+        name: `View class details for ${cohort.titleEn}`,
+        exact: true,
+      })
       .click();
     await expect(
-      card.getByText("Individual session cancellation", { exact: true }),
+      page.getByRole("button", { name: "Cancel class", exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: /Patterns, proofs, and problem-solving strategies/,
+      })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Cancel session", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Class management", exact: true }),
+    ).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/classes/${classId}$`));
+    await expect(
+      page.getByRole("heading", { name: cohort.titleEn, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Curriculum and schedule" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Reserve and confirm Marks" }),
+    ).toHaveCount(0);
+    await assertFits(page);
+    if (!process.env.PLAYWRIGHT_NO_ARTIFACTS)
+      await page.screenshot({
+        path: test.info().outputPath(`shared-class-admin-detail-${width}.png`),
+        fullPage: true,
+      });
+    await page
+      .getByRole("link", { name: "Browse classes", exact: true })
+      .click();
     await page.getByRole("tab", { name: "Drafts & editor" }).click();
     await expect(page.getByLabel("Class type", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Title", { exact: true })).toHaveCount(1);
+    await expect(page.getByLabel("Description", { exact: true })).toHaveCount(
+      1,
+    );
+    await expect(page.getByText(/Indonesian, optional/)).toHaveCount(0);
+
     await assertFits(page);
     expect(errors).toEqual([]);
     if (!process.env.PLAYWRIGHT_NO_ARTIFACTS)
@@ -1417,3 +1463,269 @@ for (const role of ["tutor", "admin"] as const) {
       });
   });
 }
+
+for (const role of ["admin", "student", "tutor"] as const) {
+  test(`${role} booking route uses the correct detail capabilities`, async ({
+    page,
+  }) => {
+    const errors = await mockClasses(page, role);
+    const calls: string[] = [];
+    const bookingId = "55555555-5555-4555-8555-555555555555";
+    const booking = {
+      id: bookingId,
+      bookingNumber: 42,
+      type: "solo",
+      modality: "online",
+      currentState: "scheduled",
+      targetGroupSize: 1,
+      confirmedHeadcount: 1,
+      tutorId: "booking-tutor",
+      proposerId: "class-ui-fixture",
+      tutor: { name: "Booking Tutor" },
+      proposer: { name: "Class UI" },
+      scheduledStartAt: future,
+      scheduledEndAt: futureEnd,
+      timezone: "Asia/Jakarta",
+      deadlineAt: null,
+      meetingUrl: "https://meet.google.com/synthetic",
+      meetingStatus: "ready",
+      meeting: { status: "created", provider: "google_meet" },
+      originalMarks: 40,
+      holdAmount: 40,
+      refundedAmount: 0,
+      priceSnapshot: null,
+      learningGoal: "Practise algebra",
+      sessionTopic: null,
+      stateHistory: [],
+      rescheduleProposals: [],
+      roomBookings: [],
+      tutorFees: [],
+      participants: [],
+      overrideMeta: null,
+      reportedAt: null,
+      slaDeadline: null,
+    };
+    await page.route("**/rpc/**", async (route, request) => {
+      const procedure = new URL(request.url()).pathname.replace("/rpc/", "");
+      calls.push(procedure);
+      if (procedure === "booking/get")
+        return route.fulfill({ json: { json: booking, meta: [] } });
+      if (procedure === "adminBooking/listBookings")
+        return route.fulfill({
+          json: { json: { items: [booking], nextCursor: null }, meta: [] },
+        });
+      return route.fallback();
+    });
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto(`/bookings/${bookingId}`);
+    await expect(
+      page.getByText("Session overview", { exact: true }),
+    ).toBeVisible();
+    if (role === "admin") {
+      await expect(
+        page.getByRole("button", { name: "Open override", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Admin review context", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Wallet impact", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("State history", { exact: true }),
+      ).toBeVisible();
+      expect(calls).toContain("adminBooking/getBookingStateHistory");
+      await page.goto(`/admin-operations/bookings/${bookingId}`);
+      await expect(page).toHaveURL(new RegExp(`/bookings/${bookingId}$`));
+      await expect(
+        page.getByRole("button", { name: "Open override", exact: true }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByRole("button", { name: "Open override", exact: true }),
+      ).toHaveCount(0);
+      expect(calls.some((call) => call.startsWith("adminBooking/"))).toBe(
+        false,
+      );
+    }
+    await assertFits(page);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("class and session cancellations review reason and returns before confirming", async ({
+  page,
+}) => {
+  const errors = await mockClasses(page, "admin");
+  const calls: { name: string; input: Record<string, unknown> }[] = [];
+  await page.route("**/rpc/**", async (route, request) => {
+    const name = new URL(request.url()).pathname.replace("/rpc/", "");
+    if (
+      !name.startsWith("classes/previewAdmin") &&
+      !name.startsWith("classes/confirmAdmin")
+    )
+      return route.fallback();
+    const input = (request.postDataJSON() as { json: Record<string, unknown> })
+      .json;
+    calls.push({ name, input });
+    const data =
+      name === "classes/previewAdminCancellation"
+        ? {
+            cancelledSessionIds: [sessionId],
+            returnMarks: 20,
+            retainedMarks: 0,
+            quoteVersion: "class-quote",
+          }
+        : name === "classes/previewAdminSessionCancellation"
+          ? {
+              returnMarks: 20,
+              releasedAllocationIds: ["allocation"],
+              quoteVersion: "session-quote",
+            }
+          : { returnMarks: 20 };
+    return route.fulfill({ json: { json: data, meta: [] } });
+  });
+  await page.goto(`/classes/${classId}`);
+  await page.getByRole("button", { name: "Cancel class", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: "Cancel class" });
+  await dialog
+    .getByRole("textbox", { name: "Class cancellation reason" })
+    .fill("Class cannot proceed");
+  expect(calls).toHaveLength(0);
+  await dialog
+    .getByRole("button", { name: "Review class cancellation" })
+    .click();
+  await expect(dialog.getByText(/Return: 20 Marks/)).toBeVisible();
+  expect(calls.map((call) => call.name)).toEqual([
+    "classes/previewAdminCancellation",
+  ]);
+  await dialog
+    .getByRole("button", { name: "Confirm class cancellation" })
+    .click();
+  await expect.poll(() => calls.length).toBe(2);
+  expect(calls[1]?.input).toMatchObject({
+    classId,
+    expectedVersion: 1,
+    reason: "Class cannot proceed",
+    quoteVersion: "class-quote",
+  });
+  await expect(dialog).toBeHidden();
+  await page
+    .getByRole("button", {
+      name: /Patterns, proofs, and problem-solving strategies/,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Cancel session", exact: true })
+    .click();
+  dialog = page.getByRole("dialog", { name: "Cancel session" });
+  await dialog
+    .getByRole("textbox", { name: "Cancellation reason" })
+    .fill("Session cannot proceed");
+  await dialog.getByRole("button", { name: "Preview exact return" }).click();
+  await expect(dialog.getByText(/Return: 20 Marks/)).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Confirm session cancellation" })
+    .click();
+  await expect.poll(() => calls.length).toBe(4);
+  expect(calls[3]?.input).toMatchObject({
+    classId,
+    sessionId,
+    expectedClassVersion: 1,
+    expectedSessionVersion: 1,
+    reason: "Session cannot proceed",
+    quoteVersion: "session-quote",
+  });
+  expect(errors).toEqual([]);
+});
+
+test("admin edits the selected session in a multi-session class", async ({
+  page,
+}) => {
+  const errors = await mockClasses(page, "admin");
+  const secondId = "66666666-6666-4666-8666-666666666666";
+  const record = {
+    ...cohort,
+    sessions: [
+      cohort.sessions[0],
+      {
+        ...cohort.sessions[0],
+        id: secondId,
+        sequenceNumber: 2,
+        titleEn: "Second session",
+        version: 7,
+        tutor: { name: "Second Tutor" },
+      },
+    ],
+  };
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/rpc/**", async (route, request) => {
+    const procedure = new URL(request.url()).pathname.replace("/rpc/", "");
+    if (procedure === "admin/getAcademyClass")
+      return route.fulfill({ json: { json: record, meta: [] } });
+    if (procedure === "admin/rescheduleClassSession") {
+      submitted = (request.postDataJSON() as { json: Record<string, unknown> })
+        .json;
+      return route.fulfill({ json: { json: record, meta: [] } });
+    }
+    return route.fallback();
+  });
+  await page.goto(`/classes/${classId}`);
+  await page.getByRole("button", { name: /Second session/ }).click();
+  await page
+    .getByRole("button", { name: "Change session time for Second session" })
+    .click();
+  const prompt = page.getByRole("dialog", { name: "Update session time" });
+  await prompt
+    .getByRole("textbox", { name: "New date and start time" })
+    .last()
+    .fill("11:15");
+  await prompt
+    .getByRole("textbox", { name: "Reason for students" })
+    .fill("Adjust second session");
+  await prompt
+    .getByRole("button", { name: "Confirm update session time" })
+    .click();
+  await expect.poll(() => submitted?.sessionId).toBe(secondId);
+  expect(submitted).toMatchObject({
+    sessionId: secondId,
+    expectedVersion: 7,
+    reason: "Adjust second session",
+  });
+  expect(errors).toEqual([]);
+});
+
+test("minimum enrollment check appears in administration", async ({ page }) => {
+  const errors = await mockClasses(page, "admin");
+  const record = { ...cohort, minimumCheckAt: future };
+  await page.route("**/rpc/**", async (route, request) => {
+    const procedure = new URL(request.url()).pathname.replace("/rpc/", "");
+    if (procedure === "admin/getAcademyClass")
+      return route.fulfill({ json: { json: record, meta: [] } });
+    if (procedure === "classes/getAdminMinimumCheck")
+      return route.fulfill({
+        json: {
+          json: {
+            activeFullHalfStudents: 2,
+            minimumEnrollment: 4,
+            shortfall: 2,
+            minimumCheckResolvedAt: null,
+            postponementCount: 0,
+            freeExitUntil: null,
+            eligible: false,
+          },
+          meta: [],
+        },
+      });
+    return route.fallback();
+  });
+  await page.goto(`/classes/${classId}`);
+  const admin = page.getByRole("complementary", {
+    name: "Class administration",
+  });
+  await expect(
+    admin.getByText("Minimum enrollment check", { exact: true }),
+  ).toBeVisible();
+  await expect(admin.getByText(/2 \/ 4/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
