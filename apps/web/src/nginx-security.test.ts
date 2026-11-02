@@ -21,4 +21,10 @@ describe("web nginx CSP", () => {
   test("allows blob image previews for client-side uploads", () => {
     expect(nginxConfig).toContain("img-src 'self' data: blob: https:");
   });
+
+  test("allows the Cloudflare Insights beacon script", () => {
+    expect(nginxConfig).toContain(
+      "script-src 'self' https://*.posthog.com https://static.cloudflareinsights.com",
+    );
+  });
 });
