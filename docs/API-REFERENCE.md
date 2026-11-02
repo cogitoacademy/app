@@ -1442,7 +1442,7 @@ used to retrieve production OTPs.
 - **HTTP:** `POST /rpc/admin/getTutorPayoutReport`
 - **Auth:** Admin
 - **Input:** `{ dateFrom?, dateTo? }` (ISO datetimes; both are optional)
-- **Output:** `TutorPayoutReportRow[]`; rows include payout status, covered-session count, gross, saved tax status/rate/source/withholding, transfer fee, calculated net, actual amount/reference/proof, transfer-recorded actor/time, and reconciliation fields. New paid/void rows use saved tax and bank snapshots. Legacy aggregate rows retain nullable snapshots and never fall back to current identity/bank data; admin history labels absent coverage and tax snapshots as unavailable instead of showing numeric zero.
+- **Output:** `TutorPayoutReportRow[]`; rows include payout status, covered-session count, gross, saved tax status/rate/source/withholding, transfer fee, calculated net, actual amount/reference/proof, transfer-recorded actor/time, and reconciliation fields. New paid/void rows use saved tax and bank snapshots. Legacy aggregate rows retain nullable snapshots and never fall back to current identity/bank data; admin history labels absent coverage and tax snapshots as unavailable instead of showing numeric zero. The web workspace and monthly CSV render saved enum snapshots through human labels, so raw values such as `nik_only` or `default_nik_npwp` never appear.
 - **Description:** Returns paid and void transfer history in the requested Asia/Jakarta date window plus each tutor's current unpaid summary. Current unpaid sessions remain visible outside the selected history window. NIK/NPWP and bank details are admin-only fields; this procedure requires the admin role.
 
 ### `admin.getPendingTutorPayouts`

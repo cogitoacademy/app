@@ -4,7 +4,7 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 export const badgeVariants = cva(
-  "inline-flex items-center gap-1.5 border border-transparent",
+  "inline-flex items-center gap-1.5 whitespace-nowrap border border-transparent",
   {
     variants: {
       variant: {

@@ -68,7 +68,13 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
 import {
+  formatBankAccountOwnership,
   formatPayoutCoverageLabel,
+  formatPayoutDeliveryStatus,
+  formatPayoutReconciliationStatus,
+  formatPayoutSourceType,
+  formatPayoutTaxRateSource,
+  formatPayoutTaxStatus,
   formatTaxRateSnapshot,
 } from "@/lib/tutor-payout-presentation";
 import { client, orpc } from "@/utils/orpc";
@@ -879,7 +885,7 @@ export function AdminTutorPayoutsPage() {
                         {formatRate(row.taxRateBps)}
                         {row.taxRateSource ? (
                           <Text className="text-xs text-dimmed">
-                            {row.taxRateSource}
+                            {formatPayoutTaxRateSource(row.taxRateSource)}
                           </Text>
                         ) : null}
                       </TableCell>
@@ -987,7 +993,9 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Account ownership"
-                      value={selectedRow.bankAccountOwnership || "Not provided"}
+                      value={formatBankAccountOwnership(
+                        selectedRow.bankAccountOwnership,
+                      )}
                     />
                     <PayoutDetail
                       label="Gross"
@@ -999,7 +1007,7 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Tax status"
-                      value={selectedRow.taxStatus ?? "Not recorded"}
+                      value={formatPayoutTaxStatus(selectedRow.taxStatus)}
                     />
                     <PayoutDetail
                       label="Tax rate"
@@ -1064,7 +1072,10 @@ export function AdminTutorPayoutsPage() {
                   {selectedRow.status === "void" ? (
                     <Text className="mt-3 text-sm text-muted">
                       Void reason: {selectedRow.voidReason || "Not provided"}.
-                      Reconciliation: {selectedRow.reconciliationStatus}
+                      Reconciliation:{" "}
+                      {formatPayoutReconciliationStatus(
+                        selectedRow.reconciliationStatus,
+                      )}
                       {selectedRow.reconciliationReason
                         ? ` · ${selectedRow.reconciliationReason}`
                         : ""}
@@ -1150,11 +1161,13 @@ export function AdminTutorPayoutsPage() {
                                 </Text>
                                 <Text className="text-sm text-muted">
                                   {formatDateTime(item.scheduledStartAt)} ·{" "}
-                                  {item.deliveryStatus}
+                                  {formatPayoutDeliveryStatus(
+                                    item.deliveryStatus,
+                                  )}
                                 </Text>
                                 <Text className="text-xs text-dimmed">
-                                  {item.sourceType} · earned{" "}
-                                  {formatDateTime(item.earnedAt)}
+                                  {formatPayoutSourceType(item.sourceType)} ·
+                                  earned {formatDateTime(item.earnedAt)}
                                 </Text>
                               </span>
                               <Text className="shrink-0 font-semibold">
@@ -1190,7 +1203,7 @@ export function AdminTutorPayoutsPage() {
                           />
                           <PayoutDetail
                             label="Tax status / rate"
-                            value={`${selectedPreview.taxStatus} · ${formatRate(selectedPreview.taxRateBps)}`}
+                            value={`${formatPayoutTaxStatus(selectedPreview.taxStatus)} · ${formatRate(selectedPreview.taxRateBps)}`}
                           />
                           <PayoutDetail
                             label="Withholding"
@@ -1294,11 +1307,13 @@ export function AdminTutorPayoutsPage() {
                               </Text>
                               <Text className="text-sm text-muted">
                                 {formatDateTime(item.scheduledStartAt)} ·{" "}
-                                {item.deliveryStatus}
+                                {formatPayoutDeliveryStatus(
+                                  item.deliveryStatus,
+                                )}
                               </Text>
                               <Text className="text-xs text-dimmed">
-                                {item.sourceType} · earned{" "}
-                                {formatDateTime(item.earnedAt)}
+                                {formatPayoutSourceType(item.sourceType)} ·
+                                earned {formatDateTime(item.earnedAt)}
                               </Text>
                             </div>
                             <Text className="font-semibold">

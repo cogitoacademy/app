@@ -85,6 +85,10 @@ describe("tutor payout CSV", () => {
     expect(csv).toContain('"300"');
     expect(csv).toContain('"500"');
     expect(csv).toContain('"3000"');
+    expect(csv).toContain('"NIK + NPWP"');
+    expect(csv).toContain('"Default (NIK + NPWP)"');
+    expect(csv).toContain('"Not required"');
+    expect(csv).not.toContain("nik_npwp");
     expect(csv).not.toContain('"8,000"');
     expect(csv).toContain('"\'001234567890"');
     expect(csv).toContain('"\'0012345678901234"');

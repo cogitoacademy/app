@@ -1,3 +1,9 @@
+import {
+  formatPayoutReconciliationStatus,
+  formatPayoutTaxRateSource,
+  formatPayoutTaxStatus,
+} from "@/lib/tutor-payout-presentation";
+
 export interface TutorPayoutCsvRow {
   tutorName: string;
   bankName: string | null;
@@ -120,9 +126,13 @@ export function buildTutorPayoutCsv(
     formatWibDateTime(row.transferRecordedAt),
     formatWibDateTime(row.voidedAt),
     row.grossHonorariumIdr,
-    row.taxStatus ?? "Unavailable (required snapshot missing)",
+    row.taxStatus === null
+      ? "Unavailable (required snapshot missing)"
+      : formatPayoutTaxStatus(row.taxStatus),
     row.taxRateBps ?? "Unavailable (required snapshot missing)",
-    row.taxRateSource ?? "Unavailable (required snapshot missing)",
+    row.taxRateSource === null
+      ? "Unavailable (required snapshot missing)"
+      : formatPayoutTaxRateSource(row.taxRateSource),
     row.taxHonorariumIdr ?? "Unavailable (required snapshot missing)",
     row.transferFeeIdr,
     row.netHonorariumIdr,
@@ -131,7 +141,7 @@ export function buildTutorPayoutCsv(
     row.coveredSessionCount > 0
       ? row.coveredSessionCount
       : "Session coverage unavailable",
-    row.reconciliationStatus,
+    formatPayoutReconciliationStatus(row.reconciliationStatus),
     row.voidReason,
     row.reconciliationReason,
   ];

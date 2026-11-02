@@ -1769,8 +1769,10 @@ the exact actual net only after an external bank transfer. A reasoned void keeps
 history/evidence and requires audited transfer reconciliation before released
 sources can be prepared again. The report supports status/sorting views and a
 monthly CSV using saved snapshots, actual Asia/Jakarta paid dates, and a separate
-void/reconciliation section. The unpaid amount does not reset automatically each
-calendar week.
+void/reconciliation section. Status badges stay on one line. Stored enum
+snapshots are rendered through shared presentation labels, and unknown values
+are humanized instead of showing underscores. The unpaid amount does not reset
+automatically each calendar week.
 
 **Files:**
 
