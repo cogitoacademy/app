@@ -2902,7 +2902,6 @@ Blog, FAQ and Activities now share RichTextEditorSurface for editor framing, com
 
 Blog people references remain optional. Manual featured/reviewer names are shared across locales and persisted separately from tutor IDs. Linked identities take display precedence. The editor defaults to Indonesian-first per the client spec, derives an empty SEO title from that language title, generates an unpublished draft slug when necessary, and never copies Indonesian prose into English.
 
-
 ### Admin finance follow-up (2 November 2026)
 
 `getV3EconomySettings` includes `activeValues` (or `null`) alongside the latest saved values and active revision. The admin rate card compares current and draft prices; its save, activation and cancel actions live in the header. Payout CSV and Excel reports separate paid transfers from cancelled payouts and exclude cancelled amounts from paid totals.
