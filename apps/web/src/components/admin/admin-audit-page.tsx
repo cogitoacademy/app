@@ -189,7 +189,11 @@ export function AdminAuditPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="flex w-full min-w-0 max-w-full flex-nowrap flex-col"
+    >
       <div>
         <Heading level={1} size="md">
           Audit log
@@ -205,10 +209,10 @@ export function AdminAuditPage() {
         </CardHeader>
         <CardBody>
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
             onSubmit={handleSubmit}
           >
-            <Field className="min-w-52">
+            <Field className="w-full sm:w-auto sm:min-w-52">
               <FieldLabel htmlFor="audit-action">Action</FieldLabel>
               <Input
                 id="audit-action"
@@ -224,7 +228,7 @@ export function AdminAuditPage() {
                 placeholder="economy_config_updated"
               />
             </Field>
-            <Field className="min-w-48">
+            <Field className="w-full sm:w-auto sm:min-w-48">
               <FieldLabel htmlFor="audit-target-type">Target type</FieldLabel>
               <Input
                 id="audit-target-type"
@@ -240,7 +244,7 @@ export function AdminAuditPage() {
                 placeholder="economy_config"
               />
             </Field>
-            <Field className="min-w-44">
+            <Field className="w-full sm:w-auto sm:min-w-44">
               <FieldLabel htmlFor="audit-target-id">Target ID</FieldLabel>
               <Input
                 id="audit-target-id"
@@ -255,7 +259,7 @@ export function AdminAuditPage() {
                 }
               />
             </Field>
-            <Field className="min-w-44">
+            <Field className="w-full sm:w-auto sm:min-w-44">
               <FieldLabel htmlFor="audit-actor-id">Actor ID</FieldLabel>
               <Input
                 id="audit-actor-id"
@@ -270,7 +274,7 @@ export function AdminAuditPage() {
                 }
               />
             </Field>
-            <Field className="min-w-40">
+            <Field className="w-full sm:w-auto sm:min-w-40">
               <FieldLabel htmlFor="audit-date-from">Date from</FieldLabel>
               <DatePicker
                 id="audit-date-from"
@@ -281,7 +285,7 @@ export function AdminAuditPage() {
                 }
               />
             </Field>
-            <Field className="min-w-40">
+            <Field className="w-full sm:w-auto sm:min-w-40">
               <FieldLabel htmlFor="audit-date-to">Date to</FieldLabel>
               <DatePicker
                 id="audit-date-to"
@@ -314,7 +318,7 @@ export function AdminAuditPage() {
         </CardBody>
       </Card>
 
-      <Card id="admin-audit-log" className="scroll-mt-4">
+      <Card id="admin-audit-log" className="min-w-0 scroll-mt-4">
         <CardHeader>
           <div>
             <CardTitle>Recorded actions</CardTitle>
