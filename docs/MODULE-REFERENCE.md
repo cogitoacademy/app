@@ -1285,13 +1285,14 @@ preserving native Intl short labels for other IANA zones. The shared
 The admin analytics repo composes three additional bounded aggregates from
 `admin-health-analytics.ts` inside the same `Promise.all`:
 
-- Funnel counts distinct students per selected-period cohort: accounts created
-  in the window (`registeredStudents`), booking proposers with a booking created
-  in the window (`bookedStudents`), those proposers whose booking state is
-  `completed` (`completedStudents`), and distinct payment users with a
+- Funnel restricts every step to the cohort of student accounts created in the
+  selected WIB window: the cohort size (`registeredStudents`), cohort members
+  with a booking created in the window (`bookedStudents`), those members whose
+  booking is `completed` (`completedStudents`), and cohort members with a
   successful provider date and `PAID`/`SETTLED`/`REFUNDED` status
-  (`paidStudents`). Counts are raw; the dashboard computes percentages and shows
-  a placeholder for a zero base.
+  (`paidStudents`). Counts are raw; the dashboard computes percentages against
+  the cohort and shows a placeholder for a zero base. Later steps are subsets,
+  so percentages stay at or below 100%.
 - Supply-demand groups period bookings by the saved topic parent category name
   (`Other` fallback), keeps the top 8, and counts approved/published tutor
   profiles joined through `tutor_profile_subject` to the child subject's parent

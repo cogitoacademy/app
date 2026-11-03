@@ -921,7 +921,7 @@ function AnalyticsContent({
 
       <AnalyticsSection
         title="Student conversion funnel"
-        description="Selected period cohort. Each step counts distinct students; percentages use registered students as the base. Steps can overlap because booking and payment activity is not limited to accounts created in this period."
+        description="Selected period cohort. Every step counts distinct students whose accounts were created in this period; percentages use registered students as the base."
       >
         <AnalyticsMetric
           icon={<IconUsers />}

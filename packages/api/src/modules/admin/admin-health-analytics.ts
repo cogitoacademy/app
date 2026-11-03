@@ -35,32 +35,38 @@ function readRows(result: unknown): Record<string, unknown>[] {
 /**
  * Counts the selected-period student cohort steps in one round trip.
  *
- * All steps are period cohorts: student accounts created inside the window,
- * bookings created inside the window, completions among those bookings, and
- * successful payments whose provider success time falls inside the window.
- * Raw counts only; the dashboard derives step percentages.
+ * Every step is restricted to students whose accounts were created inside the
+ * window. Bookings and payments are then counted only for that cohort, so each
+ * later step is a subset of the previous one and percentages stay at or below
+ * 100. Raw counts only; the dashboard derives step percentages.
  */
 export async function getFunnelAnalytics(
   conn: DbOrTx,
   query: DashboardAnalyticsQuery,
 ): Promise<FunnelAnalyticsSummary> {
   const result = await conn.execute(sql`
+    WITH cohort AS (
+      SELECT u.id
+      FROM "user" u
+      WHERE u.role = 'student'
+        AND u.created_at >= ${query.periodStart.toISOString()}::timestamptz
+        AND u.created_at <= ${query.periodEnd.toISOString()}::timestamptz
+    )
     SELECT
-      (SELECT COUNT(*)::int FROM "user" u
-        WHERE u.role = 'student'
-          AND u.created_at >= ${query.periodStart.toISOString()}::timestamptz
-          AND u.created_at <= ${query.periodEnd.toISOString()}::timestamptz
-      ) AS "registeredStudents",
+      (SELECT COUNT(*)::int FROM cohort) AS "registeredStudents",
       (SELECT COUNT(DISTINCT b.proposer_id)::int FROM booking b
+        JOIN cohort c ON c.id = b.proposer_id
         WHERE b.created_at >= ${query.periodStart.toISOString()}::timestamptz
           AND b.created_at <= ${query.periodEnd.toISOString()}::timestamptz
       ) AS "bookedStudents",
       (SELECT COUNT(DISTINCT b.proposer_id)::int FROM booking b
+        JOIN cohort c ON c.id = b.proposer_id
         WHERE b.created_at >= ${query.periodStart.toISOString()}::timestamptz
           AND b.created_at <= ${query.periodEnd.toISOString()}::timestamptz
           AND b.current_state = 'completed'
       ) AS "completedStudents",
       (SELECT COUNT(DISTINCT p.user_id)::int FROM payment_record p
+        JOIN cohort c ON c.id = p.user_id
         WHERE p.provider_success_at >= ${query.periodStart.toISOString()}::timestamptz
           AND p.provider_success_at <= ${query.periodEnd.toISOString()}::timestamptz
           AND p.status IN ('PAID', 'SETTLED', 'REFUNDED')

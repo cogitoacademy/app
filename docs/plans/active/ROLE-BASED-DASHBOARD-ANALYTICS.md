@@ -59,15 +59,14 @@ Still pending:
 
 Landed in `admin.getDashboardAnalytics` without input changes:
 
-- **Student conversion funnel** (`funnel`): period cohorts only. Registered =
-  student accounts created in the selected WIB window; booked = distinct
-  `booking.proposerId` with a booking created in the window; completed = the
-  same cohort with `currentState = 'completed'`; paid = distinct payment users
-  with `providerSuccessAt` in the window and status `PAID`, `SETTLED`, or
-  `REFUNDED`. Counts are raw; the dashboard derives step percentages against
-  registered students. A step can exceed 100% because booking and payment
-  activity is not limited to accounts created in the window, and the UI states
-  that.
+- **Student conversion funnel** (`funnel`): one period cohort only. The cohort
+  is the set of student accounts created in the selected WIB window. Registered
+  = cohort size; booked = cohort members with a booking created in the window;
+  completed = those members with `currentState = 'completed'`; paid = those
+  members with `providerSuccessAt` in the window and status `PAID`, `SETTLED`,
+  or `REFUNDED`. Counts are raw; the dashboard derives step percentages against
+  registered students. Later steps are subsets, so percentages stay at or below
+  100%.
 - **Supply vs demand** (`supplyDemand`): top 8 categories by bookings created in
   the window, using the booking topic `categoryName` with `Other` fallback.
   `activeTutors` counts approved/published tutor profiles whose selected child
