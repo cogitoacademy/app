@@ -45,6 +45,7 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { cn } from "@cogito-app/ui/lib/utils";
 import {
   v3EconomyConfigSchema,
   type V3EconomyConfig,
@@ -77,18 +78,25 @@ const idr = (amount: number | null | undefined) =>
     ? "Not set"
     : `Rp${amount.toLocaleString("en-US")}`;
 
+// Tables sit edge to edge inside the accordion, so cells must keep the same
+// 24px inset as the accordion triggers and the small-screen step must not shrink it.
+const tableInsetClassName =
+  "[&_[data-slot=table-head]]:px-6 [&_[data-slot=table-cell]]:px-6";
+
 function AmountInput({
   label,
   value,
   onChange,
+  className,
 }: {
   label: string;
   value: number | undefined;
   onChange: (value: number) => void;
+  className?: string;
 }) {
   return (
     <SeliaNumberField
-      className="w-full min-w-44 max-w-52"
+      className={cn("w-full min-w-44 max-w-52", className)}
       inputProps={{ "aria-label": label, className: "min-w-32" }}
       allowOutOfRange
       format={{ useGrouping: false }}
@@ -415,14 +423,22 @@ export function V3EconomySettings() {
                 keepMounted
                 className="[&_[data-slot=accordion-panel-content]]:px-0"
               >
+                <Text className="px-6 pb-2 text-sm text-muted">
+                  A package is a one-time purchase of Marks. Students spend
+                  Marks on sessions.
+                </Text>
                 <TableContainer>
-                  <Table>
+                  <Table className={tableInsetClassName}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Package</TableHead>
-                        <TableHead>{primaryLabel}</TableHead>
+                        <TableHead>Marks</TableHead>
+                        <TableHead>Price (IDR)</TableHead>
                         {showDraftColumn ? (
-                          <TableHead>New prices</TableHead>
+                          <>
+                            <TableHead>New marks</TableHead>
+                            <TableHead>New price (IDR)</TableHead>
+                          </>
                         ) : null}
                       </TableRow>
                     </TableHeader>
@@ -439,7 +455,15 @@ export function V3EconomySettings() {
                             <TableCell>
                               {currentPkg ? (
                                 <ValueText>
-                                  <CogitoMarks value={currentPkg.marks} /> ·{" "}
+                                  <CogitoMarks value={currentPkg.marks} />
+                                </ValueText>
+                              ) : (
+                                <Text className="text-muted">Not set</Text>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {currentPkg ? (
+                                <ValueText>
                                   {idr(currentPkg.priceIdr)}
                                 </ValueText>
                               ) : (
@@ -447,10 +471,11 @@ export function V3EconomySettings() {
                               )}
                             </TableCell>
                             {showDraftColumn ? (
-                              <TableCell>
-                                {editing ? (
-                                  <div className="flex flex-wrap gap-2">
+                              <>
+                                <TableCell>
+                                  {editing ? (
                                     <AmountInput
+                                      className="min-w-40 max-w-40"
                                       label={`${pkg.code} Marks`}
                                       value={pkg.marks}
                                       onChange={(amount) =>
@@ -459,7 +484,16 @@ export function V3EconomySettings() {
                                         })
                                       }
                                     />
+                                  ) : (
+                                    <ValueText>
+                                      <CogitoMarks value={pkg.marks} />
+                                    </ValueText>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {editing ? (
                                     <AmountInput
+                                      className="min-w-40 max-w-40"
                                       label={`${pkg.code} price in IDR`}
                                       value={pkg.priceIdr}
                                       onChange={(amount) =>
@@ -469,14 +503,11 @@ export function V3EconomySettings() {
                                         })
                                       }
                                     />
-                                  </div>
-                                ) : (
-                                  <ValueText>
-                                    <CogitoMarks value={pkg.marks} /> ·{" "}
-                                    {idr(pkg.priceIdr)}
-                                  </ValueText>
-                                )}
-                              </TableCell>
+                                  ) : (
+                                    <ValueText>{idr(pkg.priceIdr)}</ValueText>
+                                  )}
+                                </TableCell>
+                              </>
                             ) : null}
                           </TableRow>
                         );
@@ -497,18 +528,23 @@ export function V3EconomySettings() {
                 keepMounted
                 className="[&_[data-slot=accordion-panel-content]]:px-0"
               >
-                <Text className="px-6 pb-1 text-sm text-muted">
-                  Online solo rates. Offline delivery adds the group size
-                  adjustments below.
+                <Text className="px-6 pb-2 text-sm text-muted">
+                  Online solo rates. Each session costs the student the Marks
+                  listed and pays the tutor the fee listed. Offline delivery
+                  adds the group size adjustments below.
                 </Text>
                 <TableContainer>
-                  <Table>
+                  <Table className={tableInsetClassName}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Competition</TableHead>
-                        <TableHead>{primaryLabel}</TableHead>
+                        <TableHead>Marks per session</TableHead>
+                        <TableHead>Tutor fee per session (IDR)</TableHead>
                         {showDraftColumn ? (
-                          <TableHead>New prices</TableHead>
+                          <>
+                            <TableHead>New marks</TableHead>
+                            <TableHead>New tutor fee (IDR)</TableHead>
+                          </>
                         ) : null}
                       </TableRow>
                     </TableHeader>
@@ -525,18 +561,27 @@ export function V3EconomySettings() {
                             <TableCell>
                               {currentRate ? (
                                 <ValueText>
-                                  <CogitoMarks value={currentRate.soloMarks} />{" "}
-                                  · {idr(currentRate.soloFeeIdr)}
+                                  <CogitoMarks value={currentRate.soloMarks} />
+                                </ValueText>
+                              ) : (
+                                <Text className="text-muted">Not set</Text>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {currentRate ? (
+                                <ValueText>
+                                  {idr(currentRate.soloFeeIdr)}
                                 </ValueText>
                               ) : (
                                 <Text className="text-muted">Not set</Text>
                               )}
                             </TableCell>
                             {showDraftColumn ? (
-                              <TableCell>
-                                {editing ? (
-                                  <div className="flex flex-wrap gap-2">
+                              <>
+                                <TableCell>
+                                  {editing ? (
                                     <AmountInput
+                                      className="min-w-40 max-w-40"
                                       label={`${item.name} online solo Marks`}
                                       value={newRate?.soloMarks}
                                       onChange={(amount) =>
@@ -547,7 +592,18 @@ export function V3EconomySettings() {
                                         )
                                       }
                                     />
+                                  ) : typeof newRate?.soloMarks === "number" ? (
+                                    <ValueText>
+                                      <CogitoMarks value={newRate.soloMarks} />
+                                    </ValueText>
+                                  ) : (
+                                    <Text className="text-muted">Required</Text>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {editing ? (
                                     <AmountInput
+                                      className="min-w-40 max-w-40"
                                       label={`${item.name} online solo tutor fee in IDR`}
                                       value={newRate?.soloFeeIdr}
                                       onChange={(amount) =>
@@ -558,18 +614,16 @@ export function V3EconomySettings() {
                                         )
                                       }
                                     />
-                                  </div>
-                                ) : newRate &&
-                                  typeof newRate.soloMarks === "number" &&
-                                  typeof newRate.soloFeeIdr === "number" ? (
-                                  <ValueText>
-                                    <CogitoMarks value={newRate.soloMarks} /> ·{" "}
-                                    {idr(newRate.soloFeeIdr)}
-                                  </ValueText>
-                                ) : (
-                                  <Text className="text-muted">Required</Text>
-                                )}
-                              </TableCell>
+                                  ) : typeof newRate?.soloFeeIdr ===
+                                    "number" ? (
+                                    <ValueText>
+                                      {idr(newRate.soloFeeIdr)}
+                                    </ValueText>
+                                  ) : (
+                                    <Text className="text-muted">Required</Text>
+                                  )}
+                                </TableCell>
+                              </>
                             ) : null}
                           </TableRow>
                         );
@@ -591,13 +645,13 @@ export function V3EconomySettings() {
                 className="[&_[data-slot=accordion-panel-content]]:px-0"
               >
                 <TableContainer>
-                  <Table>
+                  <Table className={tableInsetClassName}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Setting</TableHead>
-                        <TableHead>{primaryLabel}</TableHead>
+                        <TableHead>Current value</TableHead>
                         {showDraftColumn ? (
-                          <TableHead>New prices</TableHead>
+                          <TableHead>New value</TableHead>
                         ) : null}
                       </TableRow>
                     </TableHeader>
@@ -714,14 +768,14 @@ export function V3EconomySettings() {
             competition || competitions[0]?.slug || "",
           ) ? (
             <TableContainer>
-              <Table>
+              <Table className={tableInsetClassName}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Students</TableHead>
                     <TableHead>Online Marks / student</TableHead>
-                    <TableHead>Online tutor fee</TableHead>
+                    <TableHead>Online tutor fee (IDR)</TableHead>
                     <TableHead>Offline Marks / student</TableHead>
-                    <TableHead>Offline tutor fee</TableHead>
+                    <TableHead>Offline tutor fee (IDR)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -759,9 +813,9 @@ export function V3EconomySettings() {
             <Text>Correct the configuration to see the example.</Text>
           )}
           <Field>
-            <FieldLabel>Custom top-up Marks</FieldLabel>
+            <FieldLabel>Custom top-up amount (Marks)</FieldLabel>
             <AmountInput
-              label="Custom top-up Marks"
+              label="Custom top-up amount in Marks"
               value={exactMarks}
               onChange={setExactMarks}
             />
@@ -772,16 +826,22 @@ export function V3EconomySettings() {
               className="flex flex-col gap-2 rounded-lg bg-accent p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
+                <Text className="text-sm text-muted">You pay</Text>
+                <Text className="font-semibold tabular-nums">
+                  {idr(topUp.amountIdr)}
+                </Text>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Text className="text-sm text-muted">You get</Text>
-                <Text className="flex items-center gap-1 font-semibold tabular-nums">
-                  <CogitoMarks value={topUp.marks} /> · {idr(topUp.amountIdr)}
+                <Text className="font-semibold tabular-nums">
+                  <CogitoMarks value={topUp.marks} />
                 </Text>
               </div>
               {topUp.recommendation ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
                   <Text className="text-sm text-muted">Better value</Text>
                   <Text className="flex items-center gap-1 text-sm tabular-nums">
-                    <CogitoMarks value={topUp.recommendation.marks} /> ·{" "}
+                    <CogitoMarks value={topUp.recommendation.marks} /> for{" "}
                     {idr(topUp.recommendation.priceIdr)}
                   </Text>
                 </div>
