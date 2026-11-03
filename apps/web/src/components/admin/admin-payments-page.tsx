@@ -347,7 +347,7 @@ export function AdminPaymentsPage() {
       ) : (
         <div id="admin-payments" className="min-w-0">
           <TableContainer className="min-w-0 max-w-none">
-            <Table className="min-w-[60rem] text-sm">
+            <Table className="min-w-[60rem] text-sm [&_td]:py-2.5 [&_th]:py-2">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-36 whitespace-nowrap">
