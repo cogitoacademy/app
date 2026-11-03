@@ -14,6 +14,8 @@ T10 implementation checkpoints: [public tutor API](active/T10-PUBLIC-TUTORS-API.
 
 Automated UAT evidence: [test record with diagrams](active/V3-UAT-AUTOMATED-EVIDENCE.md), [story coverage](active/V3-USER-STORIES-COVERAGE.md), and [final-scope gap analysis](active/FINAL-SCOPE-V3-GAP-ANALYSIS.md).
 
+Delivery handover: [Release v3 delivery handover](../client/RELEASE-V3-HANDOVER.tex) (compiled PDF beside it) covers the delivery delta, academy website update, migrations, operations, and open release gates.
+
 ## Active
 
 Release v3 implementation package (2026-10-18):

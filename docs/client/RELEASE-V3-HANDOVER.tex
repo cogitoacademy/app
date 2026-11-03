@@ -1,0 +1,751 @@
+% Release v3 delivery handover.
+% Status snapshot: 3 November 2026, cogito-app main 07de65f6, cogito-acad main d870c49.
+% Product authority remains docs/plans/active/RELEASE-V3-PRD.md; status authority is RELEASE-V3-TASKS.md.
+% This document is an engineering handover, not client UAT acceptance and not a quotation revision.
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+% !TEX program = xelatex
+\usepackage{fontspec}
+\setmainfont{Figtree}[Path=fonts/,Extension=.ttf,UprightFont=*-Regular,BoldFont=*-Bold,ItalicFont=*-Italic,BoldItalicFont=*-BoldItalic]
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{calc}
+\usepackage{xcolor}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{2pt}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\titleformat{\section}{\large\bfseries}{}{0em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{}{0em}{}
+\setcounter{secnumdepth}{-1}
+\setcounter{tocdepth}{1}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlength{\emergencystretch}{3em}
+\newcounter{none}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\statusdone}{\textcolor{black}{\textbf{Done}}}
+\newcommand{\statusopen}{\textcolor{black}{\textbf{Open}}}
+\newcommand{\statuspartial}{\textcolor{black}{\textbf{Partial}}}
+\begin{document}
+\begin{center}
+{\LARGE\textbf{Cogito Release v3}}\\[4pt]
+{\Large\textbf{Delivery Handover}}\\[5pt]
+{\normalsize PRD delivery, added scope, and academy website update}\\[4pt]
+{\normalsize 3 November 2026}
+\end{center}
+\vspace{1em}
+
+\begin{tabular}{@{}L{3.2cm}L{12.3cm}@{}}
+\toprule
+\textbf{Document} & Cogito Release v3 --- Delivery Handover \\
+\midrule
+\textbf{Version} & 1.0 \\
+\textbf{Date} & 3 November 2026 \\
+\textbf{Status} & Internal engineering handover. Implementation evidence and open gates, not client UAT acceptance. \\
+\textbf{Product baseline} & Phase 0 PRD version 1.7 (original contract, Rp10,500,000 confirmed by the project owner). \\
+\textbf{V3 baseline} & Release v3 PRD, scope baseline dated 19 October 2026, quotation COGITO-V3-ADD-20261019-R1. \\
+\textbf{Repositories} & \code{cogito-app} (app, API, database, docs) and \code{cogito-acad} (public website). \\
+\textbf{Snapshot} & \code{cogito-app} main \code{07de65f6}; \code{cogito-acad} main \code{d870c49}. \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.5em}
+
+\section*{TL;DR}
+Release v3 is integrated on \code{main}. The work covers the revised Marks economy, public cohorts and masterclasses, enrollment and installments, session reports and branded PDF export, tutor tax and payout recording, friend referrals and KOL commission settlement, parent/child competition catalog management, app-backed Knowledge Bank, competition calendar, FAQ, Activities and blog, plus the matching public website update in \code{cogito-acad}.
+
+The product rules live in the Release v3 PRD. The status authority is \code{RELEASE-V3-TASKS.md}. This handover adds the delivery view: what exists, which document owns each claim, how the two repositories deploy together, and what still blocks release.
+
+The latest recorded verification found 56 of 56 user stories reachable, 46 covered and 10 partial because of provider or finance boundaries, with no missing path. The 2 November gap review found 21 items already present and resolved all 8 missing items: 5 done or removed by decision, 2 kept by decision, and 1 moved out of scope.
+
+Release is not closed. Open gates are the named client UAT approver (Q14), tax-adviser wording (OPS01), provider and browser journeys, production migration and restore rehearsal, the hosted coverage gate, live KOL settlement, and the decision on the two final-scope mismatches D01 and D04.
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{1. How to use this handover}
+
+This document transfers Release v3 from the development wave to the next maintainer, operator, and client reviewer. It records the repository state at the cover date and the reasoning behind the current scope. It does not replace the PRD, the decision register, or the quotation.
+
+Read the pack in this order:
+
+\begin{enumerate}
+	\item \textbf{Release v3 PRD} (\code{docs/plans/active/RELEASE-V3-PRD.md}) for product rules, requirement IDs, and acceptance criteria.
+	\item \textbf{Technical specification} (\code{RELEASE-V3-SPEC.md}) for data contracts, state transitions, and engineering boundaries.
+	\item \textbf{Decision register} (\code{docs/client/RELEASE-V3-DECISIONS.md}) for owner answers Q01--Q15 and operational follow-ups.
+	\item \textbf{Execution and acceptance plan} (\code{RELEASE-V3-TASKS.md}) for current status and dated evidence.
+	\item \textbf{This handover} for the delivery delta, operating map, website update, and remaining gates.
+	\item \textbf{Academy site README} (\code{cogito-acad/README.md}) for marketing-site behaviour.
+\end{enumerate}
+
+\subsection{Document authority}
+
+\begin{longtable}{@{}L{4.1cm}L{7.0cm}L{4.0cm}@{}}
+\toprule
+\textbf{Document} & \textbf{Owns} & \textbf{Does not own} \\
+\midrule
+\endhead
+Phase 0 PRD & Product contract version 1.7. Original obligations. & V3 additions and later owner decisions. \\
+V3 PRD & V3 product behaviour, requirement IDs, sources S01--S07. & Implementation choice, commercial acceptance. \\
+V3 specification & Engineering contracts, data rules, API inventory, rollout. & Product policy. \\
+V3 task plan & Status, evidence, dependency order, release gates. & New product rules. \\
+V3 decision register & Owner decisions, open questions, operational follow-ups. & Implementation proof. \\
+V3 quotation appendix & Commercial baseline, fee, milestones, exclusions. & Feature acceptance. \\
+Contract scope delta & Which V3 changes are additional to the original contract. & Current build status. \\
+Context log & Append-only implementation history, newest entry first. & Forward-looking authority. \\
+API reference & Implemented RPC surface and payloads. & Product intent. \\
+Module reference & Module ownership, services, event keys, business rules. & Commercial terms. \\
+Runbook & Operations, migrations, environment, recovery. & Roadmap. \\
+\bottomrule
+\end{longtable}
+
+\noindent File locations: the V3 PRD, specification, and task plan are in \code{docs/plans/active/}; the decision register, quotation appendix, and scope delta are in \code{docs/client/}; the Phase 0 PRD is \code{docs/prd.tex} and \code{docs/prd.pdf}.
+
+Two reading rules prevent most mistakes:
+
+\begin{itemize}
+	\item \textbf{Latest dated entry wins.} \code{CONTEXT.md}, \code{RUNBOOK.md}, and \code{MODULE-REFERENCE.md} are chronological logs. An older paragraph may describe a superseded state. Check the date and the referenced migration before trusting it.
+	\item \textbf{TASKS records evidence, not intention.} A feature may be merged and still fail a provider gate. Do not convert a merged PR into client acceptance.
+\end{itemize}
+
+\section{2. Status snapshot, 3 November 2026}
+
+\subsection{Code state}
+
+\begin{tabular}{@{}L{4.2cm}L{11.4cm}@{}}
+\toprule
+\textbf{Item} & \textbf{State} \\
+\midrule
+App main & \code{07de65f6} --- \code{fix(infra): wire Knowledge Bank private bucket env (\#346)}. \\
+Academy site main & \code{d870c49} --- \code{fix(content): render FAQ and tutor pages on demand (\#21)}. \\
+V3 integration PRs & \#332 \code{feat(release): integrate Release V3 for acceptance} (1 Nov); \#335 \code{feat(release): complete class workflows, room guards and V3 readiness} (2 Nov). \\
+Follow-up wave & \#336 bilingual blog and FAQ seed; \#337--\#338 finance and payout controls; \#340--\#341 payout columns and field errors; \#342--\#344 CSP, Knowledge Bank cutover and calendar import; \#345--\#346 calendar seed and private bucket env. \\
+Schema & Drizzle migrations through \code{0090\_tutor\_payout\_bank\_columns.sql}. \\
+\bottomrule
+\end{tabular}
+
+\subsection{What ``done'' means here}
+
+A requirement marked done in this handover means the repository contains the implementation and the plan records focused or local evidence for it. It does not mean any of the following:
+
+\begin{itemize}
+	\item client UAT acceptance by a named owner;
+	\item a production migration, cutover, or restore rehearsal;
+	\item a proven external provider journey in a real browser;
+	\item a closed hosted CI coverage gate.
+\end{itemize}
+
+\subsection{Verification snapshot}
+
+\begin{tabular}{@{}L{5.2cm}L{10.4cm}@{}}
+\toprule
+\textbf{Measure} & \textbf{Recorded result} \\
+\midrule
+User stories (1 Nov) & 56 reviewed, 56 reachable, 46 covered, 10 partial, 0 missing. Student 15/20 covered, tutor 13/15, admin 18/21. \\
+Functional checkpoints (1 Nov) & 34 functional, 26 negative or edge, 10 time boundary, 10 offline room, 5 payout lifecycle, 1 report replay. \\
+Final-scope gap review (2 Nov) & 21 items present; 8 missing items now 7 done or kept and 1 out of scope; 4 behaviour mismatches, 2 still need a product decision; 9 items partially verified. \\
+Class enrollment (30 Oct) & 45 PostgreSQL tests, 362 assertions: full, half, single, installment, expiry, cancellation, refund, race, minimum, postponement, reports, class fee, payout preparation, masterclass journey. \\
+Booking regression (30 Oct) & 319 booking unit tests pass after V3 fixture conversion. \\
+Live Academy publish (30 Oct) & Real dev PostgreSQL and Google Meet: masterclass Rp250,000 and cohort Rp500,000 published, no duplicate event, cleanup completed. \\
+\bottomrule
+\end{tabular}
+
+\subsection{Open gates}
+
+\begin{tabular}{@{}L{1.3cm}L{5.3cm}L{8.3cm}@{}}
+\toprule
+\textbf{ID} & \textbf{Gate} & \textbf{Why it blocks release} \\
+\midrule
+Q14 & Named client UAT and launch approver & No authority records acceptance, finance totals, or a launch date. \\
+OPS01 & Tax-adviser confirmation and Marks-only wording & Financial wording and tax defaults need operational approval. \\
+--- & Production migration, cutover, restore rehearsal & The plan does not record a completed production rollout. Verify the deployed SHA first. \\
+--- & Provider journeys & Midtrans browser checkout and signed webhook delivery, OTP inbox, Google consent, Meet joining, and real transfers are not proven end to end. \\
+--- & Hosted coverage gate & The plan records the 100\% hosted gate as open. Focused local coverage is not the same evidence. \\
+--- & Live KOL commission and transfer & Settlement logic and CSV are tested; a real qualifying commission and real transfer are still unproven. \\
+--- & D01 and D04 & Exact top-up choice and the economy preview differ from the final-scope PDF. A product decision must confirm which baseline wins. \\
+\bottomrule
+\end{tabular}
+
+\section{3. Scope: baseline, additions, and later deltas}
+
+\subsection{Commercial baseline}
+
+The original Phase 0 contract is PRD version 1.7. The project owner confirmed its value as Rp10,500,000. Release v3 is quoted separately as one fixed bundle of Rp5,500,000 under reference COGITO-V3-ADD-20261019-R1. The quotation is a commercial baseline issued for acceptance. It is not an accepted change order, an invoice, or proof of delivery.
+
+\begin{tabular}{@{}L{3.8cm}L{8.2cm}L{3.0cm}@{}}
+\toprule
+\textbf{Work package} & \textbf{Included change} & \textbf{State} \\
+\midrule
+Economy and exact top-up & Competition rate card, admin controls, packages, custom quotes, tiers, surcharge, recommendation, payment integration & Implemented \\
+Cohorts and masterclasses & Shared public class model, curriculum, tutor per session, capacity, enrollment, full/half/single plans, installments, late join, cancellation and returns & Implemented \\
+Tutor finance & Tax identity, withholding, explicit session coverage, payout snapshots, actual transfer, void and reconciliation, monthly tax CSV & Implemented \\
+Reports and PDF & Limits, reminders, admin resolution, cross-class support, branded three-month student and admin PDF & Implemented \\
+Friend referral and KOL & Registration codes, welcome and reward, semester cap, campaign attribution, commission, settlement history, exports & Implemented \\
+Website and content & App-backed Activities, public tutors, FAQ admin and page, Knowledge Bank and calendar migration, targeted landing changes & Implemented \\
+Competition catalog & Parent and child CRUD, archive and restore, safe delete and move, parent palettes, dynamic consumers & Implemented \\
+\bottomrule
+\end{tabular}
+
+The fee does not include video or motion production, hosting and provider charges, bulk content creation, or features outside the quoted scope such as automated bank payouts, cash refunds, parent accounts, WhatsApp notifications, waitlists, private cohorts, or a report-template editor.
+
+\subsection{Delta after the 19 October baseline}
+
+These changes arrived after the scope baseline. Each one is recorded in the PRD, the decision register, or a dated context entry.
+
+\begin{longtable}{@{}L{3.0cm}L{8.1cm}L{4.0cm}@{}}
+\toprule
+\textbf{Change} & \textbf{Effect} & \textbf{Status} \\
+\midrule
+\endhead
+S04 competition catalog & Parent and child CRUD, archive, safe delete, stable identity, dynamic consumers. Added to the quoted baseline. & Implemented; CRUD live acceptance 26 Oct. \\
+S05 parent colours & Four OKLCH values per parent, inherited by children, theme previews, unsafe values rejected. & Implemented. \\
+23 Oct KOL settlement boundary & Actual transfers, partial and overpaid readback, immutable adjustments, history and monthly CSV. & Implemented; live transfer unproven. \\
+24 Oct single-input content & Knowledge Bank and calendar use one input and one stored value in any language. No translation requirement. & Implemented. \\
+30 Oct per-class fee & Admin may set a flat tutor fee per class. Defaults stay Rp400,000 cohort and Rp300,000 masterclass per session. & Implemented. \\
+30 Oct content and video cancelled & M01 and M02 are no longer delivery gates. Empty states remain valid. & Recorded. \\
+30 Oct Q04 schedule changes & Exit right until the earlier of notification plus 24 hours and the new session start, for the affected undelivered session only. Same-time tutor replacement grants no new exit. & Implemented. \\
+30 Oct Q15 analytics & Business insights separate IDR receipts, delivered Marks, future commitments, and earned tutor cost. No implied profit. & Implemented. \\
+1 Nov single-language Academy classes & Title, description, and curriculum have one input each. Canonical field names remain. & Implemented; migration 0085. \\
+1 Nov class covers removed & No cover storage, upload, schema column, or public field. Cards are text-only. & Decision recorded. \\
+2 Nov exact top-up & Both custom and recommended choices remain (Q13). Tiers follow configured packages. & Implemented; conflicts with final-scope D01, decision pending. \\
+2 Nov Activities structure & One Classes section plus Others. The three-section split is kept as-is by decision. & Implemented; conflicts with final-scope D03, closed by decision. \\
+2 Nov legal name and NIK optional & Required only before payout preparation. & Kept by decision. \\
+2 Nov manual bank top-up out & Student top-ups stay on Midtrans. Admin-recorded transfers cover tutor and KOL payouts only. & Out of scope by decision. \\
+2 Nov FAQ seed & 55 approved bilingual entries, nine fixed categories, six landing entries, stable IDs. & Implemented; migration 0089. \\
+2 Nov bilingual blog & App-managed articles, independent locale publishing, media, public API, marketing renderer. & Implemented; content pilot and admin E2E open. \\
+3 Nov calendar seed & 63 approved events, stable IDs, idempotent insert, no overwrite of admin edits. & Implemented. \\
+\bottomrule
+\end{longtable}
+
+\section{4. Delivered capability}
+
+\subsection{Economy, pricing, and incoming payment}
+
+\begin{itemize}
+	\item Four package defaults: 50 Marks at Rp350,000; 150 at Rp975,000; 250 at Rp1,500,000; 500 at Rp2,750,000.
+	\item Exact top-up tiers use configured package Marks and unit prices plus the configured surcharge. Exact package amounts use package prices. Example checks: 31 Marks is Rp224,750; 176 is Rp1,188,000; 320 is Rp2,000,000; 600 is Rp3,450,000.
+	\item Competition-scoped rate card. Online solo: Model UN and World Scholar's Cup 50 Marks and Rp200,000 fee; Debate and Olympiad 44 and Rp180,000; Essay, Business, Public Speaking 38 and Rp160,000.
+	\item Group formulas: online total is solo plus 12 Marks per extra student; offline total is solo plus 22 Marks plus 20 per extra student. Tutor fee adds Rp30,000 online or Rp75,000 plus Rp50,000 per extra student offline. Rounding stays visible; no hidden redistribution.
+	\item Quotes, bookings, and fee events keep immutable snapshots. A later admin edit never reprices an existing booking. Activation is explicit: saving a revision does not activate it.
+	\item Incoming payment remains Midtrans. Only an authoritative success credits Marks once. Duplicate PAID, SETTLED, or reconciliation events do not re-credit. A payment after reservation expiry still credits the wallet once and never promises a seat.
+\end{itemize}
+
+\noindent\textbf{Primary code:} modules under \code{packages/api/src/modules/}: pricing, economy, payment, and wallet. \textbf{Admin surface:} \code{/admin-economy}. \textbf{Student surface:} \code{/balance}.
+
+\subsection{Cohorts and masterclasses}
+
+\begin{itemize}
+	\item One class entity with kind cohort or masterclass. Cohorts have multiple sessions; a masterclass has exactly one.
+	\item Draft, edit, publish, postpone, cancel, and minimum-enrollment check. Publishing an online session creates one Google Meet event per session through the meeting job. Failure stays retryable; retry does not create a duplicate event.
+	\item In-person sessions use an existing admin-managed room. Room capacity must cover the target group size; assignment and relocation are guarded.
+	\item Session tutors can differ. A same-time replacement keeps the time, fee ownership, and meeting identity, updates the attendee, and grants no new exit right.
+	\item Tutors can report absence before or during a scheduled session. Notices under 24 hours are late and appear in tutor history.
+	\item The tutor fee is flat per session and editable per class. All sessions of a class use the agreed class fee.
+	\item Class and session content has one authored language. The API keeps canonical \code{titleEn}, \code{descriptionEn}, and \code{curriculumEn} names. No alternate-language column remains.
+	\item Class covers are removed. Class cards and detail pages use text only.
+\end{itemize}
+
+\noindent\textbf{Primary code:} \code{modules/academy-class/}, \code{modules/meeting/}, \code{modules/room/}. \textbf{Surfaces:} \code{/classes}, \code{/classes/\$classId}, \code{/admin-classes}, \code{/my-classes}, \code{/class-reports}.
+
+\subsection{Enrollment, installments, and capacity}
+
+\begin{itemize}
+	\item Full cohort plan holds 20 Marks per session; half holds 22 per session; single holds 25; masterclass holds 5.
+	\item Odd session counts split the half plan as ceil then floor. Selected session IDs and both installment rates lock at enrollment.
+	\item A 15-minute checkout lock holds seats and price. Concurrent last-seat attempts have at most one winner. The same student cannot hold overlapping entitlement to one session.
+	\item A half plan reserves the unpaid half until its installment deadline. Non-payment releases future unpaid seats once. Reminders run seven days and one day before the half starts and recover after downtime.
+	\item Late joiners split only their remaining sessions. Rejoining after removal is a new quote at the current half rate for future sessions.
+	\item Withdrawal and cancellation return Marks only, never cash. A 20\% rounded charge applies to the relevant remaining allocation. Examples: 220 remaining returns 176; full 20 returns 16; half 22 returns 18; single 25 returns 20; masterclass 5 returns 4.
+	\item Postponement grants a separate 72-hour penalty-free exit. An ordinary schedule change grants a contextual exit for the affected undelivered session until the earlier of notification plus 24 hours and the new start.
+\end{itemize}
+
+\subsection{Reports and branded PDF}
+
+\begin{itemize}
+	\item Exactly one report per delivered session across private, cohort, and masterclass sessions.
+	\item Three required fields: discussion focus, strengths, and improvements. Total limit is 600 characters after documented normalization, enforced in the UI and server.
+	\item Submitting a report completes the session, deducts the correct student allocations, and creates one tutor earned fee. A missing report keeps holds pending and creates no payable fee. Reminders repeat until resolved.
+	\item Admin can complete or correct a report with the three fields, a delivery check, a required reason, actor and time history, and a tutor notification. An edit changes text and version only, never money or referral outcomes.
+	\item Student export lists eligible reported sessions from the last three calendar months, newest first. Admin can export for any student. Layout uses the approved banner, logo, orange STUDENT REPORT label, session metadata, three feedback rows, footer generation date, and page numbers. Long content continues on labelled pages.
+\end{itemize}
+
+\noindent\textbf{Primary code:} \code{modules/report-export/}, report routes under the booking and class modules. \textbf{Surfaces:} \code{/class-reports}, booking detail, admin report workspace.
+
+\subsection{Tutor tax and payout recording}
+
+\begin{itemize}
+	\item Tutor completion requires legal name and 16-digit NIK. NPWP stays optional. Existing published tutors may keep teaching, but a new payout requires the profile.
+	\item Tax defaults: NIK and NPWP 2.50\%; NIK only 3.00\%; missing 3.00\%; admin override allowed. Rates support two decimals.
+	\item Admin selects unpaid session fees as one batch. The preview shows gross, tax status or override, withholding, one Rp2,500 non-BCA transfer fee, and net. Actual transfer must equal net to mark fully paid.
+	\item Prepare and recorded values keep tax, bank, and fee snapshots. Later profile or settings edits never recalculate a recorded payout. One earned session cannot enter two active allocations.
+	\item A void keeps history and returns sessions to unpaid. If money moved, the transfer stays visible and requires reconciliation before repayment. Partial tutor payout is not supported.
+	\item Monthly tax CSV sums non-void paid snapshots by actual payment date, not current tax profiles. Fields include legal name, NIK, NPWP, status, gross, applicable rates, withholding, net, monthly total, and payout detail for mixed rates. Output is formula-safe.
+\end{itemize}
+
+\noindent\textbf{Primary code:} \code{modules/tutor/}, payout routes; migration \code{0090} repairs bank snapshot columns. \textbf{Surfaces:} \code{/admin-tutor-payouts}, tutor earnings panel.
+
+\subsection{Registration, friend referral, and KOL}
+
+\begin{itemize}
+	\item Email signup uses an empty OTP field plus Send code on one row, a 60-second cooldown, and atomic proof consumption only after account creation. Resend invalidates the old code. Email changes reset proof; referral correction does not.
+	\item Google signup adds a referral step with Apply code or No referral code, no extra OTP. An interrupted choice resumes on next login. An existing matching account is reused without a new reward or attribution.
+	\item One registration code is allowed, either friend or KOL. Welcome default is 15 Marks, friend reward default 15, semester cap default 75. Only student accounts participate.
+	\item Friend reward is evaluated once at the referred student's first eligible completion. It credits the remaining cap, records a zero decision when capped, and never rolls over. A no-show penalty alone does not qualify.
+	\item KOL campaign defaults are 30-day signup validity and 90-day attribution. Commission uses the snapshotted IDR purchase price, excludes gateway fees, rounds to whole rupiah, and counts repeated events once. Terms lock at signup.
+	\item Settlement records actual external transfers with partial and overpaid readback, immutable reasoned adjustments, admin history, and a monthly current reconciliation CSV. A transfer never auto-allocates to another commission or offsets future liability.
+	\item Full refund voids the effective obligation while keeping transfers and adjustments. Partial refund proration stays undefined and is never inferred.
+\end{itemize}
+
+\noindent\textbf{Primary code:} \code{modules/referral/}, \code{modules/auth/}, \code{modules/payment/}. \textbf{Surfaces:} \code{/referrals}, \code{/admin-referrals}, sign-up and Google callback.
+
+\subsection{Competition catalog}
+
+\begin{itemize}
+	\item Two levels only: parent competition and child specialization. A child belongs to one parent. Cycles, self-parenting, and third levels are rejected.
+	\item Admin can list, search, create, read, edit names, descriptions and order, archive or reactivate, and delete only unused entries. A referenced entry returns a conflict and must be archived.
+	\item Stable identity: renaming or reordering never changes tutor assignments or historical booking, report, and fee identities. Codes become read-only after creation.
+	\item Parent owns the versioned on-demand rate. Children inherit it and cannot override pricing. An unpriced draft cannot be sold.
+	\item Archive hides the entry from new selections, discovery, and new publication. Existing assignments, accepted bookings, quotes, enrollments, reports, and financial snapshots remain readable and keep agreed terms.
+	\item Four parent colours: light text, light background, dark text, dark background. Children inherit. Values must be opaque OKLCH numbers; CSS, variables, URLs, and alpha are rejected. Required labels stay visible without colour.
+	\item One catalog feeds admin forms, tutor invitation and profile, discovery filters, booking selection and validation, rate editors, class forms, public tutor projections, calendar and report labels. No fixed seven-type runtime enum remains.
+	\item The seed supplies seven parent competitions and 34 children. Migration \code{0078} removes superseded catalog rows; the catalog is not a closed list.
+\end{itemize}
+
+\noindent\textbf{Primary code:} \code{modules/competition-catalog/}, \code{modules/tutor-subjects/}. \textbf{Surfaces:} \code{/admin-competitions}, discovery filters, booking form, class editor.
+
+\subsection{Content: Knowledge Bank, calendar, FAQ, Activities, blog}
+
+\begin{itemize}
+	\item Knowledge Bank and Competition Calendar moved from Sanity reads to database and API. Admin edits go live without an extra editorial workflow. Private Knowledge Bank PDFs use authenticated access through \code{KB\_PRIVATE\_BUCKET} or a local private directory.
+	\item The calendar seed inserts 63 approved events with stable IDs and \code{onConflictDoNothing}. Reseeding never overwrites an admin edit. Calendar events need no object storage.
+	\item FAQ stores rich text with safe paragraphs, lists, bold, italic, and links. English is required; Indonesian is optional with per-field fallback. Nine fixed categories; the full list is grouped by category. At most six active entries appear on the landing surface. The 55-entry bilingual seed is part of the default seed.
+	\item Activities has one page with a Classes section and one Others article list. Classes read app class records. Others reads app \code{activity\_article} records: optional cover, required English and optional Indonesian title, summary and body, one WIB start time, location, and publication state. Upcoming or completed is derived server-side from the start time. Registration links live in the body.
+	\item The bilingual blog is app-managed. Six tables cover media, categories, articles, versions, related articles, and galleries. Each locale publishes independently. A slug locks after first publish. The publish gate checks required fields, hero media and alt text, key facts, and gallery alt text. Public reads use \code{publicContent.blog.*} with rate limits; media use existing storage and R2 public URLs.
+\end{itemize}
+
+\noindent\textbf{Surfaces:} \code{/knowledge-bank}, \code{/calendar}, \code{/faq}, \code{/activities}, \code{/admin-knowledge-bank}, \code{/admin-blog}. \textbf{Migrations:} \code{0075}, \code{0077}, \code{0083}--\code{0084}, \code{0086}, \code{0089}.
+
+\subsection{Business insights and admin operations}
+
+\begin{itemize}
+	\item Q15 splits four metric groups: IDR top-up receipts, delivered service in Marks and session counts, current future confirmed commitments with funded and unfunded states, and earned or unpaid tutor costs in IDR.
+	\item Cash uses successful payment and refund event dates. Delivery uses session delivery date. Commitments are an as-of-now snapshot. Participant and session allocations are summed; original parent Marks fields are never mixed.
+	\item No Marks-to-IDR booking conversion and no implied profit.
+	\item Admin keeps operational queues for bookings, wallet lookup, rooms, tutor review, payouts, referrals, catalog, economy, achievements, Knowledge Bank, FAQ, Activities, and blog. Actions that change money or policy require a reason and preserve before and after values.
+\end{itemize}
+
+\section{5. Data model and migrations}
+
+V3 migrations are additive unless noted. Apply them with the normal forward runner. Do not reset or reseed a target to skip a migration.
+
+\begin{longtable}{@{}L{2.3cm}L{11.1cm}@{}}
+\toprule
+\textbf{Migration} & \textbf{Effect} \\
+\midrule
+\endhead
+\code{0058}, \code{0059} & FAQ localized fields, visibility, version, rich JSONB documents, backfill. \\
+\code{0071} & Referral registration and rewards. \\
+\code{0072}--\code{0074} & KOL first successful top-up commission, external settlement, replay precondition. \\
+\code{0075} & Knowledge Bank and calendar content tables. \\
+\code{0076} & Academy class number. \\
+\code{0077} & Activity articles for Others. \\
+\code{0078} & Remove superseded competition seed rows. \\
+\code{0079} & V3 report and payout contracts. Validates allocation source and fee identity; invalid legacy rows fail the migration and need explicit cleanup. \\
+\code{0080} & Tutor absence notice history. \\
+\code{0081}--\code{0082} & Schedule-change exit window and allocation version. \\
+\code{0083}--\code{0084} & Activity single start time; optional cover. \\
+\code{0085} & Single-language Academy class and session columns. Uses \code{DROP COLUMN IF EXISTS}; replay is safe. Deploy schema, API, and web together. \\
+\code{0086} & Bilingual blog tables. Additive; requires existing user and tutor profile tables. \\
+\code{0087}--\code{0088} & Blog category optional; featured tutor and reviewer names. \\
+\code{0089} & FAQ category with nine allowed values. \\
+\code{0090} & Restore tutor payout bank snapshot columns where migration 0049 was skipped; makes journal timestamps strictly increasing. Additive and idempotent. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Seed content}
+
+The default server seed now supplies V3 baseline data: competition catalog, V3 economy configuration and active revision, Marks packages, FAQ entries and categories, blog categories, and 63 competition calendar events. Knowledge Bank documents and PDFs are not seeded; they require private storage. Inserts use stable identities and conflict-safe writes so reruns preserve admin edits. Demo accounts exist only for development and acceptance environments.
+
+\section{6. Run, configure, and deploy}
+
+\subsection{Local commands}
+
+\begin{tabular}{@{}L{7.2cm}L{8.4cm}@{}}
+\toprule
+\textbf{Command} & \textbf{Purpose} \\
+\midrule
+\code{bun install} & Install workspace dependencies. \\
+\code{bun run db:start} & Start local PostgreSQL and Redis. \\
+\code{bun run db:migrate} & Apply migrations forward. \\
+\code{cd apps/server \&\& bun run seed} & Apply the default development seed. Verify the target first. \\
+\code{bun run dev} & Web on port 3000 and API on port 3001. \\
+\code{bun run check-types} & Type-check all workspaces. \\
+\code{bun run check} & Lint and format. \\
+\code{bun run test:api} & API tests with the test environment file. \\
+\code{bun run test:e2e} & Playwright E2E. \\
+\code{bun run test:coverage} & Coverage runner. \\
+\code{bun run verify:pricing-activation} & Explicit dev pricing activation check. Refuses non-dev targets. \\
+\code{bun run verify:academy-meet} & Explicit live Google Meet check, real provider, cleans up. \\
+\code{bun run verify:class-absence} & Explicit absence and replacement check. \\
+\bottomrule
+\end{tabular}
+
+\subsection{Configuration groups}
+
+\begin{tabular}{@{}L{4.2cm}L{11.4cm}@{}}
+\toprule
+\textbf{Group} & \textbf{Keys and notes} \\
+\midrule
+Core & \code{DATABASE\_URL}, \code{REDIS\_URL}, \code{BETTER\_AUTH\_SECRET}, \code{BETTER\_AUTH\_URL}, \code{CORS\_ORIGIN}. Redis is mandatory. \\
+Payments & \code{PAYMENT\_PROVIDER}, \code{PAYMENT\_WEBHOOK\_SECRET}, \code{MIDTRANS\_MODE}, \code{MIDTRANS\_SERVER\_KEY}, \code{MIDTRANS\_CLIENT\_KEY}, \code{MIDTRANS\_MERCHANT\_ID}, signature key, webhook IP allowlist. Stub is the local default. \\
+Google & OAuth client keys, Meet OAuth keys and refresh token, calendar ID, impersonated user, send-update mode. Meet is disabled by default. \\
+Storage & \code{R2\_ACCOUNT\_ID}, \code{R2\_ACCESS\_KEY\_ID}, \code{R2\_SECRET\_ACCESS\_KEY}, \code{R2\_BUCKET}, \code{R2\_PUBLIC\_URL}, \code{KB\_PRIVATE\_BUCKET}, optional \code{KB\_PRIVATE\_DIR}. \\
+Content & \code{KB\_SOURCE}, \code{CC\_SOURCE}, \code{CONTENT\_ADMIN\_ENABLED}. Defaults are Sanity, database, and disabled; V3 cutover uses database and enabled. \\
+Scheduler & \code{SCHEDULER\_ENABLED}. Required in production for reminders, meeting retries, and expiry jobs. \\
+Acceptance & \code{CLASS\_ENROLLMENT\_DEV\_ACCEPTANCE}. Development-only, exact loopback and empty Academy state. Never combine with reset suites. \\
+\bottomrule
+\end{tabular}
+
+\subsection{Deployment order}
+
+\begin{enumerate}
+	\item Confirm the target database and take a verified backup. Rehearse restore before a production migration.
+	\item Apply migrations forward. Do not reseed a live database unless the runbook explicitly allows it.
+	\item Deploy API and web together for schema-dependent changes. Existing snapshots and old assets must stay readable.
+	\item Deploy \code{cogito-acad} after the app API. The website reads live app endpoints.
+	\item Verify health, version SHA, login, top-up quote, class list, FAQ, blog, and the marketing pages.
+	\item Record the deployed SHAs, migration range, and rollback owner.
+\end{enumerate}
+
+Rollback is forward-first. Financial snapshots and audit rows are not rewritten. If a release must be withdrawn, keep the additive schema and restore the previous images; do not reverse a migration by deleting history.
+
+\section{7. Academy website handover (cogito-acad)}
+
+\subsection{Repository and stack}
+
+\begin{tabular}{@{}L{3.6cm}L{12.0cm}@{}}
+\toprule
+\textbf{Item} & \textbf{Value} \\
+\midrule
+Location & \code{C:/.Projects/cogito-acad}. Separate repository and deployment from the app. \\
+Main & \code{d870c49}. Branches \code{f/release-v3-nonvideo}, \code{feat/bilingual-blog}, and \code{feat/activities-cohort-sessions} are merged. \\
+Stack & Next.js 16 App Router, React 19 with React Compiler, TypeScript 5, Tailwind v4, shadcn and Base UI, next-intl, Sanity 5, Motion, Turborepo, Bun. \\
+Local & \code{bun run dev:web} serves port 2001. Studio runs in the same workspace. \\
+Production & \code{www.cogitoacademy.id}. Apex redirects to \code{www} with HTTP 308. Dev preview is Vercel. \\
+Tests & \code{bun test} inside \code{apps/web}. Adapter, metadata, FAQ, activities, and blog tests live in \code{apps/web/tests}. \\
+\bottomrule
+\end{tabular}
+
+\subsection{Routes and content source}
+
+{\footnotesize
+\begin{tabular}{@{}L{4.6cm}L{3.9cm}L{6.4cm}@{}}
+\toprule
+\textbf{Route} & \textbf{Source} & \textbf{Notes} \\
+\midrule
+\code{/[locale]} & App API, Sanity, local & Landing, tutors, FAQ, testimonials, methods, logos, achievements. \\
+\code{/[locale]/\allowbreak activities} & App API & Classes plus Others. Upcoming cohort sessions. Legacy event URLs redirect here. \\
+\code{/[locale]/\allowbreak tutors} & App API & Published app profiles only. Modality filters. No Sanity fallback. \\
+\code{/[locale]/\allowbreak faq} & App API & Full active list grouped by category. No Sanity fallback. \\
+\code{/[locale]/\allowbreak blog} & App API & Published articles per locale. \\
+\code{/[locale]/\allowbreak blog/\allowbreak [slug]} & App API & Article, metadata, JSON-LD, related, FAQ. \\
+\code{/[locale]/\allowbreak blog/\allowbreak category/\allowbreak [slug]} & App API & English hub. Indonesian uses \code{kategori}. Mixed pairs return 404. \\
+\code{/blog-sitemap.xml} & App API & One entry per published locale with \code{xhtml:link} alternates. \\
+\code{/[locale]/\allowbreak calendar} & Sanity & Still Sanity. Calendar migration remains open. \\
+\code{/[locale]/\allowbreak student-resources} & Sanity & Password-gated. Still Sanity. \\
+\bottomrule
+\end{tabular}
+}
+
+\subsection{App API dependencies}
+
+All calls are server-side and use the oRPC path with the JSON envelope. The website must not read these modules from Sanity.
+
+{\footnotesize
+\begin{tabular}{@{}L{5.6cm}L{3.6cm}L{5.6cm}@{}}
+\toprule
+\textbf{Endpoint} & \textbf{Used by} & \textbf{Behaviour} \\
+\midrule
+\code{/rpc/publicContent/\allowbreak tutors/\allowbreak list} & Tutors, landing & No-store. Empty list and failure are distinct states. \\
+\code{/rpc/publicContent/\allowbreak faq/\allowbreak list} & FAQ, landing & No-store. Landing sends \code{surface: landing}; full page sends \code{surface: full}. \\
+\code{/rpc/classes/\allowbreak list} & Activities & Class cards and upcoming cohort sessions. \\
+\code{/rpc/publicContent/\allowbreak activities/\allowbreak list} & Activities & Others articles with derived status. \\
+\code{/rpc/publicContent/\allowbreak blog/\allowbreak list} and related reads & Blog & Revalidated every 60 seconds. No publish webhook. \\
+\bottomrule
+\end{tabular}
+}
+
+The public tutor projection returns only published profiles and allowlisted fields: identity, image, bio, affiliation, education, achievements, experiences, subjects with parent palette, and modality. It excludes account IDs, emails, prices, payout and tax data, consent, and review state. Empty results stay empty; request failures stay failures.
+
+\subsection{What changed in the website}
+
+\subsubsection{Landing}
+\begin{itemize}
+	\item Removed the landing Activities section and the Activities and Start Learning navigation entries.
+	\item School logos use a manually controlled horizontal strip with mouse, keyboard, and touch support. Motion is applied only after interaction where required.
+	\item Testimonials use one responsive carousel with autoplay, arrows, dots, swipe on compact screens, pause on hover or focus, and reduced-motion support.
+	\item Why Cogito spacing, programs, competition field explorer, hero rotating text, footer treatment, and logo marquee were refined.
+	\item Landing FAQ reads the app API and hides when no entry is available. Full FAQ links to the localized FAQ page.
+	\item FAQ rich answers use the same safe renderer as the app. Links inside question triggers stay non-interactive to preserve button semantics.
+\end{itemize}
+
+\subsubsection{Activities}
+\begin{itemize}
+	\item One localized page with the existing heading treatment, followed directly by Classes and Others.
+	\item Classes read app class records and show compact My Bookings-style rows: date tile, time, mode, tutor, class title, competition, session and price metadata, and a detail action. No cover or placeholder image.
+	\item Upcoming cohort sessions appear above the catalog. Each row names its parent cohort and opens the same app handoff.
+	\item Others reads published app articles only. No Sanity fallback. Empty and failure states are distinct.
+	\item Legacy event category routes, including \code{/events/simulation-days}, permanently redirect to the same locale's Activities page.
+\end{itemize}
+
+\subsubsection{Tutors}
+\begin{itemize}
+	\item The directory reads published app profiles only. There is no legacy Sanity fallback or placeholder person.
+	\item Filters use Online, Offline, and Both modality. A profile marked Both matches either filter. There is no city filter.
+	\item Subject filters come from active parent categories in the public tutor results.
+	\item Tutor details open in a responsive drawer. Profile copy follows the app's English fields; Indonesian catalog labels are used when present.
+	\item The page renders on demand so a build-time API failure cannot freeze an empty roster.
+\end{itemize}
+
+\subsubsection{FAQ}
+\begin{itemize}
+	\item The full page groups active entries by the nine app categories in fixed order.
+	\item The adapter calls \code{/rpc/publicContent/\allowbreak faq/list} with locale and surface in the JSON envelope. It validates required and optional fields and accepts older responses without rich fields.
+	\item Failures render a localized retry state; valid empty results render an empty state. The page never renders an empty article list as success.
+	\item The page is dynamic on purpose. Do not add \code{app/[locale]/\allowbreak loading.tsx}; a route-level loading boundary makes \code{notFound()} return HTTP 200.
+\end{itemize}
+
+\subsubsection{Blog}
+\begin{itemize}
+	\item Index, article, English and Indonesian category hubs, generated OG card, \code{BlogPosting} and \code{BreadcrumbList} JSON-LD, table of contents, related articles, FAQ, click-to-load social embeds, and sticky consultation.
+	\item Article metadata emits self and sibling \code{hreflang}. Indonesian \code{x-default} appears only when an Indonesian sibling is published. A single-language article emits only its self alternate.
+	\item A category hub returns 404 when fewer than two published articles exist in that locale. A mixed locale and segment pair also returns 404.
+	\item \code{/blog-sitemap.xml} is hand-built from the public API. The sitemap endpoint returns 503 with \code{Retry-After} when the API is unavailable.
+	\item Media use the public R2 URL. \code{NEXT\_PUBLIC\_R2\_HOST} must be set for \code{next/image}.
+	\item Blog content is owned by the app. Marketing revalidates every 60 seconds. There is no publish webhook, so a new article appears after the window or a redeploy.
+\end{itemize}
+
+\subsubsection{SEO and platform hygiene}
+\begin{itemize}
+	\item Canonical host is \code{www.cogitoacademy.id}. The apex redirects with HTTP 308.
+	\item Unknown routes return real 404s. Robots and sitemap dates were corrected.
+	\item Homepage has a proper \code{h1} and metadata.
+	\item FAQ and tutor pages render on demand. Other content keeps its normal caching.
+\end{itemize}
+
+\subsection{Website environment}
+
+{\footnotesize
+\begin{tabular}{@{}L{5.2cm}L{10.4cm}@{}}
+\toprule
+\textbf{Variable} & \textbf{Purpose} \\
+\midrule
+\code{NEXT\_PUBLIC\_SITE\_URL} & Canonical site origin. Production uses \code{https://www.cogitoacademy.id}. \\
+\code{COGITO\_APP\_API\_URL} & App API origin for tutors, FAQ, classes, activities, and blog. Required; never silently default to production. \\
+\code{NEXT\_PUBLIC\_APP\_URL} & Public app origin for class detail handoff. \\
+\code{NEXT\_PUBLIC\_R2\_HOST} & Public R2 host for blog and profile images. \\
+\code{NEXT\_PUBLIC\_SANITY\_\allowbreak PROJECT\_ID} & Sanity project. \\
+\code{NEXT\_PUBLIC\_SANITY\_\allowbreak DATASET} & Sanity dataset. \\
+\code{NEXT\_PUBLIC\_SANITY\_\allowbreak API\_VERSION} & Sanity API version. \\
+\code{SANITY\_API\_TOKEN} & Optional authenticated Sanity reads. \\
+\code{STUDENT\_RESOURCES\_\allowbreak PASSWORD} & Password gate for student resources. \\
+\bottomrule
+\end{tabular}
+}
+
+\subsection{Website deploy checklist}
+
+\begin{enumerate}
+	\item Confirm the app API is deployed and reachable at \code{COGITO\_APP\_API\_URL}.
+	\item Confirm published tutors, FAQ entries, classes, Others articles, and blog articles exist and the public endpoints return them.
+	\item Set \code{NEXT\_PUBLIC\_SITE\_URL}, \code{NEXT\_PUBLIC\_APP\_URL}, and \code{NEXT\_PUBLIC\_R2\_HOST}.
+	\item Build with \code{bun run build}. Run \code{bun test} in \code{apps/web}.
+	\item Deploy. Verify \code{/en} and \code{/id}, Activities, Tutors, FAQ, Blog, one article, one category hub, the sitemap, and the apex redirect.
+	\item Confirm legacy event URLs redirect and unknown blog URLs return 404, not 200.
+	\item Confirm no console errors and no horizontal overflow at 320, 390, 768, and 1440 pixels.
+\end{enumerate}
+
+\subsection{Website gaps and cautions}
+
+\begin{itemize}
+	\item \textbf{Calendar and student resources remain on Sanity.} Calendar content now exists in the app database, but the public calendar page still reads Sanity. Do not claim the calendar migration is complete until the website consumer moves and the old source is retired.
+	\item \textbf{Sanity shutdown is separate.} The blog does not use Sanity. Competitions and student resources still do.
+	\item \textbf{Blog phases 5 and 6 are open.} Content pilot, editorial checklist, admin E2E, and release verification remain. FAQ and related-article editing exist in the API but have no admin controls yet.
+	\item \textbf{No publish webhook.} Blog updates appear after the 60-second revalidation window or a redeploy.
+	\item \textbf{Do not add a route-level loading boundary.} It converts real 404s into HTTP 200.
+	\item \textbf{README drift.} The Activities section still says Others authoring is pending and mentions an end time. The implemented state is app-managed Others with one start time and derived status. The API is authority.
+	\item \textbf{Roster reconciliation.} The website does not import Sanity tutors. Confirm the intended public roster has published app profiles before launch.
+\end{itemize}
+
+\section{8. Verification and evidence}
+
+\subsection{What is proven}
+
+{\footnotesize
+\begin{longtable}{@{}L{3.4cm}L{7.4cm}L{4.2cm}@{}}
+\toprule
+\textbf{Area} & \textbf{Evidence} & \textbf{Where} \\
+\midrule
+\endhead
+Economy and pricing & Default price golden tables, quote boundaries, pinned snapshots, activation and restore, group repricing. & Unit and PostgreSQL suites; pricing activation script; TASKS 30 Oct. \\
+Classes and enrollment & 45 PostgreSQL tests / 362 assertions; live publish with real Google Meet and cleanup; room capacity cases; absence and replacement. & Enrollment acceptance JSON, Academy Meet live JSON, class absence live JSON under \code{tmp/v3-only-dev/}. \\
+Reports and payout & Report replay, admin correction, PDF output, payout record and void lifecycle. & Unit and rollback PostgreSQL acceptance; TASKS 30 Oct. \\
+Referral and KOL & Policy units, PostgreSQL replay, concurrency, refunds, settlement CSV, synthetic browser. & 26 tests / 227 assertions; KOL browser acceptance 24 Oct. \\
+Catalog & Archive, restore, move, inherited palette, role denial, real PostgreSQL browser journey. & TASKS 26 Oct. \\
+Content & KB private access, calendar dedupe, FAQ rich text and categories, Activities adapter, blog integration. & TASKS 24--26 Oct; blog integration test; marketing tests. \\
+Role walkthrough & 56 stories, 46 covered, 10 partial, 0 missing. & V3 user stories coverage document. \\
+Final scope & 21 present; all 8 gaps resolved (5 done or removed, 2 kept, 1 out); 2 decisions open. & Final-scope gap analysis document. \\
+\bottomrule
+\end{longtable}
+}
+
+\subsection{What is not proven}
+
+\begin{itemize}
+	\item Midtrans browser checkout, signed webhook delivery, provider return, duplicate event handling, and balance refresh in a real browser.
+	\item OTP email delivery to a real inbox and real Google OAuth consent, including the unverified-app warning.
+	\item Joining a live Google Meet call as a participant.
+	\item A real tutor bank transfer and a real KOL transfer, including operational reconciliation.
+	\item Production migration, cutover, restore rehearsal, and rollback with live data.
+	\item Client UAT, named approver, finance sign-off, and launch date.
+	\item The hosted 100\% coverage gate. Focused suites and local green runs do not close it.
+	\item Blog content pilot and admin E2E.
+\end{itemize}
+
+\subsection{Reproduce a bounded check}
+
+\begin{verbatim}
+bun run db:start
+bun run db:migrate
+bun run check-types
+bun run test:api
+bun run verify:pricing-activation   # explicit dev target only
+bun run verify:academy-meet         # explicit dev target, real Google
+cd apps/web && bun test             # inside cogito-acad
+\end{verbatim}
+
+Always confirm the database target before a migration or verify script. The scripts refuse unauthorized targets; do not bypass a guard.
+
+\section{9. Open work and recommended order}
+
+\begin{enumerate}
+	\item \textbf{Name the client approver (Q14).} Record who signs finance, enrollment, auth, and content acceptance, and whether a late showcase asset may be deferred.
+	\item \textbf{Close OPS01.} Obtain tax-adviser confirmation for defaults and the reviewed Marks-only wording.
+	\item \textbf{Decide D01 and D04.} Confirm whether the final-scope PDF or the current PRD wins for exact top-up choice and the economy preview. Record the decision before changing behaviour.
+	\item \textbf{Run the provider journeys.} Midtrans browser checkout, signed webhook and return, OTP inbox, Google consent, Meet join, and one real transfer for tutor and KOL.
+	\item \textbf{Rehearse production.} Backup, restore, migration range, deploy order, health and SHA verification, and rollback. Record the operator and the window.
+	\item \textbf{Close the hosted coverage gate.} Run the required CI workflow on the release head. Do not weaken thresholds to match local results.
+	\item \textbf{Finish the website calendar migration.} Move the calendar consumer off Sanity, verify dedupe and redirects, then retire the old read.
+	\item \textbf{Reconcile the public roster.} Match every intended website tutor to a published app profile. There is no import fallback.
+	\item \textbf{Finish blog phases 5 and 6.} Content pilot, editorial checklist, FAQ and related-article admin controls, admin E2E, and release verification.
+	\item \textbf{Refresh stale docs.} Correct the website README Activities paragraph and any append-only entry that a later migration superseded.
+\end{enumerate}
+
+\section{10. Risk register}
+
+\begin{tabular}{@{}L{4.2cm}L{5.0cm}L{5.8cm}@{}}
+\toprule
+\textbf{Risk} & \textbf{Impact} & \textbf{Mitigation} \\
+\midrule
+Merged code treated as accepted & False launch claim & Use TASKS evidence and this gate list. Client acceptance needs a named owner. \\
+Two-repository deploy order & Website reads stale or missing API data & Deploy API first, then website. Verify public endpoints before the website build. \\
+Financial snapshot drift & Wrong payout or commission & Keep immutable snapshots; corrections use audited adjustments; never recalculate recorded rows. \\
+Provider-only paths never exercised & Launch failure in payment, email, or Meet & Run the explicit provider checklist before cutover. \\
+Migration replay on an old database & Skipped column or failed validation & Apply the full forward range; \code{0090} repairs the known bank-column gap; preflight invalid rows for \code{0079}. \\
+Seed treated as production content & Overwritten or missing editorial data & Seed is conflict-safe and idempotent. Do not reseed a live database casually. \\
+Stale chronological docs & Wrong operational choice & Check the date, the migration, and the latest section. This handover names the authority order. \\
+Coverage gate ignored & Unverified branches in production & Run hosted CI. Focused local suites are supporting evidence only. \\
+\bottomrule
+\end{tabular}
+
+\section{Appendix A. Requirement index}
+
+\begin{longtable}{@{}L{3.2cm}L{4.8cm}L{7.0cm}@{}}
+\toprule
+\textbf{Family} & \textbf{Requirements} & \textbf{Main surfaces} \\
+\midrule
+\endhead
+Competition catalog & REQ-COMP-01..07 & \code{/admin-competitions}, discovery, booking, classes, public tutors, calendar. \\
+Economy and payment & REQ-ECON-01..04, REQ-PAY-01..02, REQ-WALLET-01 & \code{/admin-economy}, \code{/balance}, quote and checkout. \\
+Classes and enrollment & REQ-CLASS-01..05, REQ-ENROLL-01..04, REQ-CANCEL-01..03 & \code{/classes}, \code{/admin-classes}, \code{/my-classes}, enrollment panel. \\
+Reports and finance & REQ-REPORT-01..04, REQ-TAX-01, REQ-PAYOUT-01..03 & \code{/class-reports}, \code{/admin-tutor-payouts}, PDF export. \\
+Referral and KOL & REQ-AUTH-01..02, REQ-FRIEND-01..03, REQ-KOL-01..03 & Sign-up, Google callback, \code{/referrals}, \code{/admin-referrals}. \\
+Content and landing & REQ-CONTENT-01..03, REQ-CALENDAR-01, REQ-FAQ-01, REQ-LANDING-01..02, REQ-LANG-01..02 & \code{/activities}, \code{/faq}, \code{/calendar}, \code{/knowledge-bank}, website. \\
+Access and audit & REQ-ACCESS-01, REQ-AUDIT-01 & All role procedures, public DTOs, audit history. \\
+\bottomrule
+\end{longtable}
+
+\section{Appendix B. Glossary}
+
+\begin{tabular}{@{}L{3.6cm}L{12.0cm}@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+Marks & In-app balance. Purchased with IDR; not convertible back to cash. \\
+Hold & Marks moved from available to held without changing the wallet total. \\
+Deduction & Spending a held session share; reduces held and total. \\
+Return & Releasing held Marks to available. Never a cash refund. \\
+Earned fee & One tutor's gross entitlement for one delivered session. \\
+Payout & Admin record of an external transfer with tax, bank, fee, and amount snapshots. \\
+Attribution & One saved registration referral choice and its locked terms. \\
+Commission & KOL amount owed from one qualifying top-up. Not the same as money transferred. \\
+Settlement & External KOL transfer reconciled against calculated commission; may be partial or overpaid. \\
+Big class & Shared public class entity with kind cohort or masterclass. \\
+Enrollment & A student's selected session set and plan terms. Not a second wallet. \\
+Allocation & Per-session share of a student's enrollment hold or deduction. \\
+\bottomrule
+\end{tabular}
+
+\newpage
+\section{Appendix C. Document and repository index}
+
+Plan files are in \code{docs/plans/active/} unless marked otherwise. Client files are in \code{docs/client/}.
+
+{\footnotesize
+\begin{tabular}{@{}L{7.2cm}L{8.4cm}@{}}
+\toprule
+\textbf{Path} & \textbf{Use} \\
+\midrule
+\code{docs/prd.tex}, \code{docs/prd.pdf} & Phase 0 contract baseline, version 1.7. \\
+RELEASE-V3-PRD.md & Product rules and requirement IDs. \\
+RELEASE-V3-SPEC.md & Engineering contracts. \\
+RELEASE-V3-TASKS.md & Status and evidence authority. \\
+RELEASE-V3-DECISIONS.md (client) & Owner decisions and open questions. \\
+RELEASE-V3-QUOTATION-APPENDIX.md (client) & Commercial baseline. \\
+CONTRACT-SCOPE-DELTA.md (client) & Baseline versus additional scope. \\
+FINAL-SCOPE-V3-GAP-ANALYSIS.md & Final-scope comparison. \\
+V3-UAT-AUTOMATED-EVIDENCE.md & Automated and semi-automated evidence. \\
+V3-USER-STORIES-COVERAGE.md & Role and story walkthrough. \\
+BILINGUAL-BLOG.md & Blog phases and remaining work. \\
+T10-FAQ-CHECKPOINT.md & FAQ delivery and remaining gates. \\
+T10-PUBLIC-TUTORS-API.md & Public tutor projection. \\
+\code{docs/CONTEXT.md} & Implementation history. \\
+\code{docs/API-REFERENCE.md} & Implemented RPC surface. \\
+\code{docs/MODULE-REFERENCE.md} & Module ownership. \\
+\code{docs/RUNBOOK.md} & Operations and recovery. \\
+\code{docs/DEPLOYMENT.md} & Infrastructure and release procedure. \\
+\code{packages/db/src/migrations/} & Forward migrations through \code{0090}. \\
+\code{apps/server/src/seed/seed.ts} & Default seed entry point. \\
+\code{cogito-acad/README.md} & Website behaviour and environment. \\
+\code{cogito-acad/apps/web/src/lib/} & Website API adapters for tutors, FAQ, activities, and blog. \\
+\bottomrule
+\end{tabular}
+}
+
+\vspace{1em}
+\noindent\textbf{Handover rule.} When this document and a later dated repository entry disagree, the later dated entry wins. When product behaviour and commercial terms disagree, the PRD and the accepted quotation own their separate domains. Do not infer client acceptance from any line in this document.
+
+\end{document}
