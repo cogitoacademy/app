@@ -87,7 +87,15 @@ function formatWibDateTime(value: string) {
 
 function humanize(value: string) {
   return value
-    .replaceAll("_", " ")
+    .replace(/[._]/g, " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function humanizeKey(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[._]/g, " ")
+    .replace(/\bId\b/g, "ID")
     .replace(/^./, (letter) => letter.toUpperCase());
 }
 
@@ -95,8 +103,8 @@ function describeDetails(details: Record<string, unknown> | null) {
   if (!details) return "No details";
   const keys = Object.keys(details);
   if (keys.length === 0) return "No details";
-  const preview = keys.slice(0, 3).join(", ");
-  return keys.length > 3 ? `${preview}, +${keys.length - 3} more` : preview;
+  const preview = keys.slice(0, 3).map(humanizeKey).join(" · ");
+  return keys.length > 3 ? `${preview} · +${keys.length - 3} more` : preview;
 }
 
 function actorLabel(item: AuditLogItem) {
@@ -220,7 +228,7 @@ export function AdminAuditPage() {
                 action: event.target.value,
               }))
             }
-            placeholder="economy_config_updated"
+            placeholder="payout"
           />
         </Field>
         <Field className="w-full sm:w-auto sm:min-w-40">
@@ -236,7 +244,7 @@ export function AdminAuditPage() {
                 targetType: event.target.value,
               }))
             }
-            placeholder="economy_config"
+            placeholder="booking"
           />
         </Field>
         <Field className="w-full sm:w-auto sm:min-w-36">
@@ -389,20 +397,17 @@ export function AdminAuditPage() {
                             </Text>
                           ) : null}
                           <Badge variant="tertiary" size="sm" pill>
-                            {item.actorType}
+                            {humanize(item.actorType)}
                           </Badge>
                         </TableCell>
                         <TableCell className="align-top">
                           <Text className="font-medium">
                             {humanize(item.action)}
                           </Text>
-                          <Text className="font-mono text-xs text-dimmed">
-                            {item.action}
-                          </Text>
                         </TableCell>
                         <TableCell className="align-top">
-                          <Text className="font-mono text-xs">
-                            {item.targetType}
+                          <Text className="text-sm font-medium">
+                            {humanize(item.targetType)}
                           </Text>
                           {item.targetId ? (
                             <Text className="break-all font-mono text-xs text-muted">
@@ -421,7 +426,7 @@ export function AdminAuditPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            aria-label={`View audit entry ${item.action}`}
+                            aria-label={`View audit entry ${humanize(item.action)}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               setSelected(item);

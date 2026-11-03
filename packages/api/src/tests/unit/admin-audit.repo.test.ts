@@ -88,8 +88,8 @@ describe("admin audit repository", () => {
     );
     expect(sql.params).toEqual(
       expect.arrayContaining([
-        "economy_config_updated",
-        "economy_config",
+        "%economy\\_config\\_updated%",
+        "%economy\\_config%",
         "config-1",
         "admin-1",
         dateFrom.toISOString(),

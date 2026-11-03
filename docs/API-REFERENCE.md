@@ -1622,7 +1622,7 @@ the audit writer is unchanged.
 - **Input:** `{ limit?: 1..100 = 50, cursor?, action?, targetType?, targetId?, actorId?, dateFrom?, dateTo? }`; text filters are trimmed and limited to 100 characters, and `dateFrom`/`dateTo` are ISO datetimes with an offset
 - **Output:** `{ items: Array<{ id, actorId, actorName, actorEmail, actorType, action, targetType, targetId, beforeState, afterState, details, createdAt }>, nextCursor: string | null }`
 - **Errors:** `INVALID_AUDIT_DATE_RANGE` (400) when `dateFrom` is after `dateTo`; `INVALID_AUDIT_CURSOR` (400) for a malformed cursor
-- **Description:** Lists audit entries newest first by `createdAt` then `id`. Actor name and email come from a left join, so both are `null` after the user account is deleted. `nextCursor` uses the form `"<createdAt ISO>~<id>"` and appears only when another page exists. The admin page is `/admin-audit`.
+- **Description:** Lists audit entries newest first by `createdAt` then `id`. `action` and `targetType` are case-insensitive partial matches with `%`, `_`, and `\` treated literally; `targetId` and `actorId` are exact matches. Actor name and email come from a left join, so both are `null` after the user account is deleted. `nextCursor` uses the form `"<createdAt ISO>~<id>"` and appears only when another page exists. The admin page is `/admin-audit`.
 
 ---
 

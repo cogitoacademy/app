@@ -1,7 +1,15 @@
-import { and, desc, eq, gte, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, lte, or } from "drizzle-orm";
 import { auditLog, user } from "@cogito-app/db/schema";
 
 import type { DbOrTx } from "../../lib/tx";
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, "_");
+}
 
 export type AuditLogCursor = {
   createdAt: Date;
@@ -55,9 +63,20 @@ export async function listPage(
 ): Promise<AuditLogListRow[]> {
   const conditions = [];
 
-  if (query.action) conditions.push(eq(auditLog.action, query.action));
+  if (query.action)
+    conditions.push(
+      ilike(
+        auditLog.action,
+        `%${escapeLikePattern(normalizeSearch(query.action))}%`,
+      ),
+    );
   if (query.targetType)
-    conditions.push(eq(auditLog.targetType, query.targetType));
+    conditions.push(
+      ilike(
+        auditLog.targetType,
+        `%${escapeLikePattern(normalizeSearch(query.targetType))}%`,
+      ),
+    );
   if (query.targetId) conditions.push(eq(auditLog.targetId, query.targetId));
   if (query.actorId) conditions.push(eq(auditLog.actorId, query.actorId));
   if (query.dateFrom) conditions.push(gte(auditLog.createdAt, query.dateFrom));
