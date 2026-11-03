@@ -1,5 +1,22 @@
 # Cogito API Reference
 
+## Admin support inbox and admin roster (3 November 2026)
+
+### `support.adminListTickets`
+
+- **RPC path:** `/rpc/admin/support/tickets/list`
+- **Input:** `{ status?, limit?, offset? }`; status is `open`, `in_progress`, `resolved` or `closed`.
+- **Output:** `{ items, total, limit, offset }`. Items are ordered by SLA deadline, then creation time, and add `reporterName`, `reporterEmail` and `bookingNumber` to the stored ticket fields.
+- **Description:** Admin inbox read. The booking queue SLA is separate; it derives from booking override metadata, not support tickets.
+
+### `admin.listAdmins`, `admin.grantAdmin`, `admin.revokeAdmin`
+
+- **RPC paths:** `/rpc/admin/admins/list`, `/rpc/admin/admins/grant`, `/rpc/admin/admins/revoke`.
+- **Auth:** Super admin. The session must be an admin whose email is `cogitoacademy.id@gmail.com` or `itcogitoacademy01@gmail.com`.
+- **Inputs:** list takes no input; grant takes `{ email }`; revoke takes `{ userId }`.
+- **Outputs:** list returns `{ id, name, email, role, isSuperAdmin, createdAt }[]`; grant and revoke return the updated user row.
+- **Rules:** Grant promotes an existing account only and returns `USER_NOT_FOUND` when no account uses that email. Revoke demotes an admin to student. Both write `user_role_changed` audit events and keep the last-admin guard. Super-admin accounts cannot be demoted (`SUPER_ADMIN_PROTECTED`). `admin.setRole` also rejects super-admin targets. No account creation, suspension or session revocation is added.
+
 ## Single-language class content (1 November 2026)
 
 Academy class draft inputs and admin/public outputs have one content value per field: class `titleEn`, `descriptionEn`; session `titleEn`, `curriculumEn`. Removed `titleId`, `descriptionId`, and session `curriculumId` are no longer part of these contracts or database tables. Existing Zod unknown-key stripping applies to obsolete input properties. No locale-specific class read fallback is used.

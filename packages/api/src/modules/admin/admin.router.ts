@@ -1,9 +1,11 @@
-import { adminProcedure } from "../../procedures";
+import { adminProcedure, superAdminProcedure } from "../../procedures";
 import {
   dashboardAnalyticsInput,
   listUsersInput,
   adminSearchUsersInput,
   setRoleInput,
+  grantAdminInput,
+  revokeAdminInput,
   adminGetWalletInput,
   adminListLedgerEntriesInput,
   adminGetTutorPayoutsInput,
@@ -101,6 +103,41 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(setRoleInput)
       .handler(handler.setRole),
+
+    listAdmins: superAdminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/admins/list",
+        tags: ["Admin"],
+        summary: "List administrator accounts",
+        description:
+          "Returns every admin account with the protected super-admin flag",
+      })
+      .handler(handler.listAdmins),
+
+    grantAdmin: superAdminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/admins/grant",
+        tags: ["Admin"],
+        summary: "Grant admin access by email",
+        description:
+          "Promotes an existing account to admin. Super-admin access only.",
+      })
+      .input(grantAdminInput)
+      .handler(handler.grantAdmin),
+
+    revokeAdmin: superAdminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/admins/revoke",
+        tags: ["Admin"],
+        summary: "Revoke admin access",
+        description:
+          "Demotes an admin back to student. Super-admin access only; protected accounts are rejected.",
+      })
+      .input(revokeAdminInput)
+      .handler(handler.revokeAdmin),
 
     getWallet: adminProcedure
       .route({

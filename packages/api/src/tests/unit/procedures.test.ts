@@ -331,4 +331,62 @@ describe("procedures", () => {
     const mod = await import("../../procedures");
     expect(mod.studentProcedure).toBeDefined();
   });
+
+  test("requireSuperAdmin gates by protected email", async () => {
+    const { requireSuperAdmin } = await import("../../procedures");
+
+    await expect(
+      (requireSuperAdmin as any)({
+        context: { session: null, services: {} },
+        next: async () => "ok",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    await expect(
+      (requireSuperAdmin as any)({
+        context: {
+          session: { user: { id: "a1", role: "admin", email: "ops@test.dev" } },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await expect(
+      (requireSuperAdmin as any)({
+        context: {
+          session: {
+            user: {
+              id: "t1",
+              role: "tutor",
+              email: "cogitoacademy.id@gmail.com",
+            },
+          },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await expect(
+      (requireSuperAdmin as any)({
+        context: {
+          session: {
+            user: {
+              id: "a1",
+              role: "admin",
+              email: "cogitoacademy.id@gmail.com",
+            },
+          },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).resolves.toBe("ok");
+  });
+
+  test("superAdminProcedure is exported", async () => {
+    const mod = await import("../../procedures");
+    expect(mod.superAdminProcedure).toBeDefined();
+  });
 });

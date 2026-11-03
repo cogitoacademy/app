@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth-client";
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/admin": "Admin workspace",
+  "/admin-admins": "Manage admins",
   "/admin-blog": "Blog studio",
   "/balance": "Balance",
   "/bookings": "Bookings",

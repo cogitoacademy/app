@@ -12,7 +12,10 @@ import {
 } from "node:crypto";
 
 import { db } from "@cogito-app/db";
-import { isConfiguredAdminEmail } from "@cogito-app/env/admin";
+import {
+  isConfiguredAdminEmail,
+  isSuperAdminEmail,
+} from "@cogito-app/env/admin";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
@@ -368,7 +371,8 @@ function buildAuth(options?: InternalAuthOptions) {
             }
             if (
               env.NODE_ENV !== "test" &&
-              isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
+              (isSuperAdminEmail(user.email) ||
+                isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS))
             ) {
               data.role = "admin";
             }

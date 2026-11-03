@@ -51,6 +51,32 @@ function makeWalletPort() {
 }
 
 describe("AdminHandler", () => {
+  test("admin roster endpoints delegate to the service", async () => {
+    const roster = [{ id: "a1", isSuperAdmin: true }];
+    const updated = { id: "u1", role: "admin" };
+    const service = {
+      listAdmins: mock(async () => roster),
+      grantAdmin: mock(async () => updated),
+      revokeAdmin: mock(async () => ({ id: "u1", role: "student" })),
+    };
+    const handler = createAdminHandler(service as any);
+    const context = { session: { user: { id: "admin1" } } } as any;
+
+    await expect(handler.listAdmins({ context })).resolves.toEqual(roster);
+    await expect(
+      handler.grantAdmin({ context, input: { email: "new@example.com" } }),
+    ).resolves.toEqual(updated);
+    await expect(
+      handler.revokeAdmin({ context, input: { userId: "u1" } }),
+    ).resolves.toEqual({ id: "u1", role: "student" });
+    expect(service.grantAdmin).toHaveBeenCalledWith("admin1", {
+      email: "new@example.com",
+    });
+    expect(service.revokeAdmin).toHaveBeenCalledWith("admin1", {
+      userId: "u1",
+    });
+  });
+
   test("tax endpoints forward the admin identity and preserve the service result", async () => {
     const config = { version: 1 };
     const service = {
@@ -313,11 +339,18 @@ describe("AdminService", () => {
     });
 
     test("throws LastAdminError when demoting the last admin", async () => {
+      let reads = 0;
       const repo = makeAdminRepo({
-        getById: mock(async () => ({
-          id: "u1",
-          role: USER_ROLE.ADMIN,
-        })),
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "u1", role: USER_ROLE.ADMIN, email: "target@example.com" }
+            : {
+                id: "admin1",
+                role: USER_ROLE.ADMIN,
+                email: "cogitoacademy.id@gmail.com",
+              };
+        }),
         countAdmins: mock(async () => 1),
       });
       const service = createAdminService({
@@ -376,11 +409,18 @@ describe("AdminService", () => {
 
     test("allows demoting admin when other admins exist", async () => {
       const updatedUser = { id: "u1", role: "student" };
+      let reads = 0;
       const repo = makeAdminRepo({
-        getById: mock(async () => ({
-          id: "u1",
-          role: USER_ROLE.ADMIN,
-        })),
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "u1", role: USER_ROLE.ADMIN, email: "target@example.com" }
+            : {
+                id: "admin1",
+                role: USER_ROLE.ADMIN,
+                email: "cogitoacademy.id@gmail.com",
+              };
+        }),
         countAdmins: mock(async () => 3),
         updateRoleWithExpected: mock(async () => [updatedUser]),
       });

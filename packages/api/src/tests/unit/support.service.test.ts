@@ -34,6 +34,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
     })),
     listByReporter: mock(async () => []),
     adminList: mock(async () => []),
+    adminCount: mock(async () => 0),
     findById: mock(async () => null),
     updateResolution: mock(async () => ({
       id: "t1",
@@ -290,6 +291,22 @@ describe("SupportService", () => {
           resolution: "Again",
         }),
       ).rejects.toThrow(SupportTicketAlreadyResolvedError);
+    });
+
+    test("fails closed when the update returns no ticket", async () => {
+      const { service } = createService({
+        repo: {
+          findById: mock(async () => makeTicket()),
+          updateResolution: mock(async () => undefined),
+        },
+      });
+
+      await expect(
+        service.adminResolveTicket("admin1", {
+          ticketId: "t1",
+          resolution: "Refunded marks",
+        }),
+      ).rejects.toThrow(SupportTicketNotFoundError);
     });
 
     test("resolves ticket, notifies reporter, and records audit", async () => {

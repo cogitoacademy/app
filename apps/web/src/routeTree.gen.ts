@@ -21,6 +21,7 @@ import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppActivitiesRouteImport } from './routes/_app.activities'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminAdminsRouteImport } from './routes/_app.admin-admins'
 import { Route as AppAdminBlogRouteImport } from './routes/_app.admin-blog'
 import { Route as AppAdminClassesRouteImport } from './routes/_app.admin-classes'
 import { Route as AppAdminCompetitionsRouteImport } from './routes/_app.admin-competitions'
@@ -113,6 +114,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminAdminsRoute = AppAdminAdminsRouteImport.update({
+  id: '/admin-admins',
+  path: '/admin-admins',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminBlogRoute = AppAdminBlogRouteImport.update({
@@ -299,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-admins': typeof AppAdminAdminsRoute
   '/admin-blog': typeof AppAdminBlogRoute
   '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
@@ -346,6 +353,7 @@ export interface FileRoutesByTo {
   '/activities': typeof AppActivitiesRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-admins': typeof AppAdminAdminsRoute
   '/admin-blog': typeof AppAdminBlogRoute
   '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
@@ -395,6 +403,7 @@ export interface FileRoutesById {
   '/_app/activities': typeof AppActivitiesRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-admins': typeof AppAdminAdminsRoute
   '/_app/admin-blog': typeof AppAdminBlogRoute
   '/_app/admin-classes': typeof AppAdminClassesRoute
   '/_app/admin-competitions': typeof AppAdminCompetitionsRoute
@@ -444,6 +453,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-admins'
     | '/admin-blog'
     | '/admin-classes'
     | '/admin-competitions'
@@ -491,6 +501,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-admins'
     | '/admin-blog'
     | '/admin-classes'
     | '/admin-competitions'
@@ -539,6 +550,7 @@ export interface FileRouteTypes {
     | '/_app/activities'
     | '/_app/admin'
     | '/_app/admin-achievements'
+    | '/_app/admin-admins'
     | '/_app/admin-blog'
     | '/_app/admin-classes'
     | '/_app/admin-competitions'
@@ -671,6 +683,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-achievements'
       fullPath: '/admin-achievements'
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-admins': {
+      id: '/_app/admin-admins'
+      path: '/admin-admins'
+      fullPath: '/admin-admins'
+      preLoaderRoute: typeof AppAdminAdminsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-blog': {
@@ -919,6 +938,7 @@ interface AppRouteChildren {
   AppActivitiesRoute: typeof AppActivitiesRoute
   AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminAdminsRoute: typeof AppAdminAdminsRoute
   AppAdminBlogRoute: typeof AppAdminBlogRoute
   AppAdminClassesRoute: typeof AppAdminClassesRoute
   AppAdminCompetitionsRoute: typeof AppAdminCompetitionsRoute
@@ -959,6 +979,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppActivitiesRoute: AppActivitiesRoute,
   AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminAdminsRoute: AppAdminAdminsRoute,
   AppAdminBlogRoute: AppAdminBlogRoute,
   AppAdminClassesRoute: AppAdminClassesRoute,
   AppAdminCompetitionsRoute: AppAdminCompetitionsRoute,

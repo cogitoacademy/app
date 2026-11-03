@@ -121,6 +121,39 @@ export async function countUsers(conn: DbOrTx): Promise<number> {
 }
 
 /**
+ * Lists admin accounts without paging.
+ *
+ * The admin roster is intentionally treated as a small operational list;
+ * super administrators manage it from a single page.
+ */
+export async function listAdmins(conn: DbOrTx): Promise<UserRow[]> {
+  return conn
+    .select({ ...getTableColumns(user) })
+    .from(user)
+    .where(eq(user.role, USER_ROLE.ADMIN))
+    .orderBy(asc(user.createdAt));
+}
+
+/**
+ * Finds one account by its normalized email address.
+ *
+ * @param conn - the database connection or active transaction
+ * @param email - the email to resolve
+ * @returns the matching user row, or null when no account exists
+ */
+export async function findUserByEmail(
+  conn: DbOrTx,
+  email: string,
+): Promise<UserRow | null> {
+  const [row] = await conn
+    .select({ ...getTableColumns(user) })
+    .from(user)
+    .where(sql`lower(${user.email}) = lower(${email})`)
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Reads the aggregate rows used by the admin business dashboard.
  *
  * Date-based metrics use booking/user creation time in the requested window.
@@ -405,6 +438,8 @@ export function createAdminRepo() {
     listUsers,
     searchUsers,
     countUsers,
+    listAdmins,
+    findUserByEmail,
     getDashboardAnalytics,
     getById,
     countAdmins,

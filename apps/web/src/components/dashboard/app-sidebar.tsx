@@ -55,11 +55,13 @@ import {
   IconSchool,
   IconTimelineEventText,
   IconUser,
+  IconUserShield,
   IconUserSquare,
   IconUsersGroup,
   IconWallet,
 } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
+import { isSuperAdminEmail } from "@cogito-app/env/admin";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 import { orpc } from "@/utils/orpc";
 
@@ -124,6 +126,11 @@ const adminNavGroups = [
     items: [
       { to: "/admin", label: "Dashboard", icon: IconHome },
       { to: "/admin-operations", label: "Operations", icon: IconSettings },
+      {
+        to: "/admin-admins",
+        label: "Manage admins",
+        icon: IconUserShield,
+      },
     ],
   },
   {
@@ -216,7 +223,14 @@ export function AppSidebar({
 
   const navigationGroups =
     role === "admin"
-      ? adminNavGroups
+      ? adminNavGroups.map((group) => ({
+          label: group.label,
+          items: group.items.filter(
+            (item) =>
+              item.to !== "/admin-admins" ||
+              (!!userEmail && isSuperAdminEmail(userEmail)),
+          ),
+        }))
       : role === "tutor"
         ? tutorNavGroups
         : studentNavGroups;

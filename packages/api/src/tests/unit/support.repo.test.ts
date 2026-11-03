@@ -10,6 +10,7 @@ function queuedDb(results: unknown[][]) {
     orderBy: () => chain,
     limit: () => chain,
     offset: () => chain,
+    leftJoin: () => chain,
     returning: () => chain,
     values: (value: unknown) => {
       writes.push(value);
@@ -143,13 +144,44 @@ describe("SupportRepo", () => {
     ).resolves.toEqual([{ id: "t1" }]);
   });
 
+  test("counts admin tickets for the inbox", async () => {
+    const where = mock(async () => [{ count: 4 }]);
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const repo = createSupportRepo();
+
+    await expect(
+      repo.adminCount({ select } as any, { status: "open" }),
+    ).resolves.toBe(4);
+    expect(where).toHaveBeenCalledTimes(1);
+
+    await expect(repo.adminCount({ select } as any, {})).resolves.toBe(4);
+    expect(where).toHaveBeenCalledTimes(2);
+
+    const emptyWhere = mock(async () => []);
+    const emptyFrom = mock(() => ({ where: emptyWhere }));
+    const emptySelect = mock(() => ({ from: emptyFrom }));
+    await expect(
+      repo.adminCount({ select: emptySelect } as any, {}),
+    ).resolves.toBe(0);
+
+    const nullWhere = mock(async () => [{ count: null }]);
+    const nullFrom = mock(() => ({ where: nullWhere }));
+    const nullSelect = mock(() => ({ from: nullFrom }));
+    await expect(
+      repo.adminCount({ select: nullSelect } as any, {}),
+    ).resolves.toBe(0);
+  });
+
   test("filters admin tickets by status", async () => {
     const rows = [{ id: "t1" }];
     const offset = mock(async () => rows);
     const limit = mock(() => ({ offset }));
     const orderBy = mock(() => ({ limit }));
     const where = mock(() => ({ orderBy }));
-    const from = mock(() => ({ where }));
+    const secondJoin = mock(() => ({ where }));
+    const leftJoin = mock(() => ({ leftJoin: secondJoin }));
+    const from = mock(() => ({ leftJoin }));
     const select = mock(() => ({ from }));
     const db = { select };
     const repo = createSupportRepo();

@@ -1,5 +1,26 @@
 # Cogito App — Codebase Context
 
+## Admin support inbox and protected admin roster (3 November 2026)
+
+`/admin-operations` now has a **Support tickets** tab beside the booking queue,
+wallet lookup and room approvals. It lists `support_ticket` rows by SLA deadline,
+filters by status, marks overdue open tickets, and resolves through the existing
+`support.adminResolveTicket` procedure. `support.adminListTickets` now returns
+`{ items, total, limit, offset }`; each item adds reporter name/email and booking
+number through left joins. The booking queue still uses booking override SLAs and
+does not include support tickets.
+
+`/admin-admins` is a super-admin-only page for the admin roster. Super admins are
+the fixed emails `cogitoacademy.id@gmail.com` and `itcogitoacademy01@gmail.com`
+(`packages/env/src/admin.ts`); they are auto-promoted at signup, cannot be
+demoted through `admin.setRole`, and cannot be removed from the roster page.
+Super admins promote an existing account by email (`admin.grantAdmin`) or remove
+admin access (`admin.revokeAdmin`); both procedures require a super-admin session,
+write the existing `user_role_changed` audit event, and keep the last-admin guard.
+There is no account creation, suspension, ban or session-revocation flow: the
+person must sign up first, and "status" in the page is the current access level
+(super admin or admin). A new admin row has no separate database migration.
+
 ## Competition calendar seed (3 November 2026)
 
 The launch seed inserts the 63 approved competition calendar events after the

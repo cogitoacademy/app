@@ -414,6 +414,21 @@ describe("auth email hooks", () => {
     }
   });
 
+  test("production signup promotes the second protected super admin", async () => {
+    const originalNodeEnv = env.NODE_ENV;
+    try {
+      (env as { NODE_ENV: string }).NODE_ENV = "production";
+      const result = await beforeUserCreate(
+        { ...user, email: "cogitoacademy.id@gmail.com" },
+        { path: "/callback/:id" },
+      );
+      expect(result.data.role).toBe("admin");
+      expect(result.data.referralChoicePending).toBeFalsy();
+    } finally {
+      (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
+    }
+  });
+
   test("ordinary signup keeps the default student role", async () => {
     const result = await beforeUserCreate(user);
     expect(result.data.role).toBe("student");

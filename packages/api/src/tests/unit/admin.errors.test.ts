@@ -6,6 +6,9 @@ import {
   TutorPayoutNotAvailableError,
   WalletNotFoundError,
   EconomyCompetitionNotInCatalogError,
+  SuperAdminProtectedError,
+  AdminAlreadyGrantedError,
+  AdminRoleChangeForbiddenError,
   mapAdminError,
 } from "../../modules/admin/admin.errors";
 import {
@@ -36,6 +39,28 @@ describe("admin.errors", () => {
       expect(err.code).toBe("LAST_ADMIN");
       expect(err.message).toBe("Cannot remove the last admin");
       expect(err.details).toEqual({ id: "u1" });
+    });
+  });
+
+  describe("Admin roster errors", () => {
+    test("SuperAdminProtectedError exposes the protected email", () => {
+      const err = new SuperAdminProtectedError("root@example.com");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("SUPER_ADMIN_PROTECTED");
+      expect(err.details).toEqual({ email: "root@example.com" });
+    });
+
+    test("AdminAlreadyGrantedError exposes the existing admin email", () => {
+      const err = new AdminAlreadyGrantedError("admin@example.com");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("ADMIN_ALREADY_GRANTED");
+      expect(err.details).toEqual({ email: "admin@example.com" });
+    });
+
+    test("AdminRoleChangeForbiddenError is a domain error", () => {
+      const err = new AdminRoleChangeForbiddenError();
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("ADMIN_ROLE_CHANGE_FORBIDDEN");
     });
   });
 
@@ -86,6 +111,18 @@ describe("admin.errors", () => {
       const err = new LastAdminError("u1");
       const result = mapAdminError(err);
       expect(result.status).toBe(409);
+    });
+
+    test("maps admin roster guard errors", () => {
+      expect(
+        mapAdminError(new SuperAdminProtectedError("root@example.com")).status,
+      ).toBe(403);
+      expect(
+        mapAdminError(new AdminAlreadyGrantedError("admin@example.com")).status,
+      ).toBe(409);
+      expect(mapAdminError(new AdminRoleChangeForbiddenError()).status).toBe(
+        403,
+      );
     });
 
     test("maps OptimisticLockError to CONFLICT", () => {

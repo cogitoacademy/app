@@ -4,6 +4,8 @@ import {
   listUsersInput,
   adminSearchUsersInput,
   setRoleInput,
+  grantAdminInput,
+  revokeAdminInput,
 } from "../../modules/admin/admin.types";
 
 describe("Admin Types (Zod schemas)", () => {
@@ -129,5 +131,19 @@ describe("Admin Types (Zod schemas)", () => {
         expectedRole: "tutor",
       }).success,
     ).toBe(true);
+  });
+
+  test("grantAdminInput trims a valid email and rejects malformed input", () => {
+    expect(
+      grantAdminInput.safeParse({ email: "  New.Admin@Example.com " }).data,
+    ).toEqual({ email: "New.Admin@Example.com" });
+    expect(grantAdminInput.safeParse({ email: "not-an-email" }).success).toBe(
+      false,
+    );
+  });
+
+  test("revokeAdminInput requires a user id", () => {
+    expect(revokeAdminInput.safeParse({ userId: "u1" }).success).toBe(true);
+    expect(revokeAdminInput.safeParse({ userId: "" }).success).toBe(false);
   });
 });

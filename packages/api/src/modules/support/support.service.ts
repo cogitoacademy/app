@@ -160,11 +160,16 @@ export function createSupportService(deps: {
       input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT,
       MAX_PAGE_LIMIT,
     );
-    return supportRepo.adminList(db, {
-      status: input.status,
-      limit,
-      offset: input.offset ?? 0,
-    });
+    const offset = input.offset ?? 0;
+    const [items, total] = await Promise.all([
+      supportRepo.adminList(db, {
+        status: input.status,
+        limit,
+        offset,
+      }),
+      supportRepo.adminCount(db, { status: input.status }),
+    ]);
+    return { items, total, limit, offset };
   }
 
   /**
@@ -233,6 +238,7 @@ export function createSupportService(deps: {
         resolution: input.resolution,
         assignedTo: adminId,
       });
+      if (!updated) throw new SupportTicketNotFoundError(input.ticketId);
 
       await notification.writeBestEffort({
         db: tx,
