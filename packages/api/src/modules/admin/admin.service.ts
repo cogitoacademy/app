@@ -12,7 +12,11 @@ import {
   EconomyConfigConflictError,
   EconomyCompetitionNotInCatalogError,
   TutorPayoutNotAvailableError,
+  SuperAdminProtectedError,
+  AdminAlreadyGrantedError,
+  AdminRoleChangeForbiddenError,
 } from "./admin.errors";
+import { isSuperAdminEmail } from "@cogito-app/env/admin";
 import type { EconomyService } from "../economy";
 import type { CompetitionCatalogService } from "../competition-catalog";
 import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
@@ -20,6 +24,8 @@ import {
   adminSaveV3EconomyInput,
   adminActivateV3EconomyInput,
   adminPreviewV3EconomyInput,
+  grantAdminInput,
+  revokeAdminInput,
 } from "./admin.types";
 import type { z } from "zod";
 
@@ -131,6 +137,15 @@ export interface SetRoleInput {
   userId: string;
   role: UserRole;
   expectedRole: string;
+}
+
+export interface AdminRosterEntry {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isSuperAdmin: boolean;
+  createdAt: Date;
 }
 
 export interface TargetUser {
@@ -439,6 +454,18 @@ export function createAdminService(deps: {
       if (!target) throw new UserNotFoundError(input.userId);
       const previousRole = target.role;
 
+      if (isSuperAdminEmail(target.email ?? "")) {
+        throw new SuperAdminProtectedError(target.email);
+      }
+      const changesAdminRole =
+        previousRole === USER_ROLE.ADMIN || input.role === USER_ROLE.ADMIN;
+      if (changesAdminRole) {
+        const actor = await adminRepo.getById(tx, adminId);
+        if (!actor || !isSuperAdminEmail(actor.email ?? "")) {
+          throw new AdminRoleChangeForbiddenError();
+        }
+      }
+
       // The last-admin guard must be evaluated inside the transaction after
       // locking the admin rows: a stale pre-transaction count would let two
       // concurrent demotions of the last two admins both succeed (H6).
@@ -467,6 +494,112 @@ export function createAdminService(deps: {
         targetType: "user",
         beforeState: { role: previousRole },
         afterState: { role: input.role },
+      });
+
+      return row;
+    });
+  }
+
+  async function listAdmins(): Promise<AdminRosterEntry[]> {
+    const rows = await adminRepo.listAdmins(db);
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: row.role as UserRole,
+      isSuperAdmin: isSuperAdminEmail(row.email),
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async function grantAdmin(
+    adminId: string,
+    input: z.infer<typeof grantAdminInput>,
+  ): Promise<UserRow> {
+    return db.transaction(async (tx) => {
+      const actor = await adminRepo.getById(tx, adminId);
+      if (!actor || !isSuperAdminEmail(actor.email ?? "")) {
+        throw new AdminRoleChangeForbiddenError();
+      }
+
+      const target = await adminRepo.findUserByEmail(tx, input.email);
+      if (!target) throw new UserNotFoundError(input.email);
+      if (isSuperAdminEmail(target.email ?? "")) {
+        throw new SuperAdminProtectedError(target.email);
+      }
+      if (target.role === USER_ROLE.ADMIN) {
+        throw new AdminAlreadyGrantedError(target.email);
+      }
+
+      const rows = await adminRepo.updateRoleWithExpected(
+        tx,
+        target.id,
+        USER_ROLE.ADMIN,
+        target.role,
+      );
+      if (rows.length === 0) {
+        throw new OptimisticLockError(target.id, target.role);
+      }
+      const row = rows[0]!;
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "user_role_changed",
+        targetId: target.id,
+        targetType: "user",
+        beforeState: { role: target.role },
+        afterState: { role: USER_ROLE.ADMIN },
+      });
+
+      return row;
+    });
+  }
+
+  async function revokeAdmin(
+    adminId: string,
+    input: z.infer<typeof revokeAdminInput>,
+  ): Promise<UserRow> {
+    return db.transaction(async (tx) => {
+      const actor = await adminRepo.getById(tx, adminId);
+      if (!actor || !isSuperAdminEmail(actor.email ?? "")) {
+        throw new AdminRoleChangeForbiddenError();
+      }
+
+      const target = await adminRepo.getById(tx, input.userId);
+      if (!target) throw new UserNotFoundError(input.userId);
+      if (isSuperAdminEmail(target.email ?? "")) {
+        throw new SuperAdminProtectedError(target.email);
+      }
+      if (target.role !== USER_ROLE.ADMIN) {
+        throw new OptimisticLockError(target.id, USER_ROLE.ADMIN);
+      }
+
+      await adminRepo.lockAdminRows(tx);
+      const adminCount = await adminRepo.countAdmins(tx);
+      if (adminCount <= 1) throw new LastAdminError(input.userId);
+
+      const rows = await adminRepo.updateRoleWithExpected(
+        tx,
+        target.id,
+        USER_ROLE.STUDENT,
+        target.role,
+      );
+      if (rows.length === 0) {
+        throw new OptimisticLockError(target.id, target.role);
+      }
+      const row = rows[0]!;
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "user_role_changed",
+        targetId: target.id,
+        targetType: "user",
+        beforeState: { role: target.role },
+        afterState: { role: USER_ROLE.STUDENT },
       });
 
       return row;
@@ -782,6 +915,9 @@ export function createAdminService(deps: {
     searchUsers,
     getDashboardAnalytics,
     setRole,
+    listAdmins,
+    grantAdmin,
+    revokeAdmin,
     getWallet,
     listLedgerEntries,
     getTutorPayouts,

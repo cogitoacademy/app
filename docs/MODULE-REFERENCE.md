@@ -1,5 +1,22 @@
 # Cogito Module Reference
 
+## Admin support inbox and protected admin roster (3 November 2026)
+
+`SupportTicketsPanel` owns the Operations support tab: SLA-ordered list, status
+filter, overdue marker, pagination and a resolution dialog. It reads
+`support.adminListTickets` and mutates through `support.adminResolveTicket`;
+resolved tickets open read-only. The API enrichment lives in `support.repo`
+(`adminList` left joins reporter and booking, `adminCount` supports pagination).
+No new table or migration is involved.
+
+`AdminAdminsPage` at `/admin-admins` lists the admin roster and promotes existing
+accounts by email or removes access. The page and sidebar item render only for
+super admins; `superAdminProcedure` enforces the same rule on the three
+`admin.admins.*` procedures. Super-admin emails live in
+`packages/env/src/admin.ts`; auth signup promotes them and `setRole` protects
+them. Provisioning remains env/invite based: the target account must already
+exist, and no suspension or session revocation is part of this slice.
+
 ## Single-language Academy storage (1 November 2026)
 
 Academy schema migration 0085 drops the alternate class/session content columns. Draft persistence, publish snapshots and audit snapshots reference only the remaining canonical fields. There is no alternate-content response mapper. Cogito Academy Activities consumes the same class title on both localized page routes; surrounding navigation and non-class content remain localized.

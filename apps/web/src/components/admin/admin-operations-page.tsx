@@ -20,6 +20,7 @@ import {
   IconClock,
   IconCoins,
   IconInfoCircle,
+  IconLifebuoy,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -117,6 +118,7 @@ import {
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
 import { AdminRoomActions } from "@/components/booking/admin-room-actions";
+import { SupportTicketsPanel } from "@/components/admin/support-tickets-panel";
 import {
   ActivityTimelineItem,
   BookingDetailPage,
@@ -266,8 +268,8 @@ export function AdminOperationsPage() {
           Keep every booking moving
         </Heading>
         <Text className="max-w-full text-muted">
-          Resolve booking issues, inspect wallets, and coordinate offline rooms
-          from one workspace.
+          Resolve booking issues, answer support tickets, inspect wallets, and
+          coordinate offline rooms from one workspace.
         </Text>
       </div>
       <Tabs value={tab} onValueChange={setTab} className="min-w-0 max-w-full">
@@ -278,6 +280,12 @@ export function AdminOperationsPage() {
               className="flex-none whitespace-nowrap text-sm sm:text-base"
             >
               <IconCalendarEvent /> Booking queue
+            </TabsItem>
+            <TabsItem
+              value="support"
+              className="flex-none whitespace-nowrap text-sm sm:text-base"
+            >
+              <IconLifebuoy /> Support tickets
             </TabsItem>
             <TabsItem
               value="wallet"
@@ -334,6 +342,9 @@ export function AdminOperationsPage() {
         </TabsPanel>
         <TabsPanel value="wallet">
           <WalletLookup />
+        </TabsPanel>
+        <TabsPanel value="support" className="min-w-0 max-w-full">
+          <SupportTicketsPanel />
         </TabsPanel>
         <TabsPanel value="rooms">
           <RoomOperations />

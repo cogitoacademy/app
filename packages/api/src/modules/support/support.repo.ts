@@ -1,8 +1,9 @@
-import { eq, and, lt, asc, desc, getTableColumns } from "drizzle-orm";
+import { eq, and, lt, asc, desc, count, getTableColumns } from "drizzle-orm";
 import {
   supportTicket,
   booking,
   bookingParticipant,
+  user,
   type supportTicket as supportTicketTable,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
@@ -62,21 +63,57 @@ async function listByReporter(
     .limit(input.limit);
 }
 
-async function adminList(
-  conn: DbOrTx,
-  input: AdminListInput,
-): Promise<SupportTicketRow[]> {
+async function adminList(conn: DbOrTx, input: AdminListInput) {
   const conditions = [];
   if (input.status) {
     conditions.push(eq(supportTicket.status, input.status));
   }
   return conn
-    .select({ ...getTableColumns(supportTicket) })
+    .select({
+      id: supportTicket.id,
+      reporterId: supportTicket.reporterId,
+      reporterName: user.name,
+      reporterEmail: user.email,
+      bookingId: supportTicket.bookingId,
+      bookingNumber: booking.bookingNumber,
+      category: supportTicket.category,
+      description: supportTicket.description,
+      status: supportTicket.status,
+      slaDeadline: supportTicket.slaDeadline,
+      assignedTo: supportTicket.assignedTo,
+      resolution: supportTicket.resolution,
+      createdAt: supportTicket.createdAt,
+      updatedAt: supportTicket.updatedAt,
+    })
     .from(supportTicket)
-    .where(and(...conditions))
+    .leftJoin(user, eq(user.id, supportTicket.reporterId))
+    .leftJoin(booking, eq(booking.id, supportTicket.bookingId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(asc(supportTicket.slaDeadline), asc(supportTicket.createdAt))
     .limit(input.limit)
     .offset(input.offset);
+}
+
+/**
+ * Counts tickets for the admin inbox so the page can paginate accurately.
+ *
+ * @param conn - the database connection or active transaction
+ * @param input - optional status filter
+ * @returns the matching ticket count
+ */
+async function adminCount(
+  conn: DbOrTx,
+  input: { status?: string },
+): Promise<number> {
+  const conditions = [];
+  if (input.status) {
+    conditions.push(eq(supportTicket.status, input.status));
+  }
+  const [row] = await conn
+    .select({ count: count() })
+    .from(supportTicket)
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+  return row?.count ?? 0;
 }
 
 async function findById(
@@ -171,6 +208,7 @@ export function createSupportRepo() {
     insert,
     listByReporter,
     adminList,
+    adminCount,
     findById,
     updateResolution,
     findBookingForReporter,

@@ -34,6 +34,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
     })),
     listByReporter: mock(async () => []),
     adminList: mock(async () => []),
+    adminCount: mock(async () => 0),
     findById: mock(async () => null),
     updateResolution: mock(async () => ({
       id: "t1",

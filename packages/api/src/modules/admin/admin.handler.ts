@@ -13,6 +13,8 @@ import type {
   listUsersInput,
   dashboardAnalyticsInput,
   setRoleInput,
+  grantAdminInput,
+  revokeAdminInput,
   adminGetWalletInput,
   adminListLedgerEntriesInput,
   adminSearchUsersInput,
@@ -35,6 +37,8 @@ import type {
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
 type DashboardAnalyticsInputZod = z.infer<typeof dashboardAnalyticsInput>;
 type SetRoleInputZod = z.infer<typeof setRoleInput>;
+type GrantAdminInputZod = z.infer<typeof grantAdminInput>;
+type RevokeAdminInputZod = z.infer<typeof revokeAdminInput>;
 type AdminGetWalletInputZod = z.infer<typeof adminGetWalletInput>;
 type AdminListLedgerEntriesInputZod = z.infer<
   typeof adminListLedgerEntriesInput
@@ -148,6 +152,36 @@ export function createAdminHandler(adminService: AdminService) {
     }) => {
       return withDomainMap(
         () => adminService.setRole(context.session!.user.id, input),
+        mapAdminError,
+      );
+    },
+
+    listAdmins: async ({ context: _context }: { context: Context }) => {
+      return withDomainMap(() => adminService.listAdmins(), mapAdminError);
+    },
+
+    grantAdmin: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: GrantAdminInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.grantAdmin(context.session!.user.id, input),
+        mapAdminError,
+      );
+    },
+
+    revokeAdmin: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: RevokeAdminInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.revokeAdmin(context.session!.user.id, input),
         mapAdminError,
       );
     },

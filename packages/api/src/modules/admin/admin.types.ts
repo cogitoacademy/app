@@ -83,6 +83,14 @@ export const setRoleInput = z.object({
   expectedRole: z.enum(["student", "tutor", "admin"]),
 });
 
+export const grantAdminInput = z.object({
+  email: z.string().trim().email().max(320),
+});
+
+export const revokeAdminInput = z.object({
+  userId: z.string().min(1).max(100),
+});
+
 export const adminGetWalletInput = z.object({
   userId: z.string().max(100),
 });

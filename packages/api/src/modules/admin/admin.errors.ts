@@ -15,6 +15,7 @@ import {
   notFound,
   conflict,
   badRequest,
+  forbidden,
   internalServerError,
 } from "../../lib/errors";
 
@@ -29,6 +30,36 @@ export class LastAdminError extends DomainError {
   readonly domain = "admin";
   constructor(id: string) {
     super("LAST_ADMIN", "Cannot remove the last admin", { id });
+  }
+}
+
+export class SuperAdminProtectedError extends DomainError {
+  readonly domain = "admin";
+  constructor(email: string) {
+    super(
+      "SUPER_ADMIN_PROTECTED",
+      "Super administrators cannot be changed from the app",
+      { email },
+    );
+  }
+}
+
+export class AdminAlreadyGrantedError extends DomainError {
+  readonly domain = "admin";
+  constructor(email: string) {
+    super("ADMIN_ALREADY_GRANTED", "This account is already an admin", {
+      email,
+    });
+  }
+}
+
+export class AdminRoleChangeForbiddenError extends DomainError {
+  readonly domain = "admin";
+  constructor() {
+    super(
+      "ADMIN_ROLE_CHANGE_FORBIDDEN",
+      "Only super administrators can change admin roles",
+    );
   }
 }
 
@@ -97,6 +128,12 @@ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof UserNotFoundError) return notFound(err.message, err);
   if (err instanceof WalletNotFoundError) return notFound(err.message, err);
   if (err instanceof LastAdminError) return conflict(err.message, err);
+  if (err instanceof SuperAdminProtectedError)
+    return forbidden(err.message, err);
+  if (err instanceof AdminAlreadyGrantedError)
+    return conflict(err.message, err);
+  if (err instanceof AdminRoleChangeForbiddenError)
+    return forbidden(err.message, err);
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
   if (err instanceof InvalidLedgerFilterError)
     return badRequest(err.message, err);

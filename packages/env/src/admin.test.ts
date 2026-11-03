@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DEFAULT_PRODUCTION_ADMIN_EMAIL,
+  SUPER_ADMIN_EMAILS,
   isConfiguredAdminEmail,
+  isSuperAdminEmail,
   parseConfiguredAdminEmails,
 } from "./admin";
 
@@ -14,6 +16,18 @@ describe("configured production admins", () => {
     expect(parseConfiguredAdminEmails("   ")).toEqual([
       DEFAULT_PRODUCTION_ADMIN_EMAIL,
     ]);
+  });
+
+  test("keeps the launch super admins in the protected list", () => {
+    expect(SUPER_ADMIN_EMAILS).toContain("cogitoacademy.id@gmail.com");
+    expect(SUPER_ADMIN_EMAILS).toContain(DEFAULT_PRODUCTION_ADMIN_EMAIL);
+  });
+
+  test("matches super admins case-insensitively and rejects other emails", () => {
+    expect(isSuperAdminEmail(" CogitoAcademy.id@Gmail.com ")).toBe(true);
+    expect(isSuperAdminEmail(DEFAULT_PRODUCTION_ADMIN_EMAIL)).toBe(true);
+    expect(isSuperAdminEmail("other@example.com")).toBe(false);
+    expect(isSuperAdminEmail("   ")).toBe(false);
   });
 
   test("normalizes, filters, and deduplicates the email list", () => {

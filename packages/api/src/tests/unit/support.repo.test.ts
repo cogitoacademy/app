@@ -10,6 +10,7 @@ function queuedDb(results: unknown[][]) {
     orderBy: () => chain,
     limit: () => chain,
     offset: () => chain,
+    leftJoin: () => chain,
     returning: () => chain,
     values: (value: unknown) => {
       writes.push(value);
@@ -149,7 +150,9 @@ describe("SupportRepo", () => {
     const limit = mock(() => ({ offset }));
     const orderBy = mock(() => ({ limit }));
     const where = mock(() => ({ orderBy }));
-    const from = mock(() => ({ where }));
+    const secondJoin = mock(() => ({ where }));
+    const leftJoin = mock(() => ({ leftJoin: secondJoin }));
+    const from = mock(() => ({ leftJoin }));
     const select = mock(() => ({ from }));
     const db = { select };
     const repo = createSupportRepo();
