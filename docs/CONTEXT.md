@@ -1,5 +1,23 @@
 # Cogito App — Codebase Context
 
+## Admin dashboard funnel, supply-demand, and SLA (3 November 2026)
+
+`admin.getDashboardAnalytics` now also returns `funnel`, `supplyDemand`, and
+`operationalSla`; no input, migration, or new table changed. Funnel counts are
+one cohort of student accounts created in the selected period; booked,
+completed, and paid steps are subsets of that cohort, so percentages stay at or
+below 100% and the dashboard shows `—` for a zero base. Supply-demand lists the
+top 8 booked categories next to approved/published tutor counts matched through
+the child subject's parent category name; a missing name match renders "No
+published tutor" instead of a guessed mapping. Support SLA is a current snapshot
+of open/in-progress tickets split into due-within-4-hours and breached, and
+stays separate from the existing booking-escalation queue. Aggregates live in
+`packages/api/src/modules/admin/admin-health-analytics.ts` and are composed by
+`getDashboardAnalytics` in one `Promise.all`. The ticket read reuses
+`support_ticket_status_sla_idx`. The admin dashboard root uses a no-wrap flex
+column with `min-w-0`, so wide analytics tables scroll inside their containers
+instead of widening the page and clipping the mobile padding.
+
 ## Admin payment list and refund entry point (3 November 2026)
 
 Admins now have a Payments page at `/admin-payments` under Finance. It lists

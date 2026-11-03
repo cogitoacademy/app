@@ -34,6 +34,32 @@ const emptyOperations = {
   unavailablePaymentDates: 0,
 };
 
+function makeAnalyticsRaw(overrides: Record<string, unknown> = {}) {
+  return {
+    bookingSummary: {},
+    userSummary: {},
+    bookingTrend: [],
+    userTrend: [],
+    stateBreakdown: [],
+    modalityBreakdown: [],
+    categoryBreakdown: [],
+    accountSummary: {},
+    marksSummary: {},
+    paymentSummary: {},
+    refundSummary: {},
+    operationsSummary: emptyOperations,
+    funnel: {
+      registeredStudents: 0,
+      bookedStudents: 0,
+      completedStudents: 0,
+      paidStudents: 0,
+    },
+    supplyDemand: [],
+    supportSla: { openTickets: 0, breachedTickets: 0, dueSoonTickets: 0 },
+    ...overrides,
+  };
+}
+
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
   return { id: "u1", role: "student", ...overrides };
 }
@@ -245,6 +271,91 @@ describe("Admin Service", () => {
       expect(result.periodStart).toBe("2026-07-31T17:00:00.000Z");
       expect(result.periodEnd).toBe("2026-08-03T16:59:59.999Z");
       expect(result.bookingTrend).toHaveLength(3);
+    });
+
+    test("passes funnel, supply-demand, and support SLA aggregates through", async () => {
+      const repo = {
+        getDashboardAnalytics: mock(async () =>
+          makeAnalyticsRaw({
+            funnel: {
+              registeredStudents: "10",
+              bookedStudents: "6",
+              completedStudents: "4",
+              paidStudents: "3",
+            },
+            supplyDemand: [
+              { category: "Mathematics", bookings: "5", activeTutors: "2" },
+              { category: "Other", bookings: "2", activeTutors: "0" },
+            ],
+            supportSla: {
+              openTickets: "7",
+              breachedTickets: "2",
+              dueSoonTickets: "1",
+            },
+          }),
+        ),
+      };
+      const service = createAdminService({
+        adminRepo: repo as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      const result = await service.getDashboardAnalytics({ period: "30d" });
+
+      expect(result.funnel).toEqual({
+        registeredStudents: 10,
+        bookedStudents: 6,
+        completedStudents: 4,
+        paidStudents: 3,
+      });
+      expect(result.supplyDemand).toEqual([
+        { category: "Mathematics", bookings: 5, activeTutors: 2 },
+        { category: "Other", bookings: 2, activeTutors: 0 },
+      ]);
+      expect(result.operationalSla).toEqual({
+        openTickets: 7,
+        breachedTickets: 2,
+        dueSoonTickets: 1,
+        asOf: expect.any(String),
+      });
+    });
+
+    test("defaults the new aggregates to zero when the repo omits them", async () => {
+      const repo = {
+        getDashboardAnalytics: mock(async () =>
+          makeAnalyticsRaw({
+            funnel: undefined,
+            supplyDemand: undefined,
+            supportSla: undefined,
+          }),
+        ),
+      };
+      const service = createAdminService({
+        adminRepo: repo as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      const result = await service.getDashboardAnalytics();
+
+      expect(result.funnel).toEqual({
+        registeredStudents: 0,
+        bookedStudents: 0,
+        completedStudents: 0,
+        paidStudents: 0,
+      });
+      expect(result.supplyDemand).toEqual([]);
+      expect(result.operationalSla).toEqual({
+        openTickets: 0,
+        breachedTickets: 0,
+        dueSoonTickets: 0,
+        asOf: expect.any(String),
+      });
     });
   });
 

@@ -18,6 +18,15 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { useQuery } from "@tanstack/react-query";
@@ -56,6 +65,10 @@ import {
 
 import { orpc } from "@/utils/orpc";
 import { InfoPreview } from "@/components/info-preview";
+import {
+  funnelShare,
+  hasNoPublishedTutor,
+} from "@/components/dashboard/admin-analytics-utils";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -155,6 +168,12 @@ function shiftDateKey(value: string, days: number) {
 function formatDateRangeLabel(value: string) {
   return dateRangeFormatter.format(new Date(`${value}T00:00:00+07:00`));
 }
+function formatWibDateTime(value: string) {
+  return new Date(value).toLocaleString("en-GB", {
+    timeZone: "Asia/Jakarta",
+  });
+}
+
 const tooltipStyle = {
   backgroundColor: "var(--popover)",
   border: "1px solid var(--popover-border)",
@@ -358,6 +377,13 @@ function AnalyticsContent({
     1,
     ...data.categoryBreakdown.map((row) => row.bookings),
   );
+  const funnel = data.funnel;
+  const funnelPercent = (count: number) => {
+    const share = funnelShare(count, funnel.registeredStudents);
+    return share === null
+      ? "—"
+      : `${percentageFormatter.format(share)}% of registered`;
+  };
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-3">
@@ -893,11 +919,149 @@ function AnalyticsContent({
         </Card>
       </div>
 
+      <AnalyticsSection
+        title="Student conversion funnel"
+        description="Selected period cohort. Every step counts distinct students whose accounts were created in this period; percentages use registered students as the base."
+      >
+        <AnalyticsMetric
+          icon={<IconUsers />}
+          label="Registered"
+          value={numberFormatter.format(funnel.registeredStudents)}
+          helper={funnelPercent(funnel.registeredStudents)}
+          tone="info-subtle"
+        />
+        <AnalyticsMetric
+          icon={<IconChartBar />}
+          label="Booked a session"
+          value={numberFormatter.format(funnel.bookedStudents)}
+          helper={funnelPercent(funnel.bookedStudents)}
+          tone="primary-subtle"
+        />
+        <AnalyticsMetric
+          icon={<IconTargetArrow />}
+          label="Completed a session"
+          value={numberFormatter.format(funnel.completedStudents)}
+          helper={funnelPercent(funnel.completedStudents)}
+          tone="success-subtle"
+        />
+        <AnalyticsMetric
+          icon={<IconCash />}
+          label="Paid top-up"
+          value={numberFormatter.format(funnel.paidStudents)}
+          helper={funnelPercent(funnel.paidStudents)}
+          tone="warning-subtle"
+        />
+      </AnalyticsSection>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <IconBox variant="warning-subtle">
+              <IconUsers />
+            </IconBox>
+            <CardTitle>
+              Supply vs demand
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Supply vs demand"
+                  description="Top booked categories in the selected period, matched to published tutor specializations by category name."
+                />
+              </CardInfoPreview>
+            </CardTitle>
+            <CardHeaderAction>
+              <Badge variant="secondary" pill>
+                Top 8
+              </Badge>
+            </CardHeaderAction>
+          </CardHeader>
+          <CardBody>
+            {data.supplyDemand.length > 0 ? (
+              <TableContainer>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="py-2">Category</TableHead>
+                      <TableHead className="py-2 text-right">
+                        Bookings
+                      </TableHead>
+                      <TableHead className="py-2 text-right">
+                        Published tutors
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.supplyDemand.map((row) => (
+                      <TableRow key={row.category}>
+                        <TableCell className="min-w-0 truncate py-2">
+                          {row.category}
+                        </TableCell>
+                        <TableCell className="py-2 text-right tabular-nums">
+                          {numberFormatter.format(row.bookings)}
+                        </TableCell>
+                        <TableCell className="py-2 text-right tabular-nums">
+                          {hasNoPublishedTutor(
+                            row.bookings,
+                            row.activeTutors,
+                          ) ? (
+                            <Badge variant="warning" pill>
+                              <IconAlertTriangle aria-hidden />
+                              No published tutor
+                            </Badge>
+                          ) : (
+                            numberFormatter.format(row.activeTutors)
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <ChartEmpty
+                message="No booked categories in this period yet."
+                compact
+              />
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      <AnalyticsSection
+        title="Support SLA"
+        description={`Current snapshot as of ${formatWibDateTime(data.operationalSla.asOf)} WIB. Open support tickets are live workload and are not filtered by the selected period.`}
+      >
+        <AnalyticsMetric
+          icon={<IconInfoSquareRounded />}
+          label="Open tickets"
+          value={numberFormatter.format(data.operationalSla.openTickets)}
+          helper="Open or in progress"
+          tone="primary-subtle"
+          scope="Current snapshot"
+        />
+        <AnalyticsMetric
+          icon={<IconCalendarStats />}
+          label="Due within 4 hours"
+          value={numberFormatter.format(data.operationalSla.dueSoonTickets)}
+          helper="Open or in progress with a deadline in the next 4 hours"
+          tone="warning-subtle"
+          scope="Current snapshot"
+        />
+        <AnalyticsMetric
+          icon={<IconAlertTriangle />}
+          label="SLA breached"
+          value={numberFormatter.format(data.operationalSla.breachedTickets)}
+          helper="Open or in progress past the deadline"
+          tone="danger-subtle"
+          scope="Current snapshot"
+        />
+      </AnalyticsSection>
+
       <Text className="mt-3 text-xs text-dimmed">
         Booking demand charts use request creation dates. Service delivery uses
         session dates; top-up receipts use successful payment and refund dates.
         Marks, top-up receipts and tutor costs are separate measures and do not
-        represent profit.
+        represent profit. Support SLA is a current snapshot, not a period
+        metric.
       </Text>
     </>
   );
@@ -915,7 +1079,12 @@ function AnalyticsMetric({
   label: string;
   value: ReactNode;
   helper: ReactNode;
-  tone: "primary-subtle" | "success-subtle" | "info-subtle" | "warning-subtle";
+  tone:
+    | "primary-subtle"
+    | "success-subtle"
+    | "info-subtle"
+    | "warning-subtle"
+    | "danger-subtle";
   scope?: string;
 }) {
   return (

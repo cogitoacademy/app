@@ -1,5 +1,10 @@
 import { getOperationsAnalytics } from "./admin-operations-analytics";
 import {
+  getFunnelAnalytics,
+  getSupportSlaAnalytics,
+  getSupplyDemandAnalytics,
+} from "./admin-health-analytics";
+import {
   asc,
   and,
   count,
@@ -159,7 +164,9 @@ export async function findUserByEmail(
  * Date-based metrics use booking/user creation time in the requested window.
  * The current booking state mix intentionally has no date filter: it describes
  * the live portfolio an admin has to operate, while the trend rows describe
- * demand and audience movement during the selected period.
+ * demand and audience movement during the selected period. The funnel and
+ * supply-demand reads are also period cohorts; the support SLA summary is a
+ * current snapshot because open tickets are live workload.
  */
 export async function getDashboardAnalytics(
   conn: DbOrTx,
@@ -195,6 +202,9 @@ export async function getDashboardAnalytics(
     paymentSummaryRows,
     refundSummaryRows,
     operationsSummary,
+    funnelSummary,
+    supplyDemand,
+    supportSla,
   ] = await Promise.all([
     conn
       .select({
@@ -325,6 +335,9 @@ export async function getDashboardAnalytics(
       })
       .from(refundRecord),
     getOperationsAnalytics(conn, query),
+    getFunnelAnalytics(conn, query),
+    getSupplyDemandAnalytics(conn, query),
+    getSupportSlaAnalytics(conn, query),
   ]);
 
   return {
@@ -360,6 +373,9 @@ export async function getDashboardAnalytics(
       grossReceiptsIdr: 0,
     },
     refundSummary: refundSummaryRows[0] ?? { refundedIdr: 0 },
+    funnel: funnelSummary,
+    supplyDemand,
+    supportSla,
   };
 }
 

@@ -1280,6 +1280,33 @@ parallel and return aggregates only, never user identities.
 preserving native Intl short labels for other IANA zones. The shared
 `EmptyState` visual remains unchanged after reverting the dashed-border trial.
 
+### Admin funnel, supply-demand, and support SLA (2026-11-03)
+
+The admin analytics repo composes three additional bounded aggregates from
+`admin-health-analytics.ts` inside the same `Promise.all`:
+
+- Funnel restricts every step to the cohort of student accounts created in the
+  selected WIB window: the cohort size (`registeredStudents`), cohort members
+  with a booking created in the window (`bookedStudents`), those members whose
+  booking is `completed` (`completedStudents`), and cohort members with a
+  successful provider date and `PAID`/`SETTLED`/`REFUNDED` status
+  (`paidStudents`). Counts are raw; the dashboard computes percentages against
+  the cohort and shows a placeholder for a zero base. Later steps are subsets,
+  so percentages stay at or below 100%.
+- Supply-demand groups period bookings by the saved topic parent category name
+  (`Other` fallback), keeps the top 8, and counts approved/published tutor
+  profiles joined through `tutor_profile_subject` to the child subject's parent
+  category with a case-insensitive name match. A missing match reports zero
+  tutors; no mapping is invented.
+- Support SLA counts open/in-progress `support_ticket` rows, then classifies
+  them against `now` as breached (`slaDeadline` in the past) or due soon
+  (deadline in the next 4 hours). It is a current snapshot, not a period
+  metric, and does not replace booking escalation.
+
+All three return zeros for empty periods or empty ticket sets. The ticket read
+uses the existing `support_ticket_status_sla_idx`; no migration or new index was
+needed.
+
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
 The admin Knowledge Bank access workspace grants a named student a temporary
@@ -1806,13 +1833,14 @@ automatically each calendar week.
 - `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `adminSearchUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, payout report/preview/prepare/record/void/reconciliation inputs, versioned tax default and override inputs
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, payout stale/profile/tax/amount/reconciliation errors
 - `admin.repo.ts` — `getById`, `listUsers`, `searchUsers`, `getDashboardAnalytics`, `updateRoleWithExpected`
+- `admin-health-analytics.ts` — `getFunnelAnalytics`, `getSupplyDemandAnalytics`, `getSupportSlaAnalytics` raw aggregates composed by `getDashboardAnalytics`
 - `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, payout report/preview/prepare/record/void/reconciliation/config/override methods, economy methods
 - `admin.handler.ts` — corresponding admin-only payout procedures and the existing admin services
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
 
-- `getDashboardAnalytics(input?)` — Returns normalized preset/custom-range booking and signup trends, current/rolling account activity, student Marks ownership, lifetime paid conversion, selected-range payment/refund revenue, live booking-state portfolio, period modality/category breakdowns, and selected-period booking-record counts by saved pricing engine (`v3`, `legacy`, `other`, `missing`); trend dates are filled with zero rows using WIB boundaries
+- `getDashboardAnalytics(input?)` — Returns normalized preset/custom-range booking and signup trends, current/rolling account activity, student Marks ownership, lifetime paid conversion, selected-range payment/refund revenue, live booking-state portfolio, period modality/category breakdowns, selected-period booking-record counts by saved pricing engine (`v3`, `legacy`, `other`, `missing`), the selected-period student funnel, top-8 booked categories with published tutor counts, and the current support-ticket SLA snapshot; trend dates are filled with zero rows using WIB boundaries
 - `listUsers(opts)` — Paginated user list
 - `searchUsers({ query, limit? })` — Returns a bounded identity projection for admin lookup, matching name, email, or user ID
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log

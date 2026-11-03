@@ -67,7 +67,11 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
     { priorityCount: priorityItems.length + tutorCount + achievementCount },
   );
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="flex w-full min-w-0 max-w-full flex-nowrap flex-col"
+    >
       <DashboardInsights
         title={greeting.title}
         description={greeting.description}
