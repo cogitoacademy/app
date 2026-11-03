@@ -204,7 +204,7 @@ export function AdminPaymentsPage() {
     <Stack
       direction="column"
       spacing="lg"
-      className="w-full min-w-0 max-w-full"
+      className="flex w-full min-w-0 max-w-full flex-nowrap flex-col"
     >
       <div>
         <Heading level={1} size="md">
@@ -349,23 +349,20 @@ export function AdminPaymentsPage() {
       ) : (
         <div id="admin-payments" className="min-w-0">
           <TableContainer className="min-w-0 max-w-none">
-            <Table className="min-w-[72rem] text-sm">
+            <Table className="min-w-[60rem] text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-40 whitespace-nowrap">
+                  <TableHead className="w-36 whitespace-nowrap">
                     Created (WIB)
                   </TableHead>
-                  <TableHead className="w-56">User</TableHead>
-                  <TableHead className="w-44">Purchase</TableHead>
+                  <TableHead className="min-w-60">User</TableHead>
+                  <TableHead className="w-40">Purchase</TableHead>
                   <TableHead className="w-32 whitespace-nowrap">
                     Amount
                   </TableHead>
-                  <TableHead className="w-24 whitespace-nowrap">
-                    Marks
-                  </TableHead>
-                  <TableHead className="w-44">Status</TableHead>
-                  <TableHead className="w-52">Provider reference</TableHead>
-                  <TableHead className="w-28">Action</TableHead>
+                  <TableHead className="w-40">Status</TableHead>
+                  <TableHead className="w-40">Provider reference</TableHead>
+                  <TableHead className="w-24">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -383,9 +380,9 @@ export function AdminPaymentsPage() {
                     <TableCell>{row.purchaseLabel ?? "Not labeled"}</TableCell>
                     <TableCell className="whitespace-nowrap font-medium">
                       {formatIdr(row.amountIdr)}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatMarks(row.marks)}
+                      <Text className="text-muted">
+                        {formatMarks(row.marks)} Marks
+                      </Text>
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(row.status)}>
