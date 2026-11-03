@@ -158,9 +158,9 @@ export function AdminAdminsPage() {
             </Button>
           </CardHeaderAction>
         </CardHeader>
-        <CardBody className="p-0!">
+        <CardBody className="p-6">
           {adminsQuery.isPending ? (
-            <div className="p-6">
+            <div className="p-2">
               <Loader />
             </div>
           ) : adminsQuery.isError ? (
@@ -187,12 +187,14 @@ export function AdminAdminsPage() {
               className="p-10"
             />
           ) : (
-            <TableContainer>
+            <TableContainer className="mx-0! w-full!">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Administrator</TableHead>
-                    <TableHead>Access</TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      Access
+                    </TableHead>
                     <TableHead className="hidden sm:table-cell">
                       Added
                     </TableHead>
@@ -208,6 +210,17 @@ export function AdminAdminsPage() {
                         <Stack direction="column" spacing="sm">
                           <Text className="font-medium">{admin.name}</Text>
                           <Text className="text-muted">{admin.email}</Text>
+                          <span className="sm:hidden">
+                            {admin.isSuperAdmin ? (
+                              <Badge variant="primary" size="sm">
+                                <IconShieldCheck /> Super admin
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" size="sm">
+                                Admin
+                              </Badge>
+                            )}
+                          </span>
                           <Button
                             variant="plain"
                             size="sm"
@@ -219,7 +232,7 @@ export function AdminAdminsPage() {
                           </Button>
                         </Stack>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         {admin.isSuperAdmin ? (
                           <Badge variant="primary" size="sm">
                             <IconShieldCheck /> Super admin
@@ -265,7 +278,7 @@ export function AdminAdminsPage() {
         }}
       >
         <DialogPopup>
-          <DialogHeader>
+          <DialogHeader className="flex-col items-start gap-1.5">
             <DialogTitle>Add admin</DialogTitle>
             <DialogDescription>
               The person must already have a Cogito account. Ask them to sign up
@@ -307,7 +320,7 @@ export function AdminAdminsPage() {
         }}
       >
         <DialogPopup>
-          <DialogHeader>
+          <DialogHeader className="flex-col items-start gap-1.5">
             <DialogTitle>Remove admin access?</DialogTitle>
             <DialogDescription>
               {removeTarget

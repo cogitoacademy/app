@@ -369,7 +369,7 @@ export function SupportTicketsPanel() {
         }}
       >
         <DialogPopup>
-          <DialogHeader>
+          <DialogHeader className="flex-col items-start gap-1.5">
             <DialogTitle>
               {selected?.status === "resolved" || selected?.status === "closed"
                 ? "Support ticket"
