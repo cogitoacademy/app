@@ -37,6 +37,7 @@ import {
   IconClipboardText,
   IconCertificate,
   IconCoins,
+  IconCreditCard,
   IconAdjustments,
   IconHome,
   IconUsers,
@@ -151,6 +152,7 @@ const adminNavGroups = [
   {
     label: "Finance",
     items: [
+      { to: "/admin-payments", label: "Payments", icon: IconCreditCard },
       { to: "/admin-tutor-payouts", label: "Tutor Payouts", icon: IconWallet },
       { to: "/admin-referrals", label: "Referrals", icon: IconUsers },
       {

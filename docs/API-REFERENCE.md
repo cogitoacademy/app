@@ -1446,6 +1446,15 @@ used to retrieve production OTPs.
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — walletId and userId are mutually exclusive; exactly one required
 - **Description:** Paginated ledger for any wallet, filterable by type, date range, or booking
 
+### `admin.listPayments`
+
+- **RPC path:** `/rpc/admin/payment/list`
+- **Auth:** Admin
+- **Input:** `{ limit?, cursor?, status?, userId?, query?, dateFrom?, dateTo? }` (`limit` 1–100, default 50; `status` one of `PENDING`/`PAID`/`SETTLED`/`FAILED`/`EXPIRED`/`REFUNDED`; `query` is trimmed, 2–100 characters, and matches user name, user email, or provider reference case-insensitively with `%`, `_`, and `\` treated literally; `dateFrom`/`dateTo` are ISO datetimes filtered against payment creation time)
+- **Output:** `{ items: PaymentListItem[], nextCursor, total }`; each item is `{ id, userId, userName, userEmail, amountIdr, marks, status, provider, providerReference, purchaseLabel, createdAt, providerSuccessAt, providerRefundKind, providerRefundAmountIdr }`
+- **Errors:** `INVALID_PAYMENT_FILTER` (400) — invalid ISO datetime or `dateFrom` after `dateTo`; `INVALID_PAYMENT_CURSOR` (400) — malformed cursor
+- **Description:** Newest-first payment list ordered by `createdAt` and `id` descending. The composite cursor is `<createdAt ISO>~<id>`; `nextCursor` is returned only when another page exists. `total` counts every row matching the filters and ignores the cursor. Reads `payment_record` joined with `user` and makes no provider call. The admin Payments page uses the existing `adminBooking.adminRefund` procedure for its refund action.
+
 ### `admin.getTutorPayouts`
 
 - **Auth:** Admin

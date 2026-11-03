@@ -31,6 +31,7 @@ import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy
 import { Route as AppAdminKnowledgeBankRouteImport } from './routes/_app.admin-knowledge-bank'
 import { Route as AppAdminKolCommissionsRouteImport } from './routes/_app.admin-kol-commissions'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
+import { Route as AppAdminPaymentsRouteImport } from './routes/_app.admin-payments'
 import { Route as AppAdminReferralsRouteImport } from './routes/_app.admin-referrals'
 import { Route as AppAdminTutorPayoutsRouteImport } from './routes/_app.admin-tutor-payouts'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
@@ -165,6 +166,11 @@ const AppAdminKolCommissionsRoute = AppAdminKolCommissionsRouteImport.update({
 const AppAdminOperationsRoute = AppAdminOperationsRouteImport.update({
   id: '/admin-operations',
   path: '/admin-operations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminPaymentsRoute = AppAdminPaymentsRouteImport.update({
+  id: '/admin-payments',
+  path: '/admin-payments',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminReferralsRoute = AppAdminReferralsRouteImport.update({
@@ -321,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
+  '/admin-payments': typeof AppAdminPaymentsRoute
   '/admin-referrals': typeof AppAdminReferralsRoute
   '/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
@@ -370,6 +377,7 @@ export interface FileRoutesByTo {
   '/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
+  '/admin-payments': typeof AppAdminPaymentsRoute
   '/admin-referrals': typeof AppAdminReferralsRoute
   '/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
@@ -421,6 +429,7 @@ export interface FileRoutesById {
   '/_app/admin-knowledge-bank': typeof AppAdminKnowledgeBankRoute
   '/_app/admin-kol-commissions': typeof AppAdminKolCommissionsRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
+  '/_app/admin-payments': typeof AppAdminPaymentsRoute
   '/_app/admin-referrals': typeof AppAdminReferralsRoute
   '/_app/admin-tutor-payouts': typeof AppAdminTutorPayoutsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
@@ -472,6 +481,7 @@ export interface FileRouteTypes {
     | '/admin-knowledge-bank'
     | '/admin-kol-commissions'
     | '/admin-operations'
+    | '/admin-payments'
     | '/admin-referrals'
     | '/admin-tutor-payouts'
     | '/admin-tutors'
@@ -521,6 +531,7 @@ export interface FileRouteTypes {
     | '/admin-knowledge-bank'
     | '/admin-kol-commissions'
     | '/admin-operations'
+    | '/admin-payments'
     | '/admin-referrals'
     | '/admin-tutor-payouts'
     | '/admin-tutors'
@@ -571,6 +582,7 @@ export interface FileRouteTypes {
     | '/_app/admin-knowledge-bank'
     | '/_app/admin-kol-commissions'
     | '/_app/admin-operations'
+    | '/_app/admin-payments'
     | '/_app/admin-referrals'
     | '/_app/admin-tutor-payouts'
     | '/_app/admin-tutors'
@@ -765,6 +777,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-operations'
       fullPath: '/admin-operations'
       preLoaderRoute: typeof AppAdminOperationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-payments': {
+      id: '/_app/admin-payments'
+      path: '/admin-payments'
+      fullPath: '/admin-payments'
+      preLoaderRoute: typeof AppAdminPaymentsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-referrals': {
@@ -967,6 +986,7 @@ interface AppRouteChildren {
   AppAdminKnowledgeBankRoute: typeof AppAdminKnowledgeBankRoute
   AppAdminKolCommissionsRoute: typeof AppAdminKolCommissionsRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
+  AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
   AppAdminReferralsRoute: typeof AppAdminReferralsRoute
   AppAdminTutorPayoutsRoute: typeof AppAdminTutorPayoutsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
@@ -1009,6 +1029,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminKnowledgeBankRoute: AppAdminKnowledgeBankRoute,
   AppAdminKolCommissionsRoute: AppAdminKolCommissionsRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,
+  AppAdminPaymentsRoute: AppAdminPaymentsRoute,
   AppAdminReferralsRoute: AppAdminReferralsRoute,
   AppAdminTutorPayoutsRoute: AppAdminTutorPayoutsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,

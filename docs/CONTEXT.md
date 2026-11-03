@@ -1,5 +1,21 @@
 # Cogito App — Codebase Context
 
+## Admin payment list and refund entry point (3 November 2026)
+
+Admins now have a Payments page at `/admin-payments` under Finance. It lists
+`payment_record` rows newest first with user identity, purchase label, amount,
+Marks, status, provider reference, and provider refund facts. Filters cover
+status, a 2–100 character search over user name, email, or provider reference,
+and a WIB date range. The list is cursor-paginated and returns a server-side
+`total` for the current filters.
+
+`admin.listPayments` is served from the new `admin-payment` module and mounted in
+the existing `admin` router, so the web client calls `orpc.admin.listPayments`.
+It is read-only and makes no provider call. The refund action is available only
+for `PAID` and `SETTLED` rows and calls the existing `adminBooking.adminRefund`
+procedure after a required reason, reusing its audit and wallet correction path.
+No schema, migration, payment provider, or refund service change is involved.
+
 ## Admin audit log viewer (3 November 2026)
 
 Admins can read the existing `audit_log` history at `/admin-audit`. A new
