@@ -6,6 +6,8 @@ import {
   getById,
   countAdmins,
   lockAdminRows,
+  listAdmins,
+  findUserByEmail,
   getDashboardAnalytics,
   searchUsers,
   updateRoleWithExpected,
@@ -225,6 +227,43 @@ describe("countAdmins", () => {
   });
 });
 
+describe("listAdmins", () => {
+  test("returns admin rows ordered by creation time", async () => {
+    const rows = [{ id: "a1", role: "admin" }];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const result = await listAdmins(conn);
+
+    expect(result).toEqual(rows);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("findUserByEmail", () => {
+  test("returns the matching account", async () => {
+    const row = { id: "u1", email: "person@example.com" };
+    const { select, chain } = makeSelectConn([row]);
+    const conn: any = { select };
+
+    const result = await findUserByEmail(conn, "person@example.com");
+
+    expect(result).toEqual(row);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+
+  test("returns null when no account matches", async () => {
+    const { select } = makeSelectConn([]);
+    const conn: any = { select };
+
+    const result = await findUserByEmail(conn, "missing@example.com");
+
+    expect(result).toBeNull();
+  });
+});
+
 describe("createAdminRepo", () => {
   test("returns object with all repo methods", () => {
     const repo = createAdminRepo();
@@ -234,6 +273,8 @@ describe("createAdminRepo", () => {
     expect(repo).toHaveProperty("countUsers");
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("countAdmins");
+    expect(repo).toHaveProperty("listAdmins");
+    expect(repo).toHaveProperty("findUserByEmail");
     expect(repo).toHaveProperty("getDashboardAnalytics");
     expect(repo).toHaveProperty("updateRoleWithExpected");
   });

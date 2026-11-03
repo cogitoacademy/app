@@ -144,6 +144,21 @@ describe("SupportRepo", () => {
     ).resolves.toEqual([{ id: "t1" }]);
   });
 
+  test("counts admin tickets for the inbox", async () => {
+    const where = mock(async () => [{ count: 4 }]);
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const repo = createSupportRepo();
+
+    await expect(
+      repo.adminCount({ select } as any, { status: "open" }),
+    ).resolves.toBe(4);
+    expect(where).toHaveBeenCalledTimes(1);
+
+    await expect(repo.adminCount({ select } as any, {})).resolves.toBe(4);
+    expect(where).toHaveBeenCalledTimes(2);
+  });
+
   test("filters admin tickets by status", async () => {
     const rows = [{ id: "t1" }];
     const offset = mock(async () => rows);

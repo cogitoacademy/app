@@ -263,10 +263,13 @@ describe("Support ticket flow", () => {
   });
 
   test("admin lists all tickets sorted by SLA urgency", async () => {
-    const tickets = await adminClient.support.adminListTickets({});
+    const response = await adminClient.support.adminListTickets({});
 
-    expect(tickets.length).toBeGreaterThanOrEqual(3);
-    const deadlines = tickets.map((t) => new Date(t.slaDeadline).getTime());
+    expect(response.total).toBeGreaterThanOrEqual(3);
+    expect(response.items.length).toBeGreaterThanOrEqual(3);
+    const deadlines = response.items.map((t) =>
+      new Date(t.slaDeadline).getTime(),
+    );
     for (let i = 1; i < deadlines.length; i++) {
       expect(deadlines[i]!).toBeGreaterThanOrEqual(deadlines[i - 1]!);
     }
