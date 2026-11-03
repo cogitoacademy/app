@@ -191,6 +191,23 @@ describe("AdminPaymentService.list", () => {
     expect(cursor.createdAt.toISOString()).toBe("2026-11-01T00:00:00.000Z");
   });
 
+  test("defaults the limit when called without input", async () => {
+    const { repo, service } = makeService([]);
+
+    await service.list();
+
+    expect(repo.listRows.mock.calls[0]![2]).toBe(50);
+    expect(repo.listRows.mock.calls[0]![3]).toBeUndefined();
+  });
+
+  test("maps a null provider success date", async () => {
+    const { service } = makeService([makeRow({ providerSuccessAt: null })]);
+
+    const result = await service.list({ limit: 1 });
+
+    expect(result.items[0]!.providerSuccessAt).toBeNull();
+  });
+
   test("rejects a reversed date range without querying", async () => {
     const { repo, service } = makeService([]);
 
@@ -223,6 +240,18 @@ describe("AdminPaymentHandler.listPayments", () => {
       handler.listPayments({ context: {} as any, input }),
     ).resolves.toEqual({ items: [], nextCursor: null, total: 0 });
     expect(list).toHaveBeenCalledWith(input);
+  });
+
+  test("falls back to the default limit when input is absent", async () => {
+    const list = mock(async () => ({ items: [], nextCursor: null, total: 0 }));
+    const handler = createAdminPaymentHandler({ list } as any);
+
+    await handler.listPayments({
+      context: {} as any,
+      input: undefined as never,
+    });
+
+    expect(list).toHaveBeenCalledWith({ limit: 50 });
   });
 
   test("maps domain errors to a bad request response", async () => {

@@ -23,7 +23,7 @@ export function parsePaymentCursor(cursor: string): AdminPaymentCursor {
   if (parts.length !== 2) throw new InvalidPaymentCursorError();
 
   const [createdAtRaw, id] = parts;
-  const createdAt = new Date(createdAtRaw ?? "");
+  const createdAt = new Date(createdAtRaw!);
   if (!id || Number.isNaN(createdAt.getTime())) {
     throw new InvalidPaymentCursorError();
   }
