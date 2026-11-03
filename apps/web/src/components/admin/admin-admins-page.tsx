@@ -7,14 +7,6 @@ import { IconPlus, IconShieldCheck, IconUserShield } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
-  Card,
-  CardBody,
-  CardDescription,
-  CardHeader,
-  CardHeaderAction,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
-import {
   Dialog,
   DialogBody,
   DialogDescription,
@@ -129,143 +121,129 @@ export function AdminAdminsPage() {
 
   return (
     <Stack direction="column" spacing="lg">
-      <div>
-        <Heading level={1} size="md">
-          Manage administrators
-        </Heading>
-        <Text className="max-w-full text-muted">
-          Promote an existing account by email and review who can open the admin
-          workspace. Super-admin accounts are protected.
-        </Text>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Heading level={1} size="md">
+            Manage administrators
+          </Heading>
+          <Text className="max-w-full text-muted">
+            Promote an existing account by email and review who can open the
+            admin workspace. Super-admin accounts are protected.
+          </Text>
+        </div>
+        <Button
+          size="sm"
+          className="shrink-0"
+          onClick={() => {
+            setAddOpen(true);
+            setFormError(null);
+          }}
+        >
+          <IconPlus /> Add admin
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Administrator access</CardTitle>
-          <CardDescription>
-            Only super admins can add or remove administrators. Every change is
-            audited.
-          </CardDescription>
-          <CardHeaderAction>
+      {adminsQuery.isPending ? (
+        <Loader />
+      ) : adminsQuery.isError ? (
+        <EmptyState
+          icon={<IconUserShield />}
+          tone="danger"
+          title="Administrators could not be loaded"
+          description={getUserFacingError(adminsQuery.error)}
+          action={
             <Button
-              size="sm"
-              onClick={() => {
-                setAddOpen(true);
-                setFormError(null);
-              }}
+              variant="outline"
+              onClick={() => void adminsQuery.refetch()}
             >
-              <IconPlus /> Add admin
+              Try again
             </Button>
-          </CardHeaderAction>
-        </CardHeader>
-        <CardBody className="p-6">
-          {adminsQuery.isPending ? (
-            <div className="p-2">
-              <Loader />
-            </div>
-          ) : adminsQuery.isError ? (
-            <EmptyState
-              icon={<IconUserShield />}
-              tone="danger"
-              title="Administrators could not be loaded"
-              description={getUserFacingError(adminsQuery.error)}
-              action={
-                <Button
-                  variant="outline"
-                  onClick={() => void adminsQuery.refetch()}
-                >
-                  Try again
-                </Button>
-              }
-              className="p-10"
-            />
-          ) : admins.length === 0 ? (
-            <EmptyState
-              icon={<IconUserShield />}
-              title="No administrators yet"
-              description="Add an existing account by email to grant admin access."
-              className="p-10"
-            />
-          ) : (
-            <TableContainer className="mx-0! w-full!">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Administrator</TableHead>
-                    <TableHead className="hidden sm:table-cell">
-                      Access
-                    </TableHead>
-                    <TableHead className="hidden sm:table-cell">
-                      Added
-                    </TableHead>
-                    <TableHead className="hidden text-right sm:table-cell">
-                      Action
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {admins.map((admin) => (
-                    <TableRow key={admin.id}>
-                      <TableCell>
-                        <Stack direction="column" spacing="sm">
-                          <Text className="font-medium">{admin.name}</Text>
-                          <Text className="text-muted">{admin.email}</Text>
-                          <span className="sm:hidden">
-                            {admin.isSuperAdmin ? (
-                              <Badge variant="primary" size="sm">
-                                <IconShieldCheck /> Super admin
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" size="sm">
-                                Admin
-                              </Badge>
-                            )}
-                          </span>
-                          <Button
-                            variant="plain"
-                            size="sm"
-                            className="w-fit sm:hidden"
-                            disabled={admin.isSuperAdmin}
-                            onClick={() => setRemoveTarget(admin)}
-                          >
-                            {admin.isSuperAdmin ? "Protected" : "Remove"}
-                          </Button>
-                        </Stack>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {admin.isSuperAdmin ? (
-                          <Badge variant="primary" size="sm">
-                            <IconShieldCheck /> Super admin
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" size="sm">
-                            Admin
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Text className="text-muted">
-                          {formatJoined(admin.createdAt)}
-                        </Text>
-                      </TableCell>
-                      <TableCell className="hidden text-right sm:table-cell">
+          }
+          className="rounded-xl border border-border p-10"
+        />
+      ) : admins.length === 0 ? (
+        <EmptyState
+          icon={<IconUserShield />}
+          title="No administrators yet"
+          description="Add an existing account by email to grant admin access."
+          className="rounded-xl border border-border p-10"
+        />
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Administrator</TableHead>
+                  <TableHead className="hidden sm:table-cell">Access</TableHead>
+                  <TableHead className="hidden sm:table-cell">Added</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Action
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {admins.map((admin) => (
+                  <TableRow key={admin.id}>
+                    <TableCell>
+                      <Stack direction="column" spacing="sm">
+                        <Text className="font-medium">{admin.name}</Text>
+                        <Text className="text-muted">{admin.email}</Text>
+                        <span className="sm:hidden">
+                          {admin.isSuperAdmin ? (
+                            <Badge variant="primary" size="sm">
+                              <IconShieldCheck /> Super admin
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" size="sm">
+                              Admin
+                            </Badge>
+                          )}
+                        </span>
                         <Button
                           variant="plain"
                           size="sm"
+                          className="w-fit sm:hidden"
                           disabled={admin.isSuperAdmin}
                           onClick={() => setRemoveTarget(admin)}
                         >
                           {admin.isSuperAdmin ? "Protected" : "Remove"}
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardBody>
-      </Card>
+                      </Stack>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {admin.isSuperAdmin ? (
+                        <Badge variant="primary" size="sm">
+                          <IconShieldCheck /> Super admin
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" size="sm">
+                          Admin
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <Text className="text-muted">
+                        {formatJoined(admin.createdAt)}
+                      </Text>
+                    </TableCell>
+                    <TableCell className="hidden text-right sm:table-cell">
+                      <Button
+                        variant="plain"
+                        size="sm"
+                        disabled={admin.isSuperAdmin}
+                        onClick={() => setRemoveTarget(admin)}
+                      >
+                        {admin.isSuperAdmin ? "Protected" : "Remove"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </div>
+      )}
 
       <Dialog
         open={addOpen}
