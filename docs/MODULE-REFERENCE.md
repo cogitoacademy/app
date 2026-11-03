@@ -22,9 +22,6 @@ super admins; `superAdminProcedure` enforces the same rule on the three
 `packages/env/src/admin.ts`; auth signup promotes them and `setRole` protects
 them. Provisioning remains env/invite based: the target account must already
 exist, and no suspension or session revocation is part of this slice.
-=======
-Web `/admin-audit` renders `AdminAuditPage` behind the admin `beforeLoad` guard. Submit-based filters cover action, target type, target ID, actor ID and a WIB date range; Reset clears them. Filters stack in a single column below the `sm` breakpoint, and the table scrolls horizontally inside its container instead of widening the page. The table shows WIB creation time, actor identity or System, action, target and a details key summary, and cursor pagination reuses `TablePagination`. Selecting a row or View opens a read-only drawer with before/after/details JSON. The sidebar entry sits in the admin Overview group after Operations.
->>>>>>> e90721a3 (fix(admin): keep audit log usable on narrow screens)
 
 ## Single-language Academy storage (1 November 2026)
 

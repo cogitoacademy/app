@@ -203,120 +203,113 @@ export function AdminAuditPage() {
         </Text>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardBody>
-          <form
-            className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
-            onSubmit={handleSubmit}
+      <form
+        className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-end"
+        onSubmit={handleSubmit}
+      >
+        <Field className="w-full sm:w-auto sm:min-w-44">
+          <FieldLabel htmlFor="audit-action">Action</FieldLabel>
+          <Input
+            id="audit-action"
+            type="search"
+            value={draft.action}
+            maxLength={100}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                action: event.target.value,
+              }))
+            }
+            placeholder="economy_config_updated"
+          />
+        </Field>
+        <Field className="w-full sm:w-auto sm:min-w-40">
+          <FieldLabel htmlFor="audit-target-type">Target type</FieldLabel>
+          <Input
+            id="audit-target-type"
+            type="search"
+            value={draft.targetType}
+            maxLength={100}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                targetType: event.target.value,
+              }))
+            }
+            placeholder="economy_config"
+          />
+        </Field>
+        <Field className="w-full sm:w-auto sm:min-w-36">
+          <FieldLabel htmlFor="audit-target-id">Target ID</FieldLabel>
+          <Input
+            id="audit-target-id"
+            type="search"
+            value={draft.targetId}
+            maxLength={100}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                targetId: event.target.value,
+              }))
+            }
+          />
+        </Field>
+        <Field className="w-full sm:w-auto sm:min-w-36">
+          <FieldLabel htmlFor="audit-actor-id">Actor ID</FieldLabel>
+          <Input
+            id="audit-actor-id"
+            type="search"
+            value={draft.actorId}
+            maxLength={100}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                actorId: event.target.value,
+              }))
+            }
+          />
+        </Field>
+        <Field className="w-full sm:w-auto sm:min-w-40">
+          <FieldLabel htmlFor="audit-date-from">Date from</FieldLabel>
+          <DatePicker
+            id="audit-date-from"
+            value={draft.dateFrom}
+            maxDate={draft.dateTo || undefined}
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, dateFrom: value }))
+            }
+          />
+        </Field>
+        <Field className="w-full sm:w-auto sm:min-w-40">
+          <FieldLabel htmlFor="audit-date-to">Date to</FieldLabel>
+          <DatePicker
+            id="audit-date-to"
+            value={draft.dateTo}
+            minDate={draft.dateFrom || undefined}
+            onChange={(value) =>
+              setDraft((current) => ({ ...current, dateTo: value }))
+            }
+          />
+        </Field>
+        <div className="flex items-center gap-2">
+          <Button type="submit" size="sm">
+            Apply filters
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={handleReset}
           >
-            <Field className="w-full sm:w-auto sm:min-w-52">
-              <FieldLabel htmlFor="audit-action">Action</FieldLabel>
-              <Input
-                id="audit-action"
-                type="search"
-                value={draft.action}
-                maxLength={100}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    action: event.target.value,
-                  }))
-                }
-                placeholder="economy_config_updated"
-              />
-            </Field>
-            <Field className="w-full sm:w-auto sm:min-w-48">
-              <FieldLabel htmlFor="audit-target-type">Target type</FieldLabel>
-              <Input
-                id="audit-target-type"
-                type="search"
-                value={draft.targetType}
-                maxLength={100}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    targetType: event.target.value,
-                  }))
-                }
-                placeholder="economy_config"
-              />
-            </Field>
-            <Field className="w-full sm:w-auto sm:min-w-44">
-              <FieldLabel htmlFor="audit-target-id">Target ID</FieldLabel>
-              <Input
-                id="audit-target-id"
-                type="search"
-                value={draft.targetId}
-                maxLength={100}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    targetId: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-            <Field className="w-full sm:w-auto sm:min-w-44">
-              <FieldLabel htmlFor="audit-actor-id">Actor ID</FieldLabel>
-              <Input
-                id="audit-actor-id"
-                type="search"
-                value={draft.actorId}
-                maxLength={100}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    actorId: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-            <Field className="w-full sm:w-auto sm:min-w-40">
-              <FieldLabel htmlFor="audit-date-from">Date from</FieldLabel>
-              <DatePicker
-                id="audit-date-from"
-                value={draft.dateFrom}
-                maxDate={draft.dateTo || undefined}
-                onChange={(value) =>
-                  setDraft((current) => ({ ...current, dateFrom: value }))
-                }
-              />
-            </Field>
-            <Field className="w-full sm:w-auto sm:min-w-40">
-              <FieldLabel htmlFor="audit-date-to">Date to</FieldLabel>
-              <DatePicker
-                id="audit-date-to"
-                value={draft.dateTo}
-                minDate={draft.dateFrom || undefined}
-                onChange={(value) =>
-                  setDraft((current) => ({ ...current, dateTo: value }))
-                }
-              />
-            </Field>
-            <div className="flex items-center gap-2">
-              <Button type="submit" size="sm">
-                Apply filters
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={handleReset}
-              >
-                Reset
-              </Button>
-            </div>
-          </form>
-          {filterError ? (
-            <Field className="mt-3">
-              <FieldError>{filterError}</FieldError>
-            </Field>
-          ) : null}
-        </CardBody>
-      </Card>
+            Reset
+          </Button>
+        </div>
+      </form>
+      {filterError ? (
+        <Field>
+          <FieldError>{filterError}</FieldError>
+        </Field>
+      ) : null}
 
       <Card id="admin-audit-log" className="min-w-0 scroll-mt-4">
         <CardHeader>
