@@ -1203,6 +1203,120 @@ describe("Admin Service", () => {
         }),
       ).rejects.toThrow(AdminRoleChangeForbiddenError);
     });
+
+    test("allows a super admin to promote through setRole", async () => {
+      let reads = 0;
+      const { service } = makeRosterService({
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "u1", email: "student@example.com", role: "student" }
+            : { id: "a1", email: "cogitoacademy.id@gmail.com", role: "admin" };
+        }),
+        updateRoleWithExpected: mock(async () => [{ id: "u1", role: "admin" }]),
+      });
+
+      const result = await service.setRole("a1", {
+        userId: "u1",
+        role: "admin",
+        expectedRole: "student",
+      });
+
+      expect(result.role).toBe("admin");
+    });
+
+    test("treats missing actor or target emails as non-super", async () => {
+      let reads = 0;
+      const setRoleNoActorEmail = makeRosterService({
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "u1", email: "target@example.com", role: "admin" }
+            : { id: "a1", role: "admin" };
+        }),
+      });
+      await expect(
+        setRoleNoActorEmail.service.setRole("a1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        }),
+      ).rejects.toThrow(AdminRoleChangeForbiddenError);
+
+      reads = 0;
+      const grantNoActorEmail = makeRosterService({
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "a1", role: "admin" }
+            : { id: "u1", email: null, role: "student" };
+        }),
+        findUserByEmail: mock(async () => ({
+          id: "u1",
+          email: null,
+          role: "student",
+        })),
+        updateRoleWithExpected: mock(async () => [
+          { id: "u1", email: null, role: "admin" },
+        ]),
+      });
+      await expect(
+        grantNoActorEmail.service.grantAdmin("a1", {
+          email: "new@example.com",
+        }),
+      ).rejects.toThrow(AdminRoleChangeForbiddenError);
+
+      reads = 0;
+      const grantNoTargetEmail = makeRosterService({
+        getById: mock(async () => ({
+          id: "a1",
+          email: "cogitoacademy.id@gmail.com",
+          role: "admin",
+        })),
+        findUserByEmail: mock(async () => ({
+          id: "u1",
+          email: null,
+          role: "student",
+        })),
+        updateRoleWithExpected: mock(async () => [
+          { id: "u1", email: null, role: "admin" },
+        ]),
+      });
+      await expect(
+        grantNoTargetEmail.service.grantAdmin("a1", {
+          email: "new@example.com",
+        }),
+      ).resolves.toEqual({ id: "u1", email: null, role: "admin" });
+
+      reads = 0;
+      const revokeNoActorEmail = makeRosterService({
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "a1", role: "admin" }
+            : { id: "u1", email: "ops@example.com", role: "admin" };
+        }),
+      });
+      await expect(
+        revokeNoActorEmail.service.revokeAdmin("a1", { userId: "u1" }),
+      ).rejects.toThrow(AdminRoleChangeForbiddenError);
+
+      reads = 0;
+      const revokeNoTargetEmail = makeRosterService({
+        getById: mock(async () => {
+          reads += 1;
+          return reads === 1
+            ? { id: "a1", email: "cogitoacademy.id@gmail.com", role: "admin" }
+            : { id: "u1", email: null, role: "admin" };
+        }),
+        updateRoleWithExpected: mock(async () => [
+          { id: "u1", email: null, role: "student" },
+        ]),
+      });
+      await expect(
+        revokeNoTargetEmail.service.revokeAdmin("a1", { userId: "u1" }),
+      ).resolves.toEqual({ id: "u1", email: null, role: "student" });
+    });
   });
 });
 

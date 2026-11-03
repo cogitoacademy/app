@@ -157,6 +157,20 @@ describe("SupportRepo", () => {
 
     await expect(repo.adminCount({ select } as any, {})).resolves.toBe(4);
     expect(where).toHaveBeenCalledTimes(2);
+
+    const emptyWhere = mock(async () => []);
+    const emptyFrom = mock(() => ({ where: emptyWhere }));
+    const emptySelect = mock(() => ({ from: emptyFrom }));
+    await expect(
+      repo.adminCount({ select: emptySelect } as any, {}),
+    ).resolves.toBe(0);
+
+    const nullWhere = mock(async () => [{ count: null }]);
+    const nullFrom = mock(() => ({ where: nullWhere }));
+    const nullSelect = mock(() => ({ from: nullFrom }));
+    await expect(
+      repo.adminCount({ select: nullSelect } as any, {}),
+    ).resolves.toBe(0);
   });
 
   test("filters admin tickets by status", async () => {

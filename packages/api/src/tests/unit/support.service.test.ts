@@ -293,6 +293,22 @@ describe("SupportService", () => {
       ).rejects.toThrow(SupportTicketAlreadyResolvedError);
     });
 
+    test("fails closed when the update returns no ticket", async () => {
+      const { service } = createService({
+        repo: {
+          findById: mock(async () => makeTicket()),
+          updateResolution: mock(async () => undefined),
+        },
+      });
+
+      await expect(
+        service.adminResolveTicket("admin1", {
+          ticketId: "t1",
+          resolution: "Refunded marks",
+        }),
+      ).rejects.toThrow(SupportTicketNotFoundError);
+    });
+
     test("resolves ticket, notifies reporter, and records audit", async () => {
       const ticket = makeTicket();
       const { service, repo, notification, audit } = createService({
