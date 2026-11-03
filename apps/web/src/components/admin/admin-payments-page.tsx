@@ -16,6 +16,7 @@ import {
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
   Field,
   FieldDescription,
@@ -48,6 +49,7 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
 import Loader from "@/components/loader";
 import { TablePagination } from "@/components/table-pagination";
@@ -73,10 +75,6 @@ type PaymentRow = Awaited<
 
 function formatIdr(value: number) {
   return `Rp${value.toLocaleString("id-ID")}`;
-}
-
-function formatMarks(value: number) {
-  return value.toLocaleString("id-ID");
 }
 
 function formatDate(value: string | Date) {
@@ -266,28 +264,28 @@ export function AdminPaymentsPage() {
         </Field>
         <Field className="min-w-0">
           <FieldLabel htmlFor="payment-date-from">From (WIB)</FieldLabel>
-          <Input
+          <DatePicker
             id="payment-date-from"
-            type="date"
             value={dateFrom}
-            max={dateTo || undefined}
-            onChange={(event) => {
-              setDateFrom(event.target.value);
+            maxDate={dateTo || undefined}
+            onChange={(value) => {
+              setDateFrom(value);
               resetPagination();
             }}
+            placeholder="Pick a date"
           />
         </Field>
         <Field className="min-w-0">
           <FieldLabel htmlFor="payment-date-to">To (WIB)</FieldLabel>
-          <Input
+          <DatePicker
             id="payment-date-to"
-            type="date"
             value={dateTo}
-            min={dateFrom || undefined}
-            onChange={(event) => {
-              setDateTo(event.target.value);
+            minDate={dateFrom || undefined}
+            onChange={(value) => {
+              setDateTo(value);
               resetPagination();
             }}
+            placeholder="Pick a date"
           />
         </Field>
         <div className="flex items-end sm:col-span-2 xl:col-span-5">
@@ -381,7 +379,7 @@ export function AdminPaymentsPage() {
                     <TableCell className="whitespace-nowrap font-medium">
                       {formatIdr(row.amountIdr)}
                       <Text className="text-muted">
-                        {formatMarks(row.marks)} Marks
+                        <CogitoMarks value={row.marks} size="3" />
                       </Text>
                     </TableCell>
                     <TableCell>
@@ -389,7 +387,7 @@ export function AdminPaymentsPage() {
                         {row.status}
                       </Badge>
                       {row.providerRefundKind ? (
-                        <Text className="mt-1 text-muted">
+                        <Text className="mt-1 text-xs text-muted">
                           {row.providerRefundKind === "full"
                             ? "Full provider refund"
                             : "Partial provider refund"}
@@ -419,7 +417,7 @@ export function AdminPaymentsPage() {
                           Refund
                         </Button>
                       ) : (
-                        <Text className="text-muted">—</Text>
+                        <Text className="text-xs text-dimmed">No action</Text>
                       )}
                     </TableCell>
                   </TableRow>
