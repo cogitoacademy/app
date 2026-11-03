@@ -457,7 +457,9 @@ export function AdminPaymentsPage() {
             <>
               Refund {formatIdr(refundTarget.amountIdr)} for{" "}
               {refundTarget.userName} ({refundTarget.userEmail}). This reverses
-              the purchased Marks and is recorded in the audit log.
+              the unspent Marks from this payment, marks it refunded, and
+              records the reason in the audit log. No money is returned to the
+              payment method; provider-side cash refunds stay manual.
             </>
           ) : null
         }
