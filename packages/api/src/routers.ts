@@ -8,6 +8,7 @@ import { createAdminRouter } from "./modules/admin/admin.router";
 import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
 import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
 import { createAdminKnowledgeBankRouter } from "./modules/admin-knowledge-bank/admin-knowledge-bank.router";
+import { createAdminAuditRouter } from "./modules/admin-audit/admin-audit.router";
 import { createCompetitionCatalogRouter } from "./modules/competition-catalog/competition-catalog.router";
 import {
   createAcademyClassPublicRouter,
@@ -43,6 +44,7 @@ const adminRouter = {
   ...createAdminRouter(handlers.admin),
   ...createCompetitionCatalogRouter(handlers.competitionCatalog),
   ...createAcademyClassRouter(handlers.academyClass),
+  ...createAdminAuditRouter(handlers.adminAudit),
 };
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
 const adminMarkPackageRouter = createAdminMarkPackageRouter(
