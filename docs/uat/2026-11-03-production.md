@@ -5,6 +5,7 @@ Date: 2–3 November 2026 (WIB). Payout retest: 2 November 2026, 23:38–23:47 W
 > Evidence note: screenshots, PDFs, and JSON artifacts referenced as `tmp/uat-prod/` are local UAT outputs and are not committed. This document records the observed results.
 
 Environment: production
+
 - App: https://app.cogitoacademy.id
 - API: https://api.cogitoacademy.id
 - Marketing: https://cogitoacademy.id (serves `/en` and `/id`)
@@ -18,54 +19,54 @@ Verdict: **Accepted for all executable flows.** App, marketing, auth OTP, blog, 
 
 ## Result summary
 
-| Area | Result |
-| --- | --- |
-| App public routes and auth page | Pass |
-| Student, tutor, admin route walkthroughs | Pass |
-| Role access control (student/tutor blocked from admin) | Pass |
-| Class create, publish, Meet creation | Pass |
-| Full, half, and single enrollment | Pass |
-| Second installment payment | Pass |
-| Single-seat cancellation with fee | Pass |
-| Half-plan withdrawal with fee and retained seat | Pass |
-| Late and early absence notices | Pass |
-| Tutor session report and settlement | Pass |
-| Admin report correction | Pass |
-| Student and admin report PDF export | Pass |
-| Booking create, tutor accept, Meet creation | Pass |
-| Booking cancellation more than 24 hours before start | Pass |
-| Booking decline and Marks release | Pass |
-| Tutor payout lifecycle | Pass |
-| Knowledge Bank list and PDF access | Pass |
-| Knowledge Bank grant create, edit, remove | Pass |
-| FAQ authoring and app display | Pass |
-| Achievement submit, moderate, approve, app display | Pass |
-| Activity draft authoring | Pass |
-| Blog category and draft authoring | Pass |
-| Blog publish | Pass after CSP fix and alt-text correction |
-| Calendar authoring and public display | Pass — admin-created event visible |
-| Knowledge Bank authoring | Pass — PDF upload, save, public display, PDF fetch |
-| Marketing home EN and ID | Pass |
-| Marketing achievements page | Pass |
-| Marketing events/activities page | Pass |
-| Marketing contact page | Pass |
-| Marketing FAQ page | Pass — FAQ visible |
-| Marketing tutors page | Pass — Diego visible |
-| Marketing blog index | Pass — ID article listed; EN not published |
-| Marketing blog article detail | Pass — `/id/blog/uat-production-blog-draft` renders |
-| Marketing blog images | Pass — optimizer 200, image renders |
-| Bilingual blog: English publish + marketing page | Pass |
-| Friend referral attribution (`UAT506`) | Pass |
-| Google OAuth entry/callback URL | Pass at provider entry; full consent not completed |
-| 200% zoom reflow (11 app pages) | Pass — no horizontal overflow |
+| Area                                                      | Result                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------ |
+| App public routes and auth page                           | Pass                                                               |
+| Student, tutor, admin route walkthroughs                  | Pass                                                               |
+| Role access control (student/tutor blocked from admin)    | Pass                                                               |
+| Class create, publish, Meet creation                      | Pass                                                               |
+| Full, half, and single enrollment                         | Pass                                                               |
+| Second installment payment                                | Pass                                                               |
+| Single-seat cancellation with fee                         | Pass                                                               |
+| Half-plan withdrawal with fee and retained seat           | Pass                                                               |
+| Late and early absence notices                            | Pass                                                               |
+| Tutor session report and settlement                       | Pass                                                               |
+| Admin report correction                                   | Pass                                                               |
+| Student and admin report PDF export                       | Pass                                                               |
+| Booking create, tutor accept, Meet creation               | Pass                                                               |
+| Booking cancellation more than 24 hours before start      | Pass                                                               |
+| Booking decline and Marks release                         | Pass                                                               |
+| Tutor payout lifecycle                                    | Pass                                                               |
+| Knowledge Bank list and PDF access                        | Pass                                                               |
+| Knowledge Bank grant create, edit, remove                 | Pass                                                               |
+| FAQ authoring and app display                             | Pass                                                               |
+| Achievement submit, moderate, approve, app display        | Pass                                                               |
+| Activity draft authoring                                  | Pass                                                               |
+| Blog category and draft authoring                         | Pass                                                               |
+| Blog publish                                              | Pass after CSP fix and alt-text correction                         |
+| Calendar authoring and public display                     | Pass — admin-created event visible                                 |
+| Knowledge Bank authoring                                  | Pass — PDF upload, save, public display, PDF fetch                 |
+| Marketing home EN and ID                                  | Pass                                                               |
+| Marketing achievements page                               | Pass                                                               |
+| Marketing events/activities page                          | Pass                                                               |
+| Marketing contact page                                    | Pass                                                               |
+| Marketing FAQ page                                        | Pass — FAQ visible                                                 |
+| Marketing tutors page                                     | Pass — Diego visible                                               |
+| Marketing blog index                                      | Pass — ID article listed; EN not published                         |
+| Marketing blog article detail                             | Pass — `/id/blog/uat-production-blog-draft` renders                |
+| Marketing blog images                                     | Pass — optimizer 200, image renders                                |
+| Bilingual blog: English publish + marketing page          | Pass                                                               |
+| Friend referral attribution (`UAT506`)                    | Pass                                                               |
+| Google OAuth entry/callback URL                           | Pass at provider entry; full consent not completed                 |
+| 200% zoom reflow (11 app pages)                           | Pass — no horizontal overflow                                      |
 | Accessibility tree, labels, focus order, dialog semantics | Pass — no unnamed controls; actual screen-reader speech not tested |
-| Email OTP signup, welcome mail, password login | Pass |
-| Forgot-password email, reset link, new-password login | Pass |
-| KOL campaign create, pause, resume | Pass |
-| KOL code attribution at signup | Pass |
-| KOL commission, settlement, transfer | Not executed — requires real paid purchase and bank transfer |
-| Browser-clock date checks | Pass for client-rendered UI; server dates unchanged |
-| Live payment checkout | Not executed — provider test mode is off |
+| Email OTP signup, welcome mail, password login            | Pass                                                               |
+| Forgot-password email, reset link, new-password login     | Pass                                                               |
+| KOL campaign create, pause, resume                        | Pass                                                               |
+| KOL code attribution at signup                            | Pass                                                               |
+| KOL commission, settlement, transfer                      | Not executed — requires real paid purchase and bank transfer       |
+| Browser-clock date checks                                 | Pass for client-rendered UI; server dates unchanged                |
+| Live payment checkout                                     | Not executed — provider test mode is off                           |
 
 ## Defects
 
@@ -90,6 +91,7 @@ Retest with a fresh navigation: `/dashboard` 609 ms, `/my-classes` 587 ms, `/boo
 First attempt failed with `The source image cannot be decoded`. Root cause was the app CSP `img-src 'self' data: https:` blocking the editor's `blob:` preview URL. The deployed web CSP now includes `blob:`.
 
 Retest:
+
 - Hero image upload returned `Image uploaded`.
 - Required fields reached 9/9.
 - Publishing returned no decode error.
@@ -111,6 +113,7 @@ API version 604ba70c
 ```
 
 Retest after the private bucket fix:
+
 - Admin opened `/knowledge-bank` → **Manage resources** → **Add resource**.
 - PDF upload returned `PDF ready: student-reports-2026-11-02.pdf`.
 - Save returned `Changes saved live`; the resource appeared with status Active, version 1.
@@ -149,25 +152,30 @@ The blog index image rendered at 414×217. No console errors. The previous `INVA
 ## App flow evidence
 
 ### FAQ
+
 - Admin created, published, and listed one active FAQ on the app landing page.
 - Student saw the category, question, and expanded answer.
 
 ### Achievements
+
 - Student submitted "UAT Production Achievement", National level, 1 November 2026, with a proof link.
 - Admin reviewed and approved it.
 - Student list changed from Pending 1 to Approved 1.
 
 ### Knowledge Bank grants
+
 - Admin created a grant for Andre expiring 2 December 2026, edited its note, then removed it.
 - Public Knowledge Bank PDF returned 200, `application/pdf`, 832,019 bytes, header `%PDF-`.
 
 ### Class lifecycle
+
 - Masterclass `332d79a4-bc9d-4672-b25c-28ed9924cebe` published; Meet link created.
 - Student held 5 Marks; tutor report deducted 5 Marks and created a Rp400,000 fee.
 - Admin correction produced report version 3 without repeat settlement.
 - Student and admin PDF export produced a valid PDF, 36,313 bytes.
 
 ### Cohort and enrollment plans
+
 - Cohort `d0f39a56-8ba4-4efe-abaf-3ec93c691496` published with four sessions and four Meet links.
 - Andre full enrollment: 80 Marks held.
 - Argya half enrollment: 44 + 44 Marks funded.
@@ -178,11 +186,13 @@ The blog index image rendered at 414×217. No console errors. The previous `INVA
 - Late absence on session 1 and early absence on session 2 were recorded correctly.
 
 ### Booking lifecycle
+
 - Student requested 38-Mark sessions; tutor accepted one and a Meet link was created.
 - Cancellation more than 24 hours before start returned 38 Marks.
 - Tutor declined a second request with a reason; all 38 Marks returned.
 
 ### Tutor payout
+
 - Synthetic bank and tax profile saved: BCA `0000000001`, legal name "Diego UAT Review", NIK `0000000000000001`.
 - Prepared payout: gross Rp400,000, tax Rp12,000, net Rp388,000.
 - Recorded synthetic transfer `UAT-PROD-NO-REAL-TRANSFER`.
@@ -190,22 +200,23 @@ The blog index image rendered at 414×217. No console errors. The previous `INVA
 - Prepare then void before transfer: reconciliation not required; source returned to Unpaid.
 
 ### Content authoring
+
 - Activity draft "UAT Production Activity" saved.
 - Blog category "Kategori UAT" created.
 - Blog draft "UAT Production Blog Draft" saved with Indonesian title, introduction, body, SEO fields, cover description, key facts, and category. Publish blocked by D5.
 
 ## Marketing site evidence
 
-| Page | Result |
-| --- | --- |
-| `/en` | Pass: English home, hero, programs, sections render |
-| `/id` | Pass: Indonesian home renders localized copy |
-| `/en/achievements` | Pass: shows approved "UAT Production Achievement", National, 2026, Andre by Cogito |
-| `/en/activities` and `/id/activities` | Pass: show "UAT cohort session 1" under "UAT Production Cohort 2026-11-03" |
-| `/en/contact` | Pass: contact page renders |
-| `/en/faq` | Stale placeholder; API has the FAQ (D8) |
-| `/en/tutors` | Stale error page; API has the tutor (D7) |
-| `/en/blog` | Empty; no published article (D9) |
+| Page                                  | Result                                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `/en`                                 | Pass: English home, hero, programs, sections render                                |
+| `/id`                                 | Pass: Indonesian home renders localized copy                                       |
+| `/en/achievements`                    | Pass: shows approved "UAT Production Achievement", National, 2026, Andre by Cogito |
+| `/en/activities` and `/id/activities` | Pass: show "UAT cohort session 1" under "UAT Production Cohort 2026-11-03"         |
+| `/en/contact`                         | Pass: contact page renders                                                         |
+| `/en/faq`                             | Stale placeholder; API has the FAQ (D8)                                            |
+| `/en/tutors`                          | Stale error page; API has the tutor (D7)                                           |
+| `/en/blog`                            | Empty; no published article (D9)                                                   |
 
 No console errors were observed on marketing pages; the only warnings were an unused CSS preload.
 
@@ -213,16 +224,17 @@ No console errors were observed on marketing pages; the only warnings were an un
 
 Playwright `page.clock` was installed in the browser and fixed to different timestamps.
 
-| Fake time | Check | Result |
-| --- | --- | --- |
-| 05:00 WIB | Student dashboard greeting | "Good morning, Andre. ready to learn?" |
-| 11:00 WIB | Student dashboard greeting | "Hello, Andre! What's next on the learning list?" |
-| 15:00 WIB | Student dashboard greeting | "Good afternoon, Andre. finish strong" |
-| 18:00 WIB | Student dashboard greeting | "End the day a little wiser, Andre" |
-| 15 Dec 2026 | Competition calendar | Rendered December 2026 grid |
-| 15 Jan 2027 | Competition calendar | Rendered January 2027 grid with January events |
+| Fake time   | Check                      | Result                                            |
+| ----------- | -------------------------- | ------------------------------------------------- |
+| 05:00 WIB   | Student dashboard greeting | "Good morning, Andre. ready to learn?"            |
+| 11:00 WIB   | Student dashboard greeting | "Hello, Andre! What's next on the learning list?" |
+| 15:00 WIB   | Student dashboard greeting | "Good afternoon, Andre. finish strong"            |
+| 18:00 WIB   | Student dashboard greeting | "End the day a little wiser, Andre"               |
+| 15 Dec 2026 | Competition calendar       | Rendered December 2026 grid                       |
+| 15 Jan 2027 | Competition calendar       | Rendered January 2027 grid with January events    |
 
 Limits:
+
 - Booking availability did not shift under a fake browser clock. Slots still came from the server's real "next seven days". Server time is authoritative.
 - Session cookies showed an expired banner when the browser clock moved far forward, because expiry is evaluated against the fake clock.
 - Report eligibility, payout deadlines, and similar server-settled states cannot be time-travelled with client JavaScript. Those require database or server-clock control.
@@ -259,11 +271,13 @@ Fresh inbox `uatotp1103a@yopmail.com` used end to end:
 Method: Edge headless with a 720 CSS px viewport at device scale factor 2, equivalent to 200% browser zoom reflow. Tested login, student dashboard/classes/bookings/Knowledge Bank/calendar/profile, and admin dashboard/referrals/payouts/classes.
 
 Zoom/reflow:
+
 - `document.scrollWidth` stayed 720 on every page; no horizontal page overflow.
 - Only expected off-canvas sidebar elements sat outside the viewport; opening the sidebar is available.
 - Screenshots: `tmp/uat-prod/zoom-*.png`.
 
 Accessibility semantics:
+
 - One `h1` and a `main` landmark on every tested page.
 - Zero visible interactive controls with an empty accessible name.
 - Every visible input/textarea has a label, `aria-label`, or `aria-labelledby`.
