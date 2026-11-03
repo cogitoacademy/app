@@ -253,14 +253,14 @@ export function SupportTicketsPanel() {
         />
       ) : (
         <TableContainer id="support-tickets">
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Ticket</TableHead>
-                <TableHead className="hidden sm:table-cell">Reporter</TableHead>
-                <TableHead className="hidden md:table-cell">Booking</TableHead>
-                <TableHead className="hidden md:table-cell">SLA</TableHead>
-                <TableHead className="hidden md:table-cell">Status</TableHead>
+                <TableHead>Reporter</TableHead>
+                <TableHead>Booking</TableHead>
+                <TableHead>SLA</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -272,29 +272,12 @@ export function SupportTicketsPanel() {
                       <Text className="font-medium">
                         {CATEGORY_LABELS[ticket.category] ?? ticket.category}
                       </Text>
-                      <Text className="line-clamp-2 text-muted">
+                      <Text className="line-clamp-2 text-sm text-muted">
                         {ticket.description}
                       </Text>
-                      <div className="flex flex-wrap items-center gap-2 md:hidden">
-                        <Badge variant={statusVariant(ticket.status)} size="sm">
-                          {STATUS_LABELS[ticket.status as StatusFilter] ??
-                            ticket.status}
-                        </Badge>
-                        <Text className="text-muted">
-                          SLA {formatDeadline(ticket.slaDeadline)}
-                        </Text>
-                        <Text className="text-muted">
-                          {ticket.reporterName ?? ticket.reporterEmail}
-                        </Text>
-                        {isOverdue(ticket, now) ? (
-                          <Badge variant="danger" size="sm">
-                            <IconClock /> Overdue
-                          </Badge>
-                        ) : null}
-                      </div>
                     </Stack>
                   </TableCell>
-                  <TableCell className="hidden align-top sm:table-cell">
+                  <TableCell className="align-top">
                     <Stack direction="column" spacing="sm">
                       <Text>{ticket.reporterName ?? "Unknown student"}</Text>
                       <Text className="text-muted">
@@ -302,24 +285,24 @@ export function SupportTicketsPanel() {
                       </Text>
                     </Stack>
                   </TableCell>
-                  <TableCell className="hidden align-top md:table-cell">
+                  <TableCell className="align-top">
                     {ticket.bookingNumber ? (
                       <Text>#{ticket.bookingNumber}</Text>
                     ) : (
                       <Text className="text-muted">No booking</Text>
                     )}
                   </TableCell>
-                  <TableCell className="hidden align-top md:table-cell">
+                  <TableCell className="align-top">
                     <Stack direction="column" spacing="sm">
                       <Text>{formatDeadline(ticket.slaDeadline)}</Text>
                       {isOverdue(ticket, now) ? (
-                        <Badge variant="danger" size="sm">
+                        <Badge variant="danger" size="sm" className="w-fit">
                           <IconClock /> Overdue
                         </Badge>
                       ) : null}
                     </Stack>
                   </TableCell>
-                  <TableCell className="hidden align-top md:table-cell">
+                  <TableCell className="align-top">
                     <Badge variant={statusVariant(ticket.status)} size="sm">
                       {STATUS_LABELS[ticket.status as StatusFilter] ??
                         ticket.status}
@@ -327,7 +310,7 @@ export function SupportTicketsPanel() {
                   </TableCell>
                   <TableCell className="text-right align-top">
                     <Button
-                      variant="plain"
+                      variant="secondary"
                       size="sm"
                       onClick={() => openTicket(ticket)}
                     >
