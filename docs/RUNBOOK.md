@@ -4322,6 +4322,7 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
    ```
 
 5. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
+6. Knowledge Bank PDFs need a **separate private bucket** with no public domain: create `cogito-private-kb`, grant the app token Object Read & Write on it, and set `KB_PRIVATE_BUCKET`. It must differ from `R2_BUCKET`. Without it, `adminContent/uploadPdf` fails with 500 and the admin cannot create KB resources.
 
 > U3 CORS verified 2026-09-05 (read-only — Terraform has no CORS resource,
 > so bucket CORS is console-managed like the R2 custom domain; no console
