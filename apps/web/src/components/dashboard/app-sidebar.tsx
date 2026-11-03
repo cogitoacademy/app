@@ -44,6 +44,7 @@ import {
   IconArticle,
   IconWriting,
   IconClock,
+  IconHistory,
   IconBook2,
   IconLibrary,
   IconLogout,
@@ -131,6 +132,7 @@ const adminNavGroups = [
         label: "Manage admins",
         icon: IconUserShield,
       },
+      { to: "/admin-audit", label: "Audit Log", icon: IconHistory },
     ],
   },
   {

@@ -15,6 +15,7 @@ import { createAdminModule } from "./modules/admin";
 import { createAdminTutorModule } from "./modules/admin-tutor";
 import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
+import { createAdminAuditModule } from "./modules/admin-audit";
 import { createCompetitionCatalogModule } from "./modules/competition-catalog";
 import { createAcademyClassModule } from "./modules/academy-class";
 import { createClassEnrollmentModule } from "./modules/class-enrollment";
@@ -60,6 +61,7 @@ import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
 import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
 import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
+import type { AdminAuditService } from "./modules/admin-audit/admin-audit.service";
 import type { CompetitionCatalogService } from "./modules/competition-catalog/competition-catalog.service";
 import type { AcademyClassService } from "./modules/academy-class/academy-class.service";
 import type { ClassEnrollmentService } from "./modules/class-enrollment/class-enrollment.service";
@@ -85,6 +87,7 @@ import type { AdminHandler } from "./modules/admin/admin.handler";
 import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
 import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
 import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
+import type { AdminAuditHandler } from "./modules/admin-audit/admin-audit.handler";
 import type { CompetitionCatalogHandler } from "./modules/competition-catalog/competition-catalog.handler";
 import type { AcademyClassHandler } from "./modules/academy-class/academy-class.handler";
 import type { ClassEnrollmentHandler } from "./modules/class-enrollment/class-enrollment.handler";
@@ -118,6 +121,7 @@ export interface ServiceRegistry {
   adminTutor: AdminTutorService;
   adminMarkPackage: AdminMarkPackageService;
   adminKnowledgeBank: AdminKnowledgeBankService;
+  adminAudit: AdminAuditService;
   competitionCatalog: CompetitionCatalogService;
   academyClass: AcademyClassService;
   classEnrollment: ClassEnrollmentService;
@@ -151,6 +155,7 @@ export interface HandlerRegistry {
   adminTutor: AdminTutorHandler;
   adminMarkPackage: AdminMarkPackageHandler;
   adminKnowledgeBank: AdminKnowledgeBankHandler;
+  adminAudit: AdminAuditHandler;
   competitionCatalog: CompetitionCatalogHandler;
   academyClass: AcademyClassHandler;
   classEnrollment: ClassEnrollmentHandler;
@@ -308,6 +313,7 @@ function createServices() {
     db,
     audit: audit.service,
   });
+  const adminAudit = createAdminAuditModule({ db });
   const meeting = createMeetingModule({
     db,
     googleMeetEnabled: !!(env.GOOGLE_MEET_ENABLED && googleMeetConfig),
@@ -529,6 +535,7 @@ function createServices() {
     adminTutor: adminTutor.service,
     adminMarkPackage: adminMarkPackage.service,
     adminKnowledgeBank: adminKnowledgeBank.service,
+    adminAudit: adminAudit.service,
     competitionCatalog: competitionCatalog.service,
     academyClass: academyClass.service,
     classEnrollment: classEnrollment.service,
@@ -562,6 +569,7 @@ function createServices() {
     adminTutor: adminTutor.handler,
     adminMarkPackage: adminMarkPackage.handler,
     adminKnowledgeBank: adminKnowledgeBank.handler,
+    adminAudit: adminAudit.handler,
     competitionCatalog: competitionCatalog.handler,
     academyClass: academyClass.handler,
     classEnrollment: classEnrollment.handler,

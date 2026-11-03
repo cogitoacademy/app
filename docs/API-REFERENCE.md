@@ -1610,6 +1610,22 @@ used to retrieve production OTPs.
 - **Privacy:** The DTO contains no student identity/roster. A released/unfunded seat does not grant session or meeting access; funded students retain access to a report after settlement spends the allocation. Admins can read all sessions.
 - **Reminder behavior:** For an ended, still-scheduled cohort or masterclass session with no report, the existing scheduler sends a deduplicated action notification and email to the assigned tutor at `endAt` and once per 24 elapsed hours while the report remains pending. Catch-up queues only the current due period. A cancelled parent class remains eligible for a retained past session while that session is still scheduled; a cancelled/completed session, completed class, or submitted report stops reminders. The private action link opens `/class-reports`; the reminder does not change delivery or financial state, and no-show expiry alone does not complete a session. The same one-minute scheduler also runs the solo/group/series report-reminder worker: one identity per solo/group booking or series child, assigned-tutor-only notification and email, due at session end and every 24 elapsed hours, with current-period catch-up and a 100-candidate pass limit. Booking and child locks recheck tutor, schedule, report and state before the atomic notification/outbox write. A volatile keyset cursor rotates past failed candidates and resets on process restart; only the pagination key normalizes timestamps to milliseconds; SQL eligibility, current-period selection, and locked schedule fingerprints retain full stored timestamp precision. Separate scheduler counters are `bookingReportRemindersQueued` and `bookingReportRemindersFailed`. The existing global report scan runs in the shared one-minute job alongside second-installment reminders; its `reportRemindersQueued`/`reportRemindersFailed` counters remain separate from installment `remindersQueued`.
 
+## Admin Audit Log (`admin.listAuditLogs`)
+
+Read-only access to recorded audit entries. There is no mutation endpoint, and
+the audit writer is unchanged.
+
+### `admin.listAuditLogs`
+
+- **RPC path:** `/rpc/admin/audit/list`
+- **Auth:** Admin
+- **Input:** `{ limit?: 1..100 = 50, cursor?, action?, targetType?, targetId?, actorId?, dateFrom?, dateTo? }`; text filters are trimmed and limited to 100 characters, and `dateFrom`/`dateTo` are ISO datetimes with an offset
+- **Output:** `{ items: Array<{ id, actorId, actorName, actorEmail, actorType, action, targetType, targetId, beforeState, afterState, details, createdAt }>, nextCursor: string | null }`
+- **Errors:** `INVALID_AUDIT_DATE_RANGE` (400) when `dateFrom` is after `dateTo`; `INVALID_AUDIT_CURSOR` (400) for a malformed cursor
+- **Description:** Lists audit entries newest first by `createdAt` then `id`. `action` and `targetType` are case-insensitive partial matches with `%`, `_`, and `\` treated literally; `targetId` and `actorId` are exact matches. Actor name and email come from a left join, so both are `null` after the user account is deleted. `nextCursor` uses the form `"<createdAt ISO>~<id>"` and appears only when another page exists. The admin page is `/admin-audit`.
+
+---
+
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 
 All routes are admin-only. Each student has at most one live grant; the expiry

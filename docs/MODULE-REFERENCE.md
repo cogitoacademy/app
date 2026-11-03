@@ -1,5 +1,11 @@
 # Cogito Module Reference
 
+## Admin audit log viewer (3 November 2026)
+
+`packages/api/src/modules/admin-audit/` is a read-only module with the usual repo/service/handler/router split. `admin-audit.repo.ts` lists `audit_log` newest first (`createdAt desc, id desc`), left joins `user` for actor name and email, applies case-insensitive partial action/target-type matches plus exact target/actor/date filters, and fetches `limit + 1` rows. `admin-audit.service.ts` validates the date range, decodes and encodes the `"<createdAt ISO>~<id>"` composite cursor, and maps rows to serializable views. `admin-audit.handler.ts` wraps the service in `withDomainMap`; `admin-audit.router.ts` exposes `admin.listAuditLogs` (`POST /admin/audit/list`) through `adminProcedure`. The module is wired in `routers.ts`, `services.ts`, `ServiceRegistry` and `HandlerRegistry`; it does not change audit writing or add columns, tables or migrations.
+
+Web `/admin-audit` renders `AdminAuditPage` behind the admin `beforeLoad` guard. Submit-based filters cover action, target type, target ID, actor ID and a WIB date range; Reset clears them. The filter row sits directly above the table card without its own card wrapper. Filters stack in a single column below the `sm` breakpoint, and the table scrolls horizontally inside its container instead of widening the page. The table shows WIB creation time, actor identity or System, humanized action and target type, target ID, and a humanized details key summary, and cursor pagination reuses `TablePagination`. Selecting a row or View opens a read-only drawer with before/after/details JSON. The sidebar entry sits in the admin Overview group after Operations.
+
 ## Admin support inbox and protected admin roster (3 November 2026)
 
 `SupportTicketsPanel` owns the Operations support tab: SLA-ordered list, status

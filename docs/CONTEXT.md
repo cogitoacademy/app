@@ -1,5 +1,15 @@
 # Cogito App — Codebase Context
 
+## Admin audit log viewer (3 November 2026)
+
+Admins can read the existing `audit_log` history at `/admin-audit`. A new
+`packages/api/src/modules/admin-audit/` module exposes `admin.listAuditLogs`
+(`POST /rpc/admin/audit/list`) with submit-based action, target type, target ID,
+actor ID and date filters, composite-cursor pagination, and a left join for
+actor name and email. Action and target-type filters are case-insensitive
+partial matches; target and actor IDs remain exact. The viewer is read-only: no
+mutation endpoint, no audit writer change, and no schema or migration change.
+
 ## Admin support inbox and protected admin roster (3 November 2026)
 
 `/admin-operations` now has a **Support tickets** tab beside the booking queue,
