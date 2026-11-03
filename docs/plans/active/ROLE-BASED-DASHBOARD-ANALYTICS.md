@@ -1,6 +1,6 @@
 # Role-Based Dashboard Analytics
 
-Status: **Implementation in progress - account/payment BI, dashboard read/widgets, and semantic/ops slice landed locally (2026-09-29)**
+Status: **Implementation in progress - account/payment BI, dashboard read/widgets, semantic/ops slice, and the admin funnel/supply-demand/SLA slice landed locally (2026-11-03)**
 
 ## Objective
 
@@ -48,11 +48,40 @@ Completed in current worktree:
 Still pending:
 
 - Tutor period payout/capacity/request-outcome aggregates.
-- Admin payout, booking funnel, supply-demand, and SLA aggregates. Realized
-  top-up payment/refund reporting is now present; accounting-grade recognition
-  still needs a dedicated settlement timestamp/model.
+- Admin payout aggregates and deeper funnel stages: tutor response time, scheduling
+  time, and outcome rates by modality/format need validated state-history
+  timestamps. Realized top-up payment/refund reporting is present;
+  accounting-grade recognition still needs a dedicated settlement timestamp/model.
 - Group-participant active-user definition, retention cohorts, and event-based
   conversion analytics.
+
+## Admin Phase 2 slice (2026-11-03)
+
+Landed in `admin.getDashboardAnalytics` without input changes:
+
+- **Student conversion funnel** (`funnel`): period cohorts only. Registered =
+  student accounts created in the selected WIB window; booked = distinct
+  `booking.proposerId` with a booking created in the window; completed = the
+  same cohort with `currentState = 'completed'`; paid = distinct payment users
+  with `providerSuccessAt` in the window and status `PAID`, `SETTLED`, or
+  `REFUNDED`. Counts are raw; the dashboard derives step percentages against
+  registered students. A step can exceed 100% because booking and payment
+  activity is not limited to accounts created in the window, and the UI states
+  that.
+- **Supply vs demand** (`supplyDemand`): top 8 categories by bookings created in
+  the window, using the booking topic `categoryName` with `Other` fallback.
+  `activeTutors` counts approved/published tutor profiles whose selected child
+  subject resolves to a parent `subject_category` with the same name,
+  case-insensitive. Unmatched names return 0 and the UI shows "No published
+  tutor"; the matcher never guesses a taxonomy mapping.
+- **Support SLA** (`operationalSla`): current snapshot, independent of the
+  period. Open/in-progress tickets are counted as open, breached when
+  `slaDeadline < now`, and due soon when the deadline falls within the next 4
+  hours. Booking escalation remains a separate dashboard queue; this section
+  does not reimplement it.
+
+Reads are bounded SQL aggregates (one query each) and use the existing
+`support_ticket_status_sla_idx`; no migration was added.
 
 ## Metric Rules
 
@@ -300,6 +329,10 @@ Plan:
 - Break down by modality, category, solo/group/series, and class size where
   sample size permits.
 
+Landed slice (2026-11-03): distinct-student counts for registered, booked,
+completed, and paid in the selected period. Rates are derived in the UI;
+response/schedule timing and segment breakdowns remain pending.
+
 Priority: **P1**. Existing state history and booking snapshots are the likely
 source; validate timestamp completeness first.
 
@@ -315,6 +348,10 @@ Plan:
 - Include modality and category/specialization.
 - Flag zero-supply/high-demand combinations.
 - Avoid exposing individual tutor performance unless explicitly authorized.
+
+Landed slice (2026-11-03): top-8 booked categories compared with
+approved/published tutor counts matched through parent category name, with a
+zero-supply warning. Capacity, availability, and modality splits remain pending.
 
 Priority: **P1**. Requires joins across tutor profiles, specializations,
 availability, and bookings.
@@ -333,6 +370,10 @@ Plan:
 - Add meeting retry/failure and offline-room failure counts.
 - Add median time to resolution only when timestamps are reliable.
 - Every metric links to its operational queue.
+
+Landed slice (2026-11-03): current support-ticket snapshot for open,
+due-within-4-hours, and breached tickets. Trends, other risk types, and queue
+links remain pending.
 
 Priority: **P0** for unresolved risk counts; **P1** for trends/SLA.
 

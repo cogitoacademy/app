@@ -1,5 +1,9 @@
 # Cogito API Reference
 
+## Admin funnel, supply-demand, and support SLA analytics (3 November 2026)
+
+`admin.getDashboardAnalytics` keeps its existing input and response fields and adds three read-only projections: `funnel` (one cohort of students created in the period, with booked, completed, and paid steps restricted to that cohort), `supplyDemand` (top 8 booked categories with approved/published tutor counts), and `operationalSla` (current open/due-soon/breached support-ticket snapshot with `asOf`). Percentages are computed in the dashboard and stay at or below 100%. Supply matching uses the booking topic's parent category name against tutor child-subject parents, case-insensitively; unmatched categories report zero tutors instead of a guessed mapping. No migration, table, provider call, or booking-escalation change is involved, and the reads are bounded SQL aggregates.
+
 ## Admin support inbox and admin roster (3 November 2026)
 
 ### `support.adminListTickets`

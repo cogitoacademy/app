@@ -95,6 +95,23 @@ export interface DashboardAnalytics {
     unavailablePaymentDates: number;
     asOf: string;
   };
+  funnel: {
+    registeredStudents: number;
+    bookedStudents: number;
+    completedStudents: number;
+    paidStudents: number;
+  };
+  supplyDemand: Array<{
+    category: string;
+    bookings: number;
+    activeTutors: number;
+  }>;
+  operationalSla: {
+    openTickets: number;
+    breachedTickets: number;
+    dueSoonTickets: number;
+    asOf: string;
+  };
   businessSummary: {
     totalAccounts: number;
     totalStudents: number;
@@ -412,6 +429,23 @@ export function createAdminService(deps: {
         unavailablePaymentDates: toNumber(
           raw.operationsSummary.unavailablePaymentDates,
         ),
+        asOf: now.toISOString(),
+      },
+      funnel: {
+        registeredStudents: toNumber(raw.funnel?.registeredStudents),
+        bookedStudents: toNumber(raw.funnel?.bookedStudents),
+        completedStudents: toNumber(raw.funnel?.completedStudents),
+        paidStudents: toNumber(raw.funnel?.paidStudents),
+      },
+      supplyDemand: (raw.supplyDemand ?? []).map((row) => ({
+        category: row.category,
+        bookings: toNumber(row.bookings),
+        activeTutors: toNumber(row.activeTutors),
+      })),
+      operationalSla: {
+        openTickets: toNumber(raw.supportSla?.openTickets),
+        breachedTickets: toNumber(raw.supportSla?.breachedTickets),
+        dueSoonTickets: toNumber(raw.supportSla?.dueSoonTickets),
         asOf: now.toISOString(),
       },
       businessSummary: {

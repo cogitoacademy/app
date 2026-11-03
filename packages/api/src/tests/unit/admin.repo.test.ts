@@ -327,6 +327,18 @@ test("analytics returns zero aggregate defaults when queries return no rows", as
   expect(result.marksSummary.studentsWithMarks).toBe(0);
   expect(result.paymentSummary.grossReceiptsIdr).toBe(0);
   expect(result.refundSummary.refundedIdr).toBe(0);
+  expect(result.funnel).toEqual({
+    registeredStudents: 0,
+    bookedStudents: 0,
+    completedStudents: 0,
+    paidStudents: 0,
+  });
+  expect(result.supplyDemand).toEqual([]);
+  expect(result.supportSla).toEqual({
+    openTickets: 0,
+    breachedTickets: 0,
+    dueSoonTickets: 0,
+  });
 });
 
 test("counting absent admin aggregates returns zero and locks use FOR UPDATE", async () => {
