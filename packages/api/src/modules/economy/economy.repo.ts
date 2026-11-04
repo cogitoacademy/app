@@ -101,7 +101,7 @@ export async function appendV3Revision(
     expectedVersion: number;
     values: unknown;
     reason: string;
-    createdBy: string;
+    createdBy: string | null;
   },
 ) {
   await conn.execute(

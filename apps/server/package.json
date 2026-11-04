@@ -9,6 +9,8 @@
     "dev": "bun run --hot src/index.ts",
     "start": "bun run dist/index.mjs",
     "seed": "bun run src/seed/seed.ts",
+    "seed:canonical": "bun run src/seed/seed.ts --canonical-only",
+    "seed:prod": "bun run src/seed/seed-prod.ts",
     "seed-sanity-content": "bun --env-file .env ../../migration/sanity-content/import.ts",
     "seed-sanity-content:apply": "bun src/seed/seed.ts --sanity-content",
     "seed-calendar": "bun --env-file .env ../../migration/sanity-content/import.ts --events-only",

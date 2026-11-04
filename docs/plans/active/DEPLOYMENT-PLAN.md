@@ -118,12 +118,12 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 4. **Midtrans Sandbox wiring**: set `PAYMENT_PROVIDER=midtrans` + `MIDTRANS_MODE=test` + Sandbox `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID` + `PAYMENT_TEST_ALLOWED_EMAILS` in the vault. Configure the Midtrans dashboard Payment Notification URL as `https://api.cogitoacademy.id/webhooks/payments/midtrans`. `WEBHOOK_ALLOWED_IPS` stays optional; body `signature_key` verification is the primary gate.
 5. **Backup DATABASE_URL host-reachability**: the vault `DATABASE_URL` must resolve from the VPS host (Coolify's Postgres lives on a private Docker network; use `127.0.0.1:<published-port>` or the container IP) — otherwise the nightly backup cron (Task 3.1) and the CD pre-migrate snapshot fail.
 6. **Verify the default package catalog before real payments**: migration
-   `0041_seed_mark_packages.sql` installs Starter/Learner/Explorer/Pioneer
-   during the normal CD migration step and updates their default
-   name/Marks/price values without overriding an existing `is_active` choice.
+   `0041_seed_mark_packages.sql` is a no-op slot; the catalog is inserted only by
+   `bun run --cwd apps/server seed:prod` (or `seed-packages`). Until that runs, a
+   freshly migrated database returns no packages.
    Use the admin mark-package API for catalog changes; do not seed on every
-   deploy. `SEED_REVIEW_ADMIN_EMAIL` remains separate from `ADMIN_EMAILS` for
-   the unrelated review-account seed flow.
+   deploy. The production seed creates no admin account: an `ADMIN_EMAILS`
+   operator signs in first and later grants UAT access from Admin > Admins.
 7. **Apply the playbooks** — prefer the one-command wrapper (added 2026-08-31 on `ops/apply-tooling`):
    ```bash
    ./infra/apply.sh --dry-run all   # review the full ordered plan first

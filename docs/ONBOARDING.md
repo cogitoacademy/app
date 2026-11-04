@@ -47,7 +47,7 @@ bun run db:test
 # Run migrations
 bun run db:migrate
 
-# Default mark packages are installed by migration 0041. Optional local/test seed:
+# Migrations create tables only; the seed inserts the default mark-package catalog:
 bun run seed-packages
 
 # Start dev server (web + server)

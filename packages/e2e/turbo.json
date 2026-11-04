@@ -3,6 +3,7 @@
   "tasks": {
     "test": {
       "env": [
+        "ADMIN_EMAILS",
         "BETTER_AUTH_SECRET",
         "BETTER_AUTH_URL",
         "CI",

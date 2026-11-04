@@ -1,5 +1,17 @@
 # Cogito App — Codebase Context
 
+## Seed entrypoints and canonical mode (4 November 2026)
+
+The seed surface now has three explicit commands. `seed` is the UAT/dev seed: it
+creates or promotes an admin, inserts canonical content, then adds the demo tutor,
+three students, and the presentation booking. It refuses production-like
+environments. `seed:canonical` inserts canonical content with a null audit actor
+and creates no accounts; it is the CI and recovery path. `seed:prod` is the
+deployment path and requires `SEED_ALLOWED_IN_PROD=true`; it also creates no
+accounts. `--defaults-only` is rejected because it still created an admin despite
+its name. Admins in production come only from `ADMIN_EMAILS` plus the fixed
+super-admin list, promoted at signup or server boot.
+
 ## Admin dashboard funnel, supply-demand, and SLA (3 November 2026)
 
 `admin.getDashboardAnalytics` now also returns `funnel`, `supplyDemand`, and
@@ -2546,19 +2558,22 @@ verification when TLS is enabled, and should remain `true` for a managed or
 external PostgreSQL endpoint that requires TLS.
 
 Server boot outside test mode reconciles the comma-separated `ADMIN_EMAILS`
-allowlist before serving traffic. It defaults to
-`itcogitoacademy01@gmail.com`, matches case-insensitively, promotes matching
-existing accounts, and never demotes other admins. The Better Auth signup hook
-covers a matching account created after boot. Development uses the same explicit
-allowlist; tests never bootstrap configured admins. The guarded production seed uses
-a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
-`ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
-student has verified local authentication and seeded Marks, while its review
-tutor has a published structured profile, normalized specializations, and future
-availability. The presentation booking seed creates an idempotent wallet hold
-for the review student and repairs older scheduled presentation rows that were
-created without that ledger entry, so tutor completion settles student-held
-Marks rather than failing with insufficient balance. Default launch identities are Diego by Cogito for the tutor and
+allowlist plus the fixed super-admin addresses before serving traffic. It
+defaults to `itcogitoacademy01@gmail.com`, matches case-insensitively, promotes
+matching existing accounts, and never demotes other admins. The Better Auth
+signup hook covers a matching account created after boot. Development uses the
+same explicit allowlist; tests never bootstrap configured admins.
+
+Two seeds share canonical content. `seed:prod` writes packages, blog taxonomy,
+FAQ, competition taxonomy and calendar, and the default V3 economy revision with
+a null audit actor; it creates no accounts and needs no seed passwords. The
+UAT/dev seed (`seed`) adds `admin@cogitoacademy.id` with its local password, a
+published demo tutor, three verified demo students with seeded Marks, and a
+presentation booking; it refuses production-like `NODE_ENV`. The presentation
+booking seed creates an idempotent wallet hold for the review student and
+repairs older scheduled presentation rows that were created without that ledger
+entry, so tutor completion settles student-held Marks rather than failing with
+insufficient balance. Default UAT identities are Diego by Cogito for the tutor and
 Andre, Argya, and Athena by Cogito for the three students, using
 `cogito.<name>@yopmail.com` addresses. The Google Calendar operator password is never part of reviewer
 credentials. Additional admins can still be granted through the existing admin
@@ -2952,7 +2967,7 @@ when set to false.
 
 ### `refundRecord` (payment-record.ts) — refund/correction tracking, UNIQUE(provider_event_id)
 
-### `markPackage` (mark-package.ts) — purchasable mark packages; application-generated UUID text ids, stable `code`, and active/inactive catalog state. Default rows are installed by the idempotent data migration `0041_seed_mark_packages.sql`.
+### `markPackage` (mark-package.ts) — purchasable mark packages; application-generated UUID text ids, stable `code`, and active/inactive catalog state. Default rows are inserted by the idempotent server seed; migration `0041_seed_mark_packages.sql` is a no-op journal slot.
 
 ### `notification` (notification.ts) — in-app notification records
 
@@ -3110,7 +3125,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## Auth Config
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening); the configured Google provider sends `prompt=consent` so the Google permission screen is shown during verification runs even for a previously authorized account.
-- Admin bootstrap outside test mode uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; development, staging, and production are included. Existing admins are preserved and the normal admin role-management flow remains available for other addresses.
+- Admin bootstrap outside test mode uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) plus the fixed super-admin addresses (`cogitoacademy.id@gmail.com`, `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; development, staging, and production are included. Existing admins are preserved and the normal admin role-management flow remains available for other addresses.
 - Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: session cookies use sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. The short-lived Better Auth OAuth state cookie is explicitly sameSite=lax so the signed state returns on the provider's top-level callback GET; it remains secure/httpOnly and is checked against the database verification record. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site. Google login uses `prompt=consent` to make the provider permission screen visible for verification evidence; it requests identity scopes only and does not add the server-side Meet/Calendar scope to every user's login.
@@ -3371,7 +3386,7 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 
 - ✅ Stub payment checkout flag-gated (`STUB_WEBHOOK_ALLOWED` + `NODE_ENV` not production-like + provider check; staging is production-like — C2)
 - ✅ `TRUST_PROXY` handling — `getClientIp` uses `x-forwarded-for` first hop only when trusted
-- ✅ Seed script production guard (`SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` min 12 chars)
+- ✅ Seed script production guard (`SEED_ALLOWED_IN_PROD`; local/test admin password min 12 chars; production seed requires an existing operator admin)
 - ✅ Webhook idempotency atomic — `IdempotencyStore.claim` keyed on verified payload event id
 - ✅ Invite (10/min) + booking mutation (30/min) rate limits; protected
   booking detail/list/availability reads stay outside that mutation bucket so

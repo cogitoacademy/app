@@ -6,9 +6,9 @@ import { markPackage } from "@cogito-app/db/schema";
 import {
   DEFAULT_SEED_STUDENTS,
   DEFAULT_SEED_TUTOR,
-  assertReviewAdminIsSeparate,
-  requireProductionReviewPassword,
-  resolveSeedAdminEmail,
+  LOCAL_SEED_ADMIN_EMAIL,
+  demoTutorStudentSeedAllowed,
+  parseSeedMode,
   seedAllowed,
   seedAdminPassword,
 } from "./seed";
@@ -54,37 +54,33 @@ describe("seed guards", () => {
     );
   });
 
-  test("uses a separate review admin in production", () => {
-    expect(resolveSeedAdminEmail("development")).toBe("admin@cogitoacademy.id");
-    expect(resolveSeedAdminEmail("test")).toBe("admin@cogitoacademy.id");
-    expect(resolveSeedAdminEmail("production")).toBe(
-      "review.admin@cogitoacademy.id",
-    );
-    expect(resolveSeedAdminEmail("staging", " Reviewer@Example.com ")).toBe(
-      "reviewer@example.com",
+  test("keeps one local seed admin identity", () => {
+    expect(LOCAL_SEED_ADMIN_EMAIL).toBe("admin@cogitoacademy.id");
+  });
+
+  test("parses seed modes without an admin side effect", () => {
+    expect(parseSeedMode([])).toBe("full");
+    expect(parseSeedMode(["--canonical-only"])).toBe("canonical");
+    expect(parseSeedMode(["--sanity-content"])).toBe("sanity");
+  });
+
+  test("rejects the removed defaults-only flag", () => {
+    expect(() => parseSeedMode(["--defaults-only"])).toThrow(
+      "use --canonical-only",
     );
   });
 
-  test("production review admin cannot reuse an operator account", () => {
+  test("rejects two content modes at once", () => {
     expect(() =>
-      assertReviewAdminIsSeparate(
-        "operator@example.com",
-        " Operator@Example.com, other@example.com ",
-      ),
-    ).toThrow("must not be an operator email");
+      parseSeedMode(["--sanity-content", "--canonical-only"]),
+    ).toThrow("Choose one seed mode");
   });
 
-  test("production review passwords must be explicit", () => {
-    expect(() =>
-      requireProductionReviewPassword("production", "PASSWORD", undefined),
-    ).toThrow("at least 12 characters");
-    expect(() =>
-      requireProductionReviewPassword(
-        "production",
-        "PASSWORD",
-        "StrongReview123",
-      ),
-    ).not.toThrow();
+  test("demo tutor/student seed is refused in production-like envs", () => {
+    expect(demoTutorStudentSeedAllowed("development")).toBe(true);
+    expect(demoTutorStudentSeedAllowed("test")).toBe(true);
+    expect(demoTutorStudentSeedAllowed("production")).toBe(false);
+    expect(demoTutorStudentSeedAllowed("staging")).toBe(false);
   });
 
   test("W2: seed-packages exits non-zero in production without SEED_ALLOWED_IN_PROD", () => {

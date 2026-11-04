@@ -1,4 +1,4 @@
-import { and as drizzleAnd, asc, eq, isNotNull } from "drizzle-orm";
+import { and as drizzleAnd, asc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { resolve } from "node:path";
 
 import { auth } from "@cogito-app/auth";
@@ -37,7 +37,7 @@ import { seedBlogCategories } from "./seed-blog-categories";
 import { seedFaq } from "./seed-faq";
 import { seedCompetitionCalendar } from "./seed-competition-calendar";
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
-import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
+import { adminBootstrapEmails } from "../admin-bootstrap";
 
 export const DEFAULT_SEED_TUTOR = {
   email: "cogito.diego@yopmail.com",
@@ -61,29 +61,43 @@ export function seedAllowed(
   return allowFlag === "true";
 }
 
+/** The UAT/dev seed creates demo users and must never run in production-like envs. */
+export function demoTutorStudentSeedAllowed(nodeEnv: string): boolean {
+  return !isProductionLike(nodeEnv);
+}
+
 export function seedAdminPassword(value: string | undefined): string | null {
   if (!value || value.length < 12) return null;
   return value;
 }
 
-export function resolveSeedAdminEmail(
-  nodeEnv: string,
-  reviewEmail?: string,
-): string {
-  if (!isProductionLike(nodeEnv)) return "admin@cogitoacademy.id";
-  return reviewEmail?.trim().toLowerCase() || "review.admin@cogitoacademy.id";
-}
+export type SeedMode = "full" | "canonical" | "sanity";
 
-export function assertReviewAdminIsSeparate(
-  reviewEmail: string,
-  configuredAdminEmails?: string,
-) {
-  if (parseConfiguredAdminEmails(configuredAdminEmails).includes(reviewEmail)) {
+/**
+ * Resolve the requested seed mode. `--defaults-only` is rejected because it
+ * still created or promoted an admin despite its name. Use `--canonical-only`
+ * (or `bun run seed:canonical`) for canonical content without accounts.
+ */
+export function parseSeedMode(argv: string[]): SeedMode {
+  const hasSanity = argv.includes("--sanity-content");
+  const hasCanonical = argv.includes("--canonical-only");
+
+  if (argv.includes("--defaults-only")) {
     throw new Error(
-      "SEED_REVIEW_ADMIN_EMAIL must not be an operator email from ADMIN_EMAILS",
+      "--defaults-only was removed because it still created an admin; use --canonical-only for canonical content without accounts",
     );
   }
+  if (hasSanity && hasCanonical) {
+    throw new Error(
+      "Choose one seed mode: --sanity-content or --canonical-only",
+    );
+  }
+  if (hasSanity) return "sanity";
+  if (hasCanonical) return "canonical";
+  return "full";
 }
+
+export const LOCAL_SEED_ADMIN_EMAIL = "admin@cogitoacademy.id";
 
 function demoPassword(envValue: string | undefined, fallback: string): string {
   if (!envValue) return fallback;
@@ -93,17 +107,6 @@ function demoPassword(envValue: string | undefined, fallback: string): string {
     );
   }
   return envValue;
-}
-
-export function requireProductionReviewPassword(
-  nodeEnv: string,
-  name: string,
-  value: string | undefined,
-) {
-  if (!isProductionLike(nodeEnv)) return;
-  if (!value || value.length < 12) {
-    throw new Error(`${name} is required and must be at least 12 characters`);
-  }
 }
 
 // Canonical taxonomy from migrations 0029/0047; parent palettes from 0056.
@@ -528,20 +531,62 @@ async function ensureUser(email: string, password: string, name: string) {
   return result.user;
 }
 
-async function ensureSeedAdmin(adminPassword: string) {
-  const adminEmail = resolveSeedAdminEmail(
-    env.NODE_ENV,
-    process.env.SEED_REVIEW_ADMIN_EMAIL,
-  );
-  if (isProductionLike(env.NODE_ENV)) {
-    assertReviewAdminIsSeparate(adminEmail, env.ADMIN_EMAILS);
-  }
-
-  const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
+async function promoteSeedAdmin(adminId: string) {
   await db
     .update(user)
     .set({ role: USER_ROLE.ADMIN, emailVerified: true })
-    .where(eq(user.id, admin.id));
+    .where(eq(user.id, adminId));
+}
+
+/**
+ * Seed content needs an admin actor for attribution. Production never creates
+ * admin accounts: an operator address from `ADMIN_EMAILS` must sign up first,
+ * and server boot or the signup hook promotes it. Local and test runs keep the
+ * fixed local-login admin the E2E suites depend on.
+ */
+async function ensureSeedAdmin(adminPassword: string | null) {
+  const configuredEmails = adminBootstrapEmails(env.ADMIN_EMAILS);
+  const emailPredicates = configuredEmails.map(
+    (email) => sql`lower(${user.email}) = ${email}`,
+  );
+  const [configuredAdmin] = await db
+    .select()
+    .from(user)
+    .where(or(...emailPredicates))
+    .limit(1);
+  if (configuredAdmin) {
+    await promoteSeedAdmin(configuredAdmin.id);
+    console.log("Admin user ready:", configuredAdmin.id);
+    return configuredAdmin;
+  }
+
+  const [existingAdmin] = await db
+    .select()
+    .from(user)
+    .where(eq(user.role, USER_ROLE.ADMIN))
+    .limit(1);
+  if (existingAdmin) {
+    console.log("Admin user ready:", existingAdmin.id);
+    return existingAdmin;
+  }
+
+  if (isProductionLike(env.NODE_ENV)) {
+    throw new Error(
+      `No admin account found. Sign up an operator address from ADMIN_EMAILS (${configuredEmails.join(", ")}) before seeding; the seed never creates a production admin.`,
+    );
+  }
+  if (!adminPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD required (min 12 chars) to create the local seed admin",
+    );
+  }
+
+  const admin = await ensureUser(
+    LOCAL_SEED_ADMIN_EMAIL,
+    adminPassword,
+    "Admin User",
+  );
+  await promoteSeedAdmin(admin.id);
   console.log("Admin user ready:", admin.id);
   return admin;
 }
@@ -896,7 +941,7 @@ async function seedPresentationBooking(tutorId: string, studentId: string) {
   return bookingId;
 }
 
-async function seedV3Economy(adminId: string) {
+async function seedV3Economy(adminId: string | null) {
   await db.transaction(async (tx) => {
     await tx
       .insert(economyV3Activation)
@@ -933,48 +978,41 @@ async function seedV3Economy(adminId: string) {
   });
 }
 
-export async function seed() {
-  if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
-    throw new Error(
-      "Refusing to seed in production/staging unless SEED_ALLOWED_IN_PROD=true",
-    );
-  }
-  const adminPassword = seedAdminPassword(process.env.SEED_ADMIN_PASSWORD);
-  if (!adminPassword) {
-    throw new Error(
-      "SEED_ADMIN_PASSWORD required (min 12 chars) in this environment",
-    );
-  }
-
-  if (process.argv.includes("--sanity-content")) {
-    const admin = await ensureSeedAdmin(adminPassword);
-    await seedSanityContent(admin.id);
-    return;
-  }
-
-  requireProductionReviewPassword(
-    env.NODE_ENV,
-    "SEED_TUTOR_PASSWORD",
-    process.env.SEED_TUTOR_PASSWORD,
-  );
-  requireProductionReviewPassword(
-    env.NODE_ENV,
-    "SEED_STUDENT_PASSWORD",
-    process.env.SEED_STUDENT_PASSWORD,
-  );
-
+/** Canonical content shared by the UAT/dev seed and the production seed. */
+export async function seedCanonicalContent(adminId: string | null) {
   await seedPackages();
   await seedBlogCategories();
   await seedFaq();
   await seedCompetitionTypes();
   await seedCompetitionCalendar();
+  await seedV3Economy(adminId);
+}
+
+export async function seed() {
+  const adminPassword = seedAdminPassword(process.env.SEED_ADMIN_PASSWORD);
+  const mode = parseSeedMode(process.argv);
+
+  if (mode === "sanity") {
+    const admin = await ensureSeedAdmin(adminPassword);
+    await seedSanityContent(admin.id);
+    return;
+  }
+
+  if (!demoTutorStudentSeedAllowed(env.NODE_ENV)) {
+    throw new Error(
+      "This seed creates the UAT/dev admin, tutor, students, and demo booking; use `bun run seed:prod` in production/staging",
+    );
+  }
+
+  // CI's API coverage database needs only canonical business defaults. It has
+  // no admin actor, so the seed inserts content without creating an account.
+  if (mode === "canonical") {
+    await seedCanonicalContent(null);
+    return;
+  }
 
   const admin = await ensureSeedAdmin(adminPassword);
-  await seedV3Economy(admin.id);
-
-  // CI's API coverage database needs only canonical business defaults. Avoid
-  // creating demo users, bookings, and other fixtures that can affect tests.
-  if (process.argv.includes("--defaults-only")) return;
+  await seedCanonicalContent(admin.id);
 
   const tutorEmail =
     process.env.SEED_REVIEW_TUTOR_EMAIL?.trim().toLowerCase() ||

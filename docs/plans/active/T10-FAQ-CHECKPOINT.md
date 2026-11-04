@@ -19,7 +19,7 @@ Updated 2026-11-02.
 ## Default seed and categories (2026-11-02)
 
 - `apps/server/src/seed/faq-seed-content.ts` holds the client's 55 approved bilingual questions from the 2 Nov 2026 table. `seed-faq.ts` validates every document with the FAQ Zod schemas, derives the legacy columns, assigns stable IDs and `sortOrder`, and inserts with `onConflictDoNothing` so admin edits survive reruns.
-- The seed runs inside the default `seed.ts` before the `--defaults-only` return. It marks exactly six curated entries for the landing surface and leaves the remaining entries active but off-landing.
+- The seed runs inside `seed:canonical` before any demo fixture. It marks exactly six curated entries for the landing surface and leaves the remaining entries active but off-landing.
 - Migration `0089_faq_categories.sql` adds a non-null `category` column defaulting to `about`. `faq-categories.ts` defines the nine fixed keys and English/Indonesian labels. Admin create/update accepts the category with an `about` default, and public/admin DTOs return it.
 - The app read-only FAQ groups the full list by category in fixed category order. The admin editor adds a category selector and row badges.
 - Unresolved source placeholders were omitted: entry 46 stops at the street name, and entry 50 lists email and Instagram only. Add the house and WhatsApp numbers in the admin editor when the client supplies them.

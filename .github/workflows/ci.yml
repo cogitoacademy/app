@@ -279,11 +279,9 @@ jobs:
           echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
-      - name: Seed V3 defaults for API coverage
-        run: bun run seed --defaults-only
+      - name: Seed canonical defaults for API coverage
+        run: bun run seed:canonical
         working-directory: apps/server
-        env:
-          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Create payout integration Drizzle env
         run: |
           echo "DATABASE_URL=${{ env.PAYOUT_DATABASE_URL }}" > apps/server/.env.test-payout
@@ -294,12 +292,11 @@ jobs:
         run: bun run db:migrate
         env:
           ENV_FILE: ../../apps/server/.env.test-payout
-      - name: Seed V3 defaults for payout coverage
-        run: bun --env-file=.env.test-payout run seed --defaults-only
+      - name: Seed canonical defaults for payout coverage
+        run: bun --env-file=.env.test-payout run seed:canonical
         working-directory: apps/server
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
-          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Test with coverage
         id: coverage
         run: bun .github/scripts/coverage-runner.ts --collect-only

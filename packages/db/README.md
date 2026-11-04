@@ -2,23 +2,15 @@
 
 Drizzle ORM schema and migrations for Cogito, driven by the `postgres` (postgres.js) driver.
 
-## Schema (`src/schema/`, 18 files — 32 tables)
+## Schema (`src/schema/`)
 
-| File                 | Tables                                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `auth.ts`            | `user`, `session`, `account`, `verification` (Better Auth)                                                                                                                                 |
-| `booking.ts`         | `booking`, `bookingParticipant`, `bookingStateHistory`, `bookingRescheduleProposal`, `bookingSession`, `sessionNote`, `room`, `roomBooking`, `meetingEvent`                                |
-| `notification.ts`    | `notification`, `notificationDispatch`                                                                                                                                                     |
-| `payment-record.ts`  | `paymentRecord`, `refundRecord`                                                                                                                                                            |
-| `tutor-subject.ts`   | `subjectCategory`, `tutorProfileSubject`                                                                                                                                                   |
-| `wallet.ts`          | `wallet`, `ledgerEntry`                                                                                                                                                                    |
-| plus one table each: | `achievement`, `availability-slot`, `contact-request`, `economy-config`, `mark-package`, `student-profile`, `support-ticket`, `tutor-invite`, `tutor-payout`, `tutor-profile`, `audit-log` |
-
-`src/schema/index.ts` re-exports the full schema (used by Better Auth's Drizzle adapter via `@cogito-app/db/schema`).
+Current schema: 71 `pgTable` definitions across 31 schema modules. `src/schema/index.ts`
+re-exports the full schema (used by Better Auth's Drizzle adapter via
+`@cogito-app/db/schema`).
 
 ## Migrations (`src/migrations/`)
 
-43 generated SQL migrations (0000–0042) via `drizzle-kit generate`, applied with:
+Generated SQL migrations in `src/migrations/` (currently through `0090`) via `drizzle-kit generate`, applied with:
 
 ```
 bun run db:migrate
