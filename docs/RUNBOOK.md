@@ -3011,11 +3011,11 @@ manual recovery only.
 
 Two seeds exist. They share canonical content and differ in account fixtures:
 
-| Command | Use | Creates |
-| --- | --- | --- |
-| `bun run --cwd apps/server seed` | UAT / dev / E2E | Local admin `admin@cogitoacademy.id`, demo tutor, three demo students, presentation booking |
-| `bun run --cwd apps/server seed:canonical` | CI / canonical only | Canonical content only, with a null audit actor and no accounts |
-| `bun run --cwd apps/server seed:prod` | Production / staging | Canonical content only: packages, blog taxonomy, FAQ, competition taxonomy and calendar, V3 economy revision |
+| Command                                    | Use                  | Creates                                                                                                      |
+| ------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bun run --cwd apps/server seed`           | UAT / dev / E2E      | Local admin `admin@cogitoacademy.id`, demo tutor, three demo students, presentation booking                  |
+| `bun run --cwd apps/server seed:canonical` | CI / canonical only  | Canonical content only, with a null audit actor and no accounts                                              |
+| `bun run --cwd apps/server seed:prod`      | Production / staging | Canonical content only: packages, blog taxonomy, FAQ, competition taxonomy and calendar, V3 economy revision |
 
 The UAT/dev seed refuses production-like `NODE_ENV`. Passwords are optional
 locally (`SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, `SEED_STUDENT_PASSWORD`
@@ -4195,7 +4195,7 @@ Boolean environment values accept `true`/`1` and `false`/`0` (case-insensitive);
 | `R2_BACKUP_BUCKET`                                                                            | No       | Private R2 bucket used only for database backups; keep separate from the public upload bucket                                                                                                                                                                                    |
 | `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
 | `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`                                       | No       | Override the seeded tutor and first seeded student addresses. Review identities use local passwords; never use the Google Calendar operator account.                                                                                                                             |
-| `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | UAT/dev seed inputs only. `seed:prod` ignores them and creates no accounts. Minimum 12 characters for the local admin; tutor/student fallbacks exist locally. Remove them from any deployment environment. |
+| `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | UAT/dev seed inputs only. `seed:prod` ignores them and creates no accounts. Minimum 12 characters for the local admin; tutor/student fallbacks exist locally. Remove them from any deployment environment.                                                                       |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 
 ## Real-Provider Swap (Resend / Midtrans / Google Meet / R2)
