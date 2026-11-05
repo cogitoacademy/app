@@ -2,8 +2,14 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { CardBody } from "@cogito-app/ui/components/selia/card";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@cogito-app/ui/components/selia/menu";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -82,7 +88,7 @@ export function ClassCancellationPanel({
   )
     return null;
   return (
-    <CardBody className="space-y-3 border-t border-border">
+    <div className="space-y-3 border-t border-border pt-4">
       <Text className="font-medium">Cancellation and withdrawal</Text>
       <Text className="text-sm text-muted">
         Returns go to your available Marks balance, never cash. Review the exact
@@ -108,20 +114,35 @@ export function ClassCancellationPanel({
         >
           Review withdrawal
         </Button>
-        {funded.map((session) =>
-          session ? (
-            <Button
-              key={session.id}
-              variant="plain"
-              disabled={busy}
-              onClick={() =>
-                preview.mutate({ enrollmentId, sessionId: session.id })
+        {funded.length ? (
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  aria-label="Cancel session"
+                  variant="secondary"
+                  disabled={busy}
+                />
               }
             >
-              Cancel session {session.sequenceNumber}
-            </Button>
-          ) : null,
-        )}
+              Cancel session <IconChevronDown aria-hidden="true" />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              {funded.map((session) =>
+                session ? (
+                  <MenuItem
+                    key={session.id}
+                    onClick={() =>
+                      preview.mutate({ enrollmentId, sessionId: session.id })
+                    }
+                  >
+                    Cancel session {session.sequenceNumber}
+                  </MenuItem>
+                ) : null,
+              )}
+            </MenuPopup>
+          </Menu>
+        ) : null}
       </Stack>
       {quote ? (
         <div
@@ -205,6 +226,6 @@ export function ClassCancellationPanel({
           </Stack>
         </div>
       ) : null}
-    </CardBody>
+    </div>
   );
 }
