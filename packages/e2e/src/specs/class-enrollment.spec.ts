@@ -599,7 +599,10 @@ test("student enrolls in full, half, and single plans with stable checkout and i
       totalBalance: number;
     }>(studentApi, "wallet/get", {});
     await continuationPage
-      .getByRole("button", { name: "Cancel session 1", exact: true })
+      .getByRole("button", { name: "Cancel session", exact: true })
+      .click();
+    await continuationPage
+      .getByRole("menuitem", { name: "Cancel session 1", exact: true })
       .click();
     const cancellationReview = continuationPage.getByRole("region", {
       name: "Cancellation review",

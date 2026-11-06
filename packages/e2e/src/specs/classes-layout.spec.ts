@@ -1122,6 +1122,145 @@ for (const width of [320, 1440]) {
   });
 }
 
+for (const width of [390, 1440]) {
+  test(`cancellation actions use one session dropdown at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const secondSession = {
+      ...cohort.sessions[0],
+      id: "later",
+      sequenceNumber: 2,
+      titleEn: "A second session",
+      startAt: future,
+    };
+    const errors = await detailFixture(page, {
+      ...cohort,
+      sessions: [cohort.sessions[0], secondSession],
+    });
+    await page.route("**/rpc/classes/getMyEnrollments**", (route) =>
+      route.fulfill({
+        json: {
+          json: {
+            classId,
+            classState: "published",
+            freeExitUntil: null,
+            eligibleSessions: [],
+            enrollments: [
+              {
+                id: "enrollment-fixture",
+                plan: "full",
+                state: "active",
+                totalMarks: 40,
+                sessionCount: 2,
+                firstInstallmentMarks: 20,
+                secondInstallmentMarks: 20,
+                checkoutExpiresAt: null,
+                allocations: [sessionId, "later"].map((id) => ({
+                  sessionId: id,
+                  state: "funded",
+                  fundedMarks: 20,
+                  spentMarks: 0,
+                  releasedMarks: 0,
+                  scheduleChangeVersion: null,
+                  scheduleChangeExitUntil: null,
+                })),
+                installments: [1, 2].map((ordinal) => ({
+                  ordinal,
+                  state: "paid",
+                  amountMarks: 20,
+                  dueAt: null,
+                })),
+              },
+            ],
+          },
+          meta: [],
+        },
+      }),
+    );
+    let quoted: unknown;
+    await page.route("**/rpc/classes/quoteCancellation**", (route) => {
+      quoted = route.request().postDataJSON().json;
+      return route.fulfill({
+        json: {
+          json: {
+            enrollmentId: "enrollment-fixture",
+            sessionId: "later",
+            scope: "session",
+            freeExit: false,
+            freeExitUntil: null,
+            feeRateBps: 2000,
+            feeMarks: 5,
+            returnMarks: 20,
+            retainedMarks: 0,
+            quoteVersion: "synthetic-quote",
+            allocations: [
+              {
+                allocationId: "allocation-fixture",
+                sessionId: "later",
+                deadline: future,
+                chargeMarks: 25,
+                returnMarks: 20,
+              },
+            ],
+            unpaidAllocationIds: [],
+          },
+          meta: [],
+        },
+      });
+    });
+    await page.goto(`/classes/${classId}`);
+    const panel = page.getByRole("complementary", { name: "Class enrollment" });
+    const trigger = panel.getByRole("button", {
+      name: "Cancel session",
+      exact: true,
+    });
+    await expect(trigger).toHaveCount(1);
+    await expect(
+      panel.getByRole("button", { name: /^Cancel session \d+$/ }),
+    ).toHaveCount(0);
+    const heading = panel.getByText("Cancellation and withdrawal", {
+      exact: true,
+    });
+    const body = panel.getByText(/^Returns go to your available Marks/);
+    await expect(heading).toBeVisible();
+    const headingBox = await heading.boundingBox();
+    const bodyBox = await body.boundingBox();
+    expect(headingBox).toBeTruthy();
+    expect(bodyBox).toBeTruthy();
+    expect(headingBox!.x).toBe(bodyBox!.x);
+    await assertFits(page);
+    if (!process.env.PLAYWRIGHT_NO_ARTIFACTS)
+      await page.screenshot({
+        path: test.info().outputPath(`class-cancellation-${width}.png`),
+      });
+    await trigger.click();
+    await expect(page.getByRole("menuitem")).toHaveCount(2);
+    await assertFits(page);
+    if (!process.env.PLAYWRIGHT_NO_ARTIFACTS) {
+      await page.waitForTimeout(600);
+      await page.screenshot({
+        path: test
+          .info()
+          .outputPath(`class-cancellation-dropdown-${width}.png`),
+      });
+    }
+    await page
+      .getByRole("menuitem", { name: "Cancel session 2", exact: true })
+      .click();
+    await expect
+      .poll(() => quoted)
+      .toMatchObject({
+        enrollmentId: "enrollment-fixture",
+        sessionId: "later",
+      });
+    await expect(
+      panel.getByRole("region", { name: "Cancellation review" }),
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const width of [320, 1440]) {
   test(`detail radio selection and summary values work at ${width}px`, async ({
     page,
