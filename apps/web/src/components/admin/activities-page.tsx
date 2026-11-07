@@ -22,6 +22,7 @@ import {
 import { FaqRichTextEditor } from "./faq-rich-text-editor";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { formatPublicationState } from "./activity-form-utils";
 import type { FaqRichTextDocument } from "@cogito-app/api/modules/faq/faq.types";
 import { orpc } from "@/utils/orpc";
@@ -185,7 +186,6 @@ export function ActivitiesPage() {
                       [
                         "titleEn",
                         "descriptionEn",
-                        "coverUrl",
                         "location",
                         "startAt",
                       ] as const
@@ -196,7 +196,6 @@ export function ActivitiesPage() {
                             {
                               titleEn: "Title",
                               descriptionEn: "Short description",
-                              coverUrl: "Cover image URL (optional)",
                               location: "Location / online link",
                               startAt: "Date & time (WIB)",
                             }[key]
@@ -234,8 +233,8 @@ export function ActivitiesPage() {
                         ) : (
                           <Input
                             id={"activity-" + key}
-                            type={key === "coverUrl" ? "url" : "text"}
-                            required={key !== "coverUrl" && !key.endsWith("Id")}
+                            type="text"
+                            required={!key.endsWith("Id")}
                             value={form[key]}
                             onChange={(e) =>
                               setForm({ ...form, [key]: e.target.value })
@@ -276,6 +275,16 @@ export function ActivitiesPage() {
                       </Select>
                     </Field>
                   </div>
+                  <ImageUploadField
+                    id="activity-coverUrl"
+                    label="Cover image (optional)"
+                    description="JPG, PNG, WebP, or GIF. The image is resized to WebP and uploaded when selected."
+                    value={form.coverUrl}
+                    onChange={(coverUrl) =>
+                      setForm((current) => ({ ...current, coverUrl }))
+                    }
+                    previewClassName="aspect-video w-full max-w-sm rounded-md object-cover"
+                  />
                 </div>
                 <div className="min-w-0 space-y-5 lg:[&_.tiptap]:min-h-80">
                   <FaqRichTextEditor

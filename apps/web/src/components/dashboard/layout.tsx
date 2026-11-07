@@ -141,7 +141,8 @@ export function Layout({
             contentScrollMode === "contained"
               ? "overflow-hidden"
               : "overflow-y-auto overscroll-contain",
-            "xl:p-4 xl:border-l border-t border-border xl:rounded-tl-4xl",
+            "border-t border-border xl:p-4",
+            sidebarOpen ? "xl:border-l xl:rounded-tl-4xl" : "",
           )}
         >
           <SessionExpiryNotice expiresAt={sessionExpiresAt} />

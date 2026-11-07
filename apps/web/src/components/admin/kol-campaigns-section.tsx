@@ -15,7 +15,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -47,6 +51,9 @@ const labels = {
   attributionWindowDays: "Attribution window (days)",
   flatAmountIdr: "Flat commission (IDR)",
   percent: "Commission (%)",
+};
+const placeholders: Partial<Record<keyof CampaignDraft, string>> = {
+  name: "Rafsi Albar - September 2026 Launch",
 };
 const wibDate = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -218,6 +225,7 @@ export function KolCampaignsSection({
                         name={key}
                         autoComplete="off"
                         value={draft[key]}
+                        placeholder={placeholders[key]}
                         maxLength={
                           key === "name" ? 100 : key === "code" ? 32 : undefined
                         }
@@ -231,13 +239,23 @@ export function KolCampaignsSection({
                         }
                         aria-invalid={!!errors[key]}
                         aria-describedby={
-                          errors[key] ? `kol-${key}-error` : undefined
+                          [
+                            key === "name" ? "kol-name-description" : null,
+                            errors[key] ? `kol-${key}-error` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ") || undefined
                         }
                         onChange={(event) =>
                           setDraft({ ...draft, [key]: event.target.value })
                         }
                       />
                     )}
+                    {key === "name" ? (
+                      <FieldDescription id="kol-name-description">
+                        Use the KOL name, campaign month, and purpose.
+                      </FieldDescription>
+                    ) : null}
                     {errors[key] ? (
                       <Text
                         id={`kol-${key}-error`}
