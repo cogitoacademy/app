@@ -1100,29 +1100,14 @@ export function TutorReviewCard({
                   only when the review action is approved.
                 </FieldDescription>
               </Field>
-              <Field>
-                <FieldLabel htmlFor={`admin-${profile.id}-edited-photo-url`}>
-                  Or paste edited photo URL
-                </FieldLabel>
-                <Input
-                  id={`admin-${profile.id}-edited-photo-url`}
-                  type="url"
-                  value={profileImageUrl}
-                  onChange={(event) => setProfileImageUrl(event.target.value)}
-                  placeholder="https://…"
-                />
-                <FieldDescription>
-                  Use this only when the edited asset is already hosted.
-                </FieldDescription>
-              </Field>
               {profileImageUrl.trim() ? (
                 <div className="rounded-lg border border-success-border bg-success/5 p-3">
                   <Text className="text-xs font-semibold uppercase tracking-wide text-success">
                     Edited photo ready
                   </Text>
                   <Text className="mt-2 text-sm text-muted">
-                    The hosted photo will be applied when this review action is
-                    approved.
+                    The uploaded photo will be applied when this review action
+                    is approved.
                   </Text>
                 </div>
               ) : null}

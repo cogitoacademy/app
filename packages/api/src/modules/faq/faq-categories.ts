@@ -21,22 +21,22 @@ export const FAQ_CATEGORY_LABELS: Record<
   { en: string; id: string }
 > = {
   about: { en: "About Cogito", id: "Tentang Cogito" },
-  programs: { en: "Programs and classes", id: "Program dan Kelas" },
+  programs: { en: "Programs and classes", id: "Program dan kelas" },
   tutors: { en: "Tutors", id: "Tutor" },
-  accounts: { en: "Accounts and booking", id: "Akun dan Pemesanan" },
-  marks: { en: "Marks and pricing", id: "Marks dan Harga" },
+  accounts: { en: "Accounts and booking", id: "Akun dan pemesanan" },
+  marks: { en: "Marks and pricing", id: "Marks dan harga" },
   payments: {
     en: "Payments, cancellations and returns",
-    id: "Pembayaran, Pembatalan, dan Pengembalian",
+    id: "Pembayaran, pembatalan, dan pengembalian",
   },
-  progress: { en: "Progress and results", id: "Perkembangan dan Hasil" },
+  progress: { en: "Progress and results", id: "Perkembangan dan hasil" },
   offline: {
     en: "Offline classes, schools and contact",
-    id: "Kelas Offline, Sekolah, dan Kontak",
+    id: "Kelas offline, sekolah, dan kontak",
   },
   "tutor-join": {
     en: "For tutors who want to join",
-    id: "Untuk Tutor yang Ingin Bergabung",
+    id: "Untuk tutor yang ingin bergabung",
   },
 };
 

@@ -57,6 +57,7 @@ describe("guide content", () => {
       "/dashboard",
       "/balance",
       "/bookings",
+      "/classes",
       "/calendar",
       "/achievements",
       "/tutors",
@@ -64,12 +65,25 @@ describe("guide content", () => {
       "/notifications",
       "/profile",
       "/availability",
+      "/my-classes",
+      "/class-reports",
+      "/referrals",
+      "/faq",
       "/admin",
+      "/admin-operations",
       "/admin-tutors",
       "/admin-tutor-payouts",
-      "/admin-operations",
-      "/admin-achievements",
+      "/admin-classes",
+      "/admin-payments",
       "/admin-economy",
+      "/admin-referrals",
+      "/admin-competitions",
+      "/admin-achievements",
+      "/admin-knowledge-bank",
+      "/admin-admins",
+      "/admin-audit",
+      "/admin-blog",
+      "/activities",
     ]);
 
     for (const view of GUIDE_VIEWS) {
@@ -88,16 +102,52 @@ describe("guide content", () => {
     }
   });
 
+  test("covers each role's current product surfaces", () => {
+    const studentCopy = JSON.stringify(GUIDE_CONTENT.student);
+    const tutorCopy = JSON.stringify(GUIDE_CONTENT.tutor);
+    const adminCopy = JSON.stringify(GUIDE_CONTENT.admin);
+
+    for (const term of [
+      "masterclass",
+      "installment",
+      "referral",
+      "Knowledge Bank",
+    ]) {
+      expect(studentCopy).toContain(term);
+    }
+
+    for (const term of ["absence", "class session report", "payout", "NIK"]) {
+      expect(tutorCopy).toContain(term);
+    }
+
+    for (const term of [
+      "support ticket",
+      "KOL",
+      "audit log",
+      "blog",
+      "payment",
+    ]) {
+      expect(adminCopy).toContain(term);
+    }
+  });
+
   test("surfaces concrete timing rules in bold-copy markers", () => {
     const copy = JSON.stringify(GUIDE_CONTENT);
 
     expect(copy).toContain("**7 days**");
     expect(copy).toContain("**12-hour**");
-    expect(copy).toContain("**H-2 (2 hours before the session)**");
+    expect(copy).toContain("**H-2 (2 hours before start)**");
     expect(copy).toContain("**15-minute**");
     expect(copy).toContain("**24-hour**");
     expect(copy).toContain("**5 minutes**");
     expect(copy).toContain("**30 minutes**");
     expect(copy).toContain("**4 hours**");
+    expect(copy).toContain("**20%**");
+    expect(copy).toContain("**3-day**");
+    expect(copy).toContain("**600 characters**");
+    expect(copy).toContain("**15 minutes**");
+    expect(copy).toContain("**7 days**");
+    expect(copy).toContain("**1 day**");
+    expect(copy).toContain("**100**");
   });
 });
