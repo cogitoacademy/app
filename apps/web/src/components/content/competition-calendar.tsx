@@ -239,12 +239,14 @@ export function CompetitionCalendar({
             {onManage ? (
               <Button
                 variant="secondary"
-                size="sm-icon"
-                aria-label="Manage calendar"
-                title="Manage calendar"
+                size="sm"
+                aria-label="Edit/add competition"
+                title="Edit/add competition"
                 onClick={onManage}
+                className="max-md:w-8.5 max-md:px-0"
               >
                 <IconSettings aria-hidden="true" />
+                <span className="hidden md:inline">Edit/add competition</span>
               </Button>
             ) : null}
             <Menu>

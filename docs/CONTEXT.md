@@ -3841,7 +3841,7 @@ KB/calendar management refinement: compact rows, shared TablePagination (10 reco
 
 KB/calendar editor confirmation uses Selia Dialog for discarding drafts and deleting entries. Discard confirmation appears only when field values differ from the opened draft; closing an unchanged editor proceeds immediately.
 
-Calendar toolbar: admin management is an accessible gear-only button immediately before Filter inside CompetitionCalendar, including empty calendars. Calendar page/panel widths are constrained to their parent so the 720px month grid scrolls horizontally inside the panel on narrow screens. Focused mocked browser checks cover scroll movement, toolbar placement, manage navigation, and reader visibility; they do not prove live API/data behavior.
+Calendar toolbar: admin management is an accessible gear button immediately before Filter inside CompetitionCalendar, including empty calendars. The button shows the `Edit/add competition` label from the `md` breakpoint and stays icon-only below it. Calendar page/panel widths are constrained to their parent so the 720px month grid scrolls horizontally inside the panel on narrow screens. Focused mocked browser checks cover scroll movement, toolbar placement, manage navigation, and reader visibility; they do not prove live API/data behavior.
 
 ### Booking exact top-up (2026-10-30)
 

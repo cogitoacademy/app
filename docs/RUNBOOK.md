@@ -4670,7 +4670,7 @@ Web and E2E TypeScript use serial TS-Go `--checkers 1` with `GOMEMLIMIT=1GiB` an
 
 ### KB/calendar management on canonical pages (25 October 2026)
 
-Use `/knowledge-bank` → Manage resources for PDF resources, or `/calendar` → Manage calendar for events. View resources/calendar returns to the original reader UI; an open draft requires discard confirmation. The former `/admin-content` URL redirects admins to Knowledge Bank. Non-admin roles retain their existing reader/access rules.
+Use `/knowledge-bank` → Manage resources for PDF resources, or `/calendar` → Edit/add competition for events. View resources/calendar returns to the original reader UI; an open draft requires discard confirmation. The former `/admin-content` URL redirects admins to Knowledge Bank. Non-admin roles retain their existing reader/access rules.
 
 Synthetic verification with installed Edge:
 
