@@ -1,4 +1,4 @@
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
@@ -180,10 +180,9 @@ export function resolveGoogleSocialProviders(input: {
     google: {
       clientId: input.clientId,
       clientSecret: input.clientSecret,
-      // Force Google's OAuth permission screen for every authorization.
-      // This is required for the verification demo and makes a previously
-      // authorized account show the requested identity scopes again.
-      prompt: "consent" as const,
+      // Keep account selection explicit and preserve the consent screen.
+      prompt: "select_account consent" as const,
+      disableImplicitSignUp: true,
     },
   };
 }
@@ -349,9 +348,51 @@ function buildAuth(options?: InternalAuthOptions) {
       }),
     ],
     hooks: {
-      after: createAuthMiddleware(async () => {
-        // Wallet creation is now handled lazily by WalletService.getOrCreate()
-        // when the user first calls auth.me. This decouples auth from wallet.
+      after: createAuthMiddleware(async (ctx) => {
+        const result = ctx.context.returned;
+        if (
+          ctx.path !== "/sign-in/email" ||
+          !(result instanceof APIError) ||
+          result.body?.code !== "INVALID_EMAIL_OR_PASSWORD"
+        )
+          return;
+
+        const email = ctx.body?.email;
+        if (typeof email !== "string") return;
+        const existing = await db.query.user.findFirst({
+          where: eq(schema.user.email, email.toLowerCase()),
+          columns: { id: true },
+        });
+        if (!existing) {
+          throw new APIError("UNAUTHORIZED", {
+            code: "USER_NOT_FOUND",
+            message:
+              "No account was found for this email. Please sign up first.",
+          });
+        }
+        const accounts = await db.query.account.findMany({
+          where: eq(schema.account.userId, existing.id),
+          columns: { providerId: true, password: true },
+        });
+        if (
+          !accounts.some(
+            (account) =>
+              account.providerId === "credential" && account.password,
+          )
+        ) {
+          if (accounts.some((account) => account.providerId === "google")) {
+            throw new APIError("UNAUTHORIZED", {
+              code: "GOOGLE_SIGN_IN_REQUIRED",
+              message: "This account uses Google. Please continue with Google.",
+            });
+          }
+          return;
+        }
+        throw new APIError("UNAUTHORIZED", {
+          code: "INVALID_PASSWORD",
+          message:
+            "That password is incorrect. Try again or reset your password.",
+        });
       }),
     },
     databaseHooks: {

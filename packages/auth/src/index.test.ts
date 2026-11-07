@@ -563,7 +563,8 @@ describe("resolveGoogleSocialProviders", () => {
       google: {
         clientId: "google-id",
         clientSecret: "google-secret",
-        prompt: "consent",
+        prompt: "select_account consent",
+        disableImplicitSignUp: true,
       },
     });
   });

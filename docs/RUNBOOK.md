@@ -4929,3 +4929,11 @@ Migration 0088 was applied to development localhost:6767/cogito-app during this 
 ### Developer-terminal production seed helper
 
 `bun scripts/seed-prod-db.ts --help` documents the optional helper. Set `PROD_DATABASE_URL`, then pass `--confirm=<database-host>`. Loopback targets require `--via-tunnel`; existing users require `ALLOW_NONEMPTY_PROD_SEED=true`. The helper checks migration presence, runs `seed:prod` (canonical content only, no accounts), and verifies user count; it does not apply migrations. Confirm the exact target before running it.
+
+### Specific login errors (7 November 2026)
+
+Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credential validation to USER_NOT_FOUND, INVALID_PASSWORD, or GOOGLE_SIGN_IN_REQUIRED (Google account without a usable password). Linked Google accounts with passwords use password validation. Other failures remain unchanged. This intentionally exposes email registration/provider status on failed login; existing auth rate limits still apply. No migration or environment change.
+
+### Explicit Google signup (7 November 2026)
+
+Google disables implicit signup. Only the signup form sends requestSignUp: true. Unregistered Google sign-ins return to /login with signup_disabled and guidance to choose another account or sign up. Google prompts for account selection and consent. No migration or new environment setting.

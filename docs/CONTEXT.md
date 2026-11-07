@@ -3954,3 +3954,15 @@ FAQ default seed and categories (2026-11-02): the default seed now inserts the c
 Migration `0089_faq_categories.sql` adds a non-null `category` column defaulting to `about` plus a check constraint for the nine fixed keys. API inputs accept the fixed category keys with an `about` default; public and admin DTOs return the key. The FAQ API modules keep 100% statement, function, and branch coverage under the repository counter instrumenter. The app read-only FAQ groups entries by the fixed category order, and the admin editor gains a category selector plus row badges. Marketing FAQ consumers can ignore the additive field until they adopt grouping. Placeholder address/WhatsApp fragments from the source table were omitted from entries 46 and 50 pending client input.
 
 The shared app sidebar groups Competition Calendar and Knowledge Bank under Resources, followed by Help & Support with How It Works, FAQ where available, and WhatsApp Support. Existing role visibility rules still apply.
+
+### Login error guidance (7 November 2026)
+
+Generic email/password sign-in failures include a conditional reminder: "If you signed up with Google, continue with Google." The hint does not look up or disclose the account provider; authentication contracts and backend behavior are unchanged.
+
+### Specific login errors (7 November 2026)
+
+Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credential validation to USER_NOT_FOUND, INVALID_PASSWORD, or GOOGLE_SIGN_IN_REQUIRED (Google account without a usable password). Linked Google accounts with passwords use password validation. Other failures remain unchanged. This intentionally exposes email registration/provider status on failed login; existing auth rate limits still apply. No migration or environment change.
+
+### Explicit Google signup (7 November 2026)
+
+Google disables implicit signup. Only the signup form sends requestSignUp: true. Unregistered Google sign-ins return to /login with signup_disabled and guidance to choose another account or sign up. Google prompts for account selection and consent. No migration or new environment setting.

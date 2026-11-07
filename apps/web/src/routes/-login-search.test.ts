@@ -21,3 +21,16 @@ describe("validateLoginSearch", () => {
     ).toEqual({});
   });
 });
+
+test("preserves Google signup rejection with a safe destination", () => {
+  expect(
+    validateLoginSearch({ error: "signup_disabled", redirect: "/classes" }),
+  ).toEqual({ error: "signup_disabled", redirect: "/classes" });
+  expect(
+    validateLoginSearch({
+      error: "signup_disabled",
+      redirect: "//evil.example",
+    }),
+  ).toEqual({ error: "signup_disabled" });
+  expect(validateLoginSearch({ error: "untrusted" })).toEqual({});
+});
