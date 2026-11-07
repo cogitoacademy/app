@@ -248,6 +248,21 @@ export function AppSidebar({
           ]
       : resourceItems.slice(0, 2);
 
+  const sidebarResourceGroups = [
+    {
+      label: "Resources",
+      items: visibleResourceItems.filter(
+        (item) => item.to !== "/guide" && item.to !== "/faq",
+      ),
+    },
+    {
+      label: "Help & Support",
+      items: visibleResourceItems.filter(
+        (item) => item.to === "/guide" || item.to === "/faq",
+      ),
+    },
+  ];
+
   function signOut() {
     posthog.capture("account_signed_out");
     authClient.signOut({
@@ -356,63 +371,67 @@ export function AppSidebar({
               </SidebarCollapsible>
             </SidebarGroup>
           ))}
-          <SidebarGroup>
-            <SidebarCollapsible defaultOpen>
-              <SidebarCollapsibleTrigger
-                render={
-                  <SidebarItemButton
-                    className="text-sm font-medium text-dimmed"
-                    expandableIndicator={false}
-                  />
-                }
-              >
-                Resources
-                <IconChevronDown
-                  aria-hidden="true"
-                  className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                />
-              </SidebarCollapsibleTrigger>
-              <SidebarCollapsiblePanel>
-                <SidebarList>
-                  {visibleResourceItems.map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                      <SidebarItem key={item.to}>
-                        <SidebarItemButton
-                          active={pathname === item.to}
-                          render={
-                            <Link
-                              to={item.to}
-                              className={
-                                pathname === item.to
-                                  ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                                  : undefined
-                              }
-                              aria-label={item.label}
-                            />
-                          }
-                        >
-                          <Icon />
-                          {item.label}
-                        </SidebarItemButton>
-                      </SidebarItem>
-                    );
-                  })}
-                  <SidebarItem>
-                    <WhatsAppSupportDialog
-                      trigger={
-                        <SidebarItemButton aria-label="WhatsApp Support">
-                          <IconBrandWhatsapp />
-                          WhatsApp Support
-                        </SidebarItemButton>
-                      }
+          {sidebarResourceGroups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarCollapsible defaultOpen>
+                <SidebarCollapsibleTrigger
+                  render={
+                    <SidebarItemButton
+                      className="text-sm font-medium text-dimmed"
+                      expandableIndicator={false}
                     />
-                  </SidebarItem>
-                </SidebarList>
-              </SidebarCollapsiblePanel>
-            </SidebarCollapsible>
-          </SidebarGroup>
+                  }
+                >
+                  {group.label}
+                  <IconChevronDown
+                    aria-hidden="true"
+                    className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                  />
+                </SidebarCollapsibleTrigger>
+                <SidebarCollapsiblePanel>
+                  <SidebarList>
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+
+                      return (
+                        <SidebarItem key={item.to}>
+                          <SidebarItemButton
+                            active={pathname === item.to}
+                            render={
+                              <Link
+                                to={item.to}
+                                className={
+                                  pathname === item.to
+                                    ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                                    : undefined
+                                }
+                                aria-label={item.label}
+                              />
+                            }
+                          >
+                            <Icon />
+                            {item.label}
+                          </SidebarItemButton>
+                        </SidebarItem>
+                      );
+                    })}
+                    {group.label === "Help & Support" && (
+                      <SidebarItem>
+                        <WhatsAppSupportDialog
+                          trigger={
+                            <SidebarItemButton aria-label="WhatsApp Support">
+                              <IconBrandWhatsapp />
+                              WhatsApp Support
+                            </SidebarItemButton>
+                          }
+                        />
+                      </SidebarItem>
+                    )}
+                  </SidebarList>
+                </SidebarCollapsiblePanel>
+              </SidebarCollapsible>
+            </SidebarGroup>
+          ))}
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
