@@ -1,9 +1,11 @@
 # Production Data Reset
 
-Use this procedure only for an explicitly approved prelaunch reset. It deletes
-all application users and transactional data while preserving migrations,
-subject taxonomy, and the Marks package catalog. Never delete the PostgreSQL
-resource or volume in Coolify.
+Use this procedure only for an explicitly approved prelaunch reset. It drops the
+application schema, reapplies every migration, and reseeds canonical defaults.
+It never deletes the PostgreSQL resource or volume in Coolify.
+
+The reset creates no admin account. An operator address from `ADMIN_EMAILS`
+must sign in after the reset; the signup hook or server boot promotes it.
 
 ## 1. Create and verify a recoverable backup
 
@@ -36,7 +38,7 @@ aws s3 ls "s3://${R2_BACKUP_BUCKET}/backups/" \
 
 Do not continue unless the new object appears in the private backup bucket.
 
-## 2. Stop the API and truncate application data
+## 2. Stop the API and drop the application schemas
 
 Stop `cogito-api` in Coolify first so schedulers and requests cannot write
 during the reset. Keep PostgreSQL and Redis running. Then run on the VPS:
@@ -60,73 +62,16 @@ sudo docker exec -i "$DB_CONTAINER" psql \
   -U postgres \
   -d postgres <<'SQL'
 BEGIN;
-
-TRUNCATE TABLE
-  "booking_state_history",
-  "contact_request",
-  "booking_participant",
-  "booking_reschedule_proposal",
-  "booking_session",
-  "session_note",
-  "session_completion_feedback",
-  "booking",
-  "notification_dispatch",
-  "notification",
-  "payment_record",
-  "refund_record",
-  "ledger_entry",
-  "availability_slot",
-  "meeting_event",
-  "room_booking",
-  "room",
-  "tutor_profile_subject",
-  "tutor_profile",
-  "tutor_invite",
-  "tutor_payout",
-  "wallet",
-  "achievement",
-  "audit_log",
-  "support_ticket",
-  "knowledge_bank_access_grant",
-  "student_profile",
-  "account",
-  "session",
-  "verification",
-  "user"
-CASCADE;
-
-INSERT INTO "economy_config" (
-  "id",
-  "mark_value_idr",
-  "min_tutor_base_rate_idr",
-  "online_tutor_increment_idr",
-  "offline_tutor_increment_idr",
-  "online_cogito_base_idr",
-  "online_cogito_increment_idr",
-  "offline_cogito_base_idr",
-  "offline_cogito_increment_idr",
-  "version",
-  "updated_by"
-)
-VALUES (
-  'default', 5000, 50000, 30000, 40000,
-  50000, 20000, 90000, 40000, 1, NULL
-)
-ON CONFLICT ("id") DO UPDATE SET
-  "mark_value_idr" = EXCLUDED."mark_value_idr",
-  "min_tutor_base_rate_idr" = EXCLUDED."min_tutor_base_rate_idr",
-  "online_tutor_increment_idr" = EXCLUDED."online_tutor_increment_idr",
-  "offline_tutor_increment_idr" = EXCLUDED."offline_tutor_increment_idr",
-  "online_cogito_base_idr" = EXCLUDED."online_cogito_base_idr",
-  "online_cogito_increment_idr" = EXCLUDED."online_cogito_increment_idr",
-  "offline_cogito_base_idr" = EXCLUDED."offline_cogito_base_idr",
-  "offline_cogito_increment_idr" = EXCLUDED."offline_cogito_increment_idr",
-  "version" = EXCLUDED."version",
-  "updated_by" = NULL;
-
+DROP SCHEMA IF EXISTS drizzle CASCADE;
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
 COMMIT;
 SQL
 ```
+
+Dropping `public` removes every application table. Dropping `drizzle` removes
+the migration ledger; without that step `bun run db:migrate` would consider all
+migrations applied and recreate nothing.
 
 ## 3. Clear Redis
 
@@ -170,78 +115,71 @@ unset REDIS_PASSWORD
 
 The final result must be `0`.
 
-## 4. Start API and run the guarded seed
+## 4. Reapply every migration
 
-Start `cogito-api` in Coolify and wait for `/health` to return `status: ok`.
-The seed runs from the compiled image (`dist/src/seed/seed.js`), so deploy the
-current `main` before starting the reset. Use unique temporary passwords of at
-least 12 characters. Never put passwords in this document, shell history,
-Coolify environment, or chat. The review admin must not be an address listed in
-`ADMIN_EMAILS`.
+Preferred path: push to `main` so the CD pipeline snapshots, migrates, and
+deploys with the normal gates.
 
-Run on the VPS:
+Manual path from a machine with tunnel access to the database:
 
 ```bash
-set -euo pipefail
-
-API_CONTAINER="$(
-  sudo docker ps --format '{{.Names}}' |
-  grep '^6ophpbzmsblhvetxi47gqd7e' |
-  head -1
-)"
-
-test -n "$API_CONTAINER" || {
-  echo "ERROR: cogito-api container not running"
-  exit 1
-}
-
-read -rp "Review admin email: " ADMIN_EMAIL
-read -rsp "Admin password (12+ characters): " ADMIN_PASSWORD; echo
-read -rsp "Tutor password (12+ characters): " TUTOR_PASSWORD; echo
-read -rsp "Student password (12+ characters): " STUDENT_PASSWORD; echo
-
-if [ "${#ADMIN_PASSWORD}" -lt 12 ] ||
-   [ "${#TUTOR_PASSWORD}" -lt 12 ] ||
-   [ "${#STUDENT_PASSWORD}" -lt 12 ]; then
-  echo "ERROR: every password must contain at least 12 characters"
-  exit 1
-fi
-
-cleanup() {
-  unset ADMIN_PASSWORD TUTOR_PASSWORD STUDENT_PASSWORD
-}
-trap cleanup EXIT
-
-printf '%s\n%s\n%s\n%s\n' \
-  "$ADMIN_EMAIL" \
-  "$ADMIN_PASSWORD" \
-  "$TUTOR_PASSWORD" \
-  "$STUDENT_PASSWORD" |
-sudo docker exec -i --workdir /app "$API_CONTAINER" sh -c '
-  set -eu
-  IFS= read -r SEED_REVIEW_ADMIN_EMAIL
-  IFS= read -r SEED_ADMIN_PASSWORD
-  IFS= read -r SEED_TUTOR_PASSWORD
-  IFS= read -r SEED_STUDENT_PASSWORD
-  export SEED_REVIEW_ADMIN_EMAIL SEED_ADMIN_PASSWORD
-  export SEED_TUTOR_PASSWORD SEED_STUDENT_PASSWORD
-  export SEED_ALLOWED_IN_PROD=true
-  export SEED_REVIEW_TUTOR_EMAIL=cogito.diego@yopmail.com
-  export SEED_REVIEW_STUDENT_EMAIL=cogito.andre@yopmail.com
-  bun run /app/apps/server/dist/src/seed/seed.js
-'
+DATABASE_URL="$PROD_DATABASE_URL" ENV_FILE=/tmp/cogito-reset-no-env \
+  bun --cwd packages/db run db:migrate
 ```
 
-The launch seed creates one review admin, Diego as the published tutor, and
-Andre, Argya, and Athena as verified students with 200 Marks each. It also
-seeds the 63 approved competition calendar events from
-`apps/server/src/seed/competition-calendar-seed-data.ts`, after the competition
-category catalog. The seed is idempotent: existing event IDs are left untouched,
-so an operator edit is never overwritten. Seed warnings that verification email
-delivery is not configured are expected: the script marks these deterministic
-review accounts verified after signup.
+`ENV_FILE` points at a missing file on purpose. Without it, `drizzle.config.ts`
+loads `apps/server/.env` with `override: true` and could replace the production
+URL with a local one.
 
-## 5. Verify and rotate credentials
+Verify the ledger and table count before continuing:
+
+```bash
+psql "$PROD_DATABASE_URL" -c \
+  'select count(*) as migrations from drizzle.__drizzle_migrations;' \
+  -c "select count(*) as tables from information_schema.tables where table_schema = 'public';"
+```
+
+## 5. Start the API
+
+Start `cogito-api` in Coolify and wait for `/health` to return `status: ok`.
+
+## 6. Run the production seed
+
+The production seed inserts canonical content only: Marks packages, blog
+taxonomy, FAQ, competition taxonomy and calendar, and the default V3 economy
+revision. It creates no admin, tutor, or student account and needs no seed
+passwords.
+
+The deployed image does not include the seed entrypoint. Run the guarded helper
+from a repo checkout over an SSH tunnel:
+
+```bash
+# Terminal 1: tunnel the private database container.
+ssh -N -L 6543:noxeaeuxfreq0axa9unpew5r:5432 root@<vps>
+
+# Terminal 2: from the repo root.
+export PROD_DATABASE_URL='postgresql://postgres:<password>@localhost:6543/postgres'
+bun scripts/seed-prod-db.ts --confirm=localhost --via-tunnel
+```
+
+The helper checks the migration ledger, runs `seed:prod` against that URL, and
+prints the final user count. It never creates accounts. Re-runs on a database
+that already has users require `ALLOW_NONEMPTY_PROD_SEED=true`.
+
+The seed is idempotent: existing package, FAQ, category, and calendar rows are
+left untouched, so operator edits are never overwritten. It logs
+`Production seed ready: canonical defaults only`.
+
+For UAT review accounts with a published tutor and demo students, use the
+separate UAT/dev seed (`bun run --cwd apps/server seed`) against a UAT database.
+Do not run it for a launch-ready database.
+
+## 7. Sign in the operators and verify
+
+Sign in once with each address listed in `ADMIN_EMAILS` (default
+`itcogitoacademy01@gmail.com,cogitoacademy.id@gmail.com`). The signup hook
+stores each account with `role = admin`; server boot promotes an existing
+account.
 
 ```bash
 DB_CONTAINER="$(
@@ -260,10 +198,13 @@ curl --fail --silent https://api.cogitoacademy.id/health
 echo
 ```
 
-Then verify admin login, tutor discovery, future tutor availability, each
-student's 200-Mark wallet, and one booking flow. Sign up the operator address
-listed in `ADMIN_EMAILS` separately; server boot/signup promotion makes it an
-admin. Rotate every temporary seed password before public launch.
+Both operator rows must show `role = admin`. Verify package pricing, FAQ, and
+the competition calendar in the UI.
+
+To give a UAT reviewer admin access, sign up that address as a normal account,
+then grant the role from Admin > Admins while signed in as a super admin
+(`cogitoacademy.id@gmail.com` or `itcogitoacademy01@gmail.com`). Revoke it after
+UAT: the account stays and returns to `student`.
 
 ## Restore the pre-reset backup
 
@@ -284,7 +225,13 @@ aws s3 cp \
   --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
   --region auto
 '
+```
 
+The nightly backup is a custom-format archive (`pg_dump -Fc | gzip`), so restore
+with `pg_restore`, not `psql -f`. The archive includes the `drizzle` schema, so
+drop both schemas before restoring:
+
+```bash
 gunzip -c /tmp/cogito-restore.sql.gz >/tmp/cogito-restore.dump
 
 DB_CONTAINER="$(
@@ -294,19 +241,23 @@ DB_CONTAINER="$(
 )"
 
 sudo docker exec "$DB_CONTAINER" psql -U postgres -d postgres \
+  -c 'DROP SCHEMA IF EXISTS drizzle CASCADE;' \
   -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
 
 sudo docker cp /tmp/cogito-restore.dump \
-  "$DB_CONTAINER:/tmp/cogito-restore.dump"
+  "$DB_CONTAINER":/tmp/cogito-restore.dump
 
 sudo docker exec "$DB_CONTAINER" pg_restore \
-  --exit-on-error \
-  --no-owner \
-  --no-acl \
-  -U postgres \
-  -d postgres \
+  -U postgres -d postgres --no-owner --no-acl \
   /tmp/cogito-restore.dump
+
+sudo docker exec "$DB_CONTAINER" rm -f /tmp/cogito-restore.dump
+rm -f /tmp/cogito-restore.sql.gz /tmp/cogito-restore.dump
 ```
 
-Clear Redis again, restart the API, and verify `/health`, user counts, wallet
-balances, and recent bookings before ending the maintenance window.
+The CD pre-migrate snapshots (`pre-migrate-<sha>.sql.gz`) are plain SQL instead.
+Restore those with `psql -U postgres -d postgres -f /tmp/cogito-restore.dump`
+after the same schema drop.
+
+Start the API only after the restore finishes and the `user` table matches the
+recorded pre-reset state.

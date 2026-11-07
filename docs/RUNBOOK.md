@@ -1,5 +1,29 @@
 # Cogito Runbook
 
+## CI backend coverage reuse (7 November 2026)
+
+`Check coverage reuse` fingerprints the merged Git tree and queries Actions
+artifacts with `actions: read`. A matching artifact named
+`coverage-success-pr-<number>-<fingerprint>` must be unexpired and come from a
+completed successful CI pull-request run in this PR and head repository, with a
+successful `Backend tests + coverage` producer job. Proofs expire after 14 days.
+API errors, missing proofs, cancelled or failed runs fall back to a full suite.
+Manual `workflow_dispatch` always runs the suite and publishes no PR proof.
+Historical green runs without the new artifact cannot be reused. App-code PRs
+need an initial full run. Docs/infra-only PRs retain the existing path-based skip;
+root files, app/package code, scripts and GitHub tooling count as code changes.
+
+A reuse hit skips the entire backend job and its PostgreSQL/Redis services.
+Keep requiring `Test + Coverage`, whose summary links the original run; do not
+replace it with the conditional `Backend tests + coverage` job. Bun is pinned
+to 1.3.14 and service images to digests in `ci.yml`; updating pins invalidates
+proofs. The runner uses `ubuntu-24.04`; GitHub-managed image updates are outside
+the fingerprint. Exclusions are `apps/web/src/`, `apps/web/public/`,
+`packages/ui/components/`, `packages/ui/src/`, and `docs/`. Update this policy
+before backend tests start reading those paths. Manifests and unknown paths
+remain inputs. Run policy tests with
+`node --test .github/scripts/coverage-reuse.test.mjs`.
+
 ## Web CSP and client-side image uploads (3 November 2026)
 
 Blog hero and gallery uploads and the profile photo crop preview decode the
@@ -177,7 +201,7 @@ The E2E job has a 45-minute timeout because the serialized regular browser suite
 
 Use `bun run test:coverage` for the supported local coverage path; it reads the ignored apps/server/.env.test file. Preflight both exact test targets and their owning containers, then explicitly set PAYOUT_DATABASE_URL and COVERAGE_DB_RESET_WINDOW=confirmed only for approved disposable fixtures. Do not use the retained 6769/6770 fixtures for this destructive full run. Ambient TEST_DATABASE_ALLOW_RESET/TEST_DATABASE_RESET_TARGET must be absent; the runner owns the scoped child overrides. CI declares the confirmed window only for its ephemeral service databases.
 
-The CI Test + Coverage job migrates its disposable primary database, then runs `bun run seed --defaults-only` from `apps/server` before API coverage. It separately migrates the payout database and seeds V3 defaults with `DATABASE_URL` explicitly set to the disposable 6770 payout database; Bun env files do not override the workflow's existing primary `DATABASE_URL`. This seeds competition taxonomy, Marks packages and active V3 pricing without demo users or bookings. `resetDatabase()` restores canonical V3 packages and pricing after each test reset; it does not seed legacy economy values. Never run this CI reset workflow against retained local 6769/6770 databases.
+The CI Test + Coverage job migrates its disposable primary database, then runs `bun run seed:canonical` from `apps/server` before API coverage. It separately migrates the payout database and seeds canonical defaults with `DATABASE_URL` explicitly set to the disposable 6770 payout database; Bun env files do not override the workflow's existing primary `DATABASE_URL`. This seeds competition taxonomy, Marks packages and active V3 pricing without accounts, demo users, or bookings. `resetDatabase()` restores canonical V3 packages and pricing after each test reset; it does not seed legacy economy values. Never run this CI reset workflow against retained local 6769/6770 databases.
 
 The runner executes the broad API partition, one isolated process for every resetDatabase() suite discovered anywhere under packages/api/src/tests, then the fixture and payout partitions. Root-level and unit-directory database suites are isolated too. Each process owns coverage/<partition>/counters.json; use --list for the current mapping. `coverage-report.ts` merges these into coverage/counters.merged.json and coverage/lcov.merged.info, with the existing function-identity manifest. CI uses `--collect-only` and posts/enforces the gate in its existing later step; the local command enforces the same 100% gates itself. All failures remain blocking. Raw JSON and LCOV artifacts are uploaded on CI failure. Native `bun test --coverage` remains useful for reproducing the upstream reporting issue but is no longer the CI source of truth.
 
@@ -3009,29 +3033,46 @@ manual recovery only.
 
 ### Seed the Database
 
+Two seeds exist. They share canonical content and differ in account fixtures:
+
+| Command                                    | Use                  | Creates                                                                                                      |
+| ------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bun run --cwd apps/server seed`           | UAT / dev / E2E      | Local admin `admin@cogitoacademy.id`, demo tutor, three demo students, presentation booking                  |
+| `bun run --cwd apps/server seed:canonical` | CI / canonical only  | Canonical content only, with a null audit actor and no accounts                                              |
+| `bun run --cwd apps/server seed:prod`      | Production / staging | Canonical content only: packages, blog taxonomy, FAQ, competition taxonomy and calendar, V3 economy revision |
+
+The UAT/dev seed refuses production-like `NODE_ENV`. Passwords are optional
+locally (`SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, `SEED_STUDENT_PASSWORD`
+override fallbacks) and are never used by the production seed. `seed:canonical`
+runs the same canonical content without an admin, tutor, or student.
+
 ```bash
-# Default mark packages are installed by migration 0041_seed_mark_packages.sql.
-bun run seed-packages          # Optional local/test or explicitly approved recovery tool
+bun run seed-packages          # Optional standalone package catalog insert
 ```
 
-Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. Do not run it as part of normal deploys: the CD migration step applies `0041_seed_mark_packages.sql` automatically and safely. Use the command only for local/test setup or an explicitly approved recovery. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, and `SEED_STUDENT_PASSWORD` (minimum 12 characters). In production it creates a dedicated local-login review admin from `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse an operator address from `ADMIN_EMAILS`. Set the review student/tutor emails explicitly, run the seed once, then remove all seed passwords and `SEED_ALLOWED_IN_PROD` from the deployment environment. Never provide the Google Calendar account password to a reviewer.
+Production guard: `NODE_ENV=production bun run seed-packages` and
+`bun run seed:prod` exit with an error unless `SEED_ALLOWED_IN_PROD=true` is
+explicitly set. Do not seed on every deploy: CD applies schema migrations, and
+content seeding is a one-time post-migration step. Migration
+`0041_seed_mark_packages.sql` is a no-op journal slot, so a freshly migrated
+database has an empty catalog until a seed runs.
 
-Launch defaults are `cogito.diego@yopmail.com` (Diego by Cogito, tutor) and
-`cogito.andre@yopmail.com`, `cogito.argya@yopmail.com`, and
+Launch defaults for the UAT/dev seed are `cogito.diego@yopmail.com` (Diego by
+Cogito, tutor) and `cogito.andre@yopmail.com`, `cogito.argya@yopmail.com`, and
 `cogito.athena@yopmail.com` (Andre, Argya, and Athena by Cogito, students).
 `SEED_REVIEW_TUTOR_EMAIL` and `SEED_REVIEW_STUDENT_EMAIL` override Diego and
 Andre only; Argya and Athena remain fixed defaults.
 
-The full production/staging seed creates or reuses the separate review address
-from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
-every server boot outside test mode, the `ADMIN_EMAILS` operator allowlist
-promotes matching existing accounts
-case-insensitively without demoting other admins. A matching account created
-after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
-comma-separated list when more than one trusted account should be bootstrapped.
-Other admin accounts may still be granted through the existing admin role UI/API.
+Neither seed creates an admin in production. On every server boot outside test
+mode, the `ADMIN_EMAILS` allowlist plus the fixed super-admin addresses promote
+matching existing accounts case-insensitively without demoting other admins. A
+matching account created after boot is promoted by the Better Auth signup hook.
+Set `ADMIN_EMAILS` to a comma-separated list when more than one trusted account
+should be bootstrapped; the defaults are `itcogitoacademy01@gmail.com` and
+`cogitoacademy.id@gmail.com`. UAT reviewers are normal accounts granted the
+admin role from Admin > Admins by a super admin, then revoked after UAT.
 
-Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp312,500, Learner 120 Marks / Rp690,000, Explorer 200 Marks / Rp1,070,000, Pioneer 400 Marks / Rp2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
+Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp350,000, Learner 150 Marks / Rp975,000, Explorer 250 Marks / Rp1,500,000, Pioneer 500 Marks / Rp2,750,000. `bun run seed` (or `bun run seed-packages`) inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
 
 If production is currently missing packages, deploy the migration and verify with:
 
@@ -3053,7 +3094,7 @@ Coolify PostgreSQL resource or volume to reset application data.
 docker compose down -v
 bun run db:start
 bun run db:migrate
-# Migration 0041 inserts the default mark-package catalog.
+bun run --cwd apps/server seed:canonical   # Migrations create tables; the seed inserts catalog rows without accounts.
 ```
 
 Test database reset:
@@ -4177,8 +4218,8 @@ Boolean environment values accept `true`/`1` and `false`/`0` (case-insensitive);
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                             |
 | `R2_BACKUP_BUCKET`                                                                            | No       | Private R2 bucket used only for database backups; keep separate from the public upload bucket                                                                                                                                                                                    |
 | `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
-| `SEED_REVIEW_ADMIN_EMAIL` / `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`           | No       | Dedicated local-login reviewer identities. The review admin must not be present in `ADMIN_EMAILS`; never use the Google Calendar operator account.                                                                                                                               |
-| `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | One-time seed inputs, all required in production/staging with at least 12 characters. Remove them from the deployment environment immediately after seeding.                                                                                                                     |
+| `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`                                       | No       | Override the seeded tutor and first seeded student addresses. Review identities use local passwords; never use the Google Calendar operator account.                                                                                                                             |
+| `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | UAT/dev seed inputs only. `seed:prod` ignores them and creates no accounts. Minimum 12 characters for the local admin; tutor/student fallbacks exist locally. Remove them from any deployment environment.                                                                       |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 
 ## Real-Provider Swap (Resend / Midtrans / Google Meet / R2)
@@ -4887,4 +4928,4 @@ Migration 0088 was applied to development localhost:6767/cogito-app during this 
 
 ### Developer-terminal production seed helper
 
-`bun scripts/seed-prod-db.ts --help` documents the optional helper. Set `PROD_DATABASE_URL` and `SEED_ADMIN_PASSWORD`, then pass `--confirm=<database-host>`. Loopback targets require `--via-tunnel`; existing users require `ALLOW_NONEMPTY_PROD_SEED=true`. Defaults are additive and demo users require `--with-demo-users` plus their passwords. The helper checks migration presence, invokes the existing seed with production opt-in, and verifies user count; it does not apply migrations. Confirm the exact target before running it. `packages/e2e/shot-topup.mjs` is a local screenshot helper requiring the local app and seeded admin; it is not a test or deployment step.
+`bun scripts/seed-prod-db.ts --help` documents the optional helper. Set `PROD_DATABASE_URL`, then pass `--confirm=<database-host>`. Loopback targets require `--via-tunnel`; existing users require `ALLOW_NONEMPTY_PROD_SEED=true`. The helper checks migration presence, runs `seed:prod` (canonical content only, no accounts), and verifies user count; it does not apply migrations. Confirm the exact target before running it.

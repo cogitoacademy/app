@@ -19,18 +19,21 @@ concurrency:
 
 jobs:
   detect:
-    name: Detect app-code changes
-    runs-on: ubuntu-latest
+    name: Check coverage reuse
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
+      actions: read
+      pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      fingerprint: ${{ steps.reuse.outputs.fingerprint }}
+      artifact: ${{ steps.reuse.outputs.artifact }}
+      reused: ${{ steps.reuse.outputs.reused }}
+      source_run: ${{ steps.reuse.outputs.source_run }}
     steps:
       - uses: actions/checkout@v6
-      # Same dorny pin as infra-apply.yml. On pull_request this diffs the PR
-      # against its base; on workflow_dispatch the outputs may be empty, so
-      # the gated jobs below treat a manual dispatch as "run everything".
       - uses: dorny/paths-filter@v3.0.2
         id: filter
         with:
@@ -38,13 +41,16 @@ jobs:
             code:
               - 'apps/**'
               - 'packages/**'
-              - 'bun.lock'
-              - 'package.json'
-              - 'turbo.json'
-              - 'tsconfig.json'
-              - 'bts.jsonc'
-              - 'bunfig.toml'
-              - '.github/workflows/ci.yml'
+              - 'scripts/**'
+              - '.github/**'
+              - '*'
+      - name: Test coverage reuse policy
+        run: node --test .github/scripts/coverage-reuse.test.mjs
+      - name: Find successful coverage for these inputs
+        id: reuse
+        run: node .github/scripts/coverage-reuse.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -197,22 +203,19 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: bun run build
 
-  test:
-    name: Test + Coverage
+  backend_test:
+    name: Backend tests + coverage
     needs: detect
-    # Heavy suite (full unit + 100% coverage gate): app-code PRs only.
-    # Docs/infra-only PRs cannot change unit-test outcomes; lint (always on,
-    # also formats Markdown) + typecheck (always on, --affected) + infra-plan
-    # still gate those. Manual dispatches always run the suite.
-    if: needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Skip the entire job, including database services, on an exact success match.
+    if: (needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch') && needs.detect.outputs.reused != 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
@@ -225,7 +228,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
       postgres_payout:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
@@ -238,7 +241,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
       redis:
-        image: redis:7-alpine
+        image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
         ports:
           - 6379:6379
         options: >-
@@ -260,6 +263,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.3.14
       - uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
@@ -279,11 +284,9 @@ jobs:
           echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
-      - name: Seed V3 defaults for API coverage
-        run: bun run seed --defaults-only
+      - name: Seed canonical defaults for API coverage
+        run: bun run seed:canonical
         working-directory: apps/server
-        env:
-          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Create payout integration Drizzle env
         run: |
           echo "DATABASE_URL=${{ env.PAYOUT_DATABASE_URL }}" > apps/server/.env.test-payout
@@ -294,12 +297,11 @@ jobs:
         run: bun run db:migrate
         env:
           ENV_FILE: ../../apps/server/.env.test-payout
-      - name: Seed V3 defaults for payout coverage
-        run: bun --env-file=.env.test-payout run seed --defaults-only
+      - name: Seed canonical defaults for payout coverage
+        run: bun --env-file=.env.test-payout run seed:canonical
         working-directory: apps/server
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:6770/cogito-test-payout
-          SEED_ADMIN_PASSWORD: ci-seed-admin-password
       - name: Test with coverage
         id: coverage
         run: bun .github/scripts/coverage-runner.ts --collect-only
@@ -339,3 +341,53 @@ jobs:
             coverage/lcov.merged.info
             coverage/lcov.function-identity.json
           if-no-files-found: warn
+      - name: Record successful coverage inputs
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        env:
+          FINGERPRINT: ${{ needs.detect.outputs.fingerprint }}
+        run: |
+          mkdir -p coverage-success
+          printf '%s\n' "$FINGERPRINT" > coverage-success/fingerprint.txt
+          printf '%s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > coverage-success/source.txt
+      - name: Save successful coverage proof
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.detect.outputs.artifact }}
+          path: coverage-success/
+          if-no-files-found: error
+          retention-days: 14
+
+  test:
+    name: Test + Coverage
+    needs: [detect, backend_test]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require successful fresh or reused coverage
+        env:
+          CODE_CHANGED: ${{ needs.detect.outputs.code }}
+          EVENT_NAME: ${{ github.event_name }}
+          DETECT_RESULT: ${{ needs.detect.result }}
+          BACKEND_RESULT: ${{ needs.backend_test.result }}
+          REUSED: ${{ needs.detect.outputs.reused }}
+          SOURCE_RUN: ${{ needs.detect.outputs.source_run }}
+          FINGERPRINT: ${{ needs.detect.outputs.fingerprint }}
+        run: |
+          if [ "$DETECT_RESULT" != success ]; then
+            echo 'Coverage reuse detection failed or was cancelled.'
+            exit 1
+          fi
+          if [ "$CODE_CHANGED" = false ] && [ "$EVENT_NAME" = pull_request ] && [ "$BACKEND_RESULT" = skipped ]; then
+            echo 'No app or test-tooling changes in this PR.' | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$REUSED" = true ] && [ "$BACKEND_RESULT" = skipped ] && [ -n "$SOURCE_RUN" ]; then
+            echo "Reused successful backend tests and coverage: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$REUSED" = false ] && [ "$BACKEND_RESULT" = success ]; then
+            echo 'Backend tests and coverage passed on this commit.' | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Backend tests and coverage did not pass (result: $BACKEND_RESULT)."
+            exit 1
+          fi
+          printf '\nInput fingerprint: `%s`\n' "$FINGERPRINT" >> "$GITHUB_STEP_SUMMARY"

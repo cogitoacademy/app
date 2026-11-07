@@ -3,7 +3,10 @@ import { inArray, or, sql } from "drizzle-orm";
 import { USER_ROLE } from "@cogito-app/api/shared/constants";
 import { db } from "@cogito-app/db";
 import { user } from "@cogito-app/db/schema";
-import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
+import {
+  parseConfiguredAdminEmails,
+  SUPER_ADMIN_EMAILS,
+} from "@cogito-app/env/admin";
 import { env } from "@cogito-app/env/server";
 
 export type AdminBootstrapResult = {
@@ -11,6 +14,15 @@ export type AdminBootstrapResult = {
   matched: number;
   promoted: number;
 };
+
+export function adminBootstrapEmails(configuredEmails?: string): string[] {
+  return Array.from(
+    new Set([
+      ...parseConfiguredAdminEmails(configuredEmails),
+      ...SUPER_ADMIN_EMAILS,
+    ]),
+  );
+}
 
 /**
  * Promotes configured operator accounts outside test mode without demoting
@@ -31,7 +43,7 @@ export async function ensureConfiguredProductionAdmins(options?: {
     return { skipped: true, matched: 0, promoted: 0 };
   }
 
-  const emails = parseConfiguredAdminEmails(
+  const emails = adminBootstrapEmails(
     options?.configuredEmails ?? env.ADMIN_EMAILS,
   );
   const emailPredicate = or(

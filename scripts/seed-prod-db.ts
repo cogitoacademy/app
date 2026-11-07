@@ -2,23 +2,20 @@
 /**
  * Seed the production database from a developer terminal.
  *
- * This script never deletes data. It only runs the guarded seed in
- * `apps/server/src/seed/seed.ts`, which is idempotent for defaults.
+ * This script never deletes data. It runs `seed:prod`, which inserts canonical
+ * content only: packages, blog taxonomy, FAQ, competition calendar, and the V3
+ * economy revision. It creates no admin, tutor, or student account.
  *
  * Required environment:
  *   PROD_DATABASE_URL      production PostgreSQL URL (never DATABASE_URL)
- *   SEED_ADMIN_PASSWORD    bootstrap admin password, 12+ characters
  *
  * Optional:
- *   SEED_TUTOR_PASSWORD      required with --with-demo-users
- *   SEED_STUDENT_PASSWORD    required with --with-demo-users
  *   PROD_DB_SSL=require      force TLS
  *   ALLOW_NONEMPTY_PROD_SEED=true   allow seeding when users already exist
  *
  * Usage:
  *   bun scripts/seed-prod-db.ts --confirm=<db-host>
  *   bun scripts/seed-prod-db.ts --confirm=<db-host> --via-tunnel
- *   bun scripts/seed-prod-db.ts --confirm=<db-host> --with-demo-users
  *
  * The Coolify database host is internal to the VPS Docker network. From a
  * local machine, open a tunnel first, for example:
@@ -65,7 +62,7 @@ function parseFlags(argv: string[]) {
 const flags = parseFlags(process.argv);
 if (flags.has("help")) {
   console.log(
-    "Usage: bun scripts/seed-prod-db.ts --confirm=<db-host> [--via-tunnel] [--with-demo-users]",
+    "Usage: bun scripts/seed-prod-db.ts --confirm=<db-host> [--via-tunnel]",
   );
   process.exit(0);
 }
@@ -105,20 +102,6 @@ if (expectedHost !== host) {
   fail(`confirmation mismatch: expected --confirm=${host}`);
 }
 
-const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "";
-if (adminPassword.length < 12) {
-  fail("SEED_ADMIN_PASSWORD is required and must be at least 12 characters");
-}
-
-const withDemoUsers = flags.has("with-demo-users");
-if (withDemoUsers) {
-  for (const name of ["SEED_TUTOR_PASSWORD", "SEED_STUDENT_PASSWORD"]) {
-    if ((process.env[name] ?? "").length < 12) {
-      fail(`${name} is required and must be at least 12 characters`);
-    }
-  }
-}
-
 const ssl =
   process.env.PROD_DB_SSL === "require" || /sslmode=require/.test(url)
     ? ("require" as const)
@@ -152,24 +135,13 @@ try {
   await sql.end({ timeout: 5 });
 }
 
-console.log(
-  withDemoUsers
-    ? "Seeding defaults plus demo tutor and students."
-    : "Seeding defaults only (no demo tutor or students).",
-);
+console.log("Seeding canonical content only (no admin, tutor, or student).");
 
-const seedArgs = ["run", "seed"];
-if (!withDemoUsers) seedArgs.push("--defaults-only");
-
-const result = spawnSync("bun", seedArgs, {
+const result = spawnSync("bun", ["run", "seed:prod"], {
   cwd: serverDir,
   stdio: "inherit",
   env: {
     ...process.env,
-    // NODE_ENV=development avoids the production-only env validation that a
-    // developer terminal cannot satisfy (verified email sender, private R2,
-    // scheduler, payment allowlists). The seed itself is the same code path.
-    NODE_ENV: process.env.SEED_NODE_ENV ?? "development",
     DATABASE_URL: url,
     SEED_ALLOWED_IN_PROD: "true",
   },

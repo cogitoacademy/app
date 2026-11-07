@@ -1130,11 +1130,12 @@ Google sign-in starts through Better Auth on the API and uses `GET /api/auth/cal
 
 PostHog browser analytics is client-only. When configured, the web client captures the documented auth, booking, tutor-onboarding, lifecycle, and session-completion events, browser exceptions, and explicit `cogito-web` Logs records. The public project token and host are compile-time web values; production image builds receive them through the CD workflow. The Playwright web server uses Vite `test` mode and the disabled client when those values are absent, so analytics configuration cannot block seeded browser tests. No PostHog event changes an RPC request, response, schema, or persistence contract.
 
-Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
-serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
-are compared case-insensitively and promoted to `admin`; existing admins are
-never demoted. A matching account created after boot is promoted by the Better
-Auth signup hook. This is operational role initialization, not a new RPC or
+Server bootstrap outside test mode also reconciles `ADMIN_EMAILS` plus the fixed
+super-admin addresses before serving traffic (default:
+`itcogitoacademy01@gmail.com`). Matching addresses are compared
+case-insensitively and promoted to `admin`; existing admins are never demoted. A
+matching account created after boot is promoted by the Better Auth signup hook.
+This is operational role initialization, not a new RPC or
 auth request/response field; other admins can still be managed through the
 existing admin role-management flow.
 
@@ -1176,6 +1177,12 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Its CSP permits framing only from configured app origin for the PDF preview; the production web CSP also allows the API origin in `frame-src`, while other API routes remain non-frameable. Tutors and admins bypass the student wallet threshold; students with an unexpired admin grant bypass it until the stored expiry timestamp. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
+
+Backend test/coverage results may be reused on frontend-only PR follow-ups
+when the merged-tree fingerprint matches a successful CI proof in the same PR.
+The stable `Test + Coverage` check links the original run; missing proof, lookup
+errors or manual dispatch run the full suite. This changes CI execution only;
+RPC paths/envelopes and coverage thresholds are unchanged. See `RUNBOOK.md`.
 
 CI runs one lcov-producing API integration/unit suite together with the env,
 auth, and database package tests, followed by the server suite in a separate
@@ -2193,7 +2200,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ packages: MarkPackage[] }`
-- **Description:** Returns active purchasable Mark packages. The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Description:** Returns active purchasable Mark packages. The default catalog comes from the server seed (`bun run --cwd apps/server seed:prod` in production, `seed:canonical` for canonical-only or CI, `seed` for UAT/dev, or `seed-packages`); migration `0041_seed_mark_packages.sql` is a no-op journal slot. Values are Starter Pack 50 Marks / Rp350,000; Learner Pack 150 Marks / Rp975,000; Explorer Pack 250 Marks / Rp1,500,000; Pioneer Pack 500 Marks / Rp2,750,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 

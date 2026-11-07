@@ -1,5 +1,17 @@
 # Cogito Module Reference
 
+## CI coverage proof policy (7 November 2026)
+
+`.github/scripts/coverage-reuse.mjs` hashes the merged Git tree's paths, modes
+and object IDs, excluding frontend source/assets, UI source/components and docs.
+Manifests and unknown paths remain inputs. Reuse requires an exact same-PR
+artifact, matching head repository, completed successful CI pull-request run,
+and successful backend producer job. A skipped producer is not proof. Lookup
+checks at most 100 matching artifacts; a miss or API failure runs the suite.
+Manual dispatch bypasses reuse. The always-running `Test + Coverage` gate
+requires successful detection and either a fresh successful suite or validated
+reuse. No application service, business event or RPC procedure is added.
+
 ## Admin payment list module (3 November 2026)
 
 `packages/api/src/modules/admin-payment/` follows the standard Router -> Handler -> Service -> Repository layering. The repo reads `payment_record` joined with `user` and builds the same filter conditions for the page query and the filter total; the service validates ISO dates, rejects a reversed range, parses the `createdAt ISO~id` cursor, fetches `limit + 1` rows, and emits `nextCursor` only when another page exists. `%`, `_`, and `\` are escaped before the case-insensitive name, email, or provider-reference search. The module is read-only: no table, migration, audit event, provider call, or refund logic is added. `admin.listPayments` is mounted in the existing `admin` router and uses `adminProcedure`. The web page lives at `apps/web/src/components/admin/admin-payments-page.tsx` and reuses the existing refund dialog, `DatePicker`, `CogitoMarks`, and pagination helpers. Filters stack on narrow screens; the table scrolls horizontally inside its container rather than widening the page, and the Amount column carries the Marks value with the shared Marks icon so the table fits a desktop content width. Status refund facts use smaller supporting text, rows without an action read "No action", and cell padding is tightened for a compact list. The refund dialog states that only unspent Marks are reversed and that provider-side cash refunds stay manual.
@@ -1547,17 +1559,20 @@ Coolify private PostgreSQL service is non-TLS, so that deployment sets
 `DB_SSL_ENABLED=false`; `DB_SSL_REJECT_UNAUTHORIZED` applies only to TLS-backed
 managed or external PostgreSQL services.
 
-The server then runs `apps/server/src/admin-bootstrap.ts` in production-like
-environments. It reads the comma-separated `ADMIN_EMAILS` allowlist (default
-`itcogitoacademy01@gmail.com`), matches email addresses case-insensitively, and
-promotes matching existing users without demoting other admins. Better Auth
-applies the same rule to a matching signup after boot. The guarded
-production/staging review seed is deliberately separate: it uses
-`SEED_REVIEW_ADMIN_EMAIL`, rejects any address also present in `ADMIN_EMAILS`,
-and creates local-login student/tutor/admin review identities without touching
-the Google Calendar operator account. Defaults create Diego by Cogito at
-`cogito.diego@yopmail.com` and three students, Andre, Argya, and Athena by
-Cogito, at matching `cogito.<name>@yopmail.com` addresses.
+The server then runs `apps/server/src/admin-bootstrap.ts` outside test mode. It
+reads the comma-separated `ADMIN_EMAILS` allowlist (default
+`itcogitoacademy01@gmail.com`) plus the fixed super-admin addresses, matches
+email addresses case-insensitively, and promotes matching existing users without
+demoting other admins. Better Auth applies the same rule to a matching signup
+after boot. Three seed commands share canonical content. `seed:canonical` writes
+packages, blog taxonomy, FAQ, competition taxonomy and calendar, and the V3
+economy revision with a null audit actor; it creates no accounts and is the CI
+path. `seed:prod` writes the same content for deployment and also creates no
+accounts. The UAT/dev seed adds a local admin, a published tutor (Diego by Cogito
+at `cogito.diego@yopmail.com`), three students (Andre, Argya, and Athena at
+`cogito.<name>@yopmail.com`), and a presentation booking; it refuses
+production-like environments. UAT reviewers are ordinary accounts granted
+`admin` from Admin > Admins by a super admin and revoked after UAT.
 
 Recommended-tutor summaries place the starting Marks price below the avatar on
 narrow screens and keep it inline with subject metadata on wider screens. This
@@ -1902,8 +1917,8 @@ payment package codes stable.
 - Package `code` is the stable business key passed to `payment.createPurchase`; existing payment records also keep the package id and amount/Marks snapshots
 - Packages are never hard-deleted; inactive rows remain available for audit and historical references and are hidden only from `wallet.listPackages`
 - Every create/update/activation transition is written to the audit log inside the same database transaction
-- Default catalog values are installed by the versioned, idempotent data migration `0041_seed_mark_packages.sql`, not by the server boot path or every deployment seed
-- The migration updates the default name/Marks/price when the code already exists but preserves an operator's explicit `is_active` choice
+- Default catalog values are inserted by the idempotent server seed (`apps/server/src/seed/seed.ts` / `seed-packages.ts`); migration `0041_seed_mark_packages.sql` is a no-op journal slot, so a freshly migrated database has an empty catalog until the seed runs
+- The seed updates the default name/Marks/price when the code already exists but preserves an operator's explicit `is_active` choice
 
 ---
 
@@ -2036,7 +2051,7 @@ payment package codes stable.
 - The HTTP signup route is the public boundary. Only the server-owned `completePreAccountSignup` transaction supplies Better Auth's verified-email scope after OTP validation. Direct `auth.api.signUpEmail` calls are internal-only for trusted seed, test, and provisioning code; they must not be exposed as an unauthenticated HTTP bypass or generalized with a public bypass flag.
 - Google OAuth starts on the API and returns through `/api/auth/callback/google`; the frontend callback route is the post-login destination. The web client passes separate Better Auth `callbackURL` and `newUserCallbackURL` values, then stores the resolved outcome until `PostHogIdentity` has identified the session; this yields `account_signed_in` or `account_created` with the correct `authentication_method` for Google or email without anonymous attribution. The configured provider sends `prompt=consent` so the Google permission screen is available for verification runs, including when the account has a previous grant. The login flow requests identity scopes only; the broader Calendar scope used by the server-side Meet integration is a separate operator OAuth flow. Production session cookies remain `SameSite=Strict`, while Better Auth's short-lived signed OAuth state cookie uses `SameSite=Lax` so the provider's top-level callback GET can return it. The state cookie remains `Secure`/`HttpOnly`, and Better Auth verifies it against the database-backed verification record before creating a session.
 - PostHog browser analytics is initialized once at the web root when its two public Vite values are configured. `PostHogIdentity` resets on logout or account switch, identifies with the stable Better Auth user ID, and captures auth outcomes only after identification. Browser exception capture and explicit `cogito-web` Logs records remain client-side; no server module, event key, or database rule depends on PostHog availability. Playwright starts Vite in `test` mode, which uses the disabled client when analytics values are absent.
-- Production/staging startup and signup bootstrap matching `ADMIN_EMAILS` to the `admin` role is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
+- Startup and signup bootstrap matching `ADMIN_EMAILS` plus the fixed super-admin addresses to the `admin` role runs outside test mode and is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read, and chooses a validated return path or a role/onboarding-aware default: a tutor without a profile or with `draft`/`changes_requested` status goes to `/profile`, while tutors in review/approved/published/suspended states and admins go to `/dashboard`; students also default to `/dashboard`. The tutor status read uses the existing protected `tutor.getMyProfile` procedure. The client suppresses the overlapping session signal refresh so the login form does not flash back into the loader. When the fresh session has `emailVerified !== true`, email/password sign-in sends a verification OTP and routes to `/verify-email`; the Google callback applies the same rule, and the selected destination is carried through verification. Legacy accounts are not automatically marked verified. The authenticated shell uses the same fresh session source for its parent route guard. Tutor `/onboarding` links remain a compatibility redirect to `/profile`; this is frontend routing only and adds no auth/API contract.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
 - The server reads sign-up bodies through the request-size guard and safely parses the JSON before applying password policy. Malformed JSON returns HTTP 400 (`Invalid JSON request body`) rather than escaping as an internal error.

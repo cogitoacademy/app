@@ -5,7 +5,10 @@ import { db } from "@cogito-app/db";
 import { user } from "@cogito-app/db/schema";
 import { USER_ROLE } from "@cogito-app/api/shared/constants";
 
-import { ensureConfiguredProductionAdmins } from "./admin-bootstrap";
+import {
+  ensureConfiguredProductionAdmins,
+  adminBootstrapEmails,
+} from "./admin-bootstrap";
 
 const insertedUserIds: string[] = [];
 
@@ -17,6 +20,14 @@ afterEach(async () => {
 });
 
 describe("production admin bootstrap", () => {
+  test("includes the fixed super-admin addresses", () => {
+    expect(adminBootstrapEmails(" Operator@Example.com ")).toEqual([
+      "operator@example.com",
+      "cogitoacademy.id@gmail.com",
+      "itcogitoacademy01@gmail.com",
+    ]);
+  });
+
   test("does nothing outside production-like environments", async () => {
     await expect(
       ensureConfiguredProductionAdmins({

@@ -278,10 +278,10 @@ The plan is thorough; these are the gaps found during this review:
 6. **`WEBHOOK_ALLOWED_IPS` verification at go-live** — Sandbox and Production
    use documented Midtrans notification egress IPs, but verify against the live
    dashboard before the first real transaction.
-7. **Default package catalog on prod** — migration
-   `0041_seed_mark_packages.sql` now installs/upserts the PRD catalog during
-   the normal CD migration step. Keep the package seed command for local/test
-   setup or explicitly approved recovery; it is not a per-deploy operation.
+7. **Default package catalog on prod** — migrations create tables only;
+   `0041_seed_mark_packages.sql` is a no-op slot. Run
+   `bun run --cwd apps/server seed:prod` (or `seed-packages`) once after the
+   schema exists and before real payments. It is not a per-deploy operation.
 8. **Backup `DATABASE_URL` host-reachability note** — the vault's
    `DATABASE_URL` must resolve from the VPS _host_ (published port or
    container IP), not the private hostname. It's in the playbook header; add
