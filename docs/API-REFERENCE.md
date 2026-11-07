@@ -1178,6 +1178,12 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 ### Verification
 
+Backend test/coverage results may be reused on frontend-only PR follow-ups
+when the merged-tree fingerprint matches a successful CI proof in the same PR.
+The stable `Test + Coverage` check links the original run; missing proof, lookup
+errors or manual dispatch run the full suite. This changes CI execution only;
+RPC paths/envelopes and coverage thresholds are unchanged. See `RUNBOOK.md`.
+
 CI runs one lcov-producing API integration/unit suite together with the env,
 auth, and database package tests, followed by the server suite in a separate
 process because its webhook test uses `mock.module`. The previous duplicate

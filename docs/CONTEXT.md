@@ -1,5 +1,16 @@
 # Cogito App — Codebase Context
 
+## CI coverage reuse (7 November 2026)
+
+CI fingerprints the checked-out merge tree before starting backend services.
+All tracked paths remain inputs except frontend source/assets, UI source and
+components, and docs. Manifests, lockfiles, backend tests/code, shared packages,
+seeds/migrations and CI scripts remain inputs. An exact same-PR success proof
+allows frontend follow-ups to skip the entire backend job. `Test + Coverage`
+remains the required check, fails on detection/backend failure or cancellation,
+and links the reused run. Lint, typecheck and build continue on every update.
+See `docs/plans/active/CI-COVERAGE-REUSE.md` for outstanding hosted verification.
+
 ## Seed entrypoints and canonical mode (4 November 2026)
 
 The seed surface now has three explicit commands. `seed` is the UAT/dev seed: it

@@ -1,5 +1,17 @@
 # Cogito Module Reference
 
+## CI coverage proof policy (7 November 2026)
+
+`.github/scripts/coverage-reuse.mjs` hashes the merged Git tree's paths, modes
+and object IDs, excluding frontend source/assets, UI source/components and docs.
+Manifests and unknown paths remain inputs. Reuse requires an exact same-PR
+artifact, matching head repository, completed successful CI pull-request run,
+and successful backend producer job. A skipped producer is not proof. Lookup
+checks at most 100 matching artifacts; a miss or API failure runs the suite.
+Manual dispatch bypasses reuse. The always-running `Test + Coverage` gate
+requires successful detection and either a fresh successful suite or validated
+reuse. No application service, business event or RPC procedure is added.
+
 ## Admin payment list module (3 November 2026)
 
 `packages/api/src/modules/admin-payment/` follows the standard Router -> Handler -> Service -> Repository layering. The repo reads `payment_record` joined with `user` and builds the same filter conditions for the page query and the filter total; the service validates ISO dates, rejects a reversed range, parses the `createdAt ISO~id` cursor, fetches `limit + 1` rows, and emits `nextCursor` only when another page exists. `%`, `_`, and `\` are escaped before the case-insensitive name, email, or provider-reference search. The module is read-only: no table, migration, audit event, provider call, or refund logic is added. `admin.listPayments` is mounted in the existing `admin` router and uses `adminProcedure`. The web page lives at `apps/web/src/components/admin/admin-payments-page.tsx` and reuses the existing refund dialog, `DatePicker`, `CogitoMarks`, and pagination helpers. Filters stack on narrow screens; the table scrolls horizontally inside its container rather than widening the page, and the Amount column carries the Marks value with the shared Marks icon so the table fits a desktop content width. Status refund facts use smaller supporting text, rows without an action read "No action", and cell padding is tightened for a compact list. The refund dialog states that only unspent Marks are reversed and that provider-side cash refunds stay manual.

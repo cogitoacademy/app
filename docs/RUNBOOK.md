@@ -1,5 +1,29 @@
 # Cogito Runbook
 
+## CI backend coverage reuse (7 November 2026)
+
+`Check coverage reuse` fingerprints the merged Git tree and queries Actions
+artifacts with `actions: read`. A matching artifact named
+`coverage-success-pr-<number>-<fingerprint>` must be unexpired and come from a
+completed successful CI pull-request run in this PR and head repository, with a
+successful `Backend tests + coverage` producer job. Proofs expire after 14 days.
+API errors, missing proofs, cancelled or failed runs fall back to a full suite.
+Manual `workflow_dispatch` always runs the suite and publishes no PR proof.
+Historical green runs without the new artifact cannot be reused. App-code PRs
+need an initial full run. Docs/infra-only PRs retain the existing path-based skip;
+root files, app/package code, scripts and GitHub tooling count as code changes.
+
+A reuse hit skips the entire backend job and its PostgreSQL/Redis services.
+Keep requiring `Test + Coverage`, whose summary links the original run; do not
+replace it with the conditional `Backend tests + coverage` job. Bun is pinned
+to 1.3.14 and service images to digests in `ci.yml`; updating pins invalidates
+proofs. The runner uses `ubuntu-24.04`; GitHub-managed image updates are outside
+the fingerprint. Exclusions are `apps/web/src/`, `apps/web/public/`,
+`packages/ui/components/`, `packages/ui/src/`, and `docs/`. Update this policy
+before backend tests start reading those paths. Manifests and unknown paths
+remain inputs. Run policy tests with
+`node --test .github/scripts/coverage-reuse.test.mjs`.
+
 ## Web CSP and client-side image uploads (3 November 2026)
 
 Blog hero and gallery uploads and the profile photo crop preview decode the
