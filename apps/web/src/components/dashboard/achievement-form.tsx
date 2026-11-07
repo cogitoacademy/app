@@ -46,6 +46,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import { getUserFacingError } from "@/lib/error-message";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { orpc } from "@/utils/orpc";
 
 const LEVELS = [
@@ -590,33 +591,19 @@ export function AchievementForm({
               {isAdmin ? (
                 <form.Field name="documentationUrl">
                   {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>
-                        Public documentation image
-                      </FieldLabel>
-                      <FieldDescription>
-                        Optional image URL shown on the public achievement card
-                        after approval.
-                      </FieldDescription>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type="url"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        className={cn(
-                          field.state.meta.errors.length > 0 &&
-                            "ring-2 ring-danger",
-                        )}
-                        placeholder="https://…"
-                      />
-                      {field.state.meta.errors.map((error) => (
-                        <FieldError key={String(error)}>
-                          {String(error)}
-                        </FieldError>
-                      ))}
-                    </Field>
+                    <ImageUploadField
+                      id={field.name}
+                      label="Public documentation image"
+                      description="Optional image shown on the public achievement card after approval. JPG, PNG, WebP, or GIF; images are resized to WebP before upload."
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      error={
+                        field.state.meta.errors.length > 0
+                          ? String(field.state.meta.errors[0])
+                          : undefined
+                      }
+                      previewClassName="h-28 w-44 rounded-md object-cover"
+                    />
                   )}
                 </form.Field>
               ) : null}

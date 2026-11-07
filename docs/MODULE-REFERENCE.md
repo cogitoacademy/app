@@ -1657,6 +1657,7 @@ English question and answer documents are required; Indonesian documents are opt
 - `blog.handler.ts` and `blog.router.ts` — `adminBlog.*` and `publicContent.blog.*` procedures
 - `apps/web/src/components/admin/blog/` and `/admin-blog` — admin list, category creation, and bilingual editor
 - `apps/web/src/lib/blog-image.ts` — browser-side WebP normalization before upload
+- `apps/web/src/lib/upload-image.ts` — shared browser upload helper (normalize, sign, PUT/POST, public URL) used by blog media, activity covers, and admin achievement documentation images
 
 **Data rules:**
 
@@ -2891,8 +2892,10 @@ Admin referral density (30 October): activity records now use a single text line
 ## Activity articles (2026-10-30)
 
 `activity` owns its validated structured input, admin CRUD and positive public
-projection. `activity_article` has localized text/rich documents, cover URL,
-location, UTC instants, draft/publication state and optimistic version. Writes
+projection. `activity_article` has localized text/rich documents, an optional
+cover URL, location, UTC instants, draft/publication state and optimistic
+version. The admin editor uploads the cover through the protected Upload Module
+and stores its HTTP(S) public URL; existing external URLs remain valid. Writes
 are admin-only, update/delete use atomic id/version predicates; completed is a
 read-time display status, never evidence that an event was delivered. FAQ rich
 text validation/editor is reused; registration links are regular body links.

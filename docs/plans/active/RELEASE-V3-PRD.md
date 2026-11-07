@@ -297,7 +297,7 @@ Commercial update confirmed by project owner on 19 October 2026 (S06): additiona
 ### Others article authoring clarification (2026-10-30)
 
 Others is one article list authored in cogito-app and read by cogito-acad.
-Fields: cover image URL, EN-required/ID-optional title, short description and
+Fields: optional uploaded cover image, EN-required/ID-optional title, short description and
 rich body, start/end instants displayed/input as WIB, location and publication
 state. Registration links are rich-body links only; no dedicated registration
 field or automatic registration CTA. Upcoming/Completed is derived from end

@@ -2146,7 +2146,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Auth:** Admin
 - **Input:** `{ id, version, data: { eventName?, category?, award?, level?, issuer?, visibility?, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? } }`; nullable optional fields can be cleared
 - **Output:** `{ achievement }`
-- **Description:** Corrects a pending or legacy `pending_review` achievement before moderation. Admins can correct the submission fields and set or clear the public documentation image. The update uses optimistic compare-and-swap via `version`, records an `achievement_admin_updated` audit event with before/after content, and leaves the status unchanged so approval/rejection remains a separate action. A stale version returns `OPTIMISTIC_LOCK` (409); non-pending records return `ACHIEVEMENT_NOT_EDITABLE`.
+- **Description:** Corrects a pending or legacy `pending_review` achievement before moderation. Admins can correct the submission fields and set or clear the public documentation image. The admin editor uploads that image through the protected Upload Module (WebP-normalized) and saves its HTTP(S) URL; existing external URLs remain valid. The update uses optimistic compare-and-swap via `version`, records an `achievement_admin_updated` audit event with before/after content, and leaves the status unchanged so approval/rejection remains a separate action. A stale version returns `OPTIMISTIC_LOCK` (409); non-pending records return `ACHIEVEMENT_NOT_EDITABLE`.
 
 ### `achievement.adminDelete`
 
@@ -2760,7 +2760,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Input:** `{ filename, contentType, contentLength }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif` — photo flows are image-only, `application/pdf` is rejected; `filename` max 255 chars, no `..`/leading `/`; `contentLength` is an integer from 1 byte through 5 MB)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "PUT"` for R2 and `"POST"` for local mode; `fields` is `{}` for both current backends)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400); local-mode `POST /uploads/*` returns 415 when the body bytes are not a recognized image (magic-byte sniff) and 413 when over the size limit
-- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset. The nightly `infra/r2-upload-audit.sh` HEADs bucket objects and alerts on ContentType vs key-class mismatches
+- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public achievement `documentationUrl`, activity cover, blog media, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset. The nightly `infra/r2-upload-audit.sh` HEADs bucket objects and alerts on ContentType vs key-class mismatches
 
 ## Tutor payout profile fields (2026-10-21)
 
@@ -2862,6 +2862,9 @@ overwriting. Rich body uses existing safe FAQ doc format and rejects unsafe
 links. The Activities admin editor accepts one language per article and stores
 it in the `En` fields with Indonesian fields null; public reads therefore show
 the same saved article for either locale. There is no registrationLink input.
+The admin editor uploads an optional cover image through the protected Upload
+Module and saves its HTTP(S) public URL; pasted external cover URLs remain
+accepted, and replacing or removing a cover does not delete the uploaded object.
 
 Competition catalog listing and V3 economy parent reads exclude superseded
 migration 0027 seed records. RPC shapes are unchanged; catalog list results omit
