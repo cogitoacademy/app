@@ -67,8 +67,12 @@ describe("sign-in error classification hook", () => {
     const failure = new betterAuthModule.APIError("UNAUTHORIZED", {
       code: "INVALID_EMAIL_OR_PASSWORD",
     });
-    await expect(invoke("/sign-in/social", failure, user.email)).resolves.toBeDefined();
-    await expect(invoke("/sign-in/email", { ok: true }, user.email)).resolves.toBeDefined();
+    await expect(
+      invoke("/sign-in/social", failure, user.email),
+    ).resolves.toBeDefined();
+    await expect(
+      invoke("/sign-in/email", { ok: true }, user.email),
+    ).resolves.toBeDefined();
     await expect(invoke("/sign-in/email", failure, 42)).resolves.toBeDefined();
   });
 
@@ -87,11 +91,19 @@ describe("sign-in error classification hook", () => {
           : code === "GOOGLE_SIGN_IN_REQUIRED"
             ? [{ providerId: "google", password: null }]
             : [];
-      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue(rows[0] as any);
-      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(accountRows as any);
+      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue(
+        rows[0] as any,
+      );
+      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(
+        accountRows as any,
+      );
       try {
         await expect(
-          afterAuthHooks({ path: "/sign-in/email", body: { email: "STUDENT@example.com" }, context: { returned: failure } }),
+          afterAuthHooks({
+            path: "/sign-in/email",
+            body: { email: "STUDENT@example.com" },
+            context: { returned: failure },
+          }),
         ).rejects.toMatchObject({ body: { code } });
       } finally {
         userFind.mockRestore();
@@ -111,10 +123,18 @@ describe("sign-in error classification hook", () => {
       ],
       [{ providerId: "github", password: null }],
     ]) {
-      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue({ id: "user-1" } as any);
-      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(accounts as any);
+      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue({
+        id: "user-1",
+      } as any);
+      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(
+        accounts as any,
+      );
       try {
-        const result = await afterAuthHooks({ path: "/sign-in/email", body: { email: user.email }, context: { returned: failure } });
+        const result = await afterAuthHooks({
+          path: "/sign-in/email",
+          body: { email: user.email },
+          context: { returned: failure },
+        });
         if (accounts[0]?.providerId === "credential") {
           throw new Error("Expected an invalid password classification");
         }
