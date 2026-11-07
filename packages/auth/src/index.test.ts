@@ -38,6 +38,117 @@ const resetPassword = (auth as any).options.emailAndPassword.sendResetPassword;
 const sendVerificationOTP = (auth as any).options.plugins[0].options
   .sendVerificationOTP;
 const beforeUserCreate = (auth as any).options.databaseHooks.user.create.before;
+const afterAuthHooks = (auth as any).options.hooks.after;
+
+describe("sign-in error classification hook", () => {
+  const invoke = async (
+    path: string,
+    returned: unknown,
+    email?: unknown,
+    userRows: unknown[] = [],
+    accountRows: unknown[] = [],
+  ) => {
+    const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue(
+      userRows[0] as any,
+    );
+    const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(
+      accountRows as any,
+    );
+    try {
+      await afterAuthHooks({ path, body: { email }, context: { returned } });
+    } finally {
+      userFind.mockRestore();
+      accountFind.mockRestore();
+    }
+    return { userFind, accountFind };
+  };
+
+  test("ignores unrelated paths, successes, unknown emails, and non-string email", async () => {
+    const failure = new betterAuthModule.APIError("UNAUTHORIZED", {
+      code: "INVALID_EMAIL_OR_PASSWORD",
+    });
+    await expect(
+      invoke("/sign-in/social", failure, user.email),
+    ).resolves.toBeDefined();
+    await expect(
+      invoke("/sign-in/email", { ok: true }, user.email),
+    ).resolves.toBeDefined();
+    await expect(invoke("/sign-in/email", failure, 42)).resolves.toBeDefined();
+  });
+
+  test("classifies missing users, password accounts, and Google-only accounts", async () => {
+    const failure = new betterAuthModule.APIError("UNAUTHORIZED", {
+      code: "INVALID_EMAIL_OR_PASSWORD",
+    });
+    for (const [rows, code] of [
+      [[], "USER_NOT_FOUND"],
+      [[{ id: "user-1" }], "INVALID_PASSWORD"],
+      [[{ id: "user-1" }], "GOOGLE_SIGN_IN_REQUIRED"],
+    ] as const) {
+      const accountRows =
+        code === "INVALID_PASSWORD"
+          ? [{ providerId: "credential", password: "hash" }]
+          : code === "GOOGLE_SIGN_IN_REQUIRED"
+            ? [{ providerId: "google", password: null }]
+            : [];
+      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue(
+        rows[0] as any,
+      );
+      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(
+        accountRows as any,
+      );
+      try {
+        await expect(
+          afterAuthHooks({
+            path: "/sign-in/email",
+            body: { email: "STUDENT@example.com" },
+            context: { returned: failure },
+          }),
+        ).rejects.toMatchObject({ body: { code } });
+      } finally {
+        userFind.mockRestore();
+        accountFind.mockRestore();
+      }
+    }
+  });
+
+  test("keeps credential-linked Google accounts on password login and returns for unknown providers", async () => {
+    const failure = new betterAuthModule.APIError("UNAUTHORIZED", {
+      code: "INVALID_EMAIL_OR_PASSWORD",
+    });
+    for (const accounts of [
+      [
+        { providerId: "credential", password: "hash" },
+        { providerId: "google", password: null },
+      ],
+      [{ providerId: "github", password: null }],
+    ]) {
+      const userFind = spyOn(db.query.user, "findFirst").mockResolvedValue({
+        id: "user-1",
+      } as any);
+      const accountFind = spyOn(db.query.account, "findMany").mockResolvedValue(
+        accounts as any,
+      );
+      try {
+        const result = await afterAuthHooks({
+          path: "/sign-in/email",
+          body: { email: user.email },
+          context: { returned: failure },
+        });
+        if (accounts[0]?.providerId === "credential") {
+          throw new Error("Expected an invalid password classification");
+        }
+        expect(result).toBeUndefined();
+      } catch (error) {
+        if (accounts[0]?.providerId !== "credential") throw error;
+        expect(error).toMatchObject({ body: { code: "INVALID_PASSWORD" } });
+      } finally {
+        userFind.mockRestore();
+        accountFind.mockRestore();
+      }
+    }
+  });
+});
 
 afterEach(() => {
   setAuthEmailSender(null as any);
@@ -563,7 +674,8 @@ describe("resolveGoogleSocialProviders", () => {
       google: {
         clientId: "google-id",
         clientSecret: "google-secret",
-        prompt: "consent",
+        prompt: "select_account consent",
+        disableImplicitSignUp: true,
       },
     });
   });

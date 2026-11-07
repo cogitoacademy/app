@@ -23,6 +23,10 @@ export function getAuthErrorMessage(error: unknown, context: AuthErrorContext) {
       return "No account was found for this email. Please sign up first.";
     }
 
+    if (code === "GOOGLE_SIGN_IN_REQUIRED") {
+      return "This account uses Google. Please continue with Google.";
+    }
+
     if (code === "INVALID_PASSWORD") {
       return "That password is incorrect. Try again or reset your password.";
     }
@@ -36,7 +40,7 @@ export function getAuthErrorMessage(error: unknown, context: AuthErrorContext) {
       code === "INVALID_USER" ||
       status === 401
     ) {
-      return "The email or password is incorrect. If you do not have an account yet, please sign up first.";
+      return "The email or password is incorrect. If you signed up with Google, continue with Google. If you do not have an account yet, please sign up first.";
     }
   }
 

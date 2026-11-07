@@ -2978,3 +2978,11 @@ Blog people references remain optional. Manual featured/reviewer names are share
 ### Admin finance follow-up (2 November 2026)
 
 `getV3EconomySettings` includes `activeValues` (or `null`) alongside the latest saved values and active revision. The admin rate card compares current and draft prices; its save, activation and cancel actions live in the header. Payout CSV and Excel reports separate paid transfers from cancelled payouts and exclude cancelled amounts from paid totals.
+
+### Specific login errors (7 November 2026)
+
+Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credential validation to USER_NOT_FOUND, INVALID_PASSWORD, or GOOGLE_SIGN_IN_REQUIRED (Google account without a usable password). Linked Google accounts with passwords use password validation. Other failures remain unchanged. This intentionally exposes email registration/provider status on failed login; existing auth rate limits still apply. No migration or environment change.
+
+### Explicit Google signup (7 November 2026)
+
+Google disables implicit signup. Only the signup form sends requestSignUp: true. Unregistered Google sign-ins return to /login with signup_disabled and guidance to choose another account or sign up. Google prompts for account selection and consent. No migration or new environment setting.

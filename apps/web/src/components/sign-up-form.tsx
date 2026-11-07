@@ -349,6 +349,7 @@ export default function SignUpForm({
               authClient.signIn.social(
                 {
                   provider: "google",
+                  requestSignUp: true,
                   callbackURL: buildAuthCallbackUrl("signed-in", redirectPath),
                   newUserCallbackURL: buildAuthCallbackUrl(
                     "created",

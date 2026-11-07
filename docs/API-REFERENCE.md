@@ -2916,3 +2916,11 @@ Blog admin article responses include `bodyMedia: BlogMediaDto[]` for image and e
 POST `/rpc/adminBlog/categories/delete` accepts `{"json":{"categoryId":"...","expectedVersion":1}}` and returns the deleted id in the standard envelope. Admin-only. Deletes only categories without article references (including drafts/archived articles) or child categories. Stale versions return VERSION_CONFLICT; referenced categories return BLOG_CATEGORY_INVALID.
 
 adminBlog.createArticle/updateArticle accept optional nullable featuredTutorName and reviewedByName (trimmed, max 200 characters). Admin get returns both manual fields; public cards tutorName falls back to the manual featured name. Public article get adds reviewerName, preferring the linked reviewer name then the manual value. Manual names do not create tutor accounts or profile links.
+
+### Specific login errors (7 November 2026)
+
+Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credential validation to USER_NOT_FOUND, INVALID_PASSWORD, or GOOGLE_SIGN_IN_REQUIRED (Google account without a usable password). Linked Google accounts with passwords use password validation. Other failures remain unchanged. This intentionally exposes email registration/provider status on failed login; existing auth rate limits still apply. No migration or environment change.
+
+### Explicit Google signup (7 November 2026)
+
+Google disables implicit signup. Only the signup form sends requestSignUp: true. Unregistered Google sign-ins return to /login with signup_disabled and guidance to choose another account or sign up. Google prompts for account selection and consent. No migration or new environment setting.
