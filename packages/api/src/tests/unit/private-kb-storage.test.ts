@@ -10,7 +10,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   createPrivateKbStorage,
-  MAX_KB_BYTES,
+  MAX_STORED_KB_BYTES,
 } from "../../lib/private-kb-storage";
 
 const config = {
@@ -53,7 +53,7 @@ test("private bucket uses authenticated object commands and validates downloads"
     for (const response of [
       {},
       { ContentLength: 0, Body: {} },
-      { ContentLength: MAX_KB_BYTES + 1, Body: {} },
+      { ContentLength: MAX_STORED_KB_BYTES + 1, Body: {} },
       {
         ContentLength: 3,
         Body: { transformToByteArray: async () => new Uint8Array(3) },
@@ -61,7 +61,8 @@ test("private bucket uses authenticated object commands and validates downloads"
       {
         ContentLength: 1,
         Body: {
-          transformToByteArray: async () => new Uint8Array(MAX_KB_BYTES + 1),
+          transformToByteArray: async () =>
+            new Uint8Array(MAX_STORED_KB_BYTES + 1),
         },
       },
     ]) {
@@ -90,7 +91,7 @@ test("private bucket rejects invalid configuration and uploads before contacting
     for (const bytes of [
       new Uint8Array(),
       new Uint8Array(5),
-      new Uint8Array(MAX_KB_BYTES + 1),
+      new Uint8Array(MAX_STORED_KB_BYTES + 1),
     ]) {
       // eslint-disable-next-line no-await-in-loop -- Keep each rejected write isolated on the shared SDK spy.
       await expect(store.put(key, bytes)).rejects.toThrow("PDF");

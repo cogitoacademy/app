@@ -1,4 +1,5 @@
 import { APIError, createAuthMiddleware } from "better-auth/api";
+import { signupSourceFromCookie } from "./signup-source";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
@@ -223,6 +224,12 @@ function buildAuth(options?: InternalAuthOptions) {
     trustedOrigins: getAuthTrustedOrigins(env.CORS_ORIGIN, env.NODE_ENV),
     user: {
       additionalFields: {
+        signupSource: {
+          type: "json",
+          required: false,
+          input: false,
+          returned: false,
+        },
         role: {
           type: "string",
           required: false,
@@ -406,6 +413,9 @@ function buildAuth(options?: InternalAuthOptions) {
           // need a second connection to update the new row.
           before: async (user, ctx) => {
             const data = { ...user };
+            Object.assign(data, {
+              signupSource: signupSourceFromCookie(ctx?.headers?.get("cookie")),
+            });
             // OAuth input reaches this hook before adapter field defaults.
             data.role ??= "student";
             if (

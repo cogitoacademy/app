@@ -1,7 +1,12 @@
 import type { DbOrTx } from "../../lib/tx";
 import type { AuditRepo } from "./audit.repo";
 
-export type AuditActorType = "admin" | "tutor" | "student" | "system";
+export type AuditActorType =
+  | "admin"
+  | "tutor"
+  | "student"
+  | "system"
+  | "office";
 
 export interface AuditRecordParams {
   db: DbOrTx;

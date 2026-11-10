@@ -30,7 +30,7 @@ export const auditLog = pgTable(
   (table) => [
     check(
       "audit_log_actor_type_check",
-      sql`${table.actorType} IN ('admin', 'tutor', 'student', 'system')`,
+      sql`${table.actorType} IN ('admin', 'tutor', 'student', 'system', 'office')`,
     ),
     index("audit_log_actorId_idx").on(table.actorId),
     index("audit_log_targetType_targetId_idx").on(

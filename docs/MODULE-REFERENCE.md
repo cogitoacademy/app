@@ -2990,3 +2990,11 @@ Google disables implicit signup. Only the signup form sends requestSignUp: true.
 ## Student and tutor terms, November 2026
 
 `student_terms_acceptance` records the accepted version, timestamp, age group, and applicable guardian name and relationship; a guardian checkbox records a declaration, not verified identity. Email account creation and Google referral-choice completion save acceptance transactionally. Google identity creation itself precedes the pending-choice gate. Tutor onboarding records the accepted November version when submitted; older draft acceptance does not satisfy the new gate.
+
+## Office integration
+
+The Office boundary lives in apps/server/src/office; business adapters, snapshot projection, attribution reports and outbox worker live under packages/api/src/modules/office. Reuse dashboard analytics and admin services; do not fork financial calculations. Snapshot content follows CC_SOURCE/KB_SOURCE for Sanity versus database reads. Database drafts are admin-only; FAQ landing intent survives draft state.
+
+Office actions acquire a transaction advisory lock per idempotency UUID, reuse a successful receipt for seven days, and commit the service result, actor=office audit and receipt together. Dry runs execute transaction-bound validation then roll back, skipping external file puts. A failed action cannot commit its receipt. Storage writes use content-derived keys; a database rollback can leave an unreferenced asset, which is not published and must not be deleted during a retry.
+
+Attribution persists only the five bounded marketing keys and first/last timestamps; manual source is one of whatsapp/school/event/friend/other. First-touch source is overridden by manual classification. Reports count paid top-up cohorts and avoid exposing raw cookie objects. Outbox delivery signs the exact transmitted JSON and retains exhausted rows after eight exponentially delayed attempts, alerting operations through Discord. Missing webhook URL disables outbound delivery. See the Office handover for operator and live acceptance gates.

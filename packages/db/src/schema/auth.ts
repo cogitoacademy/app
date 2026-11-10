@@ -6,6 +6,7 @@ import {
   boolean,
   index,
   check,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -18,6 +19,11 @@ export const user = pgTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
+    signupSource: jsonb("signup_source").$type<{
+      firstTouch?: Record<string, string>;
+      lastTouch?: Record<string, string>;
+      manual?: "whatsapp" | "school" | "event" | "friend" | "other";
+    }>(),
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),

@@ -24,9 +24,13 @@ import {
   adminActivateV3EconomyInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
+import { manualSignupSourceInput } from "./signup-source";
 
 export function createAdminRouter(handler: AdminHandler) {
   return {
+    setManualSignupSource: adminProcedure
+      .input(manualSignupSourceInput)
+      .handler(handler.setManualSignupSource),
     activateV3EconomySettings: adminProcedure
       .input(adminActivateV3EconomyInput)
       .handler(handler.activateV3EconomySettings),

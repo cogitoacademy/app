@@ -27,6 +27,9 @@ import {
 import { orpc } from "@/utils/orpc";
 
 import "../index.css";
+import { captureSignupSource } from "@/lib/signup-source";
+
+captureSignupSource();
 
 const disabledPostHog = new PostHog();
 

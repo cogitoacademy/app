@@ -143,6 +143,7 @@ export function registerCors(app: Elysia) {
   return app.use(
     cors({
       origin: (request) =>
+        !new URL(request.url).pathname.startsWith("/office/") &&
         isAllowedFrontendOrigin(
           request.headers.get("origin"),
           env.CORS_ORIGIN,

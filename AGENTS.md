@@ -212,3 +212,7 @@ Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 ## Pre-release scope
 
 This app has not launched and has no existing user data to preserve. Implement the V3 product directly; substantial changes and removal of superseded pre-V3 behavior are acceptable. Do not retain legacy compatibility paths solely for hypothetical users or data. Preserve unrelated workspace changes and verify the exact target before destructive database operations.
+
+## Operations entry points
+
+For local setup and test commands read package.json and docs/RUNBOOK.md. For deployment, rollback, backup restore, secret rotation and switching Midtrans to live, follow docs/RUNBOOK.md and docs/OFFICE-HANDOVER.md before acting. Office rollout additionally requires the operator and joint acceptance checklist in docs/OFFICE-HANDOVER.md. Verify the exact target and existing authorization before database resets or restores; use forward migrations for ordinary deployment.

@@ -1,4 +1,5 @@
 import { auth } from "@cogito-app/auth";
+import { officeOpenApiPaths } from "../office/openapi";
 import { env } from "@cogito-app/env/server";
 import { openApiAccessDenied } from "@cogito-app/api/lib/request-id";
 import { createContext } from "@cogito-app/api/context";
@@ -28,7 +29,19 @@ async function generateOpenAPISpec(request: Request) {
     tags: openApiTags,
   });
 
-  return enrichOpenAPISpec(spec);
+  const enriched = enrichOpenAPISpec(spec);
+  return {
+    ...enriched,
+    paths: { ...enriched.paths, ...officeOpenApiPaths },
+    components: {
+      ...spec.components,
+      securitySchemes: {
+        ...spec.components?.securitySchemes,
+        officeRead: { type: "http", scheme: "bearer" },
+        officeWrite: { type: "http", scheme: "bearer" },
+      },
+    },
+  };
 }
 
 const apiHandler = new OpenAPIHandler(appRouter, {

@@ -58,7 +58,10 @@ export function createContentAdminService(deps: {
         parentId: c.parentId,
       }));
     },
-    async create(input: z.infer<typeof createContentInput>, actorId: string) {
+    async create(
+      input: z.infer<typeof createContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const parsed = createContentInput.parse(input);
       if (parsed.entry.kind === "resource" && !parsed.reason)
@@ -69,7 +72,10 @@ export function createContentAdminService(deps: {
         parsed.reason ?? "Competition event created",
       );
     },
-    async update(input: z.infer<typeof updateContentInput>, actorId: string) {
+    async update(
+      input: z.infer<typeof updateContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const parsed = updateContentInput.parse(input);
       if (parsed.entry.kind === "resource" && !parsed.reason)
@@ -81,7 +87,10 @@ export function createContentAdminService(deps: {
         parsed,
       );
     },
-    async remove(input: z.infer<typeof deleteContentInput>, actorId: string) {
+    async remove(
+      input: z.infer<typeof deleteContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const p = deleteContentInput.parse(input);
       if (p.kind === "resource" && !p.reason)

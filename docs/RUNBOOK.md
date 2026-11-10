@@ -4941,3 +4941,7 @@ Google disables implicit signup. Only the signup form sends requestSignUp: true.
 ## November 2026 terms rollout
 
 Apply the student terms acceptance migration through the normal deployment sequence before serving the updated app. Existing accounts are not backfilled with invented consent; previously published tutor profiles are not forced to reaccept by this change. Check email and Google signup, guardian consent, and tutor onboarding in the target environment. Verify the tutor fee schedule and seven-day change-notification obligations with the business owner; their implementation is not established by the terms display alone.
+
+## Office integration operations
+
+For Office setup, key rotation, private credential cleanup, ownership recovery, non-production acceptance and the joint Rafsi checklist, follow [OFFICE-HANDOVER.md](OFFICE-HANDOVER.md). These are operator gates, not claims of production completion. Keep the existing backup/restore and payment activation procedures as the authority for destructive recovery or live money operations.

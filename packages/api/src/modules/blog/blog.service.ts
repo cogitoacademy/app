@@ -484,7 +484,7 @@ export function createBlogService(deps: {
       };
     },
 
-    async createArticle(input: CreateBlogArticleInput, actorId: string) {
+    async createArticle(input: CreateBlogArticleInput, actorId: string | null) {
       if (input.categoryId) await ensureCategory(input.categoryId);
       await ensureSubcategory(input.categoryId, input.subcategoryId);
       if (input.heroMediaId) {
@@ -511,7 +511,7 @@ export function createBlogService(deps: {
       return { articleId: row.id, version: row.version };
     },
 
-    async updateArticle(input: UpdateBlogArticleInput, actorId: string) {
+    async updateArticle(input: UpdateBlogArticleInput, actorId: string | null) {
       const article = await repo.articleById(input.articleId);
       if (!article) throw new BlogNotFoundError(input.articleId);
       if (article.archivedAt) throw new BlogArticleArchivedError(article.id);
@@ -659,7 +659,7 @@ export function createBlogService(deps: {
         locale: BlogLocale;
         expectedVersion: number;
       },
-      actorId: string,
+      actorId: string | null,
     ) {
       const article = await repo.articleById(input.articleId);
       if (!article) throw new BlogNotFoundError(input.articleId);
@@ -717,7 +717,7 @@ export function createBlogService(deps: {
         locale: BlogLocale;
         expectedVersion: number;
       },
-      actorId: string,
+      actorId: string | null,
     ) {
       const version = await repo.versionByArticleLocale(
         input.articleId,
@@ -759,7 +759,7 @@ export function createBlogService(deps: {
         articleId: string;
         expectedVersion: number;
       },
-      actorId: string,
+      actorId: string | null,
     ) {
       const article = await repo.articleById(input.articleId);
       if (!article) throw new BlogNotFoundError(input.articleId);
@@ -845,7 +845,7 @@ export function createBlogService(deps: {
       return { articleId: article.id };
     },
 
-    async registerMedia(input: RegisterBlogMediaInput, actorId: string) {
+    async registerMedia(input: RegisterBlogMediaInput, actorId: string | null) {
       if (
         !isValidUploadKey(input.storageKey) ||
         !input.storageKey.startsWith(`${actorId}/`)

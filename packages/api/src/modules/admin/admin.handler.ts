@@ -1,4 +1,8 @@
 import type { Context } from "../../context";
+import {
+  manualSignupSourceInput,
+  setManualSignupSource,
+} from "./signup-source";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
 import { mapAdminError } from "./admin.errors";
@@ -66,6 +70,13 @@ export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(adminService: AdminService) {
   return {
+    setManualSignupSource: ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof manualSignupSourceInput>;
+    }) => setManualSignupSource(context.session!.user.id, input),
     activateV3EconomySettings: async ({
       context,
       input,

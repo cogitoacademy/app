@@ -7,14 +7,15 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
 export const MAX_KB_BYTES = 5 * 1024 * 1024;
+export const MAX_STORED_KB_BYTES = 20 * 1024 * 1024;
 export interface PrivateKbStorage {
   put(key: string, bytes: Uint8Array): Promise<void>;
   read(key: string): Promise<Uint8Array>;
 }
-export function assertKbPdf(bytes: Uint8Array) {
+export function assertKbPdf(bytes: Uint8Array, maxBytes = MAX_KB_BYTES) {
   if (
     !bytes.length ||
-    bytes.length > MAX_KB_BYTES ||
+    bytes.length > maxBytes ||
     new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-"
   ) {
     throw new Error("Upload a PDF of at most 5 MiB");
@@ -67,7 +68,7 @@ export function createPrivateKbStorage(config: {
     return {
       async put(key, bytes) {
         assertKey(key);
-        assertKbPdf(bytes);
+        assertKbPdf(bytes, MAX_STORED_KB_BYTES);
         await client.send(
           new PutObjectCommand({
             Bucket: config.KB_PRIVATE_BUCKET,
@@ -85,11 +86,11 @@ export function createPrivateKbStorage(config: {
         if (
           !result.Body ||
           !result.ContentLength ||
-          result.ContentLength > MAX_KB_BYTES
+          result.ContentLength > MAX_STORED_KB_BYTES
         )
           throw new Error("Invalid private PDF size");
         const bytes = await result.Body.transformToByteArray();
-        assertKbPdf(bytes);
+        assertKbPdf(bytes, MAX_STORED_KB_BYTES);
         return bytes;
       },
     };
@@ -110,7 +111,7 @@ export function createPrivateKbStorage(config: {
   return {
     async put(key, bytes) {
       assertKey(key);
-      assertKbPdf(bytes);
+      assertKbPdf(bytes, MAX_STORED_KB_BYTES);
       await checkedDir();
       await writeFile(resolve(dir, key), bytes, { flag: "wx" }).catch(
         async (error) => {
@@ -128,7 +129,7 @@ export function createPrivateKbStorage(config: {
       if ((await realpath(path)) !== path)
         throw new Error("Private file symlinks are forbidden");
       const bytes = await readFile(path);
-      assertKbPdf(bytes);
+      assertKbPdf(bytes, MAX_STORED_KB_BYTES);
       return bytes;
     },
   };
