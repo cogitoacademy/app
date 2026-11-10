@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { z } from "zod";
 import {
-  assertKbPdf,
+  validateKbPdf,
   type PrivateKbStorage,
 } from "../../lib/private-kb-storage";
 import type { ContentAdminRepo } from "./content-admin.repo";
@@ -110,7 +110,7 @@ export function createContentAdminService(deps: {
       if (bytes.toString("base64") !== p.base64)
         throw new ContentInvalidError("Invalid PDF encoding");
       try {
-        assertKbPdf(bytes);
+        await validateKbPdf(bytes);
       } catch {
         throw new ContentInvalidError("Upload a PDF of at most 5 MiB");
       }

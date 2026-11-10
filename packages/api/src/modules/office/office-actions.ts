@@ -5,7 +5,7 @@ import { env } from "@cogito-app/env/server";
 import { db, type DbType } from "../../lib/db";
 import { createStorage, type StoragePort } from "../../lib/storage";
 import {
-  assertKbPdf,
+  validateKbPdf,
   createPrivateKbStorage,
   type PrivateKbStorage,
 } from "../../lib/private-kb-storage";
@@ -37,7 +37,7 @@ class PreviewRollback extends Error {
 }
 const rich = (text: string) => ({
   type: "doc" as const,
-  blocks: [{ type: "paragraph" as const, content: [{ text }] }],
+  blocks: [{ type: "paragraph" as const, content: Array.from({ length: Math.max(1, Math.ceil(text.length / 5000)) }, (_, i) => ({ text: text.slice(i * 5000, (i + 1) * 5000) })) }],
 });
 const slug = (title: string) =>
   title
@@ -363,7 +363,7 @@ export async function executeOfficeAction(
           20 * 1024 * 1024,
           config.fetcher,
         );
-        assertKbPdf(bytes, 20 * 1024 * 1024);
+        await validateKbPdf(bytes, 20 * 1024 * 1024);
         const hash = createHash("sha256").update(bytes).digest("hex");
         if (!body.dryRun)
           await (config.privateStorage ?? createPrivateKbStorage(env)).put(

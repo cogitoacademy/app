@@ -252,7 +252,8 @@ describe("FAQ Postgres integration", () => {
       showOnLanding: true,
     });
     expect(deactivated.isActive).toBe(false);
-    expect(deactivated.showOnLanding).toBe(false);
+    // Drafts retain the desired placement; public queries still require isActive.
+    expect(deactivated.showOnLanding).toBe(true);
     expect(
       (
         await clients.publicClient.publicContent.faq.list({

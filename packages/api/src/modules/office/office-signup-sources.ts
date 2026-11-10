@@ -10,18 +10,21 @@ export async function getOfficeSignupSources(start: Date, end: Date) {
     FROM "user" u WHERE u.created_at >= ${start.toISOString()}::timestamptz AND u.created_at < ${end.toISOString()}::timestamptz
     GROUP BY 1,2 ORDER BY 1,2
   `);
+  return projectOfficeSignupSources(result);
+}
+
+export function projectOfficeSignupSources(result: Iterable<Record<string, unknown>>) {
   const groups = new Map<
     string,
     { source: string; campaign: string; registered: number; paidTopUp: number }
   >();
   for (const row of result) {
     const source =
-      typeof row.source === "string" && /^[a-z0-9_.-]{1,200}$/i.test(row.source)
+      typeof row.source === "string" && ["direct", "instagram", "facebook", "google", "whatsapp", "school", "event", "friend", "other"].includes(row.source)
         ? row.source
         : "other";
     const campaign =
-      typeof row.campaign === "string" &&
-      /^[a-z0-9_.-]{0,200}$/i.test(row.campaign)
+      row.campaign === "test"
         ? row.campaign
         : "";
     const key = JSON.stringify([source, campaign]);

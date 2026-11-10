@@ -1,3 +1,4 @@
+import { officeOutbox } from "@cogito-app/db/schema";
 import { expect, test, mock } from "bun:test";
 import { createReferralService } from "../../modules/referral/referral.service";
 import { createReferralHandler } from "../../modules/referral/referral.handler";
@@ -6,6 +7,7 @@ import { ReferralError } from "../../modules/referral/referral.errors";
 // Scripted query results exercise getMine wiring without opening a database.
 function fixture(results: unknown[][], saveReturnsRow = true) {
   const inserted: Record<string, unknown>[] = [];
+  const events: Record<string, unknown>[] = [];
   const updates: Record<string, unknown>[] = [];
   const db = {
     execute: async () => undefined,
@@ -28,9 +30,9 @@ function fixture(results: unknown[][], saveReturnsRow = true) {
       };
       return query;
     },
-    insert: () => ({
+    insert: (table: unknown) => ({
       values: (value: Record<string, unknown>) => {
-        inserted.push(value);
+        (table === officeOutbox ? events : inserted).push(value);
         return {
           onConflictDoNothing: async () => undefined,
           returning: async () =>
@@ -59,6 +61,7 @@ function fixture(results: unknown[][], saveReturnsRow = true) {
   return {
     service,
     inserted,
+    events,
     results,
     updates,
     wallet,
@@ -113,6 +116,7 @@ test.each([
     ).resolves.toBeNull();
     expect(f.results).toEqual([]);
     expect(f.inserted).toEqual([]);
+    expect(f.events).toEqual(["free", "missing-choice"].includes(scenario) ? [] : [{ id: "referral-converted-choice1", type: "referral.converted", payload: { id: "choice1" } }]);
     expect(f.wallet.credit).not.toHaveBeenCalled();
   },
 );

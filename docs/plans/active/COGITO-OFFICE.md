@@ -13,3 +13,5 @@ Approved specification: CEO, 10 November 2026. Scope: app-side blocks 1-4 and re
 | 6     | Runbook, OpenAPI and ownership checklist                                                   | Cogito ownership, vault recovery, non-production/live payment proof                                                |
 
 Do not merge until CI and parent review assess the evidence. Keep null for unsupported KOL first-paid-completion metrics. Session report on-time means within 24h after end. Full DB and production acceptance must not be inferred from unit tests.
+
+Review repair: source fixes implemented; local focused and type checks recorded in PR Evidence. Hosted integration and 100% coverage remain required and unproven until a fresh successful run.

@@ -1,3 +1,4 @@
+import { PDFDocument } from "pdf-lib";
 import {
   GetObjectCommand,
   PutObjectCommand,
@@ -19,6 +20,16 @@ export function assertKbPdf(bytes: Uint8Array, maxBytes = MAX_KB_BYTES) {
     new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-"
   ) {
     throw new Error("Upload a PDF of at most 5 MiB");
+  }
+}
+export async function validateKbPdf(bytes: Uint8Array, maxBytes = MAX_KB_BYTES) {
+  assertKbPdf(bytes, maxBytes);
+  try {
+    const document = await PDFDocument.load(bytes, { throwOnInvalidObject: true });
+    if (document.getPageCount() < 1) throw new Error("No pages");
+    document.getPages();
+  } catch {
+    throw new Error("Upload a valid, unencrypted PDF with pages");
   }
 }
 function assertKey(key: string) {
@@ -68,7 +79,7 @@ export function createPrivateKbStorage(config: {
     return {
       async put(key, bytes) {
         assertKey(key);
-        assertKbPdf(bytes, MAX_STORED_KB_BYTES);
+        await validateKbPdf(bytes, MAX_STORED_KB_BYTES);
         await client.send(
           new PutObjectCommand({
             Bucket: config.KB_PRIVATE_BUCKET,
@@ -90,7 +101,7 @@ export function createPrivateKbStorage(config: {
         )
           throw new Error("Invalid private PDF size");
         const bytes = await result.Body.transformToByteArray();
-        assertKbPdf(bytes, MAX_STORED_KB_BYTES);
+        await validateKbPdf(bytes, MAX_STORED_KB_BYTES);
         return bytes;
       },
     };
@@ -111,7 +122,7 @@ export function createPrivateKbStorage(config: {
   return {
     async put(key, bytes) {
       assertKey(key);
-      assertKbPdf(bytes, MAX_STORED_KB_BYTES);
+      await validateKbPdf(bytes, MAX_STORED_KB_BYTES);
       await checkedDir();
       await writeFile(resolve(dir, key), bytes, { flag: "wx" }).catch(
         async (error) => {
@@ -129,7 +140,7 @@ export function createPrivateKbStorage(config: {
       if ((await realpath(path)) !== path)
         throw new Error("Private file symlinks are forbidden");
       const bytes = await readFile(path);
-      assertKbPdf(bytes, MAX_STORED_KB_BYTES);
+      await validateKbPdf(bytes, MAX_STORED_KB_BYTES);
       return bytes;
     },
   };

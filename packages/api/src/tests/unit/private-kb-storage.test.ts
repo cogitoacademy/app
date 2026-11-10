@@ -1,3 +1,4 @@
+import { testPdf } from "../helpers/pdf";
 import { expect, spyOn, test } from "bun:test";
 import * as fsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
@@ -9,6 +10,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
+  validateKbPdf,
   createPrivateKbStorage,
   MAX_STORED_KB_BYTES,
 } from "../../lib/private-kb-storage";
@@ -21,7 +23,7 @@ const config = {
   R2_SECRET_ACCESS_KEY: "synthetic",
 };
 const key = `${"a".repeat(64)}.pdf`;
-const pdf = new TextEncoder().encode("%PDF-synthetic");
+const pdf = await testPdf();
 
 test("private bucket uses authenticated object commands and validates downloads", async () => {
   const send = spyOn(S3Client.prototype, "send");
@@ -149,7 +151,7 @@ test("local PDF writes accept identical retries and reject a hash collision", as
     await store.put(key, pdf);
     await expect(store.put(key, pdf)).resolves.toBeUndefined();
     await expect(
-      store.put(key, new TextEncoder().encode("%PDF-different")),
+      store.put(key, await testPdf("different")),
     ).rejects.toThrow("Private file hash collision");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -173,4 +175,11 @@ test("rethrows unexpected local PDF write errors", async () => {
     write.mockRestore();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("PDF parser rejects forged headers and accepts a generated page", async () => {
+  for (const text of ["%PDF-not-a-document", "%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF"]) {
+    await expect(validateKbPdf(new TextEncoder().encode(text))).rejects.toThrow("PDF");
+  }
+  await expect(validateKbPdf(await testPdf())).resolves.toBeUndefined();
 });

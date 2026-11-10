@@ -61,7 +61,7 @@ BEGIN
       IF TG_OP = 'INSERT' THEN event_type := 'payment.refunded'; data := jsonb_build_object('id', n->>'payment_id', 'amountIdr', (n->>'amount_idr')::bigint); END IF;
     WHEN 'tutor_payout' THEN
       -- The Office receives only aggregate totals, never an individual tutor's payout ID or destination.
-      SELECT jsonb_build_object('count', count(*), 'amountIdr', COALESCE(sum(net_honorarium_idr),0)) INTO data FROM tutor_payout WHERE status = n->>'status';
+      data := jsonb_build_object('count', 1, 'amountIdr', COALESCE((n->>'actual_amount_idr')::bigint, (n->>'net_honorarium_idr')::bigint));
       IF n->>'status' IS DISTINCT FROM o->>'status' THEN
         IF n->>'status' = 'prepared' THEN event_type := 'payout.ready'; ELSIF n->>'status' = 'paid' THEN event_type := 'payout.paid'; END IF;
       END IF;
@@ -71,8 +71,8 @@ BEGIN
       IF n->>'role' = 'admin' AND n->>'role' IS DISTINCT FROM o->>'role' THEN event_type := 'admin.added';
       ELSIF o->>'role' = 'admin' AND n->>'role' <> 'admin' THEN event_type := 'admin.removed'; END IF;
     WHEN 'notification' THEN
-      IF n->'metadata'->>'action' IN ('booking-session-report','class-session-report') THEN
-        event_type := 'session_report.overdue'; data := jsonb_build_object('id', n->>'id');
+      IF TG_OP = 'INSERT' AND n->'metadata'->>'action' IN ('booking-session-report','class-session-report') AND n->>'event_key' ~ ':missing-report:day:[1-9][0-9]*$' THEN
+        INSERT INTO office_outbox(id,type,payload) VALUES ('session-report-overdue-' || md5(regexp_replace(n->>'event_key', ':day:[0-9]+$', '')), 'session_report.overdue', jsonb_build_object('id', regexp_replace(n->>'event_key', ':day:[0-9]+$', ''))) ON CONFLICT DO NOTHING;
       END IF;
   END CASE;
   IF event_type IS NOT NULL THEN

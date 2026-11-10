@@ -1,3 +1,4 @@
+import { testPdf } from "../helpers/pdf";
 import { describe, expect, mock, test } from "bun:test";
 import { createRouterClient } from "@orpc/server";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -273,7 +274,7 @@ describe("content admin boundaries", () => {
     const result = await createContentAdminHandler(s).uploadPdf({
       input: {
         fileName: "x.pdf",
-        base64: btoa("%PDF-test"),
+        base64: Buffer.from(await testPdf()).toString("base64"),
       },
     });
     expect(Object.keys(result).toSorted()).toEqual([
@@ -365,7 +366,7 @@ describe("content admin boundaries", () => {
     ).rejects.toThrow("encoding");
     expect(put).not.toHaveBeenCalled();
     await expect(
-      s.uploadPdf({ fileName: "x.pdf", base64: btoa("%PDF-test") }),
+      s.uploadPdf({ fileName: "x.pdf", base64: Buffer.from(await testPdf()).toString("base64") }),
     ).rejects.toThrow("storage unavailable");
     expect(registerFile).not.toHaveBeenCalled();
   });
@@ -394,17 +395,15 @@ describe("private local PDF storage", () => {
         UPLOAD_DIR: join(dir, "public"),
       });
       const key = "a".repeat(64) + ".pdf",
-        bytes = new TextEncoder().encode("%PDF-test");
+        bytes = await testPdf();
       await store.put(key, bytes);
       await store.put(key, bytes);
       expect(await store.read(key)).toEqual(bytes);
       await expect(store.read("../secret")).rejects.toThrow();
       await expect(
-        store.put(key, new TextEncoder().encode("%PDF-changed")),
+        store.put(key, await testPdf("changed")),
       ).rejects.toThrow("collision");
-      expect(await readFile(join(dir, "private", key), "utf8")).toBe(
-        "%PDF-test",
-      );
+      expect(new Uint8Array(await readFile(join(dir, "private", key)))).toEqual(bytes);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

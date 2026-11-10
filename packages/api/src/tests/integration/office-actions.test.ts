@@ -1,3 +1,5 @@
+import { resetDatabase } from "../helpers/test-client";
+import { testPdf } from "../helpers/pdf";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -59,7 +61,7 @@ const config = {
           { headers: { "content-type": "image/jpeg" } },
         )
       : new Response(
-          `%PDF-1.7\n${prefix}\n1 0 obj <<>> endobj\n%%EOF`,
+          await testPdf(prefix),
         )) as unknown as typeof fetch,
 };
 function envelope(input: unknown, dryRun = false, key = crypto.randomUUID()) {
@@ -116,7 +118,8 @@ async function action(name: string, input: unknown) {
 }
 describe("Office actions guarded database acceptance", () => {
   let previousSwitch: string | undefined;
-  beforeAll(() => {
+  beforeAll(async () => {
+    await resetDatabase();
     assertSafeTestDatabaseUrl(process.env.DATABASE_URL, process.env.NODE_ENV);
     previousSwitch = process.env.OFFICE_WRITES_ENABLED;
     process.env.OFFICE_WRITES_ENABLED = "true";
@@ -231,7 +234,7 @@ describe("Office actions guarded database acceptance", () => {
     await action("activities.publish", { id: activity });
     const faq = await action("faq.saveDraft", {
       question: prefix,
-      answer: "Test answer",
+      answer: "a".repeat(20000),
       category: "about",
       onLanding: false,
     });
