@@ -146,6 +146,16 @@ describe("Office action trust boundary", () => {
   });
 });
 describe("Office asset download", () => {
+  test("uses the global fetch when no override is provided", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response("asset")) as typeof fetch;
+      const result = await downloadOfficeAsset("https://office.cogitoacademy.id/a", 100);
+      expect(result.bytes.toString()).toBe("asset");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
   test("disables redirects and sets a timeout", async () => {
     let options: RequestInit | undefined;
     const fake = (async (_url: string | URL | Request, init?: RequestInit) => {

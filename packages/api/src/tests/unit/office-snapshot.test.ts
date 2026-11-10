@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { createOfficeSnapshotService } from "../../modules/office/office-snapshot";
 import { snapshotFixture } from "../helpers/office-snapshot-fixture";
 import * as s from "@cogito-app/db/schema";
+import "../../modules/office/office-snapshot.test";
 
 describe("Office snapshot query orchestration", () => {
   test("projects all operational queues and content without private service fields", async () => {
