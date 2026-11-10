@@ -21,11 +21,19 @@ export function parseTermsDocument(source: string): TermsBlock[] {
 }
 
 export function splitTermsEmphasis(text: string) {
-  return text.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g).map((part) => {
-    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__")))
-      return { text: part.slice(2, -2), emphasis: "strong" as const };
-    if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_")))
-      return { text: part.slice(1, -1), emphasis: "em" as const };
-    return { text: part, emphasis: null };
-  });
+  return text
+    .split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g)
+    .map((part) => {
+      if (
+        (part.startsWith("**") && part.endsWith("**")) ||
+        (part.startsWith("__") && part.endsWith("__"))
+      )
+        return { text: part.slice(2, -2), emphasis: "strong" as const };
+      if (
+        (part.startsWith("*") && part.endsWith("*")) ||
+        (part.startsWith("_") && part.endsWith("_"))
+      )
+        return { text: part.slice(1, -1), emphasis: "em" as const };
+      return { text: part, emphasis: null };
+    });
 }

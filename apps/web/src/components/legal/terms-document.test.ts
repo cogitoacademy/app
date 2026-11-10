@@ -35,7 +35,7 @@ describe("November 2026 student terms", () => {
       { text: "agree", emphasis: "strong" },
       { text: ".", emphasis: null },
     ]);
-    expect(splitTermsEmphasis("Use _Marks_ and __agree__." )).toEqual([
+    expect(splitTermsEmphasis("Use _Marks_ and __agree__.")).toEqual([
       { text: "Use ", emphasis: null },
       { text: "Marks", emphasis: "em" },
       { text: " and ", emphasis: null },
