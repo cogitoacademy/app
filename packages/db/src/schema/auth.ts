@@ -39,6 +39,28 @@ export const user = pgTable(
   ],
 );
 
+export const studentTermsAcceptance = pgTable(
+  "student_terms_acceptance",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    version: text("version").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ageGroup: text("age_group").notNull(),
+    guardianName: text("guardian_name"),
+    guardianRelationship: text("guardian_relationship"),
+  },
+  (table) => [
+    check(
+      "student_terms_guardian_check",
+      sql`(${table.ageGroup} = 'adult' AND ${table.guardianName} IS NULL AND ${table.guardianRelationship} IS NULL) OR (${table.ageGroup} = 'minor' AND ${table.guardianName} IS NOT NULL AND length(trim(${table.guardianName})) > 0 AND ${table.guardianRelationship} IS NOT NULL AND ${table.guardianRelationship} IN ('father', 'mother', 'guardian'))`,
+    ),
+  ],
+);
+
 export const session = pgTable(
   "session",
   {

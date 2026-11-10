@@ -405,6 +405,7 @@ describe("auth email hooks", () => {
         return query;
       },
       delete: remove,
+      insert: () => ({ values: async () => undefined }),
     };
     const transaction = spyOn(db, "transaction").mockImplementation((async (
       fn: (conn: unknown) => Promise<unknown>,
@@ -424,6 +425,11 @@ describe("auth email hooks", () => {
     try {
       await expect(
         completePreAccountSignup({
+          consent: {
+            termsAccepted: true,
+            termsVersion: "2026-11",
+            ageGroup: "adult",
+          },
           email,
           password: "ValidPassword123!",
           name: "Student",
@@ -470,8 +476,27 @@ describe("auth email hooks", () => {
       name: "Student",
       otp: "123456",
       signupAttemptId,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
       headers: new Headers(),
     };
+    await expect(
+      completePreAccountSignup({ ...input, consent: undefined }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(
+      completePreAccountSignup({
+        ...input,
+        consent: {
+          termsAccepted: true,
+          termsVersion: "2026-11",
+          ageGroup: "minor",
+          guardianName: "Parent",
+        },
+      }),
+    ).resolves.toMatchObject({ ok: false, status: 400 });
     await expect(
       completePreAccountSignup({ ...input, email: "invalid" }),
     ).resolves.toMatchObject({ ok: false, status: 400 });
@@ -796,6 +821,11 @@ describe("pre-account signup outcome reconciliation", () => {
       );
       try {
         const result = await completePreAccountSignup({
+          consent: {
+            termsAccepted: true,
+            termsVersion: "2026-11",
+            ageGroup: "adult",
+          },
           email,
           password: "ValidPassword123!",
           name: "Student",
@@ -812,7 +842,7 @@ describe("pre-account signup outcome reconciliation", () => {
           expect(result.ok).toBe(true);
           expect(signup).toHaveBeenCalledTimes(1);
           expect(referral).toHaveBeenCalledTimes(1);
-          expect(saved).toHaveLength(1);
+          expect(saved).toHaveLength(2);
           expect(removed).toHaveLength(scenario === "expired-outcome" ? 2 : 1);
           if (scenario === "welcome-failure") {
             expect(welcome).toHaveBeenCalledTimes(1);
@@ -843,6 +873,11 @@ describe("pre-account signup outcome reconciliation", () => {
     try {
       expect(
         await completePreAccountSignup({
+          consent: {
+            termsAccepted: true,
+            termsVersion: "2026-11",
+            ageGroup: "adult",
+          },
           email: "defensive@example.com",
           password: "ValidPassword123!",
           name: "Student",
@@ -1115,6 +1150,11 @@ test.each([
     setSignupReferralChoiceWriter(referral);
     try {
       const result = await completePreAccountSignup({
+        consent: {
+          termsAccepted: true,
+          termsVersion: "2026-11",
+          ageGroup: "adult",
+        },
         email,
         password: "ValidPassword123!",
         name: "Student",

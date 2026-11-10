@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { TutorTermsOfService } from "./tutor-terms-of-service";
+import { TUTOR_TERMS_OF_SERVICE_VERSION } from "@cogito-app/api/modules/tutor/tutor.types";
 import { TutorCapacityFields } from "./tutor-capacity-fields";
 import { InfoPreview } from "@/components/info-preview";
 import {
@@ -362,7 +363,7 @@ function TutorTermsConsent({
           htmlFor="tutor-terms-of-service-accepted"
           className="text-sm font-medium leading-relaxed gap-1"
         >
-          <span>I agree to the</span>
+          <span>I have read, understood and agree to the</span>
           <Button
             type="button"
             variant="underline"
@@ -373,6 +374,9 @@ function TutorTermsConsent({
           >
             Tutor Terms of Service
           </Button>
+          <span>
+            , including the Fee Schedule shown on my account dashboard.
+          </span>
         </FieldLabel>
         {error ? (
           <FieldError id="tutor-terms-of-service-error">{error}</FieldError>
@@ -487,7 +491,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const hasRecordedTutorTermsAcceptance = Boolean(
-    profile.termsOfServiceAcceptedAt,
+    profile.termsOfServiceAcceptedAt &&
+    profile.termsOfServiceVersion === TUTOR_TERMS_OF_SERVICE_VERSION,
   );
   const requiresTutorTermsAcceptance =
     profile.onboardingStatus !== "published" &&
@@ -892,7 +897,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       }
       await updateMutation.mutateAsync(getSavePayload());
       await submitMutation.mutateAsync(
-        acceptTerms ? { acceptTerms: true } : {},
+        acceptTerms
+          ? { acceptTerms: true, termsVersion: TUTOR_TERMS_OF_SERVICE_VERSION }
+          : {},
       );
     } catch {
       // handled by mutation callbacks

@@ -227,7 +227,11 @@ export function validateSubmitForReview(
   if (!hasSelectableSubject) {
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
-  if (!profile.termsOfServiceAcceptedAt && !acceptTerms) {
+  if (
+    (!profile.termsOfServiceAcceptedAt ||
+      profile.termsOfServiceVersion !== TUTOR_TERMS_OF_SERVICE_VERSION) &&
+    !acceptTerms
+  ) {
     throw new TutorTermsNotAcceptedError(
       profile.id,
       TUTOR_TERMS_OF_SERVICE_VERSION,
@@ -455,7 +459,10 @@ export function createTutorService(deps: {
       await lockTutorForBooking(tx, userId);
       const profile = await tutorRepo.getByUserId(tx, userId);
       const acceptsTermsForFirstSubmission =
-        input.acceptTerms === true && !profile?.termsOfServiceAcceptedAt;
+        input.acceptTerms === true &&
+        input.termsVersion === TUTOR_TERMS_OF_SERVICE_VERSION &&
+        (!profile?.termsOfServiceAcceptedAt ||
+          profile.termsOfServiceVersion !== TUTOR_TERMS_OF_SERVICE_VERSION);
       validateSubmitForReview(
         profile,
         pricingPort,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { studentTermsConsentSchema } from "@cogito-app/auth/student-terms";
 
 export const listReferralUsageInput = z.object({
   search: z.string().trim().max(120).default(""),
@@ -18,6 +19,7 @@ const referralCodeInput = z
 
 export const saveGoogleChoiceInput = z.object({
   code: referralCodeInput.nullable(),
+  consent: studentTermsConsentSchema,
 });
 
 export const updateReferralSettingsInput = z.object({

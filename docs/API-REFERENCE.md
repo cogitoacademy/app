@@ -2924,3 +2924,7 @@ Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credenti
 ### Explicit Google signup (7 November 2026)
 
 Google disables implicit signup. Only the signup form sends requestSignUp: true. Google callback errors return to /login and show a dismissible persistent toast; signup_disabled provides guidance to choose another account or sign up, and other errors show retry guidance. The error is removed from the URL after display while preserving the return destination. Google prompts for account selection and consent. No migration or new environment setting.
+
+## November 2026 student signup consent
+
+`POST /api/auth/sign-up/email` additionally requires `consent` with `termsAccepted: true`, `termsVersion: "2026-11"`, and `ageGroup: "adult" | "minor"`. For minors, `guardianName`, `guardianRelationship` (`father`, `mother`, or `guardian`), and `guardianAccepted: true` are required. It is recorded atomically with signup and referral selection. `POST /rpc/referral/saveGoogleChoice` uses the standard `{ "json": { "code": null, "consent": ... } }` envelope and records the same consent before clearing the new Google student's pending referral choice. Tutor `submitForReview` accepts `acceptTerms: true` and `termsVersion: "2026-11"` for a new acceptance; stale versions cannot satisfy the current gate.

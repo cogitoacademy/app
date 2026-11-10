@@ -51,7 +51,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     bankAccountOwnership: "self",
     bankTransferDisclaimerAccepted: true,
     termsOfServiceAcceptedAt: new Date("2026-09-01T00:00:00Z"),
-    termsOfServiceVersion: "2026-09",
+    termsOfServiceVersion: "2026-11",
     prices: { "1": 50 },
     subjects: [
       {
@@ -1390,7 +1390,7 @@ describe("Tutor Service", () => {
       });
       const updatedProfile = makeProfile({
         termsOfServiceAcceptedAt: new Date("2026-09-02T00:00:00Z"),
-        termsOfServiceVersion: "2026-09",
+        termsOfServiceVersion: "2026-11",
       });
       const updateStatus = mock(async () => updatedProfile);
       const deps = makeDeps({
@@ -1402,13 +1402,48 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
 
-      await service.submitForReview("u1", { acceptTerms: true });
+      await service.submitForReview("u1", {
+        acceptTerms: true,
+        termsVersion: "2026-11",
+      });
 
       expect(updateStatus).toHaveBeenCalledWith(
         expect.anything(),
         "u1",
         "pending_review",
-        { acceptTerms: true, termsVersion: "2026-09" },
+        { acceptTerms: true, termsVersion: "2026-11" },
+      );
+    });
+
+    test("requires renewed consent for an older version before submitting", async () => {
+      const profile = makeProfile({ termsOfServiceVersion: "2026-09" });
+      const updateStatus = mock(async () => profile);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus,
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(service.submitForReview("u1", {})).rejects.toThrow(
+        TutorTermsNotAcceptedError,
+      );
+      await expect(
+        service.submitForReview("u1", {
+          acceptTerms: true,
+          termsVersion: "2026-09",
+        }),
+      ).rejects.toThrow(TutorTermsNotAcceptedError);
+      await service.submitForReview("u1", {
+        acceptTerms: true,
+        termsVersion: "2026-11",
+      });
+      expect(updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "pending_review",
+        { acceptTerms: true, termsVersion: "2026-11" },
       );
     });
 
@@ -1913,6 +1948,7 @@ describe("Tutor Service", () => {
       });
       await createTutorService(deps as any).submitForReview("u1", {
         acceptTerms: true,
+        termsVersion: "2026-11",
       });
       expect(deps.auditPort.record).toHaveBeenCalledWith(
         expect.objectContaining({

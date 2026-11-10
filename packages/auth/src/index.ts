@@ -21,6 +21,10 @@ import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 
 import * as schema from "@cogito-app/db/schema";
+import {
+  studentTermsAcceptanceValues,
+  studentTermsConsentSchema,
+} from "./student-terms";
 
 import {
   createSecondaryStorage,
@@ -726,11 +730,21 @@ export async function completePreAccountSignup(input: {
   otp: string;
   signupAttemptId: string;
   referralCode?: string | null;
+  consent?: unknown;
   headers: Headers;
 }): Promise<
   { ok: true; response: Response } | (SignupFailure & { response?: Response })
 > {
   const email = normalizeEmail(input.email);
+  const consent = studentTermsConsentSchema.safeParse(input.consent);
+  if (!consent.success) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "Accept the student terms and provide the required guardian consent.",
+    };
+  }
   if (!isValidEmail(email) || !isUuid(input.signupAttemptId)) {
     return { ok: false, status: 400, error: "Invalid signup request." };
   }
@@ -838,6 +852,10 @@ export async function completePreAccountSignup(input: {
       if (!response.ok || !body?.user) {
         throw new FailedBetterAuthSignup(response);
       }
+
+      await tx
+        .insert(schema.studentTermsAcceptance)
+        .values(studentTermsAcceptanceValues(body.user.id, consent.data));
 
       await signupReferralChoiceWriter!(
         tx as unknown as SignupReferralTransaction,

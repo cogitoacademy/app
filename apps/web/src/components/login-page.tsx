@@ -8,6 +8,7 @@ import { TextLink } from "@cogito-app/ui/components/selia/text";
 import { ModeToggle } from "@/components/mode-toggle";
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
+import { clearGoogleConsent } from "@/lib/student-consent";
 
 export function LoginPage() {
   const [showSignIn, setShowSignIn] = useState(true);
@@ -22,6 +23,7 @@ export function LoginPage() {
     }
     if (handledError.current) return;
     handledError.current = true;
+    clearGoogleConsent();
     toastManager.add({
       title: "Google authentication failed",
       description:

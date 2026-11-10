@@ -3968,3 +3968,9 @@ Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credenti
 Google disables implicit signup. Only the signup form sends requestSignUp: true. Google callback errors return to /login and show a dismissible persistent toast; signup_disabled provides guidance to choose another account or sign up, and other errors show retry guidance. The error is removed from the URL after display while preserving the return destination. Google prompts for account selection and consent. No migration or new environment setting.
 
 Signup referral copy identifies a possible welcome reward as free Marks. The amount is configured by administrators and can be zero; this copy does not change reward eligibility or crediting.
+
+## November 2026 signup terms
+
+Signup displays the supplied student and tutor terms. Student consent is collected before email signup or Google signup; a new Google identity is created by the provider callback and remains referral-choice pending until consent and its referral choice are saved. Student age and, for a minor, the named guardian's declared agreement are recorded with the November version. This is a self-declaration, not independent identity verification. Tutor profile submission requires consent to the current tutor version. Existing published tutors are not automatically re-consented.
+
+The supplied tutor terms describe a dashboard fee schedule and seven-day notification of schedule changes; this change does not implement or verify those operational commitments. See the active terms plan before treating the document as proof that every stated business process exists.

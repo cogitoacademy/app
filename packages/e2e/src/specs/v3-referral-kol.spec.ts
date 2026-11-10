@@ -66,6 +66,12 @@ for (const code of ["friend-code", null]) {
     await expect(
       page.getByRole("button", { name: "Apply code", exact: true }),
     ).toBeDisabled();
+    await page.getByRole("radio", { name: "I am 18 or older." }).click();
+    await page
+      .getByRole("checkbox", {
+        name: /I have read, understood and agree to the student terms/,
+      })
+      .check();
     if (code) {
       await page.getByLabel("Referral code", { exact: true }).fill(code);
       await expect(
@@ -79,7 +85,16 @@ for (const code of ["friend-code", null]) {
       })
       .click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    expect(submitted).toEqual({ json: { code: code?.toUpperCase() ?? null } });
+    expect(submitted).toEqual({
+      json: {
+        code: code?.toUpperCase() ?? null,
+        consent: {
+          termsAccepted: true,
+          termsVersion: "2026-11",
+          ageGroup: "adult",
+        },
+      },
+    });
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
   });
@@ -103,9 +118,17 @@ test("failed referral save retains choice and enables retry", async ({
     }),
   );
   await page.goto("/referral-choice");
+  await page.getByRole("radio", { name: "I am 18 or older." }).click();
+  await page
+    .getByRole("checkbox", {
+      name: /I have read, understood and agree to the student terms/,
+    })
+    .check();
   await page.getByLabel("Referral code", { exact: true }).fill("bad-code");
   await page.getByRole("button", { name: "Apply code", exact: true }).click();
-  await expect(page.getByText("Referral code is invalid")).toBeVisible();
+  await expect(
+    page.getByText("Referral code is invalid").first(),
+  ).toBeVisible();
   await expect(page).toHaveURL(/\/referral-choice$/);
   await expect(page.getByLabel("Referral code", { exact: true })).toHaveValue(
     "BAD-CODE",

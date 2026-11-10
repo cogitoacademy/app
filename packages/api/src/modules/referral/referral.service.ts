@@ -26,7 +26,12 @@ import {
   referralSemesterUsage,
   referralSettingsRevision,
   user,
+  studentTermsAcceptance,
 } from "@cogito-app/db/schema";
+import {
+  studentTermsAcceptanceValues,
+  studentTermsConsentSchema,
+} from "@cogito-app/auth/student-terms";
 import type { AuditPort } from "../audit/audit.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -326,8 +331,9 @@ export function createReferralService(deps: {
 
   async function saveGoogleChoice(
     userId: string,
-    input: { code: string | null },
+    input: { code: string | null; consent: unknown },
   ) {
+    const consent = studentTermsConsentSchema.parse(input.consent);
     return db.transaction(async (tx) => {
       const [account] = await tx
         .select({
@@ -350,7 +356,14 @@ export function createReferralService(deps: {
         .from(referralChoice)
         .where(eq(referralChoice.userId, userId))
         .limit(1);
-      if (existingChoice) return existingChoice;
+      if (existingChoice && !account.referralChoicePending)
+        return existingChoice;
+      if (existingChoice) {
+        throw new ReferralError(
+          "REFERRAL_CHOICE_REQUIRED",
+          "This account has an incomplete signup. Contact support.",
+        );
+      }
       if (account.role !== "student") {
         throw new ReferralError(
           "REFERRAL_STUDENT_ONLY",
@@ -363,6 +376,10 @@ export function createReferralService(deps: {
           "This account is not waiting for a referral choice.",
         );
       }
+
+      await tx
+        .insert(studentTermsAcceptance)
+        .values(studentTermsAcceptanceValues(userId, consent));
 
       const savedChoice = await saveChoice(tx, {
         userId,

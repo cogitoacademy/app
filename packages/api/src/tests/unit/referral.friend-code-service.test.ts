@@ -244,7 +244,14 @@ test("a Google friend referral credits the welcome reward and links its ledger e
     [{ id: "ledger-id" }],
   ]);
   expect(
-    await f.service.saveGoogleChoice("student-id", { code: " abc123 " }),
+    await f.service.saveGoogleChoice("student-id", {
+      code: " abc123 ",
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).toMatchObject({
     kind: "friend",
     codeSnapshot: "ABC123",
@@ -269,18 +276,39 @@ test("a Google friend referral credits the welcome reward and links its ledger e
 test("Google referral choice requires a pending student account", async () => {
   const missing = fixture([[]]);
   await expect(
-    missing.service.saveGoogleChoice("student-id", { code: null }),
+    missing.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).rejects.toMatchObject({ code: "REFERRAL_STUDENT_ONLY" });
   const tutor = fixture([[{ role: "tutor", referralChoicePending: true }], []]);
   await expect(
-    tutor.service.saveGoogleChoice("tutor-id", { code: null }),
+    tutor.service.saveGoogleChoice("tutor-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).rejects.toMatchObject({ code: "REFERRAL_STUDENT_ONLY" });
   const decided = fixture([
     [{ role: "student", referralChoicePending: false }],
     [],
   ]);
   await expect(
-    decided.service.saveGoogleChoice("student-id", { code: null }),
+    decided.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).rejects.toMatchObject({ code: "REFERRAL_CHOICE_REQUIRED" });
   expect(decided.inserted).toEqual([]);
   expect(decided.updates).toEqual([]);
@@ -293,14 +321,40 @@ test("Google referral choice replays the saved choice without another reward", a
     welcomeMarksSnapshot: 15,
   };
   const f = fixture([
-    [{ role: "student", referralChoicePending: true }],
+    [{ role: "student", referralChoicePending: false }],
     [choice],
   ]);
   expect(
-    await f.service.saveGoogleChoice("student-id", { code: "OTHER1" }),
+    await f.service.saveGoogleChoice("student-id", {
+      code: "OTHER1",
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).toEqual(choice);
   expect(f.inserted).toEqual([]);
   expect(f.wallet.credit).not.toHaveBeenCalled();
+});
+
+test("Google signup cannot bypass acceptance through an inconsistent existing choice", async () => {
+  const f = fixture([
+    [{ role: "student", referralChoicePending: true }],
+    [{ id: "existing-choice" }],
+  ]);
+  await expect(
+    f.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
+  ).rejects.toMatchObject({ code: "REFERRAL_CHOICE_REQUIRED" });
+  expect(f.inserted).toEqual([]);
+  expect(f.updates).toEqual([]);
 });
 
 test("skipping a Google referral records the decision and clears the pending flag", async () => {
@@ -312,7 +366,14 @@ test("skipping a Google referral records the decision and clears the pending fla
     [],
   ]);
   expect(
-    await f.service.saveGoogleChoice("student-id", { code: null }),
+    await f.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).toMatchObject({
     kind: "none",
     welcomeMarksSnapshot: 0,
@@ -580,7 +641,14 @@ test("Google choice refuses an unpersisted decision without clearing pending", a
     false,
   );
   await expect(
-    f.service.saveGoogleChoice("student-id", { code: null }),
+    f.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).rejects.toThrow("Referral choice was not saved.");
   expect(f.updates).toEqual([]);
 });
@@ -818,7 +886,14 @@ test("Google referral does not clear pending if the account changes role during 
     [{ role: "tutor" }],
   ]);
   await expect(
-    f.service.saveGoogleChoice("student-id", { code: null }),
+    f.service.saveGoogleChoice("student-id", {
+      code: null,
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).rejects.toThrow("Referral choice was not saved.");
   expect(f.updates).toEqual([]);
 });
@@ -846,7 +921,14 @@ test("welcome reward without a returned ledger row leaves ledger link unset", as
     [],
   ]);
   expect(
-    await f.service.saveGoogleChoice("student-id", { code: "ABC123" }),
+    await f.service.saveGoogleChoice("student-id", {
+      code: "ABC123",
+      consent: {
+        termsAccepted: true,
+        termsVersion: "2026-11",
+        ageGroup: "adult",
+      },
+    }),
   ).not.toHaveProperty("welcomeLedgerEntryId");
   expect(f.wallet.credit).toHaveBeenCalledTimes(1);
   expect(f.updates).toEqual([{ referralChoicePending: false }]);

@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import type { Context } from "../../context";
 import { ReferralError } from "./referral.errors";
 import type { ReferralService } from "./referral.service";
+import type { StudentTermsConsent } from "@cogito-app/auth/student-terms";
 
 function throwReferralRpcError(error: unknown): never {
   if (!(error instanceof ReferralError)) throw error;
@@ -39,7 +40,7 @@ export function createReferralHandler(service: ReferralService) {
       input,
     }: {
       context: Context;
-      input: { code: string | null };
+      input: { code: string | null; consent: StudentTermsConsent };
     }) => run(() => service.saveGoogleChoice(context.session!.user.id, input)),
 
     getMine: ({ context }: { context: Context }) =>

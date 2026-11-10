@@ -148,15 +148,23 @@ for (const entry of adminCases) {
 
 test("pending signup can save a normalized choice while paid referral access stays blocked", async () => {
   const { client, spies } = fixture(context("student", false, true));
-  await client.referral.saveGoogleChoice({ code: " friend42 " });
+  const consent = {
+    termsAccepted: true,
+    termsVersion: "2026-11",
+    ageGroup: "adult",
+  } as const;
+  await expect(
+    client.referral.saveGoogleChoice({ code: null } as never),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  await client.referral.saveGoogleChoice({ code: " friend42 ", consent });
   expect(spies.get("saveGoogleChoice")).toHaveBeenCalledWith(
     "authenticated-actor",
-    { code: "FRIEND42" },
+    { code: "FRIEND42", consent },
   );
-  await client.referral.saveGoogleChoice({ code: null });
+  await client.referral.saveGoogleChoice({ code: null, consent });
   expect(spies.get("saveGoogleChoice")).toHaveBeenLastCalledWith(
     "authenticated-actor",
-    { code: null },
+    { code: null, consent },
   );
   await expect(client.referral.getMine()).rejects.toMatchObject({
     code: "FORBIDDEN",

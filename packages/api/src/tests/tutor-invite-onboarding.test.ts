@@ -245,6 +245,7 @@ describe("Tutor Invite & Onboarding", () => {
     test("tutor can submit for review", async () => {
       const result = await tutorClient.tutor.submitForReview({
         acceptTerms: true,
+        termsVersion: "2026-11",
       });
       expect(result.onboardingStatus).toBe("pending_review");
 
@@ -254,7 +255,7 @@ describe("Tutor Invite & Onboarding", () => {
         .where(eq(tutorProfile.userId, tutorId))
         .limit(1);
       expect(profile!.termsOfServiceAcceptedAt).toBeDefined();
-      expect(profile!.termsOfServiceVersion).toBe("2026-09");
+      expect(profile!.termsOfServiceVersion).toBe("2026-11");
     });
 
     test("admin requests changes", async () => {
