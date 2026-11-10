@@ -150,7 +150,10 @@ describe("Office asset download", () => {
     const originalFetch = globalThis.fetch;
     try {
       globalThis.fetch = (async () => new Response("asset")) as typeof fetch;
-      const result = await downloadOfficeAsset("https://office.cogitoacademy.id/a", 100);
+      const result = await downloadOfficeAsset(
+        "https://office.cogitoacademy.id/a",
+        100,
+      );
       expect(result.bytes.toString()).toBe("asset");
     } finally {
       globalThis.fetch = originalFetch;
