@@ -255,7 +255,7 @@ describe("Tutor Invite & Onboarding", () => {
         .where(eq(tutorProfile.userId, tutorId))
         .limit(1);
       expect(profile!.termsOfServiceAcceptedAt).toBeDefined();
-      expect(profile!.termsOfServiceVersion).toBe("2026-09");
+      expect(profile!.termsOfServiceVersion).toBe("2026-11");
     });
 
     test("admin requests changes", async () => {
