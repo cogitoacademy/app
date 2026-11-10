@@ -7,6 +7,7 @@
     "./origins": "./src/origins.ts",
     "./admin": "./src/admin.ts",
     "./node-env": "./src/node-env.ts",
+    "./office-campaigns": "./src/office-campaigns.ts",
     "./server": "./src/server.ts",
     "./web": "./src/web.ts"
   },

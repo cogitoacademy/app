@@ -1,3 +1,4 @@
+import { env } from "@cogito-app/env/server";
 import { sql } from "drizzle-orm";
 import { db } from "../../lib/db";
 
@@ -10,11 +11,12 @@ export async function getOfficeSignupSources(start: Date, end: Date) {
     FROM "user" u WHERE u.created_at >= ${start.toISOString()}::timestamptz AND u.created_at < ${end.toISOString()}::timestamptz
     GROUP BY 1,2 ORDER BY 1,2
   `);
-  return projectOfficeSignupSources(result);
+  return projectOfficeSignupSources(result, env.OFFICE_CAMPAIGN_LABELS);
 }
 
 export function projectOfficeSignupSources(
   result: Iterable<Record<string, unknown>>,
+  campaignLabels: Readonly<Record<string, string>> = {},
 ) {
   const groups = new Map<
     string,
@@ -36,7 +38,11 @@ export function projectOfficeSignupSources(
       ].includes(row.source)
         ? row.source
         : "other";
-    const campaign = row.campaign === "test" ? row.campaign : "";
+    const campaign =
+      typeof row.campaign === "string" &&
+      Object.hasOwn(campaignLabels, row.campaign)
+        ? campaignLabels[row.campaign]!
+        : "";
     const key = JSON.stringify([source, campaign]);
     const group = groups.get(key) ?? {
       source,
