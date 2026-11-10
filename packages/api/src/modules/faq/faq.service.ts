@@ -90,7 +90,7 @@ function normalizedFields(input: CreateFaqInput | UpdateFaqInput) {
     answerIdRich,
     category: input.category,
     isActive: input.isActive,
-    showOnLanding: input.isActive && input.showOnLanding,
+    showOnLanding: input.showOnLanding,
   };
 }
 

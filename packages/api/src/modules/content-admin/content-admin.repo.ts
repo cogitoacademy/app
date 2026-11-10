@@ -111,7 +111,7 @@ export function createContentAdminRepo(db: DbType, audit: AuditPort) {
     },
     async save(
       entry: ContentEntry,
-      actorId: string,
+      actorId: string | null,
       reason: string,
       existing?: { id: string; expectedVersion: number },
       identity?: { id: string; sourceId: string; sourceHash: string },
@@ -282,7 +282,7 @@ export function createContentAdminRepo(db: DbType, audit: AuditPort) {
       kind: ContentKind,
       id: string,
       expectedVersion: number,
-      actorId: string,
+      actorId: string | null,
       reason: string,
     ) {
       return db.transaction(async (tx) => {

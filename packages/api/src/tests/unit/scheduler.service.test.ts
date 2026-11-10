@@ -1,4 +1,13 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
+import {
+  describe,
+  test,
+  expect,
+  mock,
+  beforeEach,
+  afterEach,
+  spyOn,
+} from "bun:test";
+import * as officeEvents from "../../modules/office/office-events";
 
 let capturedJobHandler: ((job: any) => Promise<any>) | null = null;
 let capturedFailedHandler: ((job: any, err: Error) => void) | null = null;
@@ -106,6 +115,44 @@ import {
 } from "../../modules/scheduler/scheduler.service";
 
 describe("createSchedulerService", () => {
+  test("exhausted job without ID still reaches DLQ when Office event enqueue fails", async () => {
+    const enqueue = spyOn(
+      officeEvents,
+      "enqueueOfficeEvent",
+    ).mockRejectedValueOnce(new Error("outbox unavailable"));
+    try {
+      createSchedulerService("redis://localhost:6379", {
+        onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+        onReleaseHolds: mock(async () => ({ released: 0 })),
+        onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+        onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+        onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+      });
+      capturedFailedHandler!(
+        { name: "expire-bookings", attemptsMade: 1, opts: {}, data: {} },
+        new Error("failed"),
+      );
+      await Promise.resolve();
+      expect(enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        "system.job_failed",
+        { id: "unknown" },
+        expect.stringMatching(/^system-job-failed-[0-9a-f-]{36}$/),
+      );
+      expect(mockDlqQueueAdd).toHaveBeenCalledWith(
+        "expire-bookings",
+        expect.objectContaining({ attemptsMade: 1, failedReason: "failed" }),
+      );
+      expect(
+        logCaptures.some(
+          (entry) =>
+            entry.entry?.action === "office_job_failure_enqueue_failed",
+        ),
+      ).toBe(true);
+    } finally {
+      enqueue.mockRestore();
+    }
+  });
   test("returns null when redisUrl is empty", () => {
     const result = createSchedulerService("", {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),

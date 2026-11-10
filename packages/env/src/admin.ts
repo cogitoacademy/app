@@ -27,9 +27,14 @@ export function parseConfiguredAdminEmails(
       source
         .split(",")
         .map((email) => email.trim().toLowerCase())
-        .filter(Boolean),
+        .filter((email) => !!email && !isPublicTestMailbox(email)),
     ),
   );
+}
+
+/** Public test inboxes cannot be configured as operators, including at boot. */
+export function isPublicTestMailbox(email: string): boolean {
+  return /@(yopmail\.com|yopmail\.fr|yopmail\.net)$/i.test(email.trim());
 }
 
 export function isConfiguredAdminEmail(

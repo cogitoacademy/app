@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { z } from "zod";
 import {
-  assertKbPdf,
+  validateKbPdf,
   type PrivateKbStorage,
 } from "../../lib/private-kb-storage";
 import type { ContentAdminRepo } from "./content-admin.repo";
@@ -58,7 +58,10 @@ export function createContentAdminService(deps: {
         parentId: c.parentId,
       }));
     },
-    async create(input: z.infer<typeof createContentInput>, actorId: string) {
+    async create(
+      input: z.infer<typeof createContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const parsed = createContentInput.parse(input);
       if (parsed.entry.kind === "resource" && !parsed.reason)
@@ -69,7 +72,10 @@ export function createContentAdminService(deps: {
         parsed.reason ?? "Competition event created",
       );
     },
-    async update(input: z.infer<typeof updateContentInput>, actorId: string) {
+    async update(
+      input: z.infer<typeof updateContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const parsed = updateContentInput.parse(input);
       if (parsed.entry.kind === "resource" && !parsed.reason)
@@ -81,7 +87,10 @@ export function createContentAdminService(deps: {
         parsed,
       );
     },
-    async remove(input: z.infer<typeof deleteContentInput>, actorId: string) {
+    async remove(
+      input: z.infer<typeof deleteContentInput>,
+      actorId: string | null,
+    ) {
       ready();
       const p = deleteContentInput.parse(input);
       if (p.kind === "resource" && !p.reason)
@@ -101,7 +110,7 @@ export function createContentAdminService(deps: {
       if (bytes.toString("base64") !== p.base64)
         throw new ContentInvalidError("Invalid PDF encoding");
       try {
-        assertKbPdf(bytes);
+        await validateKbPdf(bytes);
       } catch {
         throw new ContentInvalidError("Upload a PDF of at most 5 MiB");
       }

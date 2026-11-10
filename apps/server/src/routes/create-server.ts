@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { registerOfficeRoutes } from "../office/routes";
 
 import { paymentsWebhook } from "../webhooks/payments";
 import {
@@ -28,6 +29,7 @@ import { registerHealthMetricsRoutes } from "./health-metrics";
  */
 export function createServer() {
   return new Elysia()
+    .use(registerOfficeRoutes)
     .use(registerRequestLogging)
     .use(registerCors)
     .use(registerSecurityHeaders)

@@ -1,3 +1,4 @@
+import { testPdf } from "../helpers/pdf";
 import { expect, spyOn, test } from "bun:test";
 import * as fsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
@@ -9,8 +10,9 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
+  validateKbPdf,
   createPrivateKbStorage,
-  MAX_KB_BYTES,
+  MAX_STORED_KB_BYTES,
 } from "../../lib/private-kb-storage";
 
 const config = {
@@ -21,7 +23,7 @@ const config = {
   R2_SECRET_ACCESS_KEY: "synthetic",
 };
 const key = `${"a".repeat(64)}.pdf`;
-const pdf = new TextEncoder().encode("%PDF-synthetic");
+const pdf = await testPdf();
 
 test("private bucket uses authenticated object commands and validates downloads", async () => {
   const send = spyOn(S3Client.prototype, "send");
@@ -53,7 +55,7 @@ test("private bucket uses authenticated object commands and validates downloads"
     for (const response of [
       {},
       { ContentLength: 0, Body: {} },
-      { ContentLength: MAX_KB_BYTES + 1, Body: {} },
+      { ContentLength: MAX_STORED_KB_BYTES + 1, Body: {} },
       {
         ContentLength: 3,
         Body: { transformToByteArray: async () => new Uint8Array(3) },
@@ -61,7 +63,8 @@ test("private bucket uses authenticated object commands and validates downloads"
       {
         ContentLength: 1,
         Body: {
-          transformToByteArray: async () => new Uint8Array(MAX_KB_BYTES + 1),
+          transformToByteArray: async () =>
+            new Uint8Array(MAX_STORED_KB_BYTES + 1),
         },
       },
     ]) {
@@ -90,7 +93,7 @@ test("private bucket rejects invalid configuration and uploads before contacting
     for (const bytes of [
       new Uint8Array(),
       new Uint8Array(5),
-      new Uint8Array(MAX_KB_BYTES + 1),
+      new Uint8Array(MAX_STORED_KB_BYTES + 1),
     ]) {
       // eslint-disable-next-line no-await-in-loop -- Keep each rejected write isolated on the shared SDK spy.
       await expect(store.put(key, bytes)).rejects.toThrow("PDF");
@@ -147,9 +150,9 @@ test("local PDF writes accept identical retries and reject a hash collision", as
   try {
     await store.put(key, pdf);
     await expect(store.put(key, pdf)).resolves.toBeUndefined();
-    await expect(
-      store.put(key, new TextEncoder().encode("%PDF-different")),
-    ).rejects.toThrow("Private file hash collision");
+    await expect(store.put(key, await testPdf("different"))).rejects.toThrow(
+      "Private file hash collision",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -172,4 +175,16 @@ test("rethrows unexpected local PDF write errors", async () => {
     write.mockRestore();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("PDF parser rejects forged headers and accepts a generated page", async () => {
+  for (const text of [
+    "%PDF-not-a-document",
+    "%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF",
+  ]) {
+    await expect(validateKbPdf(new TextEncoder().encode(text))).rejects.toThrow(
+      "PDF",
+    );
+  }
+  await expect(validateKbPdf(await testPdf())).resolves.toBeUndefined();
 });

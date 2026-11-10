@@ -1785,6 +1785,12 @@ type PreviewResult = Awaited<
 >;
 
 function WalletLookup() {
+  const [manualSource, setManualSource] = useState("whatsapp");
+  const manualSourceMutation = useMutation({
+    mutationFn: (
+      input: Parameters<typeof client.admin.setManualSignupSource>[0],
+    ) => client.admin.setManualSignupSource(input),
+  });
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [selectedUser, setSelectedUser] =
@@ -1976,6 +1982,58 @@ function WalletLookup() {
               {selectedUser.id}
             </CardDescription>
           </CardHeader>
+          <CardBody>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (selectedUser)
+                  manualSourceMutation.mutate({
+                    userId: selectedUser.id,
+                    source: manualSource as
+                      | "whatsapp"
+                      | "school"
+                      | "event"
+                      | "friend"
+                      | "other",
+                  });
+              }}
+              className="flex flex-wrap items-center gap-3"
+            >
+              <label htmlFor="manual-signup-source">
+                Sumber pendaftaran manual
+              </label>
+              <Select
+                value={manualSource}
+                onValueChange={(value) => {
+                  if (typeof value === "string") setManualSource(value);
+                }}
+              >
+                <SelectTrigger id="manual-signup-source">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    {["whatsapp", "school", "event", "friend", "other"].map(
+                      (value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+              <Button type="submit" disabled={manualSourceMutation.isPending}>
+                Simpan sumber
+              </Button>
+              {manualSourceMutation.isSuccess ? (
+                <Text>Sumber tersimpan.</Text>
+              ) : null}
+              {manualSourceMutation.isError ? (
+                <Text>Gagal menyimpan sumber.</Text>
+              ) : null}
+            </form>
+          </CardBody>
         </Card>
       ) : null}
 

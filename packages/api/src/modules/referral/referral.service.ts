@@ -1,4 +1,5 @@
 import { kolCsv } from "./kol-settlement.csv";
+import { enqueueOfficeEvent } from "../office/office-events";
 import { createReferralUsageReader } from "./referral-usage.repo";
 import { calculateKolSettlement, kolMonthRange } from "./kol-settlement.policy";
 import {
@@ -562,7 +563,7 @@ export function createReferralService(deps: {
   }
 
   async function createKolCampaign(
-    adminId: string,
+    adminId: string | null,
     input: CreateKolCampaignInput,
   ) {
     const activatedAt = input.activationAt ?? now();
@@ -635,6 +636,7 @@ export function createReferralService(deps: {
         activationAt: referralCampaign.activationAt,
         expiresAt: referralCampaign.expiresAt,
         pausedAt: referralCampaign.pausedAt,
+        retiredAt: referralCampaign.retiredAt,
         attributionWindowDays: referralCampaign.attributionWindowDays,
         flatAmountIdr: referralCampaign.flatAmountIdr,
         percentBps: referralCampaign.percentBps,
@@ -661,6 +663,11 @@ export function createReferralService(deps: {
           "Campaign not found.",
         );
       }
+      if (campaign.retiredAt)
+        throw new ReferralError(
+          "REFERRAL_CAMPAIGN_INVALID",
+          "Retired campaigns cannot be changed.",
+        );
       if (input.paused && campaign.pausedAt) return campaign;
       if (!input.paused && !campaign.pausedAt) return campaign;
       const pausedAt = input.paused ? now() : null;
@@ -685,6 +692,32 @@ export function createReferralService(deps: {
         details: { reason: input.reason },
       });
       return updated;
+    });
+  }
+
+  async function retireKolCampaign(code: string) {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ campaign: referralCampaign })
+        .from(referralCampaign)
+        .innerJoin(
+          referralCode,
+          eq(referralCode.campaignId, referralCampaign.id),
+        )
+        .where(eq(referralCode.code, code.trim().toUpperCase()))
+        .for("update");
+      if (!row)
+        throw new ReferralError(
+          "REFERRAL_CAMPAIGN_INVALID",
+          "Campaign not found.",
+        );
+      if (row.campaign.retiredAt) return row.campaign;
+      const [updated] = await tx
+        .update(referralCampaign)
+        .set({ retiredAt: now() })
+        .where(eq(referralCampaign.id, row.campaign.id))
+        .returning();
+      return updated!;
     });
   }
 
@@ -1489,6 +1522,13 @@ export function createReferralService(deps: {
       .from(referralChoice)
       .where(eq(referralChoice.userId, input.studentId))
       .for("update");
+    if (choice)
+      await enqueueOfficeEvent(
+        conn,
+        "referral.converted",
+        { id: choice.id },
+        `referral-converted-${choice.id}`,
+      );
     if (!choice || choice.kind !== "friend" || !choice.referrerUserId) {
       return null;
     }
@@ -1607,6 +1647,7 @@ export function createReferralService(deps: {
     getSettings,
     updateSettings,
     createKolCampaign,
+    retireKolCampaign,
     listKolCampaigns,
     setKolCampaignPaused,
     recordSuccessfulKolTopUp,

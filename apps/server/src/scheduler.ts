@@ -12,6 +12,8 @@ import { scheduleRetryFailedMeetings } from "@cogito-app/api/modules/scheduler/j
 import { scheduleReconcilePayments } from "@cogito-app/api/modules/scheduler/jobs/reconcile-payments.job";
 import { scheduleClassEnrollmentCheck } from "@cogito-app/api/modules/scheduler/jobs/class-enrollment-check.job";
 import { services } from "@cogito-app/api";
+import { startOfficeOutboxScheduler } from "@cogito-app/api/modules/office/office-worker";
+let officeScheduler: ReturnType<typeof startOfficeOutboxScheduler> = null;
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
 
@@ -73,6 +75,8 @@ export async function initScheduler(): Promise<void> {
       };
     },
   });
+  officeScheduler = startOfficeOutboxScheduler(env.REDIS_URL!);
+  await officeScheduler?.start();
 
   if (!scheduler) {
     log({
@@ -107,6 +111,7 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
  * @returns a promise resolving once shutdown completes or the timeout forces close
  */
 export async function shutdownScheduler(): Promise<void> {
+  await officeScheduler?.close();
   if (!scheduler) return;
 
   log({

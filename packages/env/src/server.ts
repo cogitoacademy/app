@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+import { officeCampaignLabelsSchema } from "./office-campaigns";
 import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "./admin";
 import { isProductionLike } from "./node-env";
 
@@ -35,6 +36,14 @@ const boolSchema = (defaultValue: boolean) =>
   }, z.boolean());
 
 const serverShape = {
+  OFFICE_CAMPAIGN_LABELS: officeCampaignLabelsSchema.prefault("{}"),
+  OFFICE_READ_KEY: z.string().min(32).optional(),
+  OFFICE_WRITE_KEY: z.string().min(32).optional(),
+  OFFICE_WEBHOOK_SECRET: z.string().min(32).optional(),
+  OFFICE_WEBHOOK_URL: z
+    .literal("https://office.cogitoacademy.id/hooks/app")
+    .optional(),
+  OFFICE_WRITES_ENABLED: z.enum(["true", "false"]).default("false"),
   DATABASE_URL: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),

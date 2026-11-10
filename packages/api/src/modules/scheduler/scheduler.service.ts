@@ -1,4 +1,6 @@
 import { Queue, Worker, type Job } from "bullmq";
+import { enqueueOfficeEvent } from "../office/office-events";
+import { db } from "../../lib/db";
 import { log } from "../../lib/logger";
 import { generateRequestId } from "../../lib/request-id";
 import { runWithTrace, type TraceCtx } from "../../lib/trace";
@@ -282,6 +284,14 @@ export function createSchedulerService(
     // replayed manually if needed.
     const maxAttempts = job?.opts?.attempts ?? 1;
     if (job && job.attemptsMade >= maxAttempts) {
+      void enqueueOfficeEvent(
+        db,
+        "system.job_failed",
+        { id: job.id ?? "unknown" },
+        `system-job-failed-${job.id ?? crypto.randomUUID()}`,
+      ).catch(() =>
+        log({ level: "error", action: "office_job_failure_enqueue_failed" }),
+      );
       dlqQueue
         .add(job.name, {
           originalJobId: job.id,

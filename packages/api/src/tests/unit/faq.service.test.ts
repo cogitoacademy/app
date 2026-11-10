@@ -90,7 +90,7 @@ describe("FAQ service", () => {
     expect(listPublic).toHaveBeenLastCalledWith(false);
   });
 
-  test("normalizes rich text before create and reorder", async () => {
+  test("normalizes rich text and preserves draft landing preference before create and reorder", async () => {
     const faq = row({ questionId: null, answerId: null, showOnLanding: false });
     const create = mock(async () => faq);
     const reorder = mock(async () => undefined);
@@ -127,7 +127,7 @@ describe("FAQ service", () => {
         ],
         answerId: null,
         category: "tutors",
-        showOnLanding: false,
+        showOnLanding: true,
       }),
     );
 

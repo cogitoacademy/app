@@ -22,12 +22,13 @@ export const referralCampaign = pgTable(
     activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
     attributionWindowDays: integer("attribution_window_days").notNull(),
     flatAmountIdr: integer("flat_amount_idr").notNull().default(0),
     percentBps: integer("percent_bps").notNull().default(0),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -337,9 +338,9 @@ export const kolSettlementEntry = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     reference: text("reference"),
     reason: text("reason"),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
