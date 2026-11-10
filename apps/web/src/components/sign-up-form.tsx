@@ -350,6 +350,7 @@ export default function SignUpForm({
                 {
                   provider: "google",
                   requestSignUp: true,
+                  errorCallbackURL: `${window.location.origin}/login${redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`,
                   callbackURL: buildAuthCallbackUrl("signed-in", redirectPath),
                   newUserCallbackURL: buildAuthCallbackUrl(
                     "created",
