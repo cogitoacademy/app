@@ -5,6 +5,7 @@ export type SignupBody = {
   otp?: string;
   signupAttemptId?: string;
   referralCode?: string;
+  consent?: unknown;
 };
 
 export function hasSignupEmailProof(body: SignupBody): body is SignupBody & {
@@ -35,6 +36,7 @@ export function parseSignupBody(body: string): SignupBody | null {
     }
     const value = parsed as Record<string, unknown>;
     return {
+      ...(Object.hasOwn(value, "consent") ? { consent: value.consent } : {}),
       ...(typeof value.email === "string" ? { email: value.email } : {}),
       ...(typeof value.password === "string"
         ? { password: value.password }

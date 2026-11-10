@@ -245,6 +245,7 @@ describe("Tutor Invite & Onboarding", () => {
     test("tutor can submit for review", async () => {
       const result = await tutorClient.tutor.submitForReview({
         acceptTerms: true,
+        termsVersion: "2026-11",
       });
       expect(result.onboardingStatus).toBe("pending_review");
 

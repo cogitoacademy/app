@@ -237,8 +237,8 @@ export async function updateStatus(
       onboardingStatus: status,
       ...(options.acceptTerms
         ? {
-            termsOfServiceAcceptedAt: sql`COALESCE(${tutorProfile.termsOfServiceAcceptedAt}, now())`,
-            termsOfServiceVersion: sql`COALESCE(${tutorProfile.termsOfServiceVersion}, ${options.termsVersion ?? null})`,
+            termsOfServiceAcceptedAt: sql`now()`,
+            termsOfServiceVersion: options.termsVersion ?? null,
           }
         : {}),
     })

@@ -168,9 +168,17 @@ test("public signup requires the email OTP before creating an account", async ({
       page.getByRole("button", { name: /Resend in/ }),
     ).toBeDisabled();
     const otp = capturedOtp;
+    await page.getByRole("radio", { name: "I am 18 or older." }).click();
+    await page
+      .getByRole("checkbox", {
+        name: /I have read, understood and agree to the student terms/,
+      })
+      .check();
     const wrongOtp = otp === "000000" ? "000001" : "000000";
     await otpInput.fill(wrongOtp);
-    await page.getByRole("button", { name: "Sign Up", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Accept & Create Account", exact: true })
+      .click();
     await expect(page.getByRole("alert")).toHaveText(
       "The code is incorrect or no longer valid.",
     );
@@ -180,7 +188,9 @@ test("public signup requires the email OTP before creating an account", async ({
     const dashboardWalletResponsePromise = page.waitForResponse((response) =>
       response.url().endsWith("/rpc/wallet/get"),
     );
-    await page.getByRole("button", { name: "Sign Up", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Accept & Create Account", exact: true })
+      .click();
     await page.waitForURL("**/dashboard");
     await expect(page).toHaveURL(/\/dashboard$/);
     const dashboardWalletResponse = await dashboardWalletResponsePromise;
@@ -227,6 +237,12 @@ test("checks the committed outcome when the signup response is lost", async ({
     expect(sendBody.signupAttemptId).toBeTruthy();
 
     const otp = await fixture.readOtp();
+    await page.getByRole("radio", { name: "I am 18 or older." }).click();
+    await page
+      .getByRole("checkbox", {
+        name: /I have read, understood and agree to the student terms/,
+      })
+      .check();
     await page.getByLabel("Email verification code", { exact: true }).fill(otp);
     const outcomeResponsePromise = page.waitForResponse(
       (response) =>
@@ -238,7 +254,9 @@ test("checks the committed outcome when the signup response is lost", async ({
       expect(signupResponse.status()).toBe(200);
       await route.abort("connectionreset");
     });
-    await page.getByRole("button", { name: "Sign Up", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Accept & Create Account", exact: true })
+      .click();
 
     await expect(page.getByRole("alert")).toHaveText(
       "Your account was created, but this browser did not receive a session. Sign in to continue.",
@@ -250,7 +268,10 @@ test("checks the committed outcome when the signup response is lost", async ({
       page.getByRole("button", { name: "Sign in to continue" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Sign Up", exact: true }),
+      page.getByRole("button", {
+        name: "Accept & Create Account",
+        exact: true,
+      }),
     ).toBeDisabled();
   } finally {
     try {

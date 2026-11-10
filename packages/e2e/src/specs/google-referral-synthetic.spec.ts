@@ -33,6 +33,11 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
       }
       if (url.pathname === "/rpc/referral/saveGoogleChoice") {
         const input = route.request().postDataJSON().json;
+        expect(input.consent).toEqual({
+          termsAccepted: true,
+          termsVersion: "2026-11",
+          ageGroup: "adult",
+        });
         saved.push(input.code);
         if (input.code === "INVALID")
           return route.fulfill({
@@ -62,6 +67,12 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
     ).toBeVisible();
     await page.getByLabel("Referral code", { exact: true }).press("Enter");
     expect(saved).toEqual([]);
+    await page.getByRole("radio", { name: "I am 18 or older." }).click();
+    await page
+      .getByRole("checkbox", {
+        name: /I have read, understood and agree to the student terms/,
+      })
+      .check();
     await page.getByLabel("Referral code", { exact: true }).fill("INVALID");
     await page.getByLabel("Referral code", { exact: true }).press("Enter");
     await expect(
@@ -87,3 +98,50 @@ for (const code of ["FRIEND ABC123", "LEGACYKOL", null]) {
     await expect(page).toHaveURL("http://localhost:3320/faq");
   });
 }
+
+test("signup shows both terms and requires guardian consent for minors", async ({
+  page,
+}) => {
+  await page.route("http://localhost:3321/**", (route) =>
+    route.fulfill({ json: null }),
+  );
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Switch to sign up" }).click();
+  const google = page.getByRole("button", { name: "Sign up with Google" });
+  await expect(google).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Read student terms and conditions" })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText(
+        "Pasal 19: Hukum Yang Berlaku, Penyelesaian Sengketa, Dan Bahasa",
+      ),
+  ).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page
+    .getByRole("button", { name: "Read tutor terms of service" })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText("Clause 14: Governing Law, Disputes And Language"),
+  ).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("radio", { name: "I am under 18." }).click();
+  await page
+    .getByRole("checkbox", {
+      name: /I have read, understood and agree to the student terms/,
+    })
+    .check();
+  await expect(google).toBeDisabled();
+  await page.getByLabel("Parent/guardian’s full name").fill("Parent Example");
+  await page.getByLabel("Relationship to the student").click();
+  await page.getByRole("option", { name: "Mother" }).click();
+  await expect(google).toBeDisabled();
+  await page
+    .getByRole("checkbox", { name: /To be ticked by the parent\/guardian/ })
+    .check();
+  await expect(google).toBeEnabled();
+});

@@ -4937,3 +4937,8 @@ Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credenti
 ### Explicit Google signup (7 November 2026)
 
 Google disables implicit signup. Only the signup form sends requestSignUp: true. Google callback errors return to /login and show a dismissible persistent toast; signup_disabled provides guidance to choose another account or sign up, and other errors show retry guidance. The error is removed from the URL after display while preserving the return destination. Google prompts for account selection and consent. No migration or new environment setting.
+
+
+## November 2026 terms rollout
+
+Apply the student terms acceptance migration through the normal deployment sequence before serving the updated app. Existing accounts are not backfilled with invented consent; previously published tutor profiles are not forced to reaccept by this change. Check email and Google signup, guardian consent, and tutor onboarding in the target environment. Verify the tutor fee schedule and seven-day change-notification obligations with the business owner; their implementation is not established by the terms display alone.

@@ -23,6 +23,12 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
 import { client } from "@/utils/orpc";
+import { StudentConsentFields } from "./student-consent-fields";
+import {
+  clearGoogleConsent,
+  readGoogleConsent,
+  toStudentConsent,
+} from "@/lib/student-consent";
 
 export function ReferralChoicePage() {
   const navigate = useNavigate();
@@ -30,13 +36,18 @@ export function ReferralChoicePage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [studentConsent, setStudentConsent] = useState(() =>
+    readGoogleConsent(),
+  );
 
   async function saveChoice(value: string | null) {
-    if (saving) return;
+    const consent = toStudentConsent(studentConsent);
+    if (saving || !consent) return;
     setSaving(true);
     setError("");
     try {
-      await client.referral.saveGoogleChoice({ code: value });
+      await client.referral.saveGoogleChoice({ code: value, consent });
+      clearGoogleConsent();
       await navigate({ to: "/auth/callback", search });
     } catch (cause) {
       const message = getUserFacingError(
@@ -98,11 +109,20 @@ export function ReferralChoicePage() {
                 </FieldError>
               )}
             </Field>
+            <StudentConsentFields
+              value={studentConsent}
+              onChange={setStudentConsent}
+              disabled={saving}
+            />
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="submit"
                 block
-                disabled={saving || code.trim().length === 0}
+                disabled={
+                  saving ||
+                  code.trim().length === 0 ||
+                  !toStudentConsent(studentConsent)
+                }
                 progress={saving}
               >
                 Apply code
@@ -111,7 +131,7 @@ export function ReferralChoicePage() {
                 type="button"
                 block
                 variant="secondary"
-                disabled={saving}
+                disabled={saving || !toStudentConsent(studentConsent)}
                 onClick={() => saveChoice(null)}
               >
                 No referral code
@@ -121,13 +141,14 @@ export function ReferralChoicePage() {
           <Button
             type="button"
             variant="underline"
-            onClick={() =>
+            onClick={() => {
+              clearGoogleConsent();
               authClient.signOut({
                 fetchOptions: {
                   onSuccess: () => navigate({ to: "/login" }),
                 },
-              })
-            }
+              });
+            }}
           >
             Sign out
           </Button>

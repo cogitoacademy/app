@@ -35,6 +35,13 @@ import { buildAuthCallbackUrl, rememberAuthOutcome } from "@/lib/posthog-auth";
 import { client } from "@/utils/orpc";
 
 import { getAuthErrorMessage } from "./auth-error-message";
+import { StudentConsentFields } from "./student-consent-fields";
+import {
+  clearGoogleConsent,
+  emptyStudentConsent,
+  rememberGoogleConsent,
+  toStudentConsent,
+} from "@/lib/student-consent";
 import {
   getFieldErrorMessages,
   signInEmailSchema,
@@ -99,6 +106,7 @@ export default function SignUpForm({
   });
   const [isAuthTransitioning, setIsAuthTransitioning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [studentConsent, setStudentConsent] = useState(emptyStudentConsent);
   const [otp, setOtp] = useState("");
   const [otpEmail, setOtpEmail] = useState("");
   const [signupAttemptId, setSignupAttemptId] = useState<string | null>(null);
@@ -132,6 +140,8 @@ export default function SignUpForm({
     },
     canSubmitWhenInvalid: true,
     onSubmit: async ({ value }) => {
+      const consent = toStudentConsent(studentConsent);
+      if (!consent) return;
       setIsAuthTransitioning(true);
       setOtpError("");
       try {
@@ -153,6 +163,7 @@ export default function SignUpForm({
             otp,
             signupAttemptId,
             referralCode: value.referralCode.trim() || null,
+            consent,
           }),
         });
 
@@ -339,13 +350,21 @@ export default function SignUpForm({
         <CardTitle level={1}>Create your account</CardTitle>
       </CardHeader>
       <CardBody className="flex flex-col gap-5">
+        <StudentConsentFields
+          value={studentConsent}
+          onChange={setStudentConsent}
+          disabled={isAuthTransitioning}
+        />
         <div className="flex flex-col gap-2.5">
           <Button
             type="button"
             variant="secondary"
             block
             size="sm"
+            disabled={!toStudentConsent(studentConsent)}
             onClick={() => {
+              if (!toStudentConsent(studentConsent)) return;
+              rememberGoogleConsent(studentConsent);
               authClient.signIn.social(
                 {
                   provider: "google",
@@ -359,6 +378,7 @@ export default function SignUpForm({
                 },
                 {
                   onError: (error) => {
+                    clearGoogleConsent();
                     toastManager.add({
                       title: getAuthErrorMessage(error.error, "sign-up"),
                       type: "error",
@@ -705,11 +725,12 @@ export default function SignUpForm({
                   isSubmitting ||
                   isAuthTransitioning ||
                   signupOutcomeUnknown ||
-                  signupCreatedWithoutSession
+                  signupCreatedWithoutSession ||
+                  !toStudentConsent(studentConsent)
                 }
                 progress={isSubmitting || isAuthTransitioning}
               >
-                Sign Up
+                Accept & Create Account
               </Button>
             )}
           </form.Subscribe>

@@ -8,6 +8,7 @@ import {
 } from "@/lib/post-login-redirect";
 import { rememberAuthOutcome } from "@/lib/posthog-auth";
 import { client } from "@/utils/orpc";
+import { clearGoogleConsent } from "@/lib/student-consent";
 import { validateLoginSearch } from "./-login-search";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/auth/callback")({
         search: { redirect: search.redirect },
       });
     }
+    clearGoogleConsent();
     const tutorOnboardingStatus =
       role === "tutor" && !search.redirect
         ? await readTutorOnboardingStatus(() => client.tutor.getMyProfile())

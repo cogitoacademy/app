@@ -19,6 +19,7 @@ import {
   friendRewardDecision,
   referralSemesterUsage,
   user,
+  studentTermsAcceptance,
   verification,
   wallet,
 } from "@cogito-app/db/schema";
@@ -65,6 +66,11 @@ async function complete(input: {
   referralCode?: string;
 }) {
   return completePreAccountSignup({
+    consent: {
+      termsAccepted: true,
+      termsVersion: "2026-11",
+      ageGroup: "adult",
+    },
     email: input.email,
     password: input.password ?? "Test1234!",
     name: input.name ?? "Signup Test",
@@ -84,6 +90,52 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     setPreAccountSignupEmailSender(null);
     setSignupReferralChoiceWriter(null);
     setSignupWelcomeEmailSender(null);
+  });
+
+  test("requires consent and records guardian evidence atomically with signup", async () => {
+    wireTestMail();
+    const email = newEmail("minor-consent");
+    const { signupAttemptId, otp } = await sendCode(email);
+    const signup = {
+      email,
+      signupAttemptId,
+      otp,
+      name: "Student",
+      password: "Test1234!",
+      headers: new Headers(),
+    };
+    expect(await completePreAccountSignup(signup)).toMatchObject({
+      ok: false,
+      status: 400,
+    });
+    expect(
+      await db.query.user.findFirst({ where: eq(user.email, email) }),
+    ).toBeUndefined();
+    const consent = {
+      termsAccepted: true,
+      termsVersion: "2026-11",
+      ageGroup: "minor",
+      guardianName: "Guardian Name",
+      guardianRelationship: "guardian",
+      guardianAccepted: true,
+    } as const;
+    expect(
+      await completePreAccountSignup({ ...signup, consent }),
+    ).toMatchObject({ ok: true });
+    const created = await db.query.user.findFirst({
+      where: eq(user.email, email),
+    });
+    const acceptance = await db
+      .select()
+      .from(studentTermsAcceptance)
+      .where(eq(studentTermsAcceptance.userId, created!.id));
+    expect(acceptance).toHaveLength(1);
+    expect(acceptance[0]).toMatchObject({
+      version: "2026-11",
+      ageGroup: "minor",
+      guardianName: "Guardian Name",
+      guardianRelationship: "guardian",
+    });
   });
 
   test("enforces the cooldown, replaces a resent code, and rejects the old code", async () => {

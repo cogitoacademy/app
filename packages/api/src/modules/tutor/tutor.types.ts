@@ -9,7 +9,7 @@ import { tutorExperiencesInput } from "./tutor-experiences";
 import { tutorTaxProfileInput } from "./tutor-tax-profile";
 
 export const MAX_TUTOR_SHORT_BIO_WORDS = 50;
-export const TUTOR_TERMS_OF_SERVICE_VERSION = "2026-09";
+export const TUTOR_TERMS_OF_SERVICE_VERSION = "2026-11";
 
 export function countTutorShortBioWords(value: string) {
   const trimmed = value.trim();
@@ -86,6 +86,7 @@ export const getMyPayoutsInput = z.object({
 
 export const submitForReviewInput = z.object({
   acceptTerms: z.boolean().optional(),
+  termsVersion: z.string().max(100).optional(),
 });
 
 export type SubmitForReviewInput = z.infer<typeof submitForReviewInput>;
