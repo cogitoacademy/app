@@ -2987,7 +2987,6 @@ Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credenti
 
 Google disables implicit signup. Only the signup form sends requestSignUp: true. Google callback errors return to /login and show a dismissible persistent toast; signup_disabled provides guidance to choose another account or sign up, and other errors show retry guidance. The error is removed from the URL after display while preserving the return destination. Google prompts for account selection and consent. No migration or new environment setting.
 
-
 ## Student and tutor terms, November 2026
 
 `student_terms_acceptance` records the accepted version, timestamp, age group, and applicable guardian name and relationship; a guardian checkbox records a declaration, not verified identity. Email account creation and Google referral-choice completion save acceptance transactionally. Google identity creation itself precedes the pending-choice gate. Tutor onboarding records the accepted November version when submitted; older draft acceptance does not satisfy the new gate.

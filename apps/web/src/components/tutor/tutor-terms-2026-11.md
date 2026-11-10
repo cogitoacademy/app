@@ -1,6 +1,6 @@
 # SYARAT DAN KETENTUAN KEMITRAAN TUTOR COGITO ACADEMY
 
-*Terakhir diperbarui: November 2026*
+_Terakhir diperbarui: November 2026_
 
 Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") mengatur hubungan antara PT Cogito Academy Indonesia (selanjutnya disebut "Perusahaan") dan setiap tutor yang mendaftar dan menyediakan layanan melalui Platform (selanjutnya disebut "Anda"). Dengan mencentang kotak persetujuan dan menekan tombol "Setujui & Buat Profil", Anda menyatakan telah membaca, memahami, dan menyetujui Ketentuan ini sebagai perjanjian elektronik yang mengikat.
 
@@ -12,7 +12,7 @@ Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") menga
 
 (3) "Siswa" adalah pengguna Platform yang mengikuti layanan bimbingan, dan "Orang Tua/Wali" adalah orang tua atau wali yang sah dari Siswa yang belum berusia 18 (delapan belas) tahun.
 
-(4) "Sesi" adalah satu pertemuan bimbingan berdurasi 90 (sembilan puluh) menit yang dipesan melalui Platform, secara daring maupun luring, termasuk Sesi dalam kelas sesuai permintaan, kelas kohort, dan *masterclass*.
+(4) "Sesi" adalah satu pertemuan bimbingan berdurasi 90 (sembilan puluh) menit yang dipesan melalui Platform, secara daring maupun luring, termasuk Sesi dalam kelas sesuai permintaan, kelas kohort, dan _masterclass_.
 
 (5) "Imbalan Jasa" adalah honorarium dalam rupiah yang dibayarkan Perusahaan kepada Anda untuk setiap Sesi yang telah selesai dan terverifikasi.
 
@@ -30,7 +30,7 @@ Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") menga
 
 (3) Anda bebas menentukan ketersediaan jadwal Anda pada Platform serta menerima atau menolak permintaan Sesi.
 
-(4) Untuk kelas kohort dan *masterclass*, Perusahaan menunjuk tutor setelah berkoordinasi dengan Anda, dan dapat mengubah penunjukan tersebut dengan pemberitahuan kepada Anda.
+(4) Untuk kelas kohort dan _masterclass_, Perusahaan menunjuk tutor setelah berkoordinasi dengan Anda, dan dapat mengubah penunjukan tersebut dengan pemberitahuan kepada Anda.
 
 (5) Perusahaan tidak menjamin jumlah Siswa, frekuensi pemesanan, maupun besaran pendapatan tertentu.
 
@@ -38,7 +38,7 @@ Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") menga
 
 ### Pasal 3: Imbalan Jasa
 
-(1) Perusahaan menetapkan Imbalan Jasa untuk setiap Sesi kelas sesuai permintaan berdasarkan Tabel Imbalan Jasa yang berlaku pada saat Sesi dipesan. Untuk kelas kohort dan *masterclass*, Imbalan Jasa berupa imbalan tetap per Sesi yang disepakati dengan Anda dan tercantum pada data kelas.
+(1) Perusahaan menetapkan Imbalan Jasa untuk setiap Sesi kelas sesuai permintaan berdasarkan Tabel Imbalan Jasa yang berlaku pada saat Sesi dipesan. Untuk kelas kohort dan _masterclass_, Imbalan Jasa berupa imbalan tetap per Sesi yang disepakati dengan Anda dan tercantum pada data kelas.
 
 (2) Dengan menyetujui Ketentuan ini, Anda menyatakan memahami bahwa Tabel Imbalan Jasa ditampilkan pada dasbor Akun Anda dan menyetujui Imbalan Jasa yang tercantum di dalamnya. Anda wajib memeriksa Tabel Imbalan Jasa sebelum menerima Sesi.
 
@@ -122,7 +122,7 @@ Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") menga
 
 (3) Anda wajib memberitahukan Perusahaan paling lambat 1 x 24 (satu kali dua puluh empat) jam sejak mengetahui adanya kebocoran atau akses tidak sah terhadap data pribadi Siswa.
 
-(4) Seluruh silabus, materi latihan, bank soal, modul, dan isi Bank Pengetahuan (*Knowledge Bank*) yang disediakan Perusahaan merupakan kekayaan intelektual PT Cogito Academy Indonesia yang dilindungi peraturan perundang-undangan di bidang hak cipta.
+(4) Seluruh silabus, materi latihan, bank soal, modul, dan isi Bank Pengetahuan (_Knowledge Bank_) yang disediakan Perusahaan merupakan kekayaan intelektual PT Cogito Academy Indonesia yang dilindungi peraturan perundang-undangan di bidang hak cipta.
 
 (5) Anda dilarang menggandakan, memublikasikan, menjual kembali, atau memanfaatkan kekayaan intelektual Perusahaan di luar Sesi pada Platform tanpa izin tertulis Perusahaan.
 
@@ -192,7 +192,7 @@ Syarat dan Ketentuan Kemitraan Tutor ini (selanjutnya disebut "Ketentuan") menga
 
 # COGITO ACADEMY TUTOR TERMS OF SERVICE
 
-*Last updated: November 2026*
+_Last updated: November 2026_
 
 These Tutor Terms of Service ("Terms") govern the relationship between PT Cogito Academy Indonesia ("Company") and every tutor who registers on and provides services through the Platform ("you"). By ticking the agreement box and pressing "Accept & Complete Profile", you confirm that you have read, understood and agreed to these Terms as a binding electronic agreement.
 

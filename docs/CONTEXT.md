@@ -3969,7 +3969,6 @@ Google disables implicit signup. Only the signup form sends requestSignUp: true.
 
 Signup referral copy identifies a possible welcome reward as free Marks. The amount is configured by administrators and can be zero; this copy does not change reward eligibility or crediting.
 
-
 ## November 2026 signup terms
 
 Signup displays the supplied student and tutor terms. Student consent is collected before email signup or Google signup; a new Google identity is created by the provider callback and remains referral-choice pending until consent and its referral choice are saved. Student age and, for a minor, the named guardian's declared agreement are recorded with the November version. This is a self-declaration, not independent identity verification. Tutor profile submission requires consent to the current tutor version. Existing published tutors are not automatically re-consented.

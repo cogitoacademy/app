@@ -188,12 +188,8 @@
           "name": "academy_class_enrollment_class_id_academy_class_id_fk",
           "tableFrom": "academy_class_enrollment",
           "tableTo": "academy_class",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -201,12 +197,8 @@
           "name": "academy_class_enrollment_student_id_user_id_fk",
           "tableFrom": "academy_class_enrollment",
           "tableTo": "user",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["student_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -525,12 +517,8 @@
           "name": "academy_class_enrollment_allocation_enrollment_id_academy_class_enrollment_id_fk",
           "tableFrom": "academy_class_enrollment_allocation",
           "tableTo": "academy_class_enrollment",
-          "columnsFrom": [
-            "enrollment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["enrollment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -538,12 +526,8 @@
           "name": "academy_class_enrollment_allocation_installment_id_academy_class_enrollment_installment_id_fk",
           "tableFrom": "academy_class_enrollment_allocation",
           "tableTo": "academy_class_enrollment_installment",
-          "columnsFrom": [
-            "installment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["installment_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -551,12 +535,8 @@
           "name": "academy_class_enrollment_allocation_class_id_academy_class_id_fk",
           "tableFrom": "academy_class_enrollment_allocation",
           "tableTo": "academy_class",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -564,12 +544,8 @@
           "name": "academy_class_enrollment_allocation_session_id_academy_class_session_id_fk",
           "tableFrom": "academy_class_enrollment_allocation",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -577,12 +553,8 @@
           "name": "academy_class_enrollment_allocation_student_id_user_id_fk",
           "tableFrom": "academy_class_enrollment_allocation",
           "tableTo": "user",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["student_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -793,12 +765,8 @@
           "name": "academy_class_enrollment_installment_enrollment_id_academy_class_enrollment_id_fk",
           "tableFrom": "academy_class_enrollment_installment",
           "tableTo": "academy_class_enrollment",
-          "columnsFrom": [
-            "enrollment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["enrollment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -806,12 +774,8 @@
           "name": "academy_class_enrollment_installment_due_session_id_academy_class_session_id_fk",
           "tableFrom": "academy_class_enrollment_installment",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "due_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["due_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -983,12 +947,8 @@
           "name": "academy_class_enrollment_top_up_attempt_installment_id_academy_class_enrollment_installment_id_fk",
           "tableFrom": "academy_class_enrollment_top_up_attempt",
           "tableTo": "academy_class_enrollment_installment",
-          "columnsFrom": [
-            "installment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["installment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -996,12 +956,8 @@
           "name": "academy_class_enrollment_top_up_attempt_quote_id_economy_v3_top_up_quote_id_fk",
           "tableFrom": "academy_class_enrollment_top_up_attempt",
           "tableTo": "economy_v3_top_up_quote",
-          "columnsFrom": [
-            "quote_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["quote_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1009,12 +965,8 @@
           "name": "academy_class_enrollment_top_up_attempt_payment_id_payment_record_id_fk",
           "tableFrom": "academy_class_enrollment_top_up_attempt",
           "tableTo": "payment_record",
-          "columnsFrom": [
-            "payment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["payment_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1163,12 +1115,8 @@
           "name": "academy_class_session_report_session_id_academy_class_session_id_fk",
           "tableFrom": "academy_class_session_report",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1176,12 +1124,8 @@
           "name": "academy_class_session_report_delivery_tutor_id_user_id_fk",
           "tableFrom": "academy_class_session_report",
           "tableTo": "user",
-          "columnsFrom": [
-            "delivery_tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delivery_tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1189,12 +1133,8 @@
           "name": "academy_class_session_report_current_actor_id_user_id_fk",
           "tableFrom": "academy_class_session_report",
           "tableTo": "user",
-          "columnsFrom": [
-            "current_actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["current_actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1397,12 +1337,8 @@
           "name": "academy_class_session_report_revision_report_id_academy_class_session_report_id_fk",
           "tableFrom": "academy_class_session_report_revision",
           "tableTo": "academy_class_session_report",
-          "columnsFrom": [
-            "report_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["report_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1410,12 +1346,8 @@
           "name": "academy_class_session_report_revision_actor_id_user_id_fk",
           "tableFrom": "academy_class_session_report_revision",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1634,12 +1566,8 @@
           "name": "academy_class_competition_id_subject_category_id_fk",
           "tableFrom": "academy_class",
           "tableTo": "subject_category",
-          "columnsFrom": [
-            "competition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["competition_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1647,12 +1575,8 @@
           "name": "academy_class_created_by_user_id_fk",
           "tableFrom": "academy_class",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1660,12 +1584,8 @@
           "name": "academy_class_updated_by_user_id_fk",
           "tableFrom": "academy_class",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1675,9 +1595,7 @@
         "academy_class_class_number_unique": {
           "name": "academy_class_class_number_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "class_number"
-          ]
+          "columns": ["class_number"]
         }
       },
       "policies": {},
@@ -1834,12 +1752,8 @@
           "name": "academy_class_meeting_session_id_academy_class_session_id_fk",
           "tableFrom": "academy_class_meeting",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1849,9 +1763,7 @@
         "academy_class_meeting_session_id_unique": {
           "name": "academy_class_meeting_session_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "session_id"
-          ]
+          "columns": ["session_id"]
         }
       },
       "policies": {},
@@ -2072,12 +1984,8 @@
           "name": "academy_class_session_class_id_academy_class_id_fk",
           "tableFrom": "academy_class_session",
           "tableTo": "academy_class",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2085,12 +1993,8 @@
           "name": "academy_class_session_room_id_room_id_fk",
           "tableFrom": "academy_class_session",
           "tableTo": "room",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2098,12 +2002,8 @@
           "name": "academy_class_session_tutor_id_user_id_fk",
           "tableFrom": "academy_class_session",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2293,12 +2193,8 @@
           "name": "academy_class_tutor_absence_session_id_academy_class_session_id_fk",
           "tableFrom": "academy_class_tutor_absence",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2306,12 +2202,8 @@
           "name": "academy_class_tutor_absence_tutor_id_user_id_fk",
           "tableFrom": "academy_class_tutor_absence",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2510,12 +2402,8 @@
           "name": "achievement_user_id_user_id_fk",
           "tableFrom": "achievement",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2796,12 +2684,8 @@
           "name": "audit_log_actor_id_user_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2923,12 +2807,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3015,12 +2895,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3030,9 +2906,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -3087,12 +2961,8 @@
           "name": "student_terms_acceptance_user_id_user_id_fk",
           "tableFrom": "student_terms_acceptance",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3179,9 +3049,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -3384,12 +3252,8 @@
           "name": "availability_slot_tutor_id_user_id_fk",
           "tableFrom": "availability_slot",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3546,12 +3410,8 @@
           "name": "blog_article_category_id_blog_category_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "blog_category",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3559,12 +3419,8 @@
           "name": "blog_article_subcategory_id_blog_category_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "blog_category",
-          "columnsFrom": [
-            "subcategory_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["subcategory_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3572,12 +3428,8 @@
           "name": "blog_article_hero_media_id_blog_media_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "blog_media",
-          "columnsFrom": [
-            "hero_media_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["hero_media_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3585,12 +3437,8 @@
           "name": "blog_article_featured_tutor_id_tutor_profile_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "tutor_profile",
-          "columnsFrom": [
-            "featured_tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["featured_tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3598,12 +3446,8 @@
           "name": "blog_article_reviewed_by_tutor_id_tutor_profile_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "tutor_profile",
-          "columnsFrom": [
-            "reviewed_by_tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reviewed_by_tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3611,12 +3455,8 @@
           "name": "blog_article_created_by_user_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3624,12 +3464,8 @@
           "name": "blog_article_updated_by_user_id_fk",
           "tableFrom": "blog_article",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -3709,12 +3545,8 @@
           "name": "blog_article_gallery_article_id_blog_article_id_fk",
           "tableFrom": "blog_article_gallery",
           "tableTo": "blog_article",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["article_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3722,12 +3554,8 @@
           "name": "blog_article_gallery_media_id_blog_media_id_fk",
           "tableFrom": "blog_article_gallery",
           "tableTo": "blog_media",
-          "columnsFrom": [
-            "media_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["media_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3735,10 +3563,7 @@
       "compositePrimaryKeys": {
         "blog_article_gallery_article_id_media_id_pk": {
           "name": "blog_article_gallery_article_id_media_id_pk",
-          "columns": [
-            "article_id",
-            "media_id"
-          ]
+          "columns": ["article_id", "media_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3803,12 +3628,8 @@
           "name": "blog_article_related_article_id_blog_article_id_fk",
           "tableFrom": "blog_article_related",
           "tableTo": "blog_article",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["article_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3816,12 +3637,8 @@
           "name": "blog_article_related_related_article_id_blog_article_id_fk",
           "tableFrom": "blog_article_related",
           "tableTo": "blog_article",
-          "columnsFrom": [
-            "related_article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["related_article_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3829,10 +3646,7 @@
       "compositePrimaryKeys": {
         "blog_article_related_article_id_related_article_id_pk": {
           "name": "blog_article_related_article_id_related_article_id_pk",
-          "columns": [
-            "article_id",
-            "related_article_id"
-          ]
+          "columns": ["article_id", "related_article_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4073,12 +3887,8 @@
           "name": "blog_article_version_article_id_blog_article_id_fk",
           "tableFrom": "blog_article_version",
           "tableTo": "blog_article",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["article_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4246,12 +4056,8 @@
           "name": "blog_category_parent_id_blog_category_id_fk",
           "tableFrom": "blog_category",
           "tableTo": "blog_category",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4349,12 +4155,8 @@
           "name": "blog_media_created_by_user_id_fk",
           "tableFrom": "blog_media",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4364,9 +4166,7 @@
         "blog_media_storage_key_unique": {
           "name": "blog_media_storage_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "storage_key"
-          ]
+          "columns": ["storage_key"]
         }
       },
       "policies": {},
@@ -4688,12 +4488,8 @@
           "name": "booking_tutor_id_user_id_fk",
           "tableFrom": "booking",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4701,12 +4497,8 @@
           "name": "booking_proposer_id_user_id_fk",
           "tableFrom": "booking",
           "tableTo": "user",
-          "columnsFrom": [
-            "proposer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposer_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4915,12 +4707,8 @@
           "name": "booking_participant_booking_id_booking_id_fk",
           "tableFrom": "booking_participant",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4928,12 +4716,8 @@
           "name": "booking_participant_user_id_user_id_fk",
           "tableFrom": "booking_participant",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5090,12 +4874,8 @@
           "name": "booking_reschedule_proposal_booking_id_booking_id_fk",
           "tableFrom": "booking_reschedule_proposal",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5103,12 +4883,8 @@
           "name": "booking_reschedule_proposal_proposed_by_user_id_fk",
           "tableFrom": "booking_reschedule_proposal",
           "tableTo": "user",
-          "columnsFrom": [
-            "proposed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposed_by"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5245,12 +5021,8 @@
           "name": "booking_session_series_booking_id_booking_id_fk",
           "tableFrom": "booking_session",
           "tableTo": "booking",
-          "columnsFrom": [
-            "series_booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["series_booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5363,12 +5135,8 @@
           "name": "booking_state_history_booking_id_booking_id_fk",
           "tableFrom": "booking_state_history",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5376,12 +5144,8 @@
           "name": "booking_state_history_actor_id_user_id_fk",
           "tableFrom": "booking_state_history",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5488,12 +5252,8 @@
           "name": "meeting_event_booking_id_booking_id_fk",
           "tableFrom": "meeting_event",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5695,12 +5455,8 @@
           "name": "room_booking_room_id_room_id_fk",
           "tableFrom": "room_booking",
           "tableTo": "room",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5708,12 +5464,8 @@
           "name": "room_booking_booking_id_booking_id_fk",
           "tableFrom": "room_booking",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5849,12 +5601,8 @@
           "name": "session_completion_feedback_booking_id_booking_id_fk",
           "tableFrom": "session_completion_feedback",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5862,12 +5610,8 @@
           "name": "session_completion_feedback_session_id_booking_session_id_fk",
           "tableFrom": "session_completion_feedback",
           "tableTo": "booking_session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5875,12 +5619,8 @@
           "name": "session_completion_feedback_author_id_user_id_fk",
           "tableFrom": "session_completion_feedback",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6063,12 +5803,8 @@
           "name": "session_completion_feedback_history_feedback_id_session_completion_feedback_id_fk",
           "tableFrom": "session_completion_feedback_history",
           "tableTo": "session_completion_feedback",
-          "columnsFrom": [
-            "feedback_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["feedback_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6076,12 +5812,8 @@
           "name": "session_completion_feedback_history_booking_id_booking_id_fk",
           "tableFrom": "session_completion_feedback_history",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6089,12 +5821,8 @@
           "name": "session_completion_feedback_history_actor_id_user_id_fk",
           "tableFrom": "session_completion_feedback_history",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -6198,12 +5926,8 @@
           "name": "session_note_booking_id_booking_id_fk",
           "tableFrom": "session_note",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6211,12 +5935,8 @@
           "name": "session_note_author_id_user_id_fk",
           "tableFrom": "session_note",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6387,12 +6107,8 @@
           "name": "contact_request_booking_id_booking_id_fk",
           "tableFrom": "contact_request",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6400,12 +6116,8 @@
           "name": "contact_request_requester_id_user_id_fk",
           "tableFrom": "contact_request",
           "tableTo": "user",
-          "columnsFrom": [
-            "requester_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requester_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6413,12 +6125,8 @@
           "name": "contact_request_recipient_id_user_id_fk",
           "tableFrom": "contact_request",
           "tableTo": "user",
-          "columnsFrom": [
-            "recipient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6569,9 +6277,7 @@
         "calendar_event_source_id_unique": {
           "name": "calendar_event_source_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "source_id"
-          ]
+          "columns": ["source_id"]
         }
       },
       "policies": {},
@@ -6606,12 +6312,8 @@
           "name": "calendar_event_category_event_id_calendar_event_id_fk",
           "tableFrom": "calendar_event_category",
           "tableTo": "calendar_event",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["event_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6619,12 +6321,8 @@
           "name": "calendar_event_category_category_id_subject_category_id_fk",
           "tableFrom": "calendar_event_category",
           "tableTo": "subject_category",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6632,10 +6330,7 @@
       "compositePrimaryKeys": {
         "calendar_event_category_event_id_category_id_pk": {
           "name": "calendar_event_category_event_id_category_id_pk",
-          "columns": [
-            "event_id",
-            "category_id"
-          ]
+          "columns": ["event_id", "category_id"]
         }
       },
       "uniqueConstraints": {},
@@ -6692,9 +6387,7 @@
         "kb_file_storage_key_unique": {
           "name": "kb_file_storage_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "storage_key"
-          ]
+          "columns": ["storage_key"]
         }
       },
       "policies": {},
@@ -6794,12 +6487,8 @@
           "name": "kb_resource_file_id_kb_file_id_fk",
           "tableFrom": "kb_resource",
           "tableTo": "kb_file",
-          "columnsFrom": [
-            "file_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["file_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6809,9 +6498,7 @@
         "kb_resource_source_id_unique": {
           "name": "kb_resource_source_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "source_id"
-          ]
+          "columns": ["source_id"]
         }
       },
       "policies": {},
@@ -6915,12 +6602,8 @@
           "name": "economy_config_updated_by_user_id_fk",
           "tableFrom": "economy_config",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -6985,12 +6668,8 @@
           "name": "economy_v3_activation_active_revision_economy_v3_revision_version_fk",
           "tableFrom": "economy_v3_activation",
           "tableTo": "economy_v3_revision",
-          "columnsFrom": [
-            "active_revision"
-          ],
-          "columnsTo": [
-            "version"
-          ],
+          "columnsFrom": ["active_revision"],
+          "columnsTo": ["version"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -6998,12 +6677,8 @@
           "name": "economy_v3_activation_updated_by_user_id_fk",
           "tableFrom": "economy_v3_activation",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7101,12 +6776,8 @@
           "name": "economy_v3_top_up_quote_user_id_user_id_fk",
           "tableFrom": "economy_v3_top_up_quote",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7114,12 +6785,8 @@
           "name": "economy_v3_top_up_quote_revision_economy_v3_revision_version_fk",
           "tableFrom": "economy_v3_top_up_quote",
           "tableTo": "economy_v3_revision",
-          "columnsFrom": [
-            "revision"
-          ],
-          "columnsTo": [
-            "version"
-          ],
+          "columnsFrom": ["revision"],
+          "columnsTo": ["version"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -7181,12 +6848,8 @@
           "name": "economy_v3_revision_created_by_user_id_fk",
           "tableFrom": "economy_v3_revision",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7492,12 +7155,8 @@
           "name": "student_profile_user_id_user_id_fk",
           "tableFrom": "student_profile",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7507,9 +7166,7 @@
         "student_profile_user_id_unique": {
           "name": "student_profile_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -7721,12 +7378,8 @@
           "name": "ledger_entry_wallet_id_wallet_id_fk",
           "tableFrom": "ledger_entry",
           "tableTo": "wallet",
-          "columnsFrom": [
-            "wallet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["wallet_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7808,12 +7461,8 @@
           "name": "wallet_user_id_user_id_fk",
           "tableFrom": "wallet",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7823,9 +7472,7 @@
         "wallet_user_id_unique": {
           "name": "wallet_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -8024,12 +7671,8 @@
           "name": "tutor_invite_invited_by_user_id_fk",
           "tableFrom": "tutor_invite",
           "tableTo": "user",
-          "columnsFrom": [
-            "invited_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invited_by"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8037,12 +7680,8 @@
           "name": "tutor_invite_accepted_by_user_id_fk",
           "tableFrom": "tutor_invite",
           "tableTo": "user",
-          "columnsFrom": [
-            "accepted_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accepted_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -8050,12 +7689,8 @@
           "name": "tutor_invite_revoked_by_user_id_fk",
           "tableFrom": "tutor_invite",
           "tableTo": "user",
-          "columnsFrom": [
-            "revoked_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["revoked_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -8065,9 +7700,7 @@
         "tutor_invite_token_unique": {
           "name": "tutor_invite_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -8386,12 +8019,8 @@
           "name": "tutor_profile_user_id_user_id_fk",
           "tableFrom": "tutor_profile",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8399,12 +8028,8 @@
           "name": "tutor_profile_invite_id_tutor_invite_id_fk",
           "tableFrom": "tutor_profile",
           "tableTo": "tutor_invite",
-          "columnsFrom": [
-            "invite_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invite_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8414,9 +8039,7 @@
         "tutor_profile_user_id_unique": {
           "name": "tutor_profile_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -8626,12 +8249,8 @@
           "name": "subject_category_parent_id_subject_category_id_fk",
           "tableFrom": "subject_category",
           "tableTo": "subject_category",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -8739,12 +8358,8 @@
           "name": "tutor_profile_subject_tutor_profile_id_tutor_profile_id_fk",
           "tableFrom": "tutor_profile_subject",
           "tableTo": "tutor_profile",
-          "columnsFrom": [
-            "tutor_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8752,12 +8367,8 @@
           "name": "tutor_profile_subject_subject_id_subject_category_id_fk",
           "tableFrom": "tutor_profile_subject",
           "tableTo": "subject_category",
-          "columnsFrom": [
-            "subject_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["subject_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -8831,9 +8442,7 @@
         "mark_package_code_unique": {
           "name": "mark_package_code_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "policies": {},
@@ -9169,12 +8778,8 @@
           "name": "payment_record_user_id_user_id_fk",
           "tableFrom": "payment_record",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9182,12 +8787,8 @@
           "name": "payment_record_wallet_id_wallet_id_fk",
           "tableFrom": "payment_record",
           "tableTo": "wallet",
-          "columnsFrom": [
-            "wallet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["wallet_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9195,12 +8796,8 @@
           "name": "payment_record_package_id_mark_package_id_fk",
           "tableFrom": "payment_record",
           "tableTo": "mark_package",
-          "columnsFrom": [
-            "package_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["package_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -9208,12 +8805,8 @@
           "name": "payment_record_quote_id_economy_v3_top_up_quote_id_fk",
           "tableFrom": "payment_record",
           "tableTo": "economy_v3_top_up_quote",
-          "columnsFrom": [
-            "quote_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["quote_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -9364,12 +8957,8 @@
           "name": "refund_record_payment_id_payment_record_id_fk",
           "tableFrom": "refund_record",
           "tableTo": "payment_record",
-          "columnsFrom": [
-            "payment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["payment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9377,12 +8966,8 @@
           "name": "refund_record_wallet_id_wallet_id_fk",
           "tableFrom": "refund_record",
           "tableTo": "wallet",
-          "columnsFrom": [
-            "wallet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["wallet_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9390,12 +8975,8 @@
           "name": "refund_record_actor_id_user_id_fk",
           "tableFrom": "refund_record",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -9544,12 +9125,8 @@
           "name": "notification_user_id_user_id_fk",
           "tableFrom": "notification",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9557,12 +9134,8 @@
           "name": "notification_booking_id_booking_id_fk",
           "tableFrom": "notification",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9675,12 +9248,8 @@
           "name": "notification_dispatch_notification_id_notification_id_fk",
           "tableFrom": "notification_dispatch",
           "tableTo": "notification",
-          "columnsFrom": [
-            "notification_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["notification_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -9832,12 +9401,8 @@
           "name": "support_ticket_reporter_id_user_id_fk",
           "tableFrom": "support_ticket",
           "tableTo": "user",
-          "columnsFrom": [
-            "reporter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reporter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -9845,12 +9410,8 @@
           "name": "support_ticket_booking_id_booking_id_fk",
           "tableFrom": "support_ticket",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -9858,12 +9419,8 @@
           "name": "support_ticket_assigned_to_user_id_fk",
           "tableFrom": "support_ticket",
           "tableTo": "user",
-          "columnsFrom": [
-            "assigned_to"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["assigned_to"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -10211,12 +9768,8 @@
           "name": "tutor_payout_tutor_id_user_id_fk",
           "tableFrom": "tutor_payout",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10224,12 +9777,8 @@
           "name": "tutor_payout_prepared_by_user_id_fk",
           "tableFrom": "tutor_payout",
           "tableTo": "user",
-          "columnsFrom": [
-            "prepared_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["prepared_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10237,12 +9786,8 @@
           "name": "tutor_payout_paid_by_user_id_fk",
           "tableFrom": "tutor_payout",
           "tableTo": "user",
-          "columnsFrom": [
-            "paid_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["paid_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10250,12 +9795,8 @@
           "name": "tutor_payout_voided_by_user_id_fk",
           "tableFrom": "tutor_payout",
           "tableTo": "user",
-          "columnsFrom": [
-            "voided_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["voided_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10263,12 +9804,8 @@
           "name": "tutor_payout_reconciliation_resolved_by_user_id_fk",
           "tableFrom": "tutor_payout",
           "tableTo": "user",
-          "columnsFrom": [
-            "reconciliation_resolved_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reconciliation_resolved_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -10476,12 +10013,8 @@
           "name": "tutor_session_fee_booking_id_booking_id_fk",
           "tableFrom": "tutor_session_fee",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10489,12 +10022,8 @@
           "name": "tutor_session_fee_booking_session_id_booking_session_id_fk",
           "tableFrom": "tutor_session_fee",
           "tableTo": "booking_session",
-          "columnsFrom": [
-            "booking_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10502,12 +10031,8 @@
           "name": "tutor_session_fee_academy_class_session_id_academy_class_session_id_fk",
           "tableFrom": "tutor_session_fee",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "academy_class_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_class_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10515,12 +10040,8 @@
           "name": "tutor_session_fee_tutor_id_user_id_fk",
           "tableFrom": "tutor_session_fee",
           "tableTo": "user",
-          "columnsFrom": [
-            "tutor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -10738,12 +10259,8 @@
           "name": "tutor_payout_allocation_payout_id_tutor_payout_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "tutor_payout",
-          "columnsFrom": [
-            "payout_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["payout_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10751,12 +10268,8 @@
           "name": "tutor_payout_allocation_tutor_session_fee_id_tutor_session_fee_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "tutor_session_fee",
-          "columnsFrom": [
-            "tutor_session_fee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tutor_session_fee_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10764,12 +10277,8 @@
           "name": "tutor_payout_allocation_booking_id_booking_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "booking",
-          "columnsFrom": [
-            "booking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10777,12 +10286,8 @@
           "name": "tutor_payout_allocation_booking_session_id_booking_session_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "booking_session",
-          "columnsFrom": [
-            "booking_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["booking_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10790,12 +10295,8 @@
           "name": "tutor_payout_allocation_academy_class_session_id_academy_class_session_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "academy_class_session",
-          "columnsFrom": [
-            "academy_class_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_class_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -10803,12 +10304,8 @@
           "name": "tutor_payout_allocation_released_by_user_id_fk",
           "tableFrom": "tutor_payout_allocation",
           "tableTo": "user",
-          "columnsFrom": [
-            "released_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["released_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -10902,12 +10399,8 @@
           "name": "tutor_tax_config_updated_by_user_id_fk",
           "tableFrom": "tutor_tax_config",
           "tableTo": "user",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -11092,12 +10585,8 @@
           "name": "friend_reward_decision_referred_user_id_user_id_fk",
           "tableFrom": "friend_reward_decision",
           "tableTo": "user",
-          "columnsFrom": [
-            "referred_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referred_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -11105,12 +10594,8 @@
           "name": "friend_reward_decision_choice_id_referral_choice_id_fk",
           "tableFrom": "friend_reward_decision",
           "tableTo": "referral_choice",
-          "columnsFrom": [
-            "choice_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["choice_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -11118,12 +10603,8 @@
           "name": "friend_reward_decision_referrer_user_id_user_id_fk",
           "tableFrom": "friend_reward_decision",
           "tableTo": "user",
-          "columnsFrom": [
-            "referrer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referrer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11131,12 +10612,8 @@
           "name": "friend_reward_decision_ledger_entry_id_ledger_entry_id_fk",
           "tableFrom": "friend_reward_decision",
           "tableTo": "ledger_entry",
-          "columnsFrom": [
-            "ledger_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ledger_entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -11334,12 +10811,8 @@
           "name": "kol_commission_decision_referred_user_id_user_id_fk",
           "tableFrom": "kol_commission_decision",
           "tableTo": "user",
-          "columnsFrom": [
-            "referred_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referred_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -11347,12 +10820,8 @@
           "name": "kol_commission_decision_choice_id_referral_choice_id_fk",
           "tableFrom": "kol_commission_decision",
           "tableTo": "referral_choice",
-          "columnsFrom": [
-            "choice_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["choice_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11360,12 +10829,8 @@
           "name": "kol_commission_decision_payment_id_payment_record_id_fk",
           "tableFrom": "kol_commission_decision",
           "tableTo": "payment_record",
-          "columnsFrom": [
-            "payment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["payment_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -11510,12 +10975,8 @@
           "name": "kol_settlement_entry_decision_id_kol_commission_decision_id_fk",
           "tableFrom": "kol_settlement_entry",
           "tableTo": "kol_commission_decision",
-          "columnsFrom": [
-            "decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11523,12 +10984,8 @@
           "name": "kol_settlement_entry_created_by_user_id_fk",
           "tableFrom": "kol_settlement_entry",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -11640,12 +11097,8 @@
           "name": "referral_campaign_created_by_user_id_fk",
           "tableFrom": "referral_campaign",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -11833,12 +11286,8 @@
           "name": "referral_choice_user_id_user_id_fk",
           "tableFrom": "referral_choice",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -11846,12 +11295,8 @@
           "name": "referral_choice_code_id_referral_code_id_fk",
           "tableFrom": "referral_choice",
           "tableTo": "referral_code",
-          "columnsFrom": [
-            "code_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["code_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11859,12 +11304,8 @@
           "name": "referral_choice_referrer_user_id_user_id_fk",
           "tableFrom": "referral_choice",
           "tableTo": "user",
-          "columnsFrom": [
-            "referrer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referrer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11872,12 +11313,8 @@
           "name": "referral_choice_campaign_id_referral_campaign_id_fk",
           "tableFrom": "referral_choice",
           "tableTo": "referral_campaign",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -11885,12 +11322,8 @@
           "name": "referral_choice_welcome_ledger_entry_id_ledger_entry_id_fk",
           "tableFrom": "referral_choice",
           "tableTo": "ledger_entry",
-          "columnsFrom": [
-            "welcome_ledger_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["welcome_ledger_entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -12002,12 +11435,8 @@
           "name": "referral_code_referrer_user_id_user_id_fk",
           "tableFrom": "referral_code",
           "tableTo": "user",
-          "columnsFrom": [
-            "referrer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referrer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -12015,12 +11444,8 @@
           "name": "referral_code_campaign_id_referral_campaign_id_fk",
           "tableFrom": "referral_code",
           "tableTo": "referral_campaign",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -12105,12 +11530,8 @@
           "name": "referral_semester_usage_referrer_user_id_user_id_fk",
           "tableFrom": "referral_semester_usage",
           "tableTo": "user",
-          "columnsFrom": [
-            "referrer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["referrer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -12223,12 +11644,8 @@
           "name": "referral_settings_revision_changed_by_user_id_fk",
           "tableFrom": "referral_settings_revision",
           "tableTo": "user",
-          "columnsFrom": [
-            "changed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["changed_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -12334,12 +11751,8 @@
           "name": "knowledge_bank_access_grant_user_id_user_id_fk",
           "tableFrom": "knowledge_bank_access_grant",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -12347,12 +11760,8 @@
           "name": "knowledge_bank_access_grant_granted_by_user_id_user_id_fk",
           "tableFrom": "knowledge_bank_access_grant",
           "tableTo": "user",
-          "columnsFrom": [
-            "granted_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["granted_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }

@@ -1,6 +1,6 @@
 # SYARAT DAN KETENTUAN PENGGUNAAN PLATFORM BAGI SISWA COGITO ACADEMY
 
-*Terakhir diperbarui: November 2026*
+_Terakhir diperbarui: November 2026_
 
 Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan Platform dan seluruh layanan Cogito Academy oleh Siswa. Ketentuan ini ditampilkan pada saat pembuatan Akun dan mengikat sebagai perjanjian elektronik sejak Anda, serta Orang Tua/Wali Anda apabila Anda belum berusia 18 (delapan belas) tahun, menyetujuinya.
 
@@ -20,7 +20,7 @@ Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan P
 
 (7) "Sesi" adalah satu pertemuan bimbingan berdurasi 90 (sembilan puluh) menit, secara daring maupun luring.
 
-(8) "Kelas" adalah layanan bimbingan yang dipesan melalui Platform, yang terdiri atas kelas sesuai permintaan, kelas kohort, *masterclass*, dan layanan lain yang tersedia di Platform.
+(8) "Kelas" adalah layanan bimbingan yang dipesan melalui Platform, yang terdiri atas kelas sesuai permintaan, kelas kohort, _masterclass_, dan layanan lain yang tersedia di Platform.
 
 (9) "Marks" adalah kredit belajar prabayar yang dibeli melalui Platform dan hanya dapat digunakan untuk membayar layanan Perusahaan.
 
@@ -98,9 +98,9 @@ Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan P
 
 (6) Perubahan jadwal Sesi berlaku hanya apabila disetujui oleh Tutor dan seluruh peserta dalam waktu 24 (dua puluh empat) jam sejak diusulkan. Siswa dapat mengusulkan perubahan jadwal paling lambat 2 (dua) jam sebelum Sesi dimulai.
 
-(7) Untuk kelas kohort, Anda dapat memilih paket penuh, paket setengah yang dibayar dalam 2 (dua) tahap, atau Sesi tunggal. *Masterclass* terdiri atas 1 (satu) Sesi. Paket yang telah dipilih tidak dapat diubah.
+(7) Untuk kelas kohort, Anda dapat memilih paket penuh, paket setengah yang dibayar dalam 2 (dua) tahap, atau Sesi tunggal. _Masterclass_ terdiri atas 1 (satu) Sesi. Paket yang telah dipilih tidak dapat diubah.
 
-(8) Kursi kelas kohort dan *masterclass* dicadangkan selama 15 (lima belas) menit pada saat pembayaran. Apabila pembayaran Marks baru berhasil setelah waktu tersebut, Marks tetap masuk ke Akun Anda, tetapi kursi tidak dijamin tersedia.
+(8) Kursi kelas kohort dan _masterclass_ dicadangkan selama 15 (lima belas) menit pada saat pembayaran. Apabila pembayaran Marks baru berhasil setelah waktu tersebut, Marks tetap masuk ke Akun Anda, tetapi kursi tidak dijamin tersedia.
 
 (9) Untuk paket setengah, Perusahaan mengirimkan pengingat ke Surel Terdaftar 7 (tujuh) hari dan 1 (satu) hari sebelum Sesi pertama tahap kedua. Pembayaran tahap kedua wajib dilunasi sebelum Sesi pertama tahap kedua dimulai.
 
@@ -118,7 +118,7 @@ Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan P
 
 (4) Setiap pembatalan wajib disertai alasan tertulis, yang disimpan dalam riwayat pemesanan dan disampaikan kepada Tutor.
 
-(5) Untuk kelas kohort dan *masterclass*, Anda dapat membatalkan kursi untuk suatu Sesi paling lambat 24 (dua puluh empat) jam sebelum Sesi dimulai, dan Marks untuk kursi tersebut dikembalikan setelah dikurangi biaya pembatalan sebesar 20% (dua puluh persen) yang dibulatkan. Kursi yang dibatalkan kurang dari 24 (dua puluh empat) jam sebelum Sesi dimulai tetap dikenai harga penuh.
+(5) Untuk kelas kohort dan _masterclass_, Anda dapat membatalkan kursi untuk suatu Sesi paling lambat 24 (dua puluh empat) jam sebelum Sesi dimulai, dan Marks untuk kursi tersebut dikembalikan setelah dikurangi biaya pembatalan sebesar 20% (dua puluh persen) yang dibulatkan. Kursi yang dibatalkan kurang dari 24 (dua puluh empat) jam sebelum Sesi dimulai tetap dikenai harga penuh.
 
 (6) Dalam hal Anda mengundurkan diri dari kelas kohort, Marks yang masih ditahan untuk Sesi yang belum terlaksana dikembalikan setelah dikurangi 20% (dua puluh persen) yang dibulatkan.
 
@@ -160,11 +160,11 @@ Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan P
 
 (4) Pelanggaran terhadap ayat (1) atau ayat (2) dikenai sanksi bertahap, yaitu:
 
-   a. teguran tertulis untuk pelanggaran pertama;
+a. teguran tertulis untuk pelanggaran pertama;
 
-   b. penangguhan pemesanan Kelas paling lama 30 (tiga puluh) hari kalender untuk pelanggaran kedua; dan
+b. penangguhan pemesanan Kelas paling lama 30 (tiga puluh) hari kalender untuk pelanggaran kedua; dan
 
-   c. penutupan Akun untuk pelanggaran berikutnya, dengan sisa Marks pada Akun menjadi hangus.
+c. penutupan Akun untuk pelanggaran berikutnya, dengan sisa Marks pada Akun menjadi hangus.
 
 (5) Perusahaan tidak bertanggung jawab atas keselamatan, kualitas, maupun pembayaran bimbingan yang dilakukan di luar Platform.
 
@@ -180,7 +180,7 @@ Syarat dan Ketentuan ini (selanjutnya disebut "Ketentuan") mengatur penggunaan P
 
 ### Pasal 12: Karya Siswa
 
-(1) Hak cipta atas karya yang Anda kirimkan, seperti *position paper* dan esai, tetap menjadi milik Anda.
+(1) Hak cipta atas karya yang Anda kirimkan, seperti _position paper_ dan esai, tetap menjadi milik Anda.
 
 (2) Perusahaan dan Tutor hanya menggunakan karya tersebut untuk memberikan bimbingan dan umpan balik kepada Anda.
 
@@ -282,7 +282,7 @@ Hubungan dengan Siswa (wajib): Ayah / Ibu / Wali
 
 # COGITO ACADEMY STUDENT TERMS AND CONDITIONS
 
-*Last updated: November 2026*
+_Last updated: November 2026_
 
 These Terms and Conditions ("Terms") govern a Student's use of the Platform and all Cogito Academy services. They are shown when you create your Account and bind you as an electronic agreement once you, and your Parent/Guardian if you are under 18 (eighteen) years of age, accept them.
 
@@ -442,11 +442,11 @@ These Terms and Conditions ("Terms") govern a Student's use of the Platform and 
 
 (4) Breaches of paragraph (1) or (2) are handled in stages:
 
-   a. a written warning for the first breach;
+a. a written warning for the first breach;
 
-   b. suspension of Class bookings for up to 30 (thirty) calendar days for the second breach; and
+b. suspension of Class bookings for up to 30 (thirty) calendar days for the second breach; and
 
-   c. closure of the Account for any further breach, with any remaining Marks forfeited.
+c. closure of the Account for any further breach, with any remaining Marks forfeited.
 
 (5) The Company is not responsible for the safety, quality or payment of any coaching arranged outside the Platform.
 
