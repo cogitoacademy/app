@@ -458,7 +458,8 @@ export default function SignUpForm({
                   }}
                 />
                 <FieldDescription>
-                  A valid friend or KOL code may add a signup reward.
+                  A valid friend or KOL referral code may give you free Marks
+                  when you sign up.
                 </FieldDescription>
               </Field>
             )}

@@ -3966,3 +3966,5 @@ Email sign-in maps Better Auth INVALID_EMAIL_OR_PASSWORD failures after credenti
 ### Explicit Google signup (7 November 2026)
 
 Google disables implicit signup. Only the signup form sends requestSignUp: true. Unregistered Google sign-ins return to /login with signup_disabled and guidance to choose another account or sign up. Google prompts for account selection and consent. No migration or new environment setting.
+
+Signup referral copy identifies a possible welcome reward as free Marks. The amount is configured by administrators and can be zero; this copy does not change reward eligibility or crediting.

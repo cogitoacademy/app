@@ -90,7 +90,7 @@ export function ReferralChoicePage() {
                 }}
               />
               <FieldDescription>
-                A valid code may include the signup reward.
+                A valid referral code may give you free Marks when you sign up.
               </FieldDescription>
               {error && (
                 <FieldError match={true} className="text-sm leading-relaxed">
