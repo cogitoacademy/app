@@ -32,5 +32,7 @@ test("preserves Google signup rejection with a safe destination", () => {
       redirect: "//evil.example",
     }),
   ).toEqual({ error: "signup_disabled" });
-  expect(validateLoginSearch({ error: "untrusted" })).toEqual({});
+  expect(validateLoginSearch({ error: "untrusted" })).toEqual({
+    error: "google_auth_failed",
+  });
 });
