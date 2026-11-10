@@ -60,9 +60,7 @@ const config = {
           ]),
           { headers: { "content-type": "image/jpeg" } },
         )
-      : new Response(
-          await testPdf(prefix),
-        )) as unknown as typeof fetch,
+      : new Response(await testPdf(prefix))) as unknown as typeof fetch,
 };
 function envelope(input: unknown, dryRun = false, key = crypto.randomUUID()) {
   keys.push(key);

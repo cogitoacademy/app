@@ -37,7 +37,15 @@ class PreviewRollback extends Error {
 }
 const rich = (text: string) => ({
   type: "doc" as const,
-  blocks: [{ type: "paragraph" as const, content: Array.from({ length: Math.max(1, Math.ceil(text.length / 5000)) }, (_, i) => ({ text: text.slice(i * 5000, (i + 1) * 5000) })) }],
+  blocks: [
+    {
+      type: "paragraph" as const,
+      content: Array.from(
+        { length: Math.max(1, Math.ceil(text.length / 5000)) },
+        (_, i) => ({ text: text.slice(i * 5000, (i + 1) * 5000) }),
+      ),
+    },
+  ],
 });
 const slug = (title: string) =>
   title

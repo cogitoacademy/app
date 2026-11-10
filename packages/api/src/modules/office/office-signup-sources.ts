@@ -13,20 +13,30 @@ export async function getOfficeSignupSources(start: Date, end: Date) {
   return projectOfficeSignupSources(result);
 }
 
-export function projectOfficeSignupSources(result: Iterable<Record<string, unknown>>) {
+export function projectOfficeSignupSources(
+  result: Iterable<Record<string, unknown>>,
+) {
   const groups = new Map<
     string,
     { source: string; campaign: string; registered: number; paidTopUp: number }
   >();
   for (const row of result) {
     const source =
-      typeof row.source === "string" && ["direct", "instagram", "facebook", "google", "whatsapp", "school", "event", "friend", "other"].includes(row.source)
+      typeof row.source === "string" &&
+      [
+        "direct",
+        "instagram",
+        "facebook",
+        "google",
+        "whatsapp",
+        "school",
+        "event",
+        "friend",
+        "other",
+      ].includes(row.source)
         ? row.source
         : "other";
-    const campaign =
-      row.campaign === "test"
-        ? row.campaign
-        : "";
+    const campaign = row.campaign === "test" ? row.campaign : "";
     const key = JSON.stringify([source, campaign]);
     const group = groups.get(key) ?? {
       source,

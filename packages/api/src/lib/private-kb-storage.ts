@@ -22,10 +22,15 @@ export function assertKbPdf(bytes: Uint8Array, maxBytes = MAX_KB_BYTES) {
     throw new Error("Upload a PDF of at most 5 MiB");
   }
 }
-export async function validateKbPdf(bytes: Uint8Array, maxBytes = MAX_KB_BYTES) {
+export async function validateKbPdf(
+  bytes: Uint8Array,
+  maxBytes = MAX_KB_BYTES,
+) {
   assertKbPdf(bytes, maxBytes);
   try {
-    const document = await PDFDocument.load(bytes, { throwOnInvalidObject: true });
+    const document = await PDFDocument.load(bytes, {
+      throwOnInvalidObject: true,
+    });
     if (document.getPageCount() < 1) throw new Error("No pages");
     document.getPages();
   } catch {

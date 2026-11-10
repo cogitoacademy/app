@@ -366,7 +366,10 @@ describe("content admin boundaries", () => {
     ).rejects.toThrow("encoding");
     expect(put).not.toHaveBeenCalled();
     await expect(
-      s.uploadPdf({ fileName: "x.pdf", base64: Buffer.from(await testPdf()).toString("base64") }),
+      s.uploadPdf({
+        fileName: "x.pdf",
+        base64: Buffer.from(await testPdf()).toString("base64"),
+      }),
     ).rejects.toThrow("storage unavailable");
     expect(registerFile).not.toHaveBeenCalled();
   });
@@ -400,10 +403,12 @@ describe("private local PDF storage", () => {
       await store.put(key, bytes);
       expect(await store.read(key)).toEqual(bytes);
       await expect(store.read("../secret")).rejects.toThrow();
-      await expect(
-        store.put(key, await testPdf("changed")),
-      ).rejects.toThrow("collision");
-      expect(new Uint8Array(await readFile(join(dir, "private", key)))).toEqual(bytes);
+      await expect(store.put(key, await testPdf("changed"))).rejects.toThrow(
+        "collision",
+      );
+      expect(new Uint8Array(await readFile(join(dir, "private", key)))).toEqual(
+        bytes,
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

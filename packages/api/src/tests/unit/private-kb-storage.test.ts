@@ -150,9 +150,9 @@ test("local PDF writes accept identical retries and reject a hash collision", as
   try {
     await store.put(key, pdf);
     await expect(store.put(key, pdf)).resolves.toBeUndefined();
-    await expect(
-      store.put(key, await testPdf("different")),
-    ).rejects.toThrow("Private file hash collision");
+    await expect(store.put(key, await testPdf("different"))).rejects.toThrow(
+      "Private file hash collision",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -178,8 +178,13 @@ test("rethrows unexpected local PDF write errors", async () => {
 });
 
 test("PDF parser rejects forged headers and accepts a generated page", async () => {
-  for (const text of ["%PDF-not-a-document", "%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF"]) {
-    await expect(validateKbPdf(new TextEncoder().encode(text))).rejects.toThrow("PDF");
+  for (const text of [
+    "%PDF-not-a-document",
+    "%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF",
+  ]) {
+    await expect(validateKbPdf(new TextEncoder().encode(text))).rejects.toThrow(
+      "PDF",
+    );
   }
   await expect(validateKbPdf(await testPdf())).resolves.toBeUndefined();
 });

@@ -116,7 +116,17 @@ test.each([
     ).resolves.toBeNull();
     expect(f.results).toEqual([]);
     expect(f.inserted).toEqual([]);
-    expect(f.events).toEqual(["free", "missing-choice"].includes(scenario) ? [] : [{ id: "referral-converted-choice1", type: "referral.converted", payload: { id: "choice1" } }]);
+    expect(f.events).toEqual(
+      ["free", "missing-choice"].includes(scenario)
+        ? []
+        : [
+            {
+              id: "referral-converted-choice1",
+              type: "referral.converted",
+              payload: { id: "choice1" },
+            },
+          ],
+    );
     expect(f.wallet.credit).not.toHaveBeenCalled();
   },
 );

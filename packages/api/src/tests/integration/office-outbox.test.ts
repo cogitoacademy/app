@@ -155,24 +155,55 @@ describe("Office transactional outbox", () => {
 
 test("transition trigger emits overdue once per session and payout totals per operation", async () => {
   const rollback = new Error("rollback trigger regression");
-  await expect(db.transaction(async (tx) => {
-    await tx.execute(sql`CREATE TEMP TABLE notification (id text, event_key text, metadata jsonb, is_read boolean) ON COMMIT DROP`);
-    await tx.execute(sql`CREATE TRIGGER office_test AFTER INSERT OR UPDATE ON pg_temp.notification FOR EACH ROW EXECUTE FUNCTION office_capture_transition()`);
-    const key = `booking:${crypto.randomUUID()}:session:test:missing-report`;
-    await tx.execute(sql`INSERT INTO pg_temp.notification VALUES ('n1', ${key + ':day:1'}, '{"action":"booking-session-report"}', false)`);
-    await tx.execute(sql`UPDATE pg_temp.notification SET is_read=true`);
-    await tx.execute(sql`INSERT INTO pg_temp.notification VALUES ('n2', ${key + ':day:2'}, '{"action":"booking-session-report"}', false)`);
-    const events = await tx.select().from(officeOutbox).where(sql`${officeOutbox.id} = 'session-report-overdue-' || md5(${key})`);
-    expect(events).toHaveLength(1);
-    expect(events[0]?.payload).toEqual({ id: key });
-    await tx.execute(sql`CREATE TEMP TABLE tutor_payout (id text, status text, net_honorarium_idr bigint, actual_amount_idr bigint) ON COMMIT DROP`);
-    await tx.execute(sql`CREATE TRIGGER office_test AFTER INSERT OR UPDATE ON pg_temp.tutor_payout FOR EACH ROW EXECUTE FUNCTION office_capture_transition()`);
-    const before = await tx.select().from(officeOutbox).where(eq(officeOutbox.type, 'payout.paid'));
-    await tx.execute(sql`INSERT INTO pg_temp.tutor_payout VALUES ('old', 'paid', 999999, 999999), ('new', 'prepared', 123, NULL)`);
-    await tx.execute(sql`UPDATE pg_temp.tutor_payout SET status='paid', actual_amount_idr=123 WHERE id='new'`);
-    const after = await tx.select().from(officeOutbox).where(eq(officeOutbox.type, 'payout.paid'));
-    expect(after.length - before.length).toBe(2);
-    expect(after.filter(e => e.payload.amountIdr === 123).length).toBeGreaterThan(0);
-    throw rollback;
-  })).rejects.toBe(rollback);
+  await expect(
+    db.transaction(async (tx) => {
+      await tx.execute(
+        sql`CREATE TEMP TABLE notification (id text, event_key text, metadata jsonb, is_read boolean) ON COMMIT DROP`,
+      );
+      await tx.execute(
+        sql`CREATE TRIGGER office_test AFTER INSERT OR UPDATE ON pg_temp.notification FOR EACH ROW EXECUTE FUNCTION office_capture_transition()`,
+      );
+      const key = `booking:${crypto.randomUUID()}:session:test:missing-report`;
+      await tx.execute(
+        sql`INSERT INTO pg_temp.notification VALUES ('n1', ${key + ":day:1"}, '{"action":"booking-session-report"}', false)`,
+      );
+      await tx.execute(sql`UPDATE pg_temp.notification SET is_read=true`);
+      await tx.execute(
+        sql`INSERT INTO pg_temp.notification VALUES ('n2', ${key + ":day:2"}, '{"action":"booking-session-report"}', false)`,
+      );
+      const events = await tx
+        .select()
+        .from(officeOutbox)
+        .where(
+          sql`${officeOutbox.id} = 'session-report-overdue-' || md5(${key})`,
+        );
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toEqual({ id: key });
+      await tx.execute(
+        sql`CREATE TEMP TABLE tutor_payout (id text, status text, net_honorarium_idr bigint, actual_amount_idr bigint) ON COMMIT DROP`,
+      );
+      await tx.execute(
+        sql`CREATE TRIGGER office_test AFTER INSERT OR UPDATE ON pg_temp.tutor_payout FOR EACH ROW EXECUTE FUNCTION office_capture_transition()`,
+      );
+      const before = await tx
+        .select()
+        .from(officeOutbox)
+        .where(eq(officeOutbox.type, "payout.paid"));
+      await tx.execute(
+        sql`INSERT INTO pg_temp.tutor_payout VALUES ('old', 'paid', 999999, 999999), ('new', 'prepared', 123, NULL)`,
+      );
+      await tx.execute(
+        sql`UPDATE pg_temp.tutor_payout SET status='paid', actual_amount_idr=123 WHERE id='new'`,
+      );
+      const after = await tx
+        .select()
+        .from(officeOutbox)
+        .where(eq(officeOutbox.type, "payout.paid"));
+      expect(after.length - before.length).toBe(2);
+      expect(
+        after.filter((e) => e.payload.amountIdr === 123).length,
+      ).toBeGreaterThan(0);
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
 });
