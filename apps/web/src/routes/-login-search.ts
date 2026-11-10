@@ -9,8 +9,14 @@ export type LoginSearch = {
 export function validateLoginSearch(
   search: Record<string, string>,
 ): LoginSearch {
-  const error =
-    search.error === "signup_disabled" ? { error: search.error } : {};
+  const error = search.error
+    ? {
+        error:
+          search.error === "signup_disabled"
+            ? "signup_disabled"
+            : "google_auth_failed",
+      }
+    : {};
   const redirect = search.redirect;
   if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
     const authOutcome = isAuthOutcome(search.authOutcome)

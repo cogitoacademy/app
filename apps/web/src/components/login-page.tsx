@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { TextLink } from "@cogito-app/ui/components/selia/text";
 
 import { ModeToggle } from "@/components/mode-toggle";
@@ -10,7 +11,28 @@ import SignUpForm from "@/components/sign-up-form";
 
 export function LoginPage() {
   const [showSignIn, setShowSignIn] = useState(true);
-  const { redirect, error } = useSearch({ from: "/login" });
+  const { redirect, error, authOutcome } = useSearch({ from: "/login" });
+  const navigate = useNavigate({ from: "/login" });
+  const handledError = useRef(false);
+
+  useEffect(() => {
+    if (!error) {
+      handledError.current = false;
+      return;
+    }
+    if (handledError.current) return;
+    handledError.current = true;
+    toastManager.add({
+      title: "Google authentication failed",
+      description:
+        error === "signup_disabled"
+          ? "This Google account is not registered with Cogito. Try another Google account or sign up to create a new account."
+          : "We couldn't complete Google authentication. Please try again.",
+      type: "error",
+      timeout: 0,
+    });
+    void navigate({ search: { redirect, authOutcome }, replace: true });
+  }, [error, navigate, redirect, authOutcome]);
 
   return (
     <main className="relative mx-auto flex min-h-svh w-full flex-col p-4 sm:p-6 lg:p-8 justify-center">
@@ -30,12 +52,6 @@ export function LoginPage() {
         aria-label={showSignIn ? "Sign in" : "Sign up"}
         className="mx-auto flex w-full max-w-md md:flex-1 flex-col justify-start md:justify-center gap-6 mt-4"
       >
-        {error === "signup_disabled" && showSignIn && (
-          <p role="alert" className="text-sm text-muted">
-            This Google account is not registered with Cogito. Try another
-            Google account or sign up to create a new account.
-          </p>
-        )}
         {showSignIn ? (
           <SignInForm
             onSwitchToSignUp={() => setShowSignIn(false)}
