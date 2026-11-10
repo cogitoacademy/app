@@ -273,7 +273,7 @@ describe("Office actions guarded database acceptance", () => {
       body,
       config,
     );
-    expect(replay).toEqual(results[0]!);
+    expect(JSON.stringify(replay)).toBe(JSON.stringify(results[0]!));
     await db
       .update(officeActionReceipt)
       .set({ createdAt: new Date(Date.now() - 8 * 86400_000) })

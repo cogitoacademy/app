@@ -6,6 +6,7 @@ import {
   services,
 } from "../../services";
 import { env } from "@cogito-app/env/server";
+import { testPdf } from "../helpers/pdf";
 
 describe("Services conditional logic", () => {
   test("test meeting wiring refuses cancellation of a real provider event", async () => {
@@ -42,7 +43,7 @@ describe("Services conditional logic", () => {
       await expect(
         services.contentAdmin.uploadPdf({
           fileName: "private.pdf",
-          base64: Buffer.from("%PDF-test").toString("base64"),
+          base64: Buffer.from(await testPdf()).toString("base64"),
         }),
       ).rejects.toThrow(
         "KB private directory must be separate from public uploads",
