@@ -70,6 +70,47 @@ function fixture(results: unknown[][], saveReturnsRow = true) {
   };
 }
 
+test.each([true, false])(
+  "retired KOL campaign rejects pause=%s without writes or audit",
+  async (paused) => {
+    const f = fixture([
+      [{ id: "retired", retiredAt: new Date("2026-10-01T00:00:00Z") }],
+    ]);
+    await expect(
+      f.service.setKolCampaignPaused("admin", {
+        id: "retired",
+        paused,
+        reason: "operator request",
+      }),
+    ).rejects.toMatchObject({
+      code: "REFERRAL_CAMPAIGN_INVALID",
+      message: "Retired campaigns cannot be changed.",
+    });
+    expect(f.updates).toEqual([]);
+    expect(f.audit.record).not.toHaveBeenCalled();
+  },
+);
+
+test("retiring an unknown KOL code rejects without mutation", async () => {
+  const f = fixture([[]]);
+  await expect(f.service.retireKolCampaign("missing")).rejects.toMatchObject({
+    code: "REFERRAL_CAMPAIGN_INVALID",
+    message: "Campaign not found.",
+  });
+  expect(f.updates).toEqual([]);
+});
+
+test("retiring an already retired KOL campaign preserves its original retirement", async () => {
+  const campaign = {
+    id: "retired",
+    retiredAt: new Date("2026-10-01T00:00:00Z"),
+  };
+  const f = fixture([[{ campaign }]]);
+  expect(await f.service.retireKolCampaign(" retired ")).toBe(campaign);
+  expect(f.updates).toEqual([]);
+  expect(f.audit.record).not.toHaveBeenCalled();
+});
+
 test.each([
   "free",
   "missing-choice",

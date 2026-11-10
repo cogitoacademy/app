@@ -1,7 +1,9 @@
+import type { DbOrTx } from "../../lib/tx";
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import {
   deliverOfficeEvent,
+  enqueueOfficeEvent,
   officeEventPayload,
   OFFICE_EVENT_TYPES,
   signOfficeEvent,
@@ -87,4 +89,115 @@ describe("Office events", () => {
     expect(migration).toContain("INSERT INTO office_outbox");
     expect(migration).not.toContain("event_type,n)");
   });
+});
+
+test("payload boundary rejects nonfinite, complex, long and personal values but allows app routes", () => {
+  expect(
+    officeEventPayload({
+      id: "x".repeat(301),
+      ref: "private@example.test",
+      state: { nested: true },
+      count: NaN,
+      amountIdr: Infinity,
+      appUrl: "https://app.cogitoacademy.id/admin-bookings?id=abc",
+      ignored: 1,
+    }),
+  ).toEqual({ appUrl: "https://app.cogitoacademy.id/admin-bookings?id=abc" });
+  expect(
+    officeEventPayload({
+      id: "x".repeat(300),
+      count: 0,
+      amountIdr: -1,
+      state: null,
+      ref: false,
+    }),
+  ).toEqual({ id: "x".repeat(300), count: 0, amountIdr: -1 });
+  expect(
+    officeEventPayload({ appUrl: "https://app.cogitoacademy.id.evil.test/" }),
+  ).toEqual({});
+});
+
+test("enqueue sanitizes payload and supports both database-generated and deterministic IDs", async () => {
+  const inserted: unknown[] = [];
+  let conflictGuards = 0;
+  const tx = {
+    insert: () => ({
+      values: (value: unknown) => {
+        inserted.push(value);
+        return {
+          onConflictDoNothing: async () => {
+            conflictGuards++;
+          },
+        };
+      },
+    }),
+  } as unknown as DbOrTx;
+  await enqueueOfficeEvent(tx, "ticket.opened", {
+    id: "ticket",
+    email: "private@example.test",
+  });
+  await enqueueOfficeEvent(
+    tx,
+    "ticket.sla_warning",
+    { id: "ticket" },
+    "warning-ticket",
+  );
+  expect(inserted).toEqual([
+    { type: "ticket.opened", payload: { id: "ticket" } },
+    {
+      id: "warning-ticket",
+      type: "ticket.sla_warning",
+      payload: { id: "ticket" },
+    },
+  ]);
+  expect(conflictGuards).toBe(2);
+});
+test("delivery defaults to global fetch and current timestamp, and propagates network errors", async () => {
+  const originalFetch = globalThis.fetch;
+  const row = {
+    id: "event-default",
+    type: "ticket.opened",
+    payload: { id: "ticket" },
+    createdAt: new Date("2026-11-10T00:00:00Z"),
+  };
+  const requests: RequestInit[] = [];
+  try {
+    globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+      requests.push(init);
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const before = Math.floor(Date.now() / 1000);
+    await deliverOfficeEvent(row, {
+      url: "https://office.cogitoacademy.id/hooks",
+      secret: "test-secret",
+    });
+    const headers = requests[0]!.headers as Record<string, string>;
+    expect(Number(headers["X-Cogito-Timestamp"])).toBeGreaterThanOrEqual(
+      before,
+    );
+    expect(Number(headers["X-Cogito-Timestamp"])).toBeLessThanOrEqual(
+      Math.floor(Date.now() / 1000),
+    );
+    expect(headers["X-Cogito-Signature"]).toBe(
+      signOfficeEvent(
+        "test-secret",
+        headers["X-Cogito-Timestamp"]!,
+        requests[0]!.body as string,
+      ),
+    );
+    expect(requests[0]!.redirect).toBe("error");
+    expect(requests[0]!.signal).toBeInstanceOf(AbortSignal);
+    const error = new Error("receiver unreachable");
+    await expect(
+      deliverOfficeEvent(row, {
+        url: "https://office.cogitoacademy.id/hooks",
+        secret: "test-secret",
+        fetch: (async () => {
+          throw error;
+        }) as unknown as typeof fetch,
+      }),
+    ).rejects.toBe(error);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

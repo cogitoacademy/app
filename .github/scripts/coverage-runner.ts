@@ -67,10 +67,22 @@ async function main() {
     "packages/api/src/tests",
     [payout],
   );
+  const isolatedWorker =
+    "./packages/api/src/tests/isolated/office-worker.test.ts";
+  const isolatedSnapshot =
+    "./packages/api/src/tests/isolated/office-snapshot-wrapper.test.ts";
   const partitions = [
+    { name: "api-office-worker", arguments: [isolatedWorker], env: {} },
+    { name: "api-office-snapshot", arguments: [isolatedSnapshot], env: {} },
     {
       name: "api-resettable",
-      arguments: [...fixtures, payout, ...guardedAcceptance]
+      arguments: [
+        ...fixtures,
+        payout,
+        ...guardedAcceptance,
+        isolatedWorker,
+        isolatedSnapshot,
+      ]
         .concat(resettableIntegrationFiles)
         .flatMap((path) => ["--path-ignore-patterns", `**/${path.slice(2)}`])
         .concat([

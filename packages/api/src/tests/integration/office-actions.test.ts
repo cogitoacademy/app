@@ -60,7 +60,15 @@ const config = {
           ]),
           { headers: { "content-type": "image/jpeg" } },
         )
-      : new Response(await testPdf(prefix))) as unknown as typeof fetch,
+      : url.endsWith(".png")
+        ? new Response(
+            Buffer.from(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=",
+              "base64",
+            ),
+            { headers: { "content-type": "image/png" } },
+          )
+        : new Response(await testPdf(prefix))) as unknown as typeof fetch,
 };
 function envelope(input: unknown, dryRun = false, key = crypto.randomUUID()) {
   keys.push(key);
@@ -214,6 +222,48 @@ describe("Office actions guarded database acceptance", () => {
       keyFacts: [{ text: "Fact" }],
     });
     await action("blog.publish", { id: article, lang: "id" });
+    await expect(
+      executeOfficeAction(
+        "blog.publish",
+        envelope({ id: article, lang: "en" }),
+        config,
+      ),
+    ).rejects.toThrow("OFFICE_TARGET_NOT_FOUND");
+    // Editing an already published locale must unpublish it, retain its slug,
+    // and save the revised content as a draft; the preview rolls this back.
+    const [published] = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    await action("blog.saveDraft", {
+      id: article,
+      title: `${prefix} revised`,
+      coverImageUrl: "https://office.cogitoacademy.id/test.jpg",
+      lang: "id",
+      category: category!.id,
+      body: [{ type: "paragraph", runs: [{ text: "Revised article" }] }],
+    });
+    const [revised] = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    expect(revised?.status).toBe("draft");
+    expect(revised?.slug).toBe(published?.slug);
+    expect(revised?.title).toBe(`${prefix} revised`);
+    // A new locale has no existing slug/version, including titles whose ASCII slug is empty.
+    await action("blog.saveDraft", {
+      id: article,
+      title: "日本語",
+      coverImageUrl: "https://office.cogitoacademy.id/test.png",
+      lang: "en",
+      category: category!.id,
+      body: [{ type: "paragraph", runs: [{ text: "New locale" }] }],
+    });
+    const versions = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    expect(versions.find((v) => v.locale === "en")?.slug).toBe("office-draft");
     const activity = await action("activities.saveDraft", {
       title: prefix,
       shortDescription: "Test",
