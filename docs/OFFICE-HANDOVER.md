@@ -2,6 +2,10 @@
 
 Source: CEO-approved specification, 10 November 2026. This checklist records operator gates; implementing code does not prove production setup or the joint Rafsi test.
 
+Client-facing instructions: [Office environment and vault access guide](client/OFFICE-ENV-CLIENT-GUIDE.md). Includes Windows setup, age access, env editing, deployment verification, key rotation and troubleshooting.
+
+Merging a vault change to main triggers Infra Apply (auto), which applies declared env and requests an API restart when its runner and credentials are available. Verify the corresponding workflow and live Office behavior; a local edit or PR push alone does not change the running environment.
+
 ## Provision the connection
 
 1. Use a non-production deployment with its own PostgreSQL, Redis, storage and payment sandbox. Confirm exact DATABASE_URL and backup before applying forward migrations (`bun run db:migrate`); never use reset or production seed for this rollout.
