@@ -10,10 +10,10 @@ Captured 11 November 2026 with the real `KolCampaignsSection` and Selia componen
 - Campaign list RPC is stubbed in browser fetch; no auth session, live API, DB write, invite, email, account signup or bank transfer was performed for these screenshots. Temporary fixture source was removed after capture.
 - The saved table has horizontal scrolling. Mobile responsiveness and recipient display are separately covered by the synthetic browser suite; PostgreSQL round-trip evidence is separate below.
 
-| Area | Before | After |
-| --- | --- | --- |
-| Form desktop | [Before](before-campaign-form-desktop.png) | [After](after-campaign-form-desktop.png) |
-| Form mobile | [Before](before-campaign-form-mobile.png) | [After](after-campaign-form-mobile.png) |
+| Area                   | Before                                     | After                                    |
+| ---------------------- | ------------------------------------------ | ---------------------------------------- |
+| Form desktop           | [Before](before-campaign-form-desktop.png) | [After](after-campaign-form-desktop.png) |
+| Form mobile            | [Before](before-campaign-form-mobile.png)  | [After](after-campaign-form-mobile.png)  |
 | Saved campaign desktop | [Before](before-campaign-list-desktop.png) | [After](after-campaign-list-desktop.png) |
 
 Validation already completed on this branch: 61 focused unit/RPC/policy tests, 23 PostgreSQL integration tests on verified `127.0.0.1:6769/cogito-test`, 16 synthetic Edge workflows and web typecheck pass. Migration `0093_referral_campaign_partner.sql` was generated and applied only on that local test target. Real payment-provider callbacks, bank transfers and production schema acceptance remain unverified.
