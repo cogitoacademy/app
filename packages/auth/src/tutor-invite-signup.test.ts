@@ -32,3 +32,17 @@ test("only a live invitation for the signup email can replace student consent", 
     ),
   ).toBe(false);
 });
+test("the default clock reads the current time", () => {
+  expect(
+    canUseTutorInviteForSignup(
+      { ...invite, expiresAt: new Date(Date.now() + 60000) },
+      "tutor@example.com",
+    ),
+  ).toBe(true);
+  expect(
+    canUseTutorInviteForSignup(
+      { ...invite, expiresAt: new Date(Date.now() - 60000) },
+      "tutor@example.com",
+    ),
+  ).toBe(false);
+});

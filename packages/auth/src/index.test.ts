@@ -896,6 +896,128 @@ describe("pre-account signup outcome reconciliation", () => {
   });
 });
 
+describe("tutor invitation signup", () => {
+  const inviteEmail = "invited-tutor@example.com";
+  const run = async (invite: unknown) => {
+    const attempt = crypto.randomUUID();
+    const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+      .update(`${inviteEmail}\0${"123456"}`)
+      .digest("hex");
+    const results: unknown[][] = [
+      invite === undefined ? [] : [invite],
+      [],
+      [
+        {
+          id: "proof-id",
+          value: `${digest}:0:${attempt}`,
+          expiresAt: new Date(Date.now() + 60000),
+        },
+      ],
+      [],
+    ];
+    const saved: unknown[] = [];
+    const tx = {
+      execute: async () => undefined,
+      select: () => {
+        const query = {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          for: () => query,
+          limit: async () => {
+            if (!results.length) throw new Error("Unexpected select");
+            return results.shift();
+          },
+        };
+        return query;
+      },
+      delete: () => ({ where: async () => undefined }),
+      insert: () => ({
+        values: async (row: unknown) => {
+          saved.push(row);
+        },
+      }),
+    };
+    const transaction = spyOn(db, "transaction").mockImplementation((async (
+      fn: (conn: unknown) => Promise<unknown>,
+    ) => fn(tx)) as any);
+    const factory = spyOn(betterAuthModule, "betterAuth").mockImplementation(
+      (() => ({
+        api: {
+          signUpEmail: async () =>
+            new Response(acceptedSignupBody, { status: 200 }),
+        },
+      })) as any,
+    );
+    const referral = mock(async () => undefined);
+    setSignupReferralChoiceWriter(referral);
+    setSignupWelcomeEmailSender(null);
+    try {
+      const result = await completePreAccountSignup({
+        email: inviteEmail,
+        password: "ValidPassword123!",
+        name: "Tutor",
+        otp: "123456",
+        signupAttemptId: attempt,
+        tutorInviteToken: "raw-invite-token",
+        headers: new Headers(),
+      });
+      return { result, saved, referral, results };
+    } finally {
+      transaction.mockRestore();
+      factory.mockRestore();
+    }
+  };
+  test("a live invitation replaces student consent and skips terms acceptance", async () => {
+    const { result, saved, referral, results } = await run({
+      email: inviteEmail,
+      status: "invited",
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    expect(result.ok).toBe(true);
+    expect(referral).toHaveBeenCalledTimes(1);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ value: inviteEmail });
+    expect(results).toEqual([]);
+  });
+  test.each([
+    ["missing", undefined],
+    [
+      "expired",
+      { email: inviteEmail, status: "invited", expiresAt: new Date(0) },
+    ],
+    [
+      "already accepted",
+      {
+        email: inviteEmail,
+        status: "accepted",
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    ],
+    [
+      "another email",
+      {
+        email: "someone-else@example.com",
+        status: "invited",
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    ],
+  ])(
+    "an unusable invitation (%s) is rejected before account creation",
+    async (_name, invite) => {
+      const { result, saved, referral } = await run(invite);
+      expect(result).toMatchObject({
+        ok: false,
+        status: 400,
+        error:
+          "This tutor invitation is invalid, expired, or belongs to another email.",
+      });
+      expect(referral).not.toHaveBeenCalled();
+      expect(saved).toEqual([]);
+    },
+  );
+});
+
 describe("captured signup proof lifecycle", () => {
   test.each([
     "expired",

@@ -758,6 +758,14 @@ test("settlement rejects a decision removed before its snapshot", async () => {
   expect(f.results).toEqual([]);
 });
 
+test("settlement reports a missing referral campaign as null", async () => {
+  const f = fixture([[{ id: "decision-id" }], [settlementDecision], [], []]);
+  expect(
+    await f.service.getKolSettlement({ decisionId: "decision-id" }),
+  ).toMatchObject({ campaign: null });
+  expect(f.results).toEqual([]);
+});
+
 test.each(["refunded", "unresolved", "negative"] as const)(
   "adjustment rejects %s obligation",
   async (scenario) => {
