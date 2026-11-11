@@ -372,7 +372,7 @@ projects` (or the report-only drift-check logs exit 2), and the censored
   token was revoked or deleted in the Coolify UI, or Coolify's `APP_KEY` was
   regenerated (that invalidates every API token while deploy webhooks keep
   working, so CD stays green). A 401 is never a permissions problem — a token
-  that exists but lacks scope returns 403 (see 5.9).
+  that exists but lacks scope returns 403 (see 5.12).
 - Recovery: confirm the vault value is unchanged before rotating it
   (`sops -d infra/secrets/prod.env | grep -c '^COOLIFY_API_TOKEN='`), then
   create a new token in Coolify UI → Keys & Tokens → API tokens and write it
@@ -380,6 +380,24 @@ projects` (or the report-only drift-check logs exit 2), and the censored
 '["COOLIFY_API_TOKEN"]'`. Merging the vault change to main re-runs Infra
   Apply through the `infra/secrets/**` path filter, which applies the declared
   env and requests an API restart. Verify the run and the live `/health`.
+
+### 5.12 Infra Apply fails with HTTP 403 after a token rotation
+
+- Detect: the apply authenticates — the drift-check passes and prints the
+  Coolify version — but fails at `List Coolify servers` with
+  `Status code was 403 and not [200]`. The `no_log` result is censored, so the
+  playbook's `Explain a Coolify token that cannot list servers` task reports
+  the status and the cause instead.
+- Meaning: the token is valid but scoped too narrowly. Coolify 4.7+ tokens
+  carry permissions **and** an access scope, and `/servers` is a team-level
+  endpoint: a token limited to selected projects, environments, or resources
+  is refused even with `read`. The playbook also needs `write` (env and
+  resource writes) and `deploy` (`POST /applications/<uuid>/restart`); `deploy`
+  alone only reaches `/deploy`, and `read` alone cannot write.
+- Recovery: create the token with permission `root` (or `read` + `write` +
+  `deploy`) **and** access "All resources in the team", write it to the vault
+  as in 5.11, and merge. Do not drop the `/servers` lookup to dodge the 403 —
+  the server UUID is required by the resource declarations.
 
 ## 6. Disaster recovery (DR)
 
