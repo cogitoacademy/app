@@ -1,3 +1,4 @@
+import { canUseTutorInviteForSignup } from "./tutor-invite-signup";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { signupSourceFromCookie } from "./signup-source";
 import { betterAuth } from "better-auth";
@@ -6,6 +7,7 @@ import { emailOTP } from "better-auth/plugins/email-otp";
 import { eq, sql } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 import {
+  createHash,
   createHmac,
   randomInt,
   randomUUID,
@@ -741,13 +743,14 @@ export async function completePreAccountSignup(input: {
   signupAttemptId: string;
   referralCode?: string | null;
   consent?: unknown;
+  tutorInviteToken?: string;
   headers: Headers;
 }): Promise<
   { ok: true; response: Response } | (SignupFailure & { response?: Response })
 > {
   const email = normalizeEmail(input.email);
   const consent = studentTermsConsentSchema.safeParse(input.consent);
-  if (!consent.success) {
+  if (!input.tutorInviteToken && !consent.success) {
     return {
       ok: false,
       status: 400,
@@ -777,6 +780,22 @@ export async function completePreAccountSignup(input: {
   let signupResponse: Response | null = null;
   try {
     const result = await db.transaction(async (tx) => {
+      if (input.tutorInviteToken) {
+        const [invite] = await tx
+          .select()
+          .from(schema.tutorInvite)
+          .where(
+            eq(
+              schema.tutorInvite.token,
+              createHash("sha256").update(input.tutorInviteToken).digest("hex"),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        if (!canUseTutorInviteForSignup(invite, email)) {
+          return { kind: "invalid-invite" as const };
+        }
+      }
       await lockSignupEmail(tx as unknown as typeof db, email);
       await lockSignupAttempt(
         tx as unknown as typeof db,
@@ -863,9 +882,11 @@ export async function completePreAccountSignup(input: {
         throw new FailedBetterAuthSignup(response);
       }
 
-      await tx
-        .insert(schema.studentTermsAcceptance)
-        .values(studentTermsAcceptanceValues(body.user.id, consent.data));
+      if (!input.tutorInviteToken && consent.success) {
+        await tx
+          .insert(schema.studentTermsAcceptance)
+          .values(studentTermsAcceptanceValues(body.user.id, consent.data));
+      }
 
       await signupReferralChoiceWriter!(
         tx as unknown as SignupReferralTransaction,
@@ -893,6 +914,13 @@ export async function completePreAccountSignup(input: {
       signupResponse = result.response;
       createdUser = result.user;
       if (env.NODE_ENV === "test") testSignupOtps.delete(email);
+    } else if (result.kind === "invalid-invite") {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          "This tutor invitation is invalid, expired, or belongs to another email.",
+      };
     } else if (result.kind === "already-completed") {
       return {
         ok: false,

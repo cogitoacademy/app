@@ -214,6 +214,7 @@ export function registerAuthRoutes(app: Elysia) {
           signupAttemptId: parsed.signupAttemptId,
           referralCode: parsed.referralCode,
           consent: parsed.consent,
+          tutorInviteToken: parsed.tutorInviteToken,
           headers: request.headers,
         });
         return result.ok

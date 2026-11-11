@@ -108,6 +108,30 @@ export function KolSettlementPanel({
         <CardTitle>Settlement · {label}</CardTitle>
       </CardHeader>
       <CardBody className="space-y-4">
+        <section aria-label="Transfer recipient" className="space-y-2">
+          <Text className="font-medium">Transfer recipient</Text>
+          <Text>
+            {data.campaign?.campaignType === "internal"
+              ? "Internal / partnership"
+              : "KOL"}{" "}
+            · {data.campaign?.partnerName || "Partner not provided"}
+          </Text>
+          <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+            <dt className="text-muted">Bank</dt>
+            <dd>{data.campaign?.bankName || "Not provided"}</dd>
+            <dt className="text-muted">Account number</dt>
+            <dd className="font-mono select-all">
+              {data.campaign?.bankAccountNumber || "Not provided"}
+            </dd>
+            <dt className="text-muted">Account holder</dt>
+            <dd>{data.campaign?.bankAccountHolderName || "Not provided"}</dd>
+          </dl>
+          {data.campaign?.notes ? (
+            <Text className="whitespace-pre-wrap text-muted">
+              {data.campaign.notes}
+            </Text>
+          ) : null}
+        </section>
         <Text>
           Calculated {idr(data.calculatedIdr)} · adjustments{" "}
           {idr(data.adjustmentIdr)} · current obligation{" "}

@@ -66,23 +66,13 @@ export function LoginPage() {
           />
         )}
         <p className="max-w-md px-4 text-center text-dimmed text-xs leading-relaxed">
-          By continuing, you agree to Cogito Academy&apos;s{" "}
           <TextLink
             href="https://cogitoacademy.id/en/privacy-policy"
             target="_blank"
             rel="noreferrer"
           >
             Privacy Policy
-          </TextLink>{" "}
-          and{" "}
-          <TextLink
-            href="https://cogitoacademy.id/en/terms-of-service"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Terms of Service
           </TextLink>
-          .
         </p>
       </section>
     </main>

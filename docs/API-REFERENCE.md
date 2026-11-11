@@ -125,7 +125,7 @@ No catalog API contract or server authorization changes. The new directory/drawe
 
 ## Admin KOL campaign frontend (26 October 2026)
 
-The existing `adminReferral.createKolCampaign` and `adminReferral.listKolCampaigns` are exposed on `/admin-referrals`. RPC paths are `/rpc/adminReferral/createKolCampaign` and `/rpc/adminReferral/listKolCampaigns`, with the existing `{ "json": input }` envelope. No API contract changed. Creation uses name (1–100), code (4–32 alphanumeric, normalized uppercase), optional activation (server defaults now), expiry after activation, attribution window (1–365, default 90), flat IDR (0–100,000,000) and percentBps (0–10,000); at least one commission component must be positive. UI percentage accepts at most two decimal places and converts to integer bps; date/time inputs represent WIB (+07:00). Creation has no automatic retry because it has no idempotency key.
+The existing `adminReferral.createKolCampaign` and `adminReferral.listKolCampaigns` are exposed on `/admin-referrals`. RPC paths are `/rpc/adminReferral/createKolCampaign` and `/rpc/adminReferral/listKolCampaigns`, with the existing `{ "json": input }` envelope. Optional partner metadata was added on 11 November 2026 (see the partner contract below). Creation uses name (1–100), code (4–32 alphanumeric, normalized uppercase), optional activation (server defaults now), expiry after activation, attribution window (1–365, default 90), flat IDR (0–100,000,000) and percentBps (0–10,000); at least one commission component must be positive for KOL campaigns, while internal campaigns may use zero. UI percentage accepts at most two decimal places and converts to integer bps; date/time inputs represent WIB (+07:00). Creation has no automatic retry because it has no idempotency key.
 
 ## Referral session cache correction (24 October 2026)
 
@@ -398,8 +398,8 @@ startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
 reason }`; creates an audited settings revision.
 - `POST /rpc/adminReferral/createKolCampaign` — admin; input
   `{ name, code, activationAt?, expiresAt, attributionWindowDays,
-flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
-  globally unique, and at least one commission term is positive.
+flatAmountIdr, percentBps, campaignType?, partnerName?, bankName?, bankAccountNumber?, bankAccountHolderName?, notes? }`. Expiry must follow activation, codes are
+  globally unique. KOL campaigns require a positive commission component; internal campaigns may have zero commission.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
   campaign dates, code, attribution window, saved terms, and `pausedAt`.
 - `POST /rpc/adminReferral/setKolCampaignPaused` — admin; input
@@ -2943,3 +2943,17 @@ Assets must originate at `https://office.cogitoacademy.id/`; redirects are refus
 Events use `{id,type,occurredAt,data}` with `X-Cogito-Timestamp` Unix seconds and `X-Cogito-Signature: sha256=<hex HMAC-SHA256(secret,timestamp+'.'+rawBody)>`. Payloads contain only allowlisted IDs, refs, states, counts, amounts and app links. Receivers must deduplicate event IDs and verify timestamp freshness.
 
 Office PR #364 review corrections: attribution capture remains bounded raw first/last touch internally; snapshot exports only approved sources (direct, instagram, facebook, google, whatsapp, school, event, friend, other) and campaign labels from operator-approved `OFFICE_CAMPAIGN_LABELS`; missing config or unmatched identifiers collapse to empty and unknown sources to other. Client campaign values match exactly (case-sensitive) and are never used as display labels. Manual source overrides retain precedence; campaign still uses first touch. FAQ accepts 20,000 characters and splits into runs of at most 5,000. Private PDF ingestion uses pdf-lib parsing with pages, rejects encrypted/malformed documents; this is structural validation, not malware scanning. Overdue events deduplicate by session reminder identity from the first observed overdue day (day >= 1), never read updates. Payout service operations contain one payout with allocated sessions: each transition exports count=1 and that operation amount, never historical totals. Office DB acceptance suites run in isolated guarded coverage partitions to prevent BullMQ mock leakage. No production migrations were applied during this repair.
+
+Invitation signup: `/login?redirect=/invite?token=...` preserves the tutor invitation when switching to signup. New invitees use email OTP signup with the invited email fixed; Google signup and referral input are omitted in this flow. `POST /api/auth/sign-up/email` accepts optional `tutorInviteToken`. Only a matching, unexpired, invited token (SHA-256 lookup, row locked during signup) bypasses student consent storage. Invalid invitation tokens return 400. The invitation is claimed separately after login; tutor consent remains required in onboarding. No schema/env changes. Test with a fresh invite, its matching inbox OTP, then Claim Invitation and complete tutor onboarding; expired/revoked/wrong-email tokens must fail. Live invitation/inbox acceptance remains unverified.
+
+## Referral campaign partners (11 November 2026)
+
+`POST /rpc/adminReferral/createKolCampaign` accepts optional `campaignType` (`internal` or `kol`, omitted means `kol`), nullable optional `partnerName`, `bankName`, `bankAccountNumber`, `bankAccountHolderName` (trimmed strings, max 100 each), and `notes` (max 600). Names are free text; no partner directory is required. Blank metadata is persisted as null. Account numbers remain strings, including leading zeroes. `internal` campaigns permit zero commission; `kol` requires a positive flat or percentage component. Existing date, code, attribution and numeric limits still apply.
+
+Create/list campaign responses and `listKolCommissions.items` include these six metadata fields. `getKolSettlement` adds `campaign: { name, campaignType, partnerName, bankName, bankAccountNumber, bankAccountHolderName, notes } | null`. `listUsage.items` adds `campaignType` and `partnerName`; search also matches partner names. All these procedures remain admin-only; student referral responses do not include bank details. Request/response envelopes remain `{ "json": input }` and `{ "json": data, "meta": [...] }`.
+
+Monthly reconciliation CSV adds Campaign type, Partner / KOL, Bank, Bank account number, Bank account holder and Campaign notes on summary and entry rows. Selection remains based on purchase/settlement activity in the WIB month, not a complete inventory of all campaigns. CSV account values are quoted strings; import the account column as text in spreadsheet software to preserve leading zeroes. Formula neutralization remains enabled for free text.
+
+### Office environment provisioning
+
+Office deployment note: OFFICE_READ_KEY and OFFICE_WRITE_KEY are backend credentials; OFFICE_WEBHOOK_SECRET signs outgoing events. The production vault sets OFFICE_WRITES_ENABLED=true; write routes still require OFFICE_WRITE_KEY and their normal validation. Adding vault configuration does not install Office endpoints in a deployment that lacks the Office implementation.

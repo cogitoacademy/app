@@ -55,3 +55,13 @@ describe("signup request body", () => {
     expect(hasSignupEmailProof(proofBackedSignup!)).toBe(true);
   });
 });
+
+test("invitation signup preserves only a string token and still requires email proof", () => {
+  expect(
+    parseSignupBody(JSON.stringify({ tutorInviteToken: "invite-token" })),
+  ).toEqual({ tutorInviteToken: "invite-token" });
+  expect(parseSignupBody(JSON.stringify({ tutorInviteToken: true }))).toEqual(
+    {},
+  );
+  expect(hasSignupEmailProof({ tutorInviteToken: "invite-token" })).toBe(false);
+});

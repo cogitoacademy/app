@@ -51,7 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
-import { Text } from "@cogito-app/ui/components/selia/text";
+import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   countTutorShortBioWords,
@@ -349,8 +349,9 @@ function TutorTermsConsent({
   onOpenTerms: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-3">
       <Checkbox
+        className="mt-1 shrink-0"
         id="tutor-terms-of-service-accepted"
         checked={accepted}
         disabled={disabled}
@@ -361,22 +362,22 @@ function TutorTermsConsent({
       <Field className="min-w-0 gap-1">
         <FieldLabel
           htmlFor="tutor-terms-of-service-accepted"
-          className="text-sm font-medium leading-relaxed gap-1"
+          className="block text-sm font-normal leading-relaxed"
         >
-          <span>I have read, understood and agree to the</span>
-          <Button
-            type="button"
-            variant="underline"
-            size="xs"
-            aria-haspopup="dialog"
-            className="h-auto! min-h-0! px-0! align-baseline text-sm! font-medium! underline"
-            onClick={onOpenTerms}
+          I have read, understood and agree to the{" "}
+          <TextLink
+            render={
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-label="Read Tutor Terms of Service"
+                onClick={onOpenTerms}
+              />
+            }
           >
             Tutor Terms of Service
-          </Button>
-          <span>
-            , including the Fee Schedule shown on my account dashboard.
-          </span>
+          </TextLink>
+          , including the Fee Schedule shown on my account dashboard.
         </FieldLabel>
         {error ? (
           <FieldError id="tutor-terms-of-service-error">{error}</FieldError>

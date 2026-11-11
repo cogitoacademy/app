@@ -115,7 +115,8 @@ export function createReferralRouter(handler: ReferralHandler) {
           method: "POST",
           path: "/admin/referral/kol-campaigns/create",
           tags: ["Admin", "Referral"],
-          summary: "Create a KOL signup code with immutable commission terms",
+          summary:
+            "Create an internal or KOL signup campaign with saved commission terms",
         })
         .input(createKolCampaignInput)
         .handler(handler.createKolCampaign),
@@ -125,7 +126,7 @@ export function createReferralRouter(handler: ReferralHandler) {
           method: "POST",
           path: "/admin/referral/kol-campaigns/list",
           tags: ["Admin", "Referral"],
-          summary: "List KOL signup campaigns and their codes",
+          summary: "List referral campaigns, partners and their codes",
         })
         .input(z.void())
         .handler(handler.listKolCampaigns),

@@ -652,6 +652,13 @@
       "when": 1794329290362,
       "tag": "0092_office_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1794385304814,
+      "tag": "0093_referral_campaign_partner",
+      "breakpoints": true
     }
   ]
 }

@@ -87,9 +87,21 @@ async function createKolSignup(input: {
   flatAmountIdr?: number;
   percentBps: number;
   attributionWindowDays?: number;
+  campaignType?: "internal" | "kol";
+  partnerName?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolderName?: string;
+  notes?: string;
 }) {
   const campaign = await referral.createKolCampaign(adminId, {
     name: input.name,
+    campaignType: input.campaignType,
+    partnerName: input.partnerName,
+    bankName: input.bankName,
+    bankAccountNumber: input.bankAccountNumber,
+    bankAccountHolderName: input.bankAccountHolderName,
+    notes: input.notes,
     code: `K${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`,
     activationAt: new Date("2099-01-01T00:00:00.000Z"),
     expiresAt: new Date("2101-01-01T00:00:00.000Z"),
@@ -263,6 +275,65 @@ afterAll(async () => {
 });
 
 describe("first eligible KOL purchase commission", () => {
+  test("internal campaign metadata survives signup, purchase, recipient lookup and export", async () => {
+    const partnerName = `Competition ${crypto.randomUUID()}`;
+    const metadata = {
+      campaignType: "internal" as const,
+      partnerName,
+      bankName: "BCA",
+      bankAccountNumber: "0012345678",
+      bankAccountHolderName: "Panitia UGM",
+      notes: "=campaign analysis",
+    };
+    const signup = await createKolSignup({
+      name: "Internal partnership",
+      percentBps: 0,
+      ...metadata,
+    });
+    expect(
+      (await referral.listKolCampaigns()).find(
+        (row) => row.id === signup.campaignId,
+      ),
+    ).toMatchObject(metadata);
+    const usage = await referral.listUsage({
+      search: partnerName,
+      kind: "all",
+      page: 0,
+      limit: 25,
+    });
+    expect(usage.items).toHaveLength(1);
+    expect(usage.items[0]).toMatchObject({
+      campaignType: "internal",
+      partnerName,
+    });
+    const payment = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350000,
+      providerSuccessAt: day(1),
+    });
+    await confirmPayment(payment, 350000);
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision?.commissionAmountIdr).toBe(0);
+    const settlement = await referral.getKolSettlement({
+      decisionId: decision!.id,
+    });
+    expect(settlement.campaign).toMatchObject(metadata);
+    expect(settlement.obligationIdr).toBe(0);
+    const commissions = await referral.listKolCommissions({ limit: 100 });
+    expect(
+      commissions.items.find((row) => row.id === decision!.id),
+    ).toMatchObject(metadata);
+    const { csv } = await referral.exportKolMonthly({ month: "2100-01" });
+    const ownRow = csv.split("\r\n").find((row) => row.includes(decision!.id));
+    expect(csv).toContain('"Bank account number"');
+    expect(ownRow).toContain('"internal"');
+    expect(ownRow).toContain(partnerName);
+    expect(ownRow).toContain('"0012345678"');
+    expect(ownRow).toContain("'=campaign analysis");
+  });
   test("late earlier success corrects the saved commission once and replays idempotently", async () => {
     const signup = await createKolSignup({
       name: "Saved 10 percent",

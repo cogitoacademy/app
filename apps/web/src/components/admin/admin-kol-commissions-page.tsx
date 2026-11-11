@@ -179,6 +179,12 @@ export function AdminKolCommissionsPage() {
                       <TableCell>
                         <div className="font-medium">{row.campaignName}</div>
                         <Text className="text-muted">
+                          {row.campaignType === "internal"
+                            ? "Internal / partnership"
+                            : "KOL"}{" "}
+                          · {row.partnerName || "Partner not provided"}
+                        </Text>
+                        <Text className="text-muted">
                           {row.code} · {row.referredUserName ?? "Student"}
                         </Text>
                         <Text className="text-muted">

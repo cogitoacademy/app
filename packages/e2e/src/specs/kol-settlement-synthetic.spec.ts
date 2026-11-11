@@ -27,6 +27,15 @@ const input = (request: Request) =>
 async function mockApp(page: Page, role = "admin") {
   const state = {
     data: {
+      campaign: {
+        name: "Synthetic KOL",
+        campaignType: "kol",
+        partnerName: "Alya Putri",
+        bankName: "BCA",
+        bankAccountNumber: "0012345678",
+        bankAccountHolderName: "Alya Putri",
+        notes: "November launch",
+      },
       decision: { ...decision },
       calculatedIdr: 15000,
       adjustmentIdr: -1000,
@@ -76,6 +85,13 @@ async function mockApp(page: Page, role = "admin") {
     if (pathname.endsWith("/listKolCommissions"))
       result = { items: [decision], nextCursor: null };
     else if (pathname.endsWith("/listKolCampaigns")) result = [];
+    else if (pathname.endsWith("/getSettings"))
+      result = {
+        version: 1,
+        welcomeMarks: 15,
+        friendRewardMarks: 15,
+        semesterCapMarks: 75,
+      };
     else if (pathname.endsWith("/listUsage"))
       result = {
         items: [],
@@ -301,9 +317,7 @@ test("monthly export sends month and downloads returned CSV bytes and filename",
     .getByLabel("Activity month (WIB)", { exact: true })
     .fill("2026-09");
   const pending = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Export monthly reconciliation CSV" })
-    .click();
+  await page.getByRole("button", { name: "Export monthly CSV" }).click();
   const download = await pending;
   expect(download.suggestedFilename()).toBe("kol-2026-09.csv");
   expect(await readFile((await download.path())!, "utf8")).toBe(csv);
@@ -354,7 +368,7 @@ for (const width of [320, 390, 720, 768, 1440]) {
     // Scrolling changes shared page state; these checks must run sequentially.
     /* eslint-disable no-await-in-loop */
     for (const name of [
-      "Export monthly reconciliation CSV",
+      "Export monthly CSV",
       "Record external transfer",
       "Record commission adjustment",
     ]) {
@@ -445,15 +459,15 @@ test("unified referrals tabs survive refresh and history; old commissions URL re
   await page.getByRole("tab", { name: "Campaigns", exact: true }).click();
   await expect(page).toHaveURL(/view=campaigns/);
   await expect(
-    page.getByRole("button", { name: "Create KOL campaign", exact: true }),
+    page.getByRole("button", { name: "Create campaign", exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Commissions", exact: true }).click();
   await expect(page).toHaveURL(/view=commissions/);
   await expect(
-    page.getByRole("heading", { name: "KOL commission decisions" }),
+    page.getByRole("heading", { name: "Latest decisions" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create KOL campaign", exact: true }),
+    page.getByRole("button", { name: "Create campaign", exact: true }),
   ).toBeHidden();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Referrals");
   await page.reload();
@@ -471,4 +485,14 @@ test("unified referrals tabs survive refresh and history; old commissions URL re
   await page.goto("/admin-kol-commissions");
   await expect(page).toHaveURL(/\/admin-referrals\?view=commissions$/);
   expect(state.errors).toEqual([]);
+});
+
+test("settlement displays the saved transfer recipient", async ({ page }) => {
+  await mockApp(page);
+  await open(page);
+  const recipient = page.getByRole("region", { name: "Transfer recipient" });
+  await expect(recipient).toContainText("Alya Putri");
+  await expect(recipient).toContainText("BCA");
+  await expect(recipient).toContainText("0012345678");
+  await expect(recipient).toContainText("November launch");
 });

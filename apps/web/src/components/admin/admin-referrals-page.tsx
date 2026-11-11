@@ -185,7 +185,7 @@ export function AdminReferralsPage() {
               <Input
                 className="min-w-0 flex-1 basis-64"
                 aria-label="Search referral usage"
-                placeholder="Code, student, referrer, or campaign"
+                placeholder="Code, student, referrer, campaign, or partner"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 maxLength={120}
@@ -215,7 +215,7 @@ export function AdminReferralsPage() {
                   <SelectList>
                     <SelectItem value="all">All choices</SelectItem>
                     <SelectItem value="friend">Friend</SelectItem>
-                    <SelectItem value="kol">KOL</SelectItem>
+                    <SelectItem value="kol">Campaign</SelectItem>
                     <SelectItem value="none">No code</SelectItem>
                   </SelectList>
                 </SelectPopup>
@@ -423,6 +423,15 @@ export function AdminReferralsPage() {
                                     selected.campaignName ??
                                     "Direct signup",
                                 ],
+                                [
+                                  "Campaign type",
+                                  selected.campaignType === "internal"
+                                    ? "Internal / partnership"
+                                    : selected.campaignType === "kol"
+                                      ? "KOL"
+                                      : null,
+                                ],
+                                ["Partner / KOL", selected.partnerName],
                                 ["Referrer email", selected.referrerEmail],
                                 ["Saved on", date(selected.decidedAt)],
                               ]

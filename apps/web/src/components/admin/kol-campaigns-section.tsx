@@ -23,6 +23,14 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectList,
+  SelectItem,
+} from "@cogito-app/ui/components/selia/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,6 +54,12 @@ import {
 const labels = {
   name: "Campaign name",
   code: "Referral code",
+  campaignType: "Campaign type",
+  partnerName: "Partner / KOL name (optional)",
+  bankName: "Bank name (optional)",
+  bankAccountNumber: "Bank account number (optional)",
+  bankAccountHolderName: "Account holder name (optional)",
+  notes: "Notes (optional)",
   activationAt: "Activation (WIB, optional)",
   expiresAt: "Expiry (WIB)",
   attributionWindowDays: "Attribution window (days)",
@@ -98,7 +112,7 @@ export function KolCampaignsSection({
         setPauseReason("");
         setPauseError(null);
         toastManager.add({
-          title: wasPaused ? "KOL campaign resumed" : "KOL campaign paused",
+          title: wasPaused ? "Campaign resumed" : "Campaign paused",
           description: wasPaused
             ? "New signups can use this code again."
             : "Existing signups keep their earned commission window.",
@@ -117,7 +131,7 @@ export function KolCampaignsSection({
       onSuccess: () => {
         setDraft({ ...emptyCampaignDraft });
         setErrors({});
-        toastManager.add({ title: "KOL campaign created", type: "success" });
+        toastManager.add({ title: "Campaign created", type: "success" });
         void queryClient.invalidateQueries({
           queryKey: orpc.adminReferral.listKolCampaigns.key(),
         });
@@ -141,7 +155,7 @@ export function KolCampaignsSection({
                 aria-controls="kol-campaign-form"
                 onClick={() => setOpen(!open)}
               >
-                {open ? "Hide creation form" : "Create KOL campaign"}
+                {open ? "Hide creation form" : "Create campaign"}
               </Button>
               <Button
                 type="button"
@@ -160,12 +174,12 @@ export function KolCampaignsSection({
         : null}
       <div className="space-y-1">
         <Heading id="kol-campaigns-heading" level={2} size="sm">
-          KOL campaigns
+          Campaigns
         </Heading>
         <Text className="max-w-2xl text-sm text-muted">
-          Choose a KOL code for new registrations only. Saved campaign terms
-          cannot be edited. Student friend codes are separate and available to
-          verified students on their My referrals page.
+          Create referral codes for internal partnerships or KOLs. Saved
+          campaign terms cannot be edited. Student friend codes are separate and
+          available to verified students on their My referrals page.
         </Text>
       </div>
       <div className="mt-5 space-y-5">
@@ -188,11 +202,13 @@ export function KolCampaignsSection({
           }}
         >
           <fieldset disabled={create.isPending} className="min-w-0 space-y-4">
-            <legend className="sr-only">Create KOL campaign</legend>
+            <legend className="sr-only">Create campaign</legend>
             <Text className="text-sm text-muted">
-              All fields are required except activation, which defaults to now.
-              Use 4–32 letters or digits for the code; it is saved uppercase.
-              Set a flat commission, a percentage, or both above zero.
+              Partner details and bank information are optional. Activation
+              defaults to now. Use 4–32 letters or digits for the code; it is
+              saved uppercase. Internal campaigns can have zero commission. KOL
+              campaigns require a flat commission, a percentage, or both above
+              zero.
             </Text>
             <div className="grid gap-4 lg:grid-cols-2">
               {(Object.keys(labels) as Array<keyof CampaignDraft>).map(
@@ -201,7 +217,43 @@ export function KolCampaignsSection({
                     <FieldLabel htmlFor={`kol-${key}`}>
                       {labels[key]}
                     </FieldLabel>
-                    {key === "activationAt" || key === "expiresAt" ? (
+                    {key === "campaignType" ? (
+                      <Select
+                        value={draft.campaignType}
+                        onValueChange={(value) => {
+                          if (value === "internal" || value === "kol")
+                            setDraft({ ...draft, campaignType: value });
+                        }}
+                      >
+                        <SelectTrigger
+                          id="kol-campaignType"
+                          aria-label="Campaign type"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectList>
+                            <SelectItem value="internal">
+                              Internal / partnership
+                            </SelectItem>
+                            <SelectItem value="kol">KOL</SelectItem>
+                          </SelectList>
+                        </SelectPopup>
+                      </Select>
+                    ) : key === "notes" ? (
+                      <Textarea
+                        id="kol-notes"
+                        value={draft.notes}
+                        maxLength={600}
+                        aria-invalid={!!errors.notes}
+                        aria-describedby={
+                          errors.notes ? "kol-notes-error" : undefined
+                        }
+                        onChange={(event) =>
+                          setDraft({ ...draft, notes: event.target.value })
+                        }
+                      />
+                    ) : key === "activationAt" || key === "expiresAt" ? (
                       <div
                         role="group"
                         aria-label={labels[key]}
@@ -227,7 +279,17 @@ export function KolCampaignsSection({
                         value={draft[key]}
                         placeholder={placeholders[key]}
                         maxLength={
-                          key === "name" ? 100 : key === "code" ? 32 : undefined
+                          [
+                            "name",
+                            "partnerName",
+                            "bankName",
+                            "bankAccountNumber",
+                            "bankAccountHolderName",
+                          ].includes(key)
+                            ? 100
+                            : key === "code"
+                              ? 32
+                              : undefined
                         }
                         inputMode={
                           key === "percent"
@@ -253,7 +315,8 @@ export function KolCampaignsSection({
                     )}
                     {key === "name" ? (
                       <FieldDescription id="kol-name-description">
-                        Use the KOL name, campaign month, and purpose.
+                        Use a campaign title, such as UGM Competition - November
+                        2026.
                       </FieldDescription>
                     ) : null}
                     {errors[key] ? (
@@ -276,9 +339,7 @@ export function KolCampaignsSection({
               disabled={create.isPending}
               progress={create.isPending}
             >
-              {create.isPending
-                ? "Creating KOL campaign…"
-                : "Save KOL campaign"}
+              {create.isPending ? "Creating campaign…" : "Save campaign"}
             </Button>
           </fieldset>
           {create.isError ? (
@@ -293,12 +354,12 @@ export function KolCampaignsSection({
         ) : query.isError ? (
           <>
             <div role="alert" className="sr-only">
-              KOL campaign list failed to load.
+              campaign list failed to load.
             </div>
             <EmptyState
               className="rounded-lg border border-dashed border-border"
               icon={<IconAlertTriangle />}
-              title="We couldn't load KOL campaigns."
+              title="We couldn't load campaigns."
               description="Try again. Saved campaigns are unchanged."
               tone="danger"
               size="inline"
@@ -316,7 +377,7 @@ export function KolCampaignsSection({
           <EmptyState
             className="rounded-lg border border-dashed border-border"
             icon={<IconSpeakerphone />}
-            title="No KOL campaigns yet."
+            title="No campaigns yet."
             description="Create a code with saved commission terms."
             size="inline"
             tone="secondary"
@@ -330,11 +391,13 @@ export function KolCampaignsSection({
           />
         ) : (
           <TableContainer>
-            <Table aria-label="Saved KOL campaigns" className="min-w-max">
+            <Table aria-label="Saved campaigns" className="min-w-max">
               <TableHeader>
                 <TableRow>
                   <TableHead>Campaign</TableHead>
                   <TableHead>Code</TableHead>
+                  <TableHead>Type / partner</TableHead>
+                  <TableHead>Bank details</TableHead>
                   <TableHead>Activation</TableHead>
                   <TableHead>Expiry</TableHead>
                   <TableHead>Attribution</TableHead>
@@ -351,9 +414,33 @@ export function KolCampaignsSection({
                     <TableRow key={campaign.id}>
                       <TableCell className="font-medium">
                         {campaign.name}
+                        {campaign.notes ? (
+                          <Text className="max-w-xs whitespace-normal text-sm text-muted">
+                            {campaign.notes}
+                          </Text>
+                        ) : null}
                       </TableCell>
                       <TableCell className="font-mono">
                         {campaign.code}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {campaign.campaignType === "internal"
+                            ? "Internal / partnership"
+                            : "KOL"}
+                        </Badge>
+                        <Text>{campaign.partnerName || "Not provided"}</Text>
+                      </TableCell>
+                      <TableCell>
+                        <div>{campaign.bankName || "Bank not provided"}</div>
+                        <Text className="font-mono">
+                          {campaign.bankAccountNumber ||
+                            "Account number not provided"}
+                        </Text>
+                        <Text className="text-muted">
+                          {campaign.bankAccountHolderName ||
+                            "Account holder not provided"}
+                        </Text>
                       </TableCell>
                       <TableCell>
                         <div>{wibDate.format(activationAt)}</div>

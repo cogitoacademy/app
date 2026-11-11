@@ -579,6 +579,12 @@ export function createReferralService(deps: {
           .insert(referralCampaign)
           .values({
             name: input.name,
+            campaignType: input.campaignType ?? "kol",
+            partnerName: input.partnerName?.trim() || null,
+            bankName: input.bankName?.trim() || null,
+            bankAccountNumber: input.bankAccountNumber?.trim() || null,
+            bankAccountHolderName: input.bankAccountHolderName?.trim() || null,
+            notes: input.notes?.trim() || null,
             activationAt: activatedAt,
             expiresAt: input.expiresAt,
             attributionWindowDays: input.attributionWindowDays,
@@ -632,6 +638,12 @@ export function createReferralService(deps: {
       .select({
         id: referralCampaign.id,
         name: referralCampaign.name,
+        campaignType: referralCampaign.campaignType,
+        partnerName: referralCampaign.partnerName,
+        bankName: referralCampaign.bankName,
+        bankAccountNumber: referralCampaign.bankAccountNumber,
+        bankAccountHolderName: referralCampaign.bankAccountHolderName,
+        notes: referralCampaign.notes,
         code: referralCode.code,
         activationAt: referralCampaign.activationAt,
         expiresAt: referralCampaign.expiresAt,
@@ -1154,7 +1166,24 @@ export function createReferralService(deps: {
         .from(kolCommissionDecision)
         .where(eq(kolCommissionDecision.id, input.decisionId))
         .for("update");
-      return settlementSnapshot(tx, input.decisionId);
+      const snapshot = await settlementSnapshot(tx, input.decisionId);
+      const [campaign] = await tx
+        .select({
+          name: referralCampaign.name,
+          campaignType: referralCampaign.campaignType,
+          partnerName: referralCampaign.partnerName,
+          bankName: referralCampaign.bankName,
+          bankAccountNumber: referralCampaign.bankAccountNumber,
+          bankAccountHolderName: referralCampaign.bankAccountHolderName,
+          notes: referralCampaign.notes,
+        })
+        .from(referralChoice)
+        .innerJoin(
+          referralCampaign,
+          eq(referralCampaign.id, referralChoice.campaignId),
+        )
+        .where(eq(referralChoice.id, snapshot.decision.choiceId));
+      return { ...snapshot, campaign: campaign ?? null };
     });
   }
 
@@ -1300,6 +1329,12 @@ export function createReferralService(deps: {
             name: user.name,
             email: user.email,
             campaign: referralCampaign.name,
+            campaignType: referralCampaign.campaignType,
+            partnerName: referralCampaign.partnerName,
+            bankName: referralCampaign.bankName,
+            bankAccountNumber: referralCampaign.bankAccountNumber,
+            bankAccountHolderName: referralCampaign.bankAccountHolderName,
+            notes: referralCampaign.notes,
             code: referralChoice.codeSnapshot,
           })
           .from(kolCommissionDecision)
@@ -1329,6 +1364,12 @@ export function createReferralService(deps: {
             "Decision ID",
             "Campaign",
             "Code",
+            "Campaign type",
+            "Partner / KOL",
+            "Bank",
+            "Bank account number",
+            "Bank account holder",
+            "Campaign notes",
             "Student",
             "Email",
             "Qualifying payment ID",
@@ -1388,6 +1429,12 @@ export function createReferralService(deps: {
             row.id,
             row.campaign,
             row.code,
+            row.campaignType,
+            row.partnerName,
+            row.bankName,
+            row.bankAccountNumber,
+            row.bankAccountHolderName,
+            row.notes,
             row.name,
             row.email,
             d.paymentId,
@@ -1441,6 +1488,12 @@ export function createReferralService(deps: {
         referredUserName: user.name,
         referredUserEmail: user.email,
         campaignName: referralCampaign.name,
+        campaignType: referralCampaign.campaignType,
+        partnerName: referralCampaign.partnerName,
+        bankName: referralCampaign.bankName,
+        bankAccountNumber: referralCampaign.bankAccountNumber,
+        bankAccountHolderName: referralCampaign.bankAccountHolderName,
+        notes: referralCampaign.notes,
         code: referralCode.code,
         paymentId: paymentRecord.id,
         paymentReference: paymentRecord.providerReference,

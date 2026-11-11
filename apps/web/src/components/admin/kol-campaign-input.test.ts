@@ -47,3 +47,49 @@ test("blank activation is omitted and expiry must be later than now", () => {
       ?.flatAmountIdr,
   ).toBe(25000);
 });
+
+test("internal campaigns allow zero commission and optional partner details", () => {
+  const { input } = parseCampaignDraft({
+    ...draft,
+    campaignType: "internal",
+    percent: "0",
+  });
+  expect(input?.campaignType).toBe("internal");
+  expect(input?.partnerName).toBeNull();
+  expect(input?.bankAccountNumber).toBeNull();
+  expect(
+    parseCampaignDraft({ ...draft, campaignType: "kol", percent: "0" }).input,
+  ).toBeNull();
+});
+
+test("partner details are trimmed and account numbers retain leading zeroes", () => {
+  const { input } = parseCampaignDraft({
+    ...draft,
+    partnerName: " Alya ",
+    bankName: " BCA ",
+    bankAccountNumber: " 0012345678 ",
+    bankAccountHolderName: " Alya Putri ",
+    notes: " November launch ",
+  });
+  expect(input).toMatchObject({
+    partnerName: "Alya",
+    bankName: "BCA",
+    bankAccountNumber: "0012345678",
+    bankAccountHolderName: "Alya Putri",
+    notes: "November launch",
+  });
+  for (const field of [
+    "partnerName",
+    "bankName",
+    "bankAccountNumber",
+    "bankAccountHolderName",
+    "notes",
+  ] as const) {
+    const result = parseCampaignDraft({
+      ...draft,
+      [field]: "x".repeat(field === "notes" ? 601 : 101),
+    });
+    expect(result.input).toBeNull();
+    expect(result.errors[field]).toBeTruthy();
+  }
+});
