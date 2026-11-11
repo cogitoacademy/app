@@ -3994,3 +3994,7 @@ Invitation signup: `/login?redirect=/invite?token=...` preserves the tutor invit
 Admin Referrals now supports internal/partnership and KOL campaign categories, optional free-text partner identity, bank/account/holder and notes. The form remains an inline Selia section. Campaign rows show recipient information; Activity can search partners; commission details show the recipient for external transfers; monthly CSV includes the identity fields for analysis. Internal campaigns can use zero commission. Code kind and signup attribution still use the existing campaign (`kol`) path; student-owned friend codes are separate.
 
 Schema prerequisite: migration `0093_referral_campaign_partner.sql`, generated on this branch after the terms/Office migrations. Existing campaigns default to KOL with null optional metadata. Saved fields remain read-only. Migration and 23 referral/KOL PostgreSQL integration tests passed against verified loopback `127.0.0.1:6769/cogito-test`; development/production databases were not changed. Drizzle generation succeeds on this branch.
+
+### Office environment provisioning
+
+Office deployment configuration: the SOPS production vault and Coolify app env allowlist include OFFICE_READ_KEY, OFFICE_WRITE_KEY, OFFICE_WEBHOOK_SECRET, OFFICE_WEBHOOK_URL, and OFFICE_WRITES_ENABLED. Writes remain disabled pending Office acceptance. Vault provisioning alone does not apply live configuration.

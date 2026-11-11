@@ -4961,3 +4961,7 @@ WSL Docker test execution: started existing `cogito-cov-6769` (postgres:16-alpin
 After deployment, verify admin creation/reload for both types, optional metadata, leading-zero account numbers, partner search, settlement recipient and monthly CSV. Transfers are still recorded after an external bank transfer. CSV consumers should import account numbers as text. The monthly report includes activity only; it does not list unused campaigns.
 
 Branch verification: 61 focused unit/RPC/policy tests, 23 PostgreSQL integration tests and 16 synthetic Edge browser cases pass on fix/student-consent-layout (9 campaign creation/error/responsive cases; 7 settlement recipient/layout/navigation cases). Web typecheck, scoped production lint, formatting and whitespace checks pass. Browser responses are mocked; PostgreSQL acceptance uses the real local test database with stub payment callbacks. Live provider and production deployment acceptance remain separate.
+
+### Office environment provisioning
+
+Office secrets: edit infra/secrets/prod.env through SOPS only. All five OFFICE_* variables are covered by .sops.yaml encrypted_regex and infra/ansible/coolify-resources.yml app_env_keys. Use independent random 32-byte read, write, and webhook secrets. Apply to the verified cogito-api target and restart before testing; keep OFFICE_WRITES_ENABLED=false until acceptance. Provision matching secrets privately on the Office backend. Never print decrypted vault values.

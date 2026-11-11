@@ -3010,3 +3010,7 @@ Invitation signup: `/login?redirect=/invite?token=...` preserves the tutor invit
 Both campaign categories use the existing `referralCode.kind = kol` and immutable signup attribution/first-purchase accounting path. `campaignType` describes the business category and is separate from the friend-versus-campaign discriminator. Internal campaigns with zero terms can track signups and first purchases with a zero obligation. No automatic transfer or new commission event is introduced. Existing audits retain the created campaign metadata. Saved campaign terms and metadata remain read-only in this interface.
 
 Admin campaign rows show category, partner and bank details; Activity searches partner names and shows category/name in its drawer. Commissions show category/name and the settlement panel fetches the saved recipient alongside balances. Monthly CSV repeats metadata on summary/detail rows, preserving existing totals and activity boundaries. Bank fields remain limited to admin procedures.
+
+### Office environment provisioning
+
+Office configuration ownership: SOPS production vault stores credentials; the Coolify app_env_keys allowlist declares runtime delivery. OFFICE_WRITES_ENABLED defaults to false for initial provisioning. Runtime acceptance and Office-side secret provisioning remain separate operator steps.

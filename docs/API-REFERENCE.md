@@ -2953,3 +2953,7 @@ Invitation signup: `/login?redirect=/invite?token=...` preserves the tutor invit
 Create/list campaign responses and `listKolCommissions.items` include these six metadata fields. `getKolSettlement` adds `campaign: { name, campaignType, partnerName, bankName, bankAccountNumber, bankAccountHolderName, notes } | null`. `listUsage.items` adds `campaignType` and `partnerName`; search also matches partner names. All these procedures remain admin-only; student referral responses do not include bank details. Request/response envelopes remain `{ "json": input }` and `{ "json": data, "meta": [...] }`.
 
 Monthly reconciliation CSV adds Campaign type, Partner / KOL, Bank, Bank account number, Bank account holder and Campaign notes on summary and entry rows. Selection remains based on purchase/settlement activity in the WIB month, not a complete inventory of all campaigns. CSV account values are quoted strings; import the account column as text in spreadsheet software to preserve leading zeroes. Formula neutralization remains enabled for free text.
+
+### Office environment provisioning
+
+Office deployment note: OFFICE_READ_KEY and OFFICE_WRITE_KEY are backend credentials; OFFICE_WEBHOOK_SECRET signs outgoing events. Adding vault configuration does not install Office endpoints in a deployment that lacks the Office implementation.
