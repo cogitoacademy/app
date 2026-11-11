@@ -1,16 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@cogito-app/ui/components/selia/dialog";
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 
 import studentTerms from "./student-terms-2026-11.md?raw";
 import { parseTermsDocument, splitTermsEmphasis } from "./terms-document";
@@ -43,21 +45,36 @@ export function StudentTermsAndConditions({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 640px)");
+    const update = () => setIsDesktop(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-4xl!">
-        <DialogHeader>
-          <DialogTitle>Student Terms and Conditions</DialogTitle>
-          <DialogDescription>
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      swipeDirection={isDesktop ? "right" : "down"}
+    >
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className="w-full sm:max-w-2xl"
+      >
+        <DrawerHeader className="flex-col items-start gap-1.5 border-b border-border pb-4.5">
+          <DrawerTitle>Student Terms and Conditions</DrawerTitle>
+          <DrawerDescription>
             Syarat dan Ketentuan Siswa · November 2026
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="min-h-0 flex-1">
+          </DrawerDescription>
+        </DrawerHeader>
+        <DrawerBody className="min-h-0 flex-1">
           <div className="space-y-4 text-sm leading-relaxed">
             {blocks.map((block) => {
               if (block.type === "title")
                 return (
-                  <h3 key={block.text} className="mt-6 text-lg font-semibold">
+                  <h3 key={block.text} className="text-lg font-semibold">
                     <TermsText text={block.text} />
                   </h3>
                 );
@@ -74,17 +91,17 @@ export function StudentTermsAndConditions({
               );
             })}
           </div>
-        </DialogBody>
-        <DialogFooter>
-          <DialogClose
+        </DrawerBody>
+        <DrawerFooter>
+          <DrawerClose
             render={
               <Button variant="tertiary" type="button" aria-label="Close" />
             }
           >
             Close
-          </DialogClose>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerPopup>
+    </Drawer>
   );
 }

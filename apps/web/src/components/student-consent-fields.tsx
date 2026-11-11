@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Button } from "@cogito-app/ui/components/selia/button";
+import { TextLink } from "@cogito-app/ui/components/selia/text";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { StudentTermsAndConditions } from "./legal/student-terms-and-conditions";
-import { TutorTermsOfService } from "./tutor/tutor-terms-of-service";
 import type { StudentConsentState } from "@/lib/student-consent";
 
 export function StudentConsentFields({
@@ -29,25 +28,27 @@ export function StudentConsentFields({
 }) {
   const id = useId();
   const [termsOpen, setTermsOpen] = useState(false);
-  const [tutorTermsOpen, setTutorTermsOpen] = useState(false);
   const update = (change: Partial<StudentConsentState>) =>
     onChange({ ...value, ...change });
   return (
-    <fieldset className="flex flex-col gap-4" disabled={disabled}>
-      <legend className="font-medium">Student terms and conditions</legend>
+    <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
+      <legend className="sr-only">Before you join</legend>
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium">Age (required)</legend>
+        <legend className="mb-2 text-base text-foreground">
+          Age (required)
+        </legend>
         <RadioGroup
+          className="flex flex-wrap gap-x-5 gap-y-2"
           value={value.ageGroup}
           onValueChange={(ageGroup) =>
             update({ ageGroup: ageGroup as StudentConsentState["ageGroup"] })
           }
         >
           <label htmlFor={`${id}-adult`} className="flex items-center gap-2">
-            <Radio id={`${id}-adult`} value="adult" /> I am 18 or older.
+            <Radio id={`${id}-adult`} value="adult" /> 18 or older
           </label>
           <label htmlFor={`${id}-minor`} className="flex items-center gap-2">
-            <Radio id={`${id}-minor`} value="minor" /> I am under 18.
+            <Radio id={`${id}-minor`} value="minor" /> Under 18
           </label>
         </RadioGroup>
       </fieldset>
@@ -121,33 +122,22 @@ export function StudentConsentFields({
           htmlFor={`${id}-student-agreement`}
           className="text-sm leading-relaxed"
         >
-          I have read, understood and agree to the student terms and conditions,
-          including that payments cannot be refunded as money.
+          I have read, understood and agree to the{" "}
+          <TextLink
+            render={
+              <button
+                type="button"
+                aria-label="Read student terms and conditions"
+                onClick={() => setTermsOpen(true)}
+              />
+            }
+          >
+            student terms and conditions
+          </TextLink>
+          , including that payments cannot be refunded as money.
         </label>
       </div>
-      <Button
-        type="button"
-        variant="underline"
-        size="sm"
-        className="self-start"
-        onClick={() => setTermsOpen(true)}
-      >
-        Read student terms and conditions
-      </Button>
       <StudentTermsAndConditions open={termsOpen} onOpenChange={setTermsOpen} />
-      <Button
-        type="button"
-        variant="underline"
-        size="sm"
-        className="self-start"
-        onClick={() => setTutorTermsOpen(true)}
-      >
-        Read tutor terms of service
-      </Button>
-      <TutorTermsOfService
-        open={tutorTermsOpen}
-        onOpenChange={setTutorTermsOpen}
-      />
     </fieldset>
   );
 }

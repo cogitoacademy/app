@@ -104,6 +104,12 @@ export default function SignUpForm({
   const navigate = useNavigate({
     from: "/",
   });
+  const inviteToken = redirectPath?.startsWith("/invite?")
+    ? (new URLSearchParams(redirectPath.split("?")[1]).get("token") ??
+      undefined)
+    : undefined;
+  const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState("");
   const [isAuthTransitioning, setIsAuthTransitioning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [studentConsent, setStudentConsent] = useState(emptyStudentConsent);
@@ -141,7 +147,7 @@ export default function SignUpForm({
     canSubmitWhenInvalid: true,
     onSubmit: async ({ value }) => {
       const consent = toStudentConsent(studentConsent);
-      if (!consent) return;
+      if (!inviteToken && !consent) return;
       setIsAuthTransitioning(true);
       setOtpError("");
       try {
@@ -164,6 +170,7 @@ export default function SignUpForm({
             signupAttemptId,
             referralCode: value.referralCode.trim() || null,
             consent,
+            tutorInviteToken: inviteToken,
           }),
         });
 
@@ -233,6 +240,28 @@ export default function SignUpForm({
       }),
     },
   });
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    client.invite
+      .verify({ token: inviteToken })
+      .then((invite) => {
+        if (!cancelled) {
+          setInviteEmail(invite.email);
+          form.setFieldValue("email", invite.email);
+        }
+      })
+      .catch(() => {
+        if (!cancelled)
+          setInviteError(
+            "This invitation is invalid or expired. Ask for a new invitation.",
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken, form]);
 
   async function finishSignup(sessionUser?: CogitoUser) {
     if (!sessionUser) {
@@ -347,61 +376,80 @@ export default function SignUpForm({
   return (
     <Card className="w-full">
       <CardHeader align="center">
-        <CardTitle level={1}>Create your account</CardTitle>
+        <CardTitle level={1}>
+          {inviteToken ? "Create your tutor account" : "Create your account"}
+        </CardTitle>
       </CardHeader>
       <CardBody className="flex flex-col gap-5">
-        <StudentConsentFields
-          value={studentConsent}
-          onChange={setStudentConsent}
-          disabled={isAuthTransitioning}
-        />
-        <div className="flex flex-col gap-2.5">
-          <Button
-            type="button"
-            variant="secondary"
-            block
-            size="sm"
-            disabled={!toStudentConsent(studentConsent)}
-            onClick={() => {
-              if (!toStudentConsent(studentConsent)) return;
-              rememberGoogleConsent(studentConsent);
-              authClient.signIn.social(
-                {
-                  provider: "google",
-                  requestSignUp: true,
-                  errorCallbackURL: `${window.location.origin}/login${redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`,
-                  callbackURL: buildAuthCallbackUrl("signed-in", redirectPath),
-                  newUserCallbackURL: buildAuthCallbackUrl(
-                    "created",
-                    redirectPath,
-                  ),
-                },
-                {
-                  onError: (error) => {
-                    clearGoogleConsent();
-                    toastManager.add({
-                      title: getAuthErrorMessage(error.error, "sign-up"),
-                      type: "error",
-                    });
-                  },
-                },
-              );
-            }}
-          >
-            <img
-              src="/google-logo.svg"
-              alt=""
-              aria-hidden="true"
-              width={18}
-              height={18}
-              className="size-4.5 object-contain"
-            />
-            Sign up with Google
-          </Button>
-        </div>
-        <Divider variant="center" className="md:my-2">
-          Or sign up with email
-        </Divider>
+        {inviteToken && (
+          <Text className="text-sm text-muted">
+            {inviteError ||
+              (inviteEmail
+                ? `Use your invited email: ${inviteEmail}. Verify it below to continue.`
+                : "Checking your tutor invitation…")}
+          </Text>
+        )}
+        {!inviteToken && (
+          <>
+            <div className="flex flex-col gap-2.5">
+              <Button
+                type="button"
+                variant="secondary"
+                block
+                size="sm"
+                onClick={() => {
+                  if (!toStudentConsent(studentConsent)) {
+                    document
+                      .getElementById("signup-consent")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    document
+                      .querySelector<HTMLInputElement>("#signup-consent input")
+                      ?.focus({ preventScroll: true });
+                    return;
+                  }
+                  rememberGoogleConsent(studentConsent);
+                  authClient.signIn.social(
+                    {
+                      provider: "google",
+                      requestSignUp: true,
+                      errorCallbackURL: `${window.location.origin}/login${redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`,
+                      callbackURL: buildAuthCallbackUrl(
+                        "signed-in",
+                        redirectPath,
+                      ),
+                      newUserCallbackURL: buildAuthCallbackUrl(
+                        "created",
+                        redirectPath,
+                      ),
+                    },
+                    {
+                      onError: (error) => {
+                        clearGoogleConsent();
+                        toastManager.add({
+                          title: getAuthErrorMessage(error.error, "sign-up"),
+                          type: "error",
+                        });
+                      },
+                    },
+                  );
+                }}
+              >
+                <img
+                  src="/google-logo.svg"
+                  alt=""
+                  aria-hidden="true"
+                  width={18}
+                  height={18}
+                  className="size-4.5 object-contain"
+                />
+                Sign up with Google
+              </Button>
+            </div>
+            <Divider variant="center" className="md:my-2">
+              Or sign up with email
+            </Divider>
+          </>
+        )}
         <form
           noValidate
           onSubmit={(e) => {
@@ -458,34 +506,34 @@ export default function SignUpForm({
             )}
           </form.Field>
 
-          <form.Field name="referralCode">
-            {(field) => (
-              <Field>
-                <FieldLabel htmlFor={field.name}>
-                  Referral code (optional)
-                </FieldLabel>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder="Enter one code"
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  maxLength={32}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    setOtpError("");
-                    field.handleChange(event.target.value);
-                  }}
-                />
-                <FieldDescription>
-                  A valid friend or KOL referral code may give you free Marks
-                  when you sign up.
-                </FieldDescription>
-              </Field>
-            )}
-          </form.Field>
-
+          {!inviteToken && (
+            <form.Field name="referralCode">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>
+                    Referral code (optional)
+                  </FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    placeholder="Enter one code"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    maxLength={32}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => {
+                      setOtpError("");
+                      field.handleChange(event.target.value);
+                    }}
+                  />
+                  <FieldDescription>
+                    Use a referral code for a chance to get free Marks.
+                  </FieldDescription>
+                </Field>
+              )}
+            </form.Field>
+          )}
           <form.Field
             name="email"
             validators={{
@@ -515,6 +563,7 @@ export default function SignUpForm({
                     field.state.meta.errors.length > 0
                   }
                   disabled={
+                    Boolean(inviteToken) ||
                     isSendingCode ||
                     isAuthTransitioning ||
                     signupOutcomeUnknown ||
@@ -714,6 +763,16 @@ export default function SignUpForm({
             )}
           </form.Field>
 
+          {!inviteToken && (
+            <div id="signup-consent" className="border-t border-border pt-5">
+              <StudentConsentFields
+                value={studentConsent}
+                onChange={setStudentConsent}
+                disabled={isAuthTransitioning}
+              />
+            </div>
+          )}
+
           <form.Subscribe
             selector={(state) => ({ isSubmitting: state.isSubmitting })}
           >
@@ -726,11 +785,15 @@ export default function SignUpForm({
                   isAuthTransitioning ||
                   signupOutcomeUnknown ||
                   signupCreatedWithoutSession ||
-                  !toStudentConsent(studentConsent)
+                  (inviteToken
+                    ? !inviteEmail || Boolean(inviteError)
+                    : !toStudentConsent(studentConsent))
                 }
                 progress={isSubmitting || isAuthTransitioning}
               >
-                Accept & Create Account
+                {inviteToken
+                  ? "Create tutor account"
+                  : "Accept & Create Account"}
               </Button>
             )}
           </form.Subscribe>
