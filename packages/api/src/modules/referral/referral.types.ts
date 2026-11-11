@@ -34,6 +34,12 @@ export const createKolCampaignInput = z
   .object({
     name: z.string().trim().min(1).max(100),
     code: referralCodeInput,
+    campaignType: z.enum(["internal", "kol"]).optional(),
+    partnerName: z.string().trim().max(100).nullable().optional(),
+    bankName: z.string().trim().max(100).nullable().optional(),
+    bankAccountNumber: z.string().trim().max(100).nullable().optional(),
+    bankAccountHolderName: z.string().trim().max(100).nullable().optional(),
+    notes: z.string().trim().max(600).nullable().optional(),
     expiresAt: z.coerce.date(),
     activationAt: z.coerce.date().optional(),
     attributionWindowDays: z.number().int().min(1).max(365).default(90),
@@ -47,10 +53,16 @@ export const createKolCampaignInput = z
       path: ["expiresAt"],
     },
   )
-  .refine((input) => input.flatAmountIdr > 0 || input.percentBps > 0, {
-    message: "Set a flat commission, a percentage, or both.",
-    path: ["flatAmountIdr"],
-  });
+  .refine(
+    (input) =>
+      input.campaignType === "internal" ||
+      input.flatAmountIdr > 0 ||
+      input.percentBps > 0,
+    {
+      message: "Set a flat commission, a percentage, or both.",
+      path: ["flatAmountIdr"],
+    },
+  );
 
 export const listKolCommissionsInput = z.object({
   limit: z.number().int().min(1).max(100).default(50),

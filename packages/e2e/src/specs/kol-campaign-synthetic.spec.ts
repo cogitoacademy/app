@@ -102,7 +102,11 @@ const campaign = {
   percentBps: 1234,
   createdAt: "2026-10-25T00:00:00Z",
 };
-async function setup(page: Page) {
+async function setup(page: Page, holdCreation = false) {
+  let finishCreation!: () => void;
+  const creationReady = new Promise<void>((resolve) => {
+    finishCreation = resolve;
+  });
   await mock(page);
   let rows: (typeof campaign)[] = [];
   let failList = false;
@@ -140,15 +144,17 @@ async function setup(page: Page) {
             },
           },
         });
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      rows = [campaign];
-      return route.fulfill({ json: { json: campaign, meta: [] } });
+      if (holdCreation) await creationReady;
+      const saved = { ...campaign, ...route.request().postDataJSON().json };
+      rows = [saved];
+      return route.fulfill({ json: { json: saved, meta: [] } });
     },
   );
   await page.goto("/admin-referrals");
   await page.getByRole("tab", { name: "Campaigns", exact: true }).click();
   return {
     payloads,
+    finishCreation,
     conflict: () => {
       conflict = true;
     },
@@ -165,7 +171,7 @@ async function setup(page: Page) {
 }
 async function fill(page: Page) {
   await page
-    .getByRole("button", { name: "Create KOL campaign", exact: true })
+    .getByRole("button", { name: "Create campaign", exact: true })
     .click();
   await page.getByLabel("Campaign name", { exact: true }).fill("Demo KOL");
   await page.getByLabel("Referral code", { exact: true }).fill("demo2026");
@@ -181,15 +187,16 @@ async function fill(page: Page) {
 test("creates once with WIB dates, uppercase code, exact bps and refreshes immutable terms", async ({
   page,
 }) => {
-  const state = await setup(page);
+  const state = await setup(page, true);
   await expect(
-    page.getByText("No KOL campaigns yet.", { exact: false }),
+    page.getByText("No campaigns yet.", { exact: false }),
   ).toBeVisible();
   await fill(page);
-  await page.getByRole("button", { name: "Save KOL campaign" }).click();
+  await page.getByRole("button", { name: "Save campaign" }).click();
   await expect(
-    page.getByRole("button", { name: "Creating KOL campaign…" }),
+    page.getByRole("button", { name: "Creating campaign…" }),
   ).toBeDisabled();
+  state.finishCreation();
   await expect(
     page.getByRole("row").filter({ hasText: "DEMO2026" }),
   ).toBeVisible();
@@ -197,6 +204,12 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
   expect(state.payloads[0].json).toEqual({
     name: "Demo KOL",
     code: "DEMO2026",
+    campaignType: "kol",
+    partnerName: null,
+    bankName: null,
+    bankAccountNumber: null,
+    bankAccountHolderName: null,
+    notes: null,
     activationAt: campaign.activationAt,
     expiresAt: campaign.expiresAt,
     attributionWindowDays: 90,
@@ -204,7 +217,7 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
     percentBps: 1234,
   });
   await expect(
-    page.getByRole("table", { name: "Saved KOL campaigns" }),
+    page.getByRole("table", { name: "Saved campaigns" }),
   ).toBeVisible();
   await expect(page.getByLabel("Campaign name", { exact: true })).toHaveValue(
     "",
@@ -217,7 +230,7 @@ for (const failure of ["conflict", "network"] as const)
     const state = await setup(page);
     state[failure]();
     await fill(page);
-    await page.getByRole("button", { name: "Save KOL campaign" }).click();
+    await page.getByRole("button", { name: "Save campaign" }).click();
     await expect(page.getByText(/Your entries are preserved/)).toBeVisible();
     await expect(page.getByLabel("Referral code", { exact: true })).toHaveValue(
       "demo2026",
@@ -233,18 +246,18 @@ test("validation focuses first error and list failure recovers explicitly", asyn
 }) => {
   const state = await setup(page);
   await page
-    .getByRole("button", { name: "Create KOL campaign", exact: true })
+    .getByRole("button", { name: "Create campaign", exact: true })
     .click();
-  await page.getByRole("button", { name: "Save KOL campaign" }).click();
+  await page.getByRole("button", { name: "Save campaign" }).click();
   await expect(page.getByLabel("Campaign name", { exact: true })).toBeFocused();
   expect(state.payloads).toHaveLength(0);
   state.failList();
   await page.getByRole("button", { name: "Refresh campaigns" }).click();
-  await expect(page.getByText("We couldn't load KOL campaigns.")).toBeVisible();
+  await expect(page.getByText("We couldn't load campaigns.")).toBeVisible();
   state.recover();
   await page.getByRole("button", { name: "Retry campaigns" }).click();
   await expect(
-    page.getByText("No KOL campaigns yet.", { exact: false }),
+    page.getByText("No campaigns yet.", { exact: false }),
   ).toBeVisible();
 });
 for (const width of [320, 390, 768, 1440])
@@ -252,9 +265,9 @@ for (const width of [320, 390, 768, 1440])
     await page.setViewportSize({ width, height: 960 });
     await setup(page);
     await fill(page);
-    await page.getByRole("button", { name: "Save KOL campaign" }).click();
+    await page.getByRole("button", { name: "Save campaign" }).click();
     await expect(
-      page.getByRole("table", { name: "Saved KOL campaigns" }),
+      page.getByRole("table", { name: "Saved campaigns" }),
     ).toBeVisible();
     const panel = page.locator("#kol-campaigns-section");
     expect(
@@ -286,3 +299,41 @@ for (const width of [320, 390, 768, 1440])
       fullPage: true,
     });
   });
+
+test("internal campaign saves optional recipient details with zero commission", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await fill(page);
+  await page.getByRole("combobox", { name: "Campaign type" }).click();
+  await page.getByRole("option", { name: "Internal / partnership" }).click();
+  await page
+    .getByLabel("Partner / KOL name (optional)", { exact: true })
+    .fill("UGM Competition");
+  await page.getByLabel("Bank name (optional)", { exact: true }).fill("BCA");
+  await page
+    .getByLabel("Bank account number (optional)", { exact: true })
+    .fill("0012345678");
+  await page
+    .getByLabel("Account holder name (optional)", { exact: true })
+    .fill("Panitia UGM");
+  await page
+    .getByLabel("Notes (optional)", { exact: true })
+    .fill("November partnership");
+  await page.getByLabel("Flat commission (IDR)", { exact: true }).fill("0");
+  await page.getByLabel("Commission (%)", { exact: true }).fill("0");
+  await page
+    .getByRole("button", { name: "Save campaign", exact: true })
+    .click();
+  const row = page.getByRole("row").filter({ hasText: "DEMO2026" });
+  await expect(row).toContainText("Internal / partnership");
+  await expect(row).toContainText("UGM Competition");
+  await expect(row).toContainText("0012345678");
+  await expect(row).toContainText("Panitia UGM");
+  expect(state.payloads[0].json).toMatchObject({
+    campaignType: "internal",
+    flatAmountIdr: 0,
+    percentBps: 0,
+    bankAccountNumber: "0012345678",
+  });
+});

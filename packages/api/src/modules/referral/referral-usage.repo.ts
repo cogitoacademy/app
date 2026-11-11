@@ -34,6 +34,7 @@ export function createReferralUsageReader(db: DbType) {
                 ilike(referrer.name, pattern),
                 ilike(referrer.email, pattern),
                 ilike(referralCampaign.name, pattern),
+                ilike(referralCampaign.partnerName, pattern),
               )
             : undefined,
         );
@@ -51,6 +52,8 @@ export function createReferralUsageReader(db: DbType) {
             referrerName: referrer.name,
             referrerEmail: referrer.email,
             campaignName: referralCampaign.name,
+            campaignType: referralCampaign.campaignType,
+            partnerName: referralCampaign.partnerName,
             settingsVersion: referralChoice.settingsVersion,
             welcomeMarksSnapshot: referralChoice.welcomeMarksSnapshot,
             welcomeCreditedMarks: ledgerEntry.amount,

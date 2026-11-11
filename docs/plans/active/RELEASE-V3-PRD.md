@@ -303,3 +303,7 @@ state. Registration links are rich-body links only; no dedicated registration
 field or automatic registration CTA. Upcoming/Completed is derived from end
 time and does not attest delivery. The new format replaces legacy Sanity event
 reads and type labels.
+
+### Referral campaign partner metadata (11 November 2026)
+
+Implementation: campaign type Internal/partnership or KOL; optional free-text partner/KOL name, bank name, account number as text, account holder and notes. Show identity in campaign/commission views and monthly export; allow Activity search by partner. Internal campaigns may use zero commission for measurement. No partner directory or automatic bank transfer is required. Code/UI/docs implemented; generated migration 0093 and 23 PostgreSQL integration checks passed on the dedicated local test target. Deployment to development/production and live provider acceptance remain open. Existing campaign metadata and terms remain read-only.

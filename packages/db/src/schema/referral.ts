@@ -19,6 +19,15 @@ export const referralCampaign = pgTable(
   {
     id: uuidPrimaryKey,
     name: text("name").notNull(),
+    campaignType: text("campaign_type")
+      .$type<"internal" | "kol">()
+      .notNull()
+      .default("kol"),
+    partnerName: text("partner_name"),
+    bankName: text("bank_name"),
+    bankAccountNumber: text("bank_account_number"),
+    bankAccountHolderName: text("bank_account_holder_name"),
+    notes: text("notes"),
     activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
@@ -43,8 +52,12 @@ export const referralCampaign = pgTable(
       sql`${table.attributionWindowDays} > 0 AND ${table.attributionWindowDays} <= 365`,
     ),
     check(
+      "referral_campaign_type_valid",
+      sql`${table.campaignType} IN ('internal', 'kol')`,
+    ),
+    check(
       "referral_campaign_terms_valid",
-      sql`${table.flatAmountIdr} >= 0 AND ${table.percentBps} BETWEEN 0 AND 10000 AND (${table.flatAmountIdr} > 0 OR ${table.percentBps} > 0)`,
+      sql`${table.flatAmountIdr} >= 0 AND ${table.percentBps} BETWEEN 0 AND 10000 AND (${table.campaignType} = 'internal' OR ${table.flatAmountIdr} > 0 OR ${table.percentBps} > 0)`,
     ),
     index("referral_campaign_expiry_idx").on(
       table.activationAt,

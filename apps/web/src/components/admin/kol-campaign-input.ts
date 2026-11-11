@@ -4,6 +4,12 @@ import { percentToBasisPoints } from "./tax-rate-input";
 export const emptyCampaignDraft = {
   name: "",
   code: "",
+  campaignType: "kol" as "internal" | "kol",
+  partnerName: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bankAccountHolderName: "",
+  notes: "",
   activationAt: "",
   expiresAt: "",
   attributionWindowDays: "90",
@@ -24,6 +30,12 @@ export function parseCampaignDraft(draft: CampaignDraft, now = new Date()) {
   const parsed = createKolCampaignInput.safeParse({
     name: draft.name,
     code: draft.code,
+    campaignType: draft.campaignType,
+    partnerName: draft.partnerName || null,
+    bankName: draft.bankName || null,
+    bankAccountNumber: draft.bankAccountNumber || null,
+    bankAccountHolderName: draft.bankAccountHolderName || null,
+    notes: draft.notes || null,
     activationAt: draft.activationAt
       ? toWibTimestamp(draft.activationAt)
       : undefined,
