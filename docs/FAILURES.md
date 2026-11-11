@@ -361,6 +361,26 @@ device` (Coolify `application_deployment_queues.logs`); the deploy
   the image or restore the database; use the pre-migrate snapshot only through
   reviewed DR-2 procedures.
 
+### 5.11 Infra Apply fails with HTTP 401 `Unauthenticated.`
+
+- Detect: `Infra Apply (auto)` → `Ansible apply` fails at `List Coolify
+  projects` (or the report-only drift-check logs exit 2), and the censored
+  `no_log` result hides the body. The uncensored drift-check log shows
+  `{"message":"Unauthenticated."}` for `GET /api/v1/version` and
+  `GET /api/v1/projects`.
+- Meaning: Coolify does not recognise the vault's `COOLIFY_API_TOKEN`. The
+  token was revoked or deleted in the Coolify UI, or Coolify's `APP_KEY` was
+  regenerated (that invalidates every API token while deploy webhooks keep
+  working, so CD stays green). A 401 is never a permissions problem — a token
+  that exists but lacks scope returns 403 (see 5.9).
+- Recovery: confirm the vault value is unchanged before rotating it
+  (`sops -d infra/secrets/prod.env | grep -c '^COOLIFY_API_TOKEN='`), then
+  create a new token in Coolify UI → Keys & Tokens → API tokens and write it
+  with `printf '"<token>"' | sops set --value-stdin infra/secrets/prod.env
+  '["COOLIFY_API_TOKEN"]'`. Merging the vault change to main re-runs Infra
+  Apply through the `infra/secrets/**` path filter, which applies the declared
+  env and requests an API restart. Verify the run and the live `/health`.
+
 ## 6. Disaster recovery (DR)
 
 ### DR-1 Bad deploy / app down
