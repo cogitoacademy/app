@@ -364,7 +364,7 @@ device` (Coolify `application_deployment_queues.logs`); the deploy
 ### 5.11 Infra Apply fails with HTTP 401 `Unauthenticated.`
 
 - Detect: `Infra Apply (auto)` → `Ansible apply` fails at `List Coolify
-  projects` (or the report-only drift-check logs exit 2), and the censored
+projects` (or the report-only drift-check logs exit 2), and the censored
   `no_log` result hides the body. The uncensored drift-check log shows
   `{"message":"Unauthenticated."}` for `GET /api/v1/version` and
   `GET /api/v1/projects`.
@@ -377,7 +377,7 @@ device` (Coolify `application_deployment_queues.logs`); the deploy
   (`sops -d infra/secrets/prod.env | grep -c '^COOLIFY_API_TOKEN='`), then
   create a new token in Coolify UI → Keys & Tokens → API tokens and write it
   with `printf '"<token>"' | sops set --value-stdin infra/secrets/prod.env
-  '["COOLIFY_API_TOKEN"]'`. Merging the vault change to main re-runs Infra
+'["COOLIFY_API_TOKEN"]'`. Merging the vault change to main re-runs Infra
   Apply through the `infra/secrets/**` path filter, which applies the declared
   env and requests an API restart. Verify the run and the live `/health`.
 
