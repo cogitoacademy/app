@@ -80,8 +80,14 @@
 #   ansible-playbook -i infra/ansible/inventory.ini \
 #     infra/ansible/coolify-resources.yml           # idempotent apply
 #
-#   The Coolify API token must be in the SOPS vault as COOLIFY_API_TOKEN
-#   (Coolify UI → Keys & Tokens → API tokens, `deploy` permission).
+#   The Coolify API token must be in the SOPS vault as COOLIFY_API_TOKEN.
+#   In the Coolify UI (Keys & Tokens → API tokens) it needs BOTH:
+#     - permission `root` (or the union `read` + `write` + `deploy`: reads are
+#       `read`, env/resource writes are `write`, and POST .../restart is
+#       `deploy` — `deploy` alone only reaches /deploy), and
+#     - access **All resources in the team**. A token limited to selected
+#       projects/environments/resources is refused (403) on team-level
+#       endpoints such as /servers, /keys and /databases.
 #
 # IDEMPOTENCE: every write is conditional on a prior GET, so re-runs change
 # nothing. Databases are never recreated (see the database task).
@@ -307,8 +313,9 @@
           - vault_env.COOLIFY_API_TOKEN | length > 0
         fail_msg: >-
           COOLIFY_API_TOKEN is missing from {{ vault_path }} — create a Coolify
-          API token (Coolify UI → Keys & Tokens → API tokens, `deploy`
-          permission) and add it to the SOPS vault.
+          API token (Coolify UI → Keys & Tokens → API tokens) with permission
+          `root` (or `read` + `write` + `deploy`) AND access "All resources in
+          the team", then add it to the SOPS vault.
 
     # --- 1. Project + environment + server lookup (create if missing) ---
     - name: List Coolify projects
@@ -375,6 +382,9 @@
       ansible.builtin.set_fact:
         environment_uuid: "{{ env_found[0].uuid if env_found | length > 0 else env_created.json.uuid }}"
 
+    # /servers is the first team-level endpoint this play needs, so it is also
+    # where a valid-but-narrowly-scoped token fails. Keep the request censored
+    # (the header carries the token) but surface the status and the fix.
     - name: List Coolify servers
       ansible.builtin.uri:
         url: "{{ coolify_api_url }}/servers"
@@ -383,7 +393,22 @@
           Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
         status_code: 200
       register: servers
+      failed_when: false
       no_log: true
+
+    - name: Explain a Coolify token that cannot list servers
+      ansible.builtin.fail:
+        msg: >-
+          GET /api/v1/servers returned HTTP
+          {{ servers.status | default('no response') }}. A 401 means Coolify
+          rejected COOLIFY_API_TOKEN (revoked, or the instance APP_KEY was
+          regenerated) — issue a new token. A 403 means the token is valid but
+          scoped too narrowly: it needs permission `root` (or `read` + `write`
+          + `deploy`) and access "All resources in the team"; a token limited
+          to selected projects/environments/resources cannot read team-level
+          endpoints such as /servers. Update infra/secrets/prod.env through
+          SOPS, then re-run this workflow.
+      when: servers.status | default(0) != 200
 
     - name: Resolve the VPS server UUID
       ansible.builtin.set_fact:

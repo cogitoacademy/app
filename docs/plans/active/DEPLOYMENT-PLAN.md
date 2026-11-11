@@ -112,7 +112,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
    ```bash
    sops -e -i infra/secrets/prod.env
    ```
-   The vault must include `COOLIFY_API_TOKEN` (Coolify UI → Keys & Tokens → API tokens, `deploy` permission) — the playbook asserts it. Never commit the plaintext.
+   The vault must include `COOLIFY_API_TOKEN` (Coolify UI → Keys & Tokens → API tokens) with permission `root` — or `read` + `write` + `deploy` — **and** access "All resources in the team"; a token limited to selected projects is refused with 403 on team-level endpoints such as `/servers`. The playbook asserts the value is present. Never commit the plaintext.
 2. **R2 bucket**: create the bucket + API token in the Cloudflare dashboard (Terraform declares it, but the operator must run `terraform apply` with `CLOUDFLARE_API_TOKEN` + R2 state token first — Task 1.1). Add `R2_*` values to the vault.
 3. **Google Meet**: run the OAuth helper locally (`scripts/google-meet-auth.ts`) → `GOOGLE_MEET_REFRESH_TOKEN` → add to the vault. If the OAuth client was published to Google Meet after the last refresh token was issued, **regenerate the refresh token** (a published client invalidates previously issued tokens).
 4. **Midtrans Sandbox wiring**: set `PAYMENT_PROVIDER=midtrans` + `MIDTRANS_MODE=test` + Sandbox `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID` + `PAYMENT_TEST_ALLOWED_EMAILS` in the vault. Configure the Midtrans dashboard Payment Notification URL as `https://api.cogitoacademy.id/webhooks/payments/midtrans`. `WEBHOOK_ALLOWED_IPS` stays optional; body `signature_key` verification is the primary gate.
