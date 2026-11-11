@@ -21,21 +21,21 @@ Fixture limits:
 
 ## Before and after pairs
 
-| Area | Before | After |
-| --- | --- | --- |
-| Signup, desktop | `before-signup-desktop.png` | `after-signup-desktop.png` |
-| Signup, mobile | `before-signup-mobile.png` | `after-signup-mobile.png` |
-| Student consent, adult | `before-student-consent-adult-desktop.png` | `after-student-consent-adult-desktop.png` |
-| Student consent, minor, desktop | `before-student-consent-minor-desktop.png` | `after-student-consent-minor-desktop.png` |
-| Student consent, minor, mobile | `before-student-consent-minor-mobile.png` | `after-student-consent-minor-mobile.png` |
-| Student terms, desktop | `before-student-terms-dialog-desktop.png` | `after-student-terms-drawer-desktop.png` |
-| Student terms, mobile | `before-student-terms-dialog-mobile.png` | `after-student-terms-drawer-mobile.png` |
-| Tutor terms, desktop | `before-tutor-terms-dialog-desktop.png` | `after-tutor-terms-drawer-desktop.png` |
-| Tutor terms, mobile | `before-tutor-terms-dialog-mobile.png` | `after-tutor-terms-drawer-mobile.png` |
-| Tutor onboarding consent, desktop | `before-tutor-consent-desktop.png` | `after-tutor-consent-desktop.png` |
-| Tutor onboarding consent, mobile | `before-tutor-consent-mobile.png` | `after-tutor-consent-mobile.png` |
-| Login footer, desktop | `before-login-footer-desktop.png` | `after-login-footer-desktop.png` |
-| Login footer, mobile | `before-login-footer-mobile.png` | `after-login-footer-mobile.png` |
+| Area                              | Before                                     | After                                     |
+| --------------------------------- | ------------------------------------------ | ----------------------------------------- |
+| Signup, desktop                   | `before-signup-desktop.png`                | `after-signup-desktop.png`                |
+| Signup, mobile                    | `before-signup-mobile.png`                 | `after-signup-mobile.png`                 |
+| Student consent, adult            | `before-student-consent-adult-desktop.png` | `after-student-consent-adult-desktop.png` |
+| Student consent, minor, desktop   | `before-student-consent-minor-desktop.png` | `after-student-consent-minor-desktop.png` |
+| Student consent, minor, mobile    | `before-student-consent-minor-mobile.png`  | `after-student-consent-minor-mobile.png`  |
+| Student terms, desktop            | `before-student-terms-dialog-desktop.png`  | `after-student-terms-drawer-desktop.png`  |
+| Student terms, mobile             | `before-student-terms-dialog-mobile.png`   | `after-student-terms-drawer-mobile.png`   |
+| Tutor terms, desktop              | `before-tutor-terms-dialog-desktop.png`    | `after-tutor-terms-drawer-desktop.png`    |
+| Tutor terms, mobile               | `before-tutor-terms-dialog-mobile.png`     | `after-tutor-terms-drawer-mobile.png`     |
+| Tutor onboarding consent, desktop | `before-tutor-consent-desktop.png`         | `after-tutor-consent-desktop.png`         |
+| Tutor onboarding consent, mobile  | `before-tutor-consent-mobile.png`          | `after-tutor-consent-mobile.png`          |
+| Login footer, desktop             | `before-login-footer-desktop.png`          | `after-login-footer-desktop.png`          |
+| Login footer, mobile              | `before-login-footer-mobile.png`           | `after-login-footer-mobile.png`           |
 
 Invitation signup, after only:
 
