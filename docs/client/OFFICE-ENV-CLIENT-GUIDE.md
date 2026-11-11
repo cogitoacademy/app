@@ -17,10 +17,10 @@ Source links:
 
 There are two separate kinds of keys:
 
-| Item | What it opens | Who needs it |
-| --- | --- | --- |
-| SOPS age private key | The encrypted production vault, including other production credentials | Rafsi or the trusted Cogito operator responsible for the app |
-| Three `OFFICE_*` connection secrets | Only the app-to-Office integration | The app backend and the Office backend |
+| Item                                | What it opens                                                          | Who needs it                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| SOPS age private key                | The encrypted production vault, including other production credentials | Rafsi or the trusted Cogito operator responsible for the app |
+| Three `OFFICE_*` connection secrets | Only the app-to-Office integration                                     | The app backend and the Office backend                       |
 
 The vault is `infra/secrets/prod.env` in the repository. Its values look like `ENC[...]` when opened normally. The age private key lets SOPS show their actual values in a local editor.
 
@@ -160,14 +160,14 @@ If Notepad returns control to PowerShell before you finish editing, use an insta
 
 ## 5. Put the values in the correct place
 
-| Setting | Main app backend (`cogito-api`) | Office backend |
-| --- | --- | --- |
-| `OFFICE_READ_KEY` | Validates summary requests | Uses the same value when requesting the summary |
-| `OFFICE_WRITE_KEY` | Validates approved action requests | Uses the same value when submitting actions |
-| `OFFICE_WEBHOOK_SECRET` | Signs outgoing events | Uses the same value to verify incoming events |
-| `OFFICE_WEBHOOK_URL` | `https://office.cogitoacademy.id/hooks/app` | This is the receiver endpoint Office must serve |
-| `OFFICE_WRITES_ENABLED` | The production vault explicitly sets `true` | This switch is enforced by the main app |
-| Main app API base URL | Existing API deployment | `https://api.cogitoacademy.id` |
+| Setting                 | Main app backend (`cogito-api`)             | Office backend                                  |
+| ----------------------- | ------------------------------------------- | ----------------------------------------------- |
+| `OFFICE_READ_KEY`       | Validates summary requests                  | Uses the same value when requesting the summary |
+| `OFFICE_WRITE_KEY`      | Validates approved action requests          | Uses the same value when submitting actions     |
+| `OFFICE_WEBHOOK_SECRET` | Signs outgoing events                       | Uses the same value to verify incoming events   |
+| `OFFICE_WEBHOOK_URL`    | `https://office.cogitoacademy.id/hooks/app` | This is the receiver endpoint Office must serve |
+| `OFFICE_WRITES_ENABLED` | The production vault explicitly sets `true` | This switch is enforced by the main app         |
+| Main app API base URL   | Existing API deployment                     | `https://api.cogitoacademy.id`                  |
 
 On the main app, the SOPS vault is the maintained source of configuration. Its declared Office variables are applied to `cogito-api` by the deployment workflow.
 
@@ -256,11 +256,11 @@ Use a separate non-production app and Office receiver for fixture writes, retrie
 
 The main app's Office interface is server-to-server:
 
-| Operation | Request |
-| --- | --- |
-| Read summary | `GET https://api.cogitoacademy.id/office/snapshot` with `Authorization: Bearer <read key>` |
+| Operation       | Request                                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Read summary    | `GET https://api.cogitoacademy.id/office/snapshot` with `Authorization: Bearer <read key>`                                       |
 | Approved action | `POST https://api.cogitoacademy.id/office/actions/<action name>` with `Authorization: Bearer <write key>` and a JSON action body |
-| Receive event | App sends to `https://office.cogitoacademy.id/hooks/app` |
+| Receive event   | App sends to `https://office.cogitoacademy.id/hooks/app`                                                                         |
 
 The `/office/*` routes take ordinary JSON; they do not use the separate `/rpc/*` JSON envelope. Keys stay in backend configuration; do not paste them into request examples, shell history, or screenshots. Browser requests are not the connection path and Office routes do not provide browser CORS headers.
 
@@ -283,34 +283,34 @@ Office actions cover approved campaigns and content only. They do not grant paym
 
 ## 9. Common problems
 
-| What you see | What to check |
-| --- | --- |
-| `sops` is not recognized | Install SOPS and reopen PowerShell; confirm its folder is on PATH. |
-| `Could not run editor` | Set `$env:SOPS_EDITOR = "notepad.exe"` in the current terminal, then reopen through SOPS. |
-| Failed to get the data key | Confirm `SOPS_AGE_KEY_FILE`, the private key file, and whether its public key was registered with `sops updatekeys`. A new identity cannot open an old vault until added. |
-| You only see `ENC[...]` | The file was opened directly; open it using `sops infra/secrets/prod.env`. |
-| `401 UNAUTHORIZED` | Check the backend key pair, the `Bearer` header, whitespace, and whether both backends restarted with the new value. Use the read key for snapshot and write key for actions. |
-| `403 WRITES_DISABLED` | The running main app still has writes disabled; check the applied runtime env and restart result. |
-| `403 ACTION_DENIED` | The requested action is outside the allowed action names. |
-| `400 INVALID_REQUEST` | Check the action name, body schema, required IDs, and approved asset URLs. |
-| `429 RATE_LIMITED` | The limits are 120 read requests/hour and 60 write requests/hour; avoid aggressive polling/retries. |
-| `503 UNAVAILABLE` | The Office rate limiter is unavailable; check API/Redis health. |
-| PR merged but connection unchanged | Check the corresponding Infra Apply run, Office backend settings, and restart results. |
-| No webhook events | Check matching webhook secrets, the Office receiver, the running app scheduler/worker, Redis, and outbox retry status. |
-| Dashboard changes appear late | Snapshot data is cached for up to 120 seconds. |
+| What you see                       | What to check                                                                                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sops` is not recognized           | Install SOPS and reopen PowerShell; confirm its folder is on PATH.                                                                                                            |
+| `Could not run editor`             | Set `$env:SOPS_EDITOR = "notepad.exe"` in the current terminal, then reopen through SOPS.                                                                                     |
+| Failed to get the data key         | Confirm `SOPS_AGE_KEY_FILE`, the private key file, and whether its public key was registered with `sops updatekeys`. A new identity cannot open an old vault until added.     |
+| You only see `ENC[...]`            | The file was opened directly; open it using `sops infra/secrets/prod.env`.                                                                                                    |
+| `401 UNAUTHORIZED`                 | Check the backend key pair, the `Bearer` header, whitespace, and whether both backends restarted with the new value. Use the read key for snapshot and write key for actions. |
+| `403 WRITES_DISABLED`              | The running main app still has writes disabled; check the applied runtime env and restart result.                                                                             |
+| `403 ACTION_DENIED`                | The requested action is outside the allowed action names.                                                                                                                     |
+| `400 INVALID_REQUEST`              | Check the action name, body schema, required IDs, and approved asset URLs.                                                                                                    |
+| `429 RATE_LIMITED`                 | The limits are 120 read requests/hour and 60 write requests/hour; avoid aggressive polling/retries.                                                                           |
+| `503 UNAVAILABLE`                  | The Office rate limiter is unavailable; check API/Redis health.                                                                                                               |
+| PR merged but connection unchanged | Check the corresponding Infra Apply run, Office backend settings, and restart results.                                                                                        |
+| No webhook events                  | Check matching webhook secrets, the Office receiver, the running app scheduler/worker, Redis, and outbox retry status.                                                        |
+| Dashboard changes appear late      | Snapshot data is cached for up to 120 seconds.                                                                                                                                |
 
 ## 10. Handover completion for the connection request
 
 Env setup covers only part of the original request. Keep the remaining items visible:
 
-| Item | Required completion evidence |
-| --- | --- |
-| Vault independence | Rafsi opens the current vault using Cogito-controlled access and has a recovery copy. |
-| Live connection | Joint read, tracking, event, action, and write-disable checks are recorded. |
-| Security cleanup | Operators rotate the exposed Coolify/OVH passwords, remove credential-bearing documentation copies, and remove public-mailbox production test accounts/access. This guide does not perform those actions. |
-| Service ownership | Cogito verifies ownership, recovery, billing and two-step access for GitHub, Coolify, OVH, Cloudflare/R2, Resend, Midtrans, Sanity, Google Cloud/Meet, Uptime Kuma and Discord alerts. |
-| Non-production environment | Record its actual app/API/Office receiver, separate databases/Redis/storage and payment sandbox, or explicitly record that none exists. |
-| Content and operations | Hand over Referrals/KOL, commissions, Economy Settings, Blog, Activities, FAQ and Audit Log. Verify deployed `CC_SOURCE` / `KB_SOURCE` before claiming Calendar/Knowledge Bank use the database rather than Sanity. |
-| Payments and recovery | Use the existing runbook for backup restore, rollback and Midtrans live acceptance. Office keys do not configure payments. Mark the real-payment check complete only with actual operator evidence. |
+| Item                       | Required completion evidence                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vault independence         | Rafsi opens the current vault using Cogito-controlled access and has a recovery copy.                                                                                                                               |
+| Live connection            | Joint read, tracking, event, action, and write-disable checks are recorded.                                                                                                                                         |
+| Security cleanup           | Operators rotate the exposed Coolify/OVH passwords, remove credential-bearing documentation copies, and remove public-mailbox production test accounts/access. This guide does not perform those actions.           |
+| Service ownership          | Cogito verifies ownership, recovery, billing and two-step access for GitHub, Coolify, OVH, Cloudflare/R2, Resend, Midtrans, Sanity, Google Cloud/Meet, Uptime Kuma and Discord alerts.                              |
+| Non-production environment | Record its actual app/API/Office receiver, separate databases/Redis/storage and payment sandbox, or explicitly record that none exists.                                                                             |
+| Content and operations     | Hand over Referrals/KOL, commissions, Economy Settings, Blog, Activities, FAQ and Audit Log. Verify deployed `CC_SOURCE` / `KB_SOURCE` before claiming Calendar/Knowledge Bank use the database rather than Sanity. |
+| Payments and recovery      | Use the existing runbook for backup restore, rollback and Midtrans live acceptance. Office keys do not configure payments. Mark the real-payment check complete only with actual operator evidence.                 |
 
 Do not store secret values in this checklist. Successful local checks or an encrypted vault do not establish that these handover items are complete.
