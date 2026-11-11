@@ -4964,4 +4964,4 @@ Branch verification: 61 focused unit/RPC/policy tests, 23 PostgreSQL integration
 
 ### Office environment provisioning
 
-Office secrets: edit infra/secrets/prod.env through SOPS only. All five OFFICE_* variables are covered by .sops.yaml encrypted_regex and infra/ansible/coolify-resources.yml app_env_keys. Use independent random 32-byte read, write, and webhook secrets. Apply to the verified cogito-api target and restart before testing; keep OFFICE_WRITES_ENABLED=false until acceptance. Provision matching secrets privately on the Office backend. Never print decrypted vault values.
+Office secrets: edit infra/secrets/prod.env through SOPS only. All five OFFICE_* variables are covered by .sops.yaml encrypted_regex and infra/ansible/coolify-resources.yml app_env_keys. Use independent random 32-byte read, write, and webhook secrets. Apply to the verified cogito-api target and restart before testing; the production vault now sets OFFICE_WRITES_ENABLED=true at the operator's request. Set it to false and reapply/restart to disable writes during rollback or an incident. Provision matching secrets privately on the Office backend. Never print decrypted vault values.

@@ -3997,4 +3997,4 @@ Schema prerequisite: migration `0093_referral_campaign_partner.sql`, generated o
 
 ### Office environment provisioning
 
-Office deployment configuration: the SOPS production vault and Coolify app env allowlist include OFFICE_READ_KEY, OFFICE_WRITE_KEY, OFFICE_WEBHOOK_SECRET, OFFICE_WEBHOOK_URL, and OFFICE_WRITES_ENABLED. Writes remain disabled pending Office acceptance. Vault provisioning alone does not apply live configuration.
+Office deployment configuration: the SOPS production vault and Coolify app env allowlist include OFFICE_READ_KEY, OFFICE_WRITE_KEY, OFFICE_WEBHOOK_SECRET, OFFICE_WEBHOOK_URL, and OFFICE_WRITES_ENABLED. The production vault sets OFFICE_WRITES_ENABLED=true at the operator's request; live acceptance remains unverified. Vault provisioning alone does not apply live configuration.

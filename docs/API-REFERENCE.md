@@ -2956,4 +2956,4 @@ Monthly reconciliation CSV adds Campaign type, Partner / KOL, Bank, Bank account
 
 ### Office environment provisioning
 
-Office deployment note: OFFICE_READ_KEY and OFFICE_WRITE_KEY are backend credentials; OFFICE_WEBHOOK_SECRET signs outgoing events. Adding vault configuration does not install Office endpoints in a deployment that lacks the Office implementation.
+Office deployment note: OFFICE_READ_KEY and OFFICE_WRITE_KEY are backend credentials; OFFICE_WEBHOOK_SECRET signs outgoing events. The production vault sets OFFICE_WRITES_ENABLED=true; write routes still require OFFICE_WRITE_KEY and their normal validation. Adding vault configuration does not install Office endpoints in a deployment that lacks the Office implementation.

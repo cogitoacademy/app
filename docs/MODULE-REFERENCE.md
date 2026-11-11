@@ -3013,4 +3013,4 @@ Admin campaign rows show category, partner and bank details; Activity searches p
 
 ### Office environment provisioning
 
-Office configuration ownership: SOPS production vault stores credentials; the Coolify app_env_keys allowlist declares runtime delivery. OFFICE_WRITES_ENABLED defaults to false for initial provisioning. Runtime acceptance and Office-side secret provisioning remain separate operator steps.
+Office configuration ownership: SOPS production vault stores credentials; the Coolify app_env_keys allowlist declares runtime delivery. OFFICE_WRITES_ENABLED defaults to false in code and examples; the production vault explicitly sets true at the operator's request. Runtime acceptance and Office-side secret provisioning remain separate operator steps.
