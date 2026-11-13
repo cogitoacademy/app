@@ -282,3 +282,40 @@ describe("server environment schema", () => {
     expect(serverEnvSchema.safeParse(prodLive).success).toBe(true);
   });
 });
+
+test("Office webhook supports isolated HTTPS receivers outside production", () => {
+  const base = baseEnv();
+  expect(
+    serverEnvSchema.parse({
+      ...base,
+      OFFICE_WEBHOOK_URL: "https://office-test.example.test/hooks/app",
+    }).OFFICE_WEBHOOK_URL,
+  ).toBe("https://office-test.example.test/hooks/app");
+  expect(serverEnvSchema.parse(base).OFFICE_CAMPAIGN_LABELS).toEqual({
+    test: "test",
+  });
+  for (const url of [
+    "http://office-test.example.test/hooks/app",
+    "https://user:pass@office-test.example.test/hooks/app",
+    "https://office-test.example.test/hooks/app#fragment",
+  ])
+    expect(
+      serverEnvSchema.safeParse({ ...base, OFFICE_WEBHOOK_URL: url }).success,
+    ).toBe(false);
+  for (const [url, shouldReject] of [
+    ["https://office-test.example.test/hooks/app", true],
+    ["https://office.cogitoacademy.id/hooks/app", false],
+  ] as const) {
+    const parsed = serverEnvSchema.safeParse({
+      ...base,
+      NODE_ENV: "production",
+      OFFICE_WEBHOOK_URL: url,
+    });
+    const receiverIssue =
+      !parsed.success &&
+      parsed.error.issues.some(
+        (issue) => issue.path[0] === "OFFICE_WEBHOOK_URL",
+      );
+    expect(receiverIssue).toBe(shouldReject);
+  }
+});

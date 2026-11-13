@@ -26,7 +26,7 @@ The vault is `infra/secrets/prod.env` in the repository. Its values look like `E
 
 Office does not need a copy of the entire vault or its private key just to connect. Give the Office backend only the three connection secrets it needs. App and Office user logins stay separate from this connection.
 
-**Status when this guide was prepared:** PR #365 is open. Its vault contains three generated, independent 32-byte Office secrets and `OFFICE_WRITES_ENABLED=true`. This is repository configuration; the deployed values, Rafsi's vault access, and the joint live test have not been verified here. Until the PR is merged, a fresh clone of `main` may not contain these settings.
+**Status when this guide was prepared:** PR #365 has merged to main. Its vault contains three generated, independent 32-byte Office secrets and `OFFICE_WRITES_ENABLED=true`. This is repository configuration; the deployed values, Rafsi's vault access, and the joint live test have not been verified here. Pull current main before editing. Repository configuration alone does not certify deployed settings.
 
 ## 2. Get the required access
 
@@ -68,7 +68,7 @@ Set-Location cogito-app
 
 Authenticate with your own authorized GitHub account if prompted. Do not put a GitHub token in the clone URL.
 
-For normal operations after PR #365 is merged:
+For normal operations:
 
 ```powershell
 git switch main
@@ -252,7 +252,7 @@ Read-key rotation affects summary reads; write-key rotation affects actions; web
 
 ## 8. Joint connection test with Rafsi
 
-Use a separate non-production app and Office receiver for fixture writes, retries, and switch testing. Such a deployment was not verified for this guide. Do not point a staging app at the production Office receiver without an explicitly agreed test arrangement; the app currently validates a fixed webhook URL.
+Use a separate non-production app and Office receiver for fixture writes, retries, and switch testing. Such a deployment was not verified for this guide. Do not point a staging app at the production Office receiver without an explicitly agreed test arrangement; the production app pins its webhook URL; a separate non-production deployment can configure its own HTTPS receiver. Asset downloads remain restricted to https://office.cogitoacademy.id/.
 
 The main app's Office interface is server-to-server:
 
@@ -277,7 +277,7 @@ Together, record these results without secret values:
 
 Action requests include `dryRun`, a UUID `idempotencyKey`, `officeItemId`, `requestedBy`, `approvedBy`, and `input`. The Office maintainer should use the exact schema from [the action definitions](../../packages/api/src/modules/office/office-actions.types.ts) and [OpenAPI definitions](../../apps/server/src/office/openapi.ts). Use separate preview and execution request IDs; reuse the execution ID for retries of that execution.
 
-**Campaign-label note:** source tracking and campaign-label export are separate. Current code uses optional `OFFICE_CAMPAIGN_LABELS` to allow only approved, non-personal campaign labels in the snapshot; its default is `{}`, so campaign labels may be empty. It is additional configuration beyond the five connection variables. A maintainer must add its encryption and env-delivery declarations if configuring it through this vault. Follow [OFFICE-HANDOVER](../OFFICE-HANDOVER.md); never use a person's name as a campaign label.
+**Campaign-label note:** source tracking and campaign-label export are separate. Current code uses optional `OFFICE_CAMPAIGN_LABELS` to allow only approved, non-personal campaign labels in the snapshot; its default is `{"test":"test"}` for the documented test marker; other labels must be approved. It is additional configuration beyond the five connection variables. Its encryption policy and Coolify env-delivery declarations are included; use snapshot.referenceData.campaigns for the approved IDs. Follow [OFFICE-HANDOVER](../OFFICE-HANDOVER.md); never use a person's name as a campaign label.
 
 Office actions cover approved campaigns and content only. They do not grant payment refunds, wallet changes, payouts, pricing changes, admin creation, or deletion. Knowledge Bank publishing remains in the app.
 

@@ -166,3 +166,49 @@ describe("Office action service failure and replay boundaries", () => {
     });
   }
 });
+
+test("KOL replay projects private fields out of an already-stored receipt without any writes", async () => {
+  process.env.OFFICE_WRITES_ENABLED = "true";
+  const config = fixture([
+    {
+      createdAt: new Date(),
+      result: {
+        ok: true,
+        dryRun: false,
+        id: "campaign",
+        result: {
+          id: "campaign",
+          code: "OFFICE26",
+          activationAt: "2026-01-01",
+          expiresAt: "2027-01-01",
+          attributionWindowDays: 90,
+          flatAmountIdr: 1000,
+          percentBps: 0,
+          pausedAt: null,
+          retiredAt: null,
+          partnerName: "Private Partner",
+          bankAccountNumber: "0000123456789",
+          notes: "Private notes",
+        },
+      },
+    },
+  ]);
+  const result = await executeOfficeAction(
+    "referrals.retireKolCampaign",
+    envelope({ code: "OFFICE26" }),
+    config,
+  );
+  expect(result).toMatchObject({
+    ok: true,
+    id: "campaign",
+    result: { code: "OFFICE26", flatAmountIdr: 1000 },
+  });
+  for (const value of [
+    "Private Partner",
+    "0000123456789",
+    "Private notes",
+    "bankAccountNumber",
+  ])
+    expect(JSON.stringify(result)).not.toContain(value);
+  expect(config.writes).not.toHaveBeenCalled();
+});

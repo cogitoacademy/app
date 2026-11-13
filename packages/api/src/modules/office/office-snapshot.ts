@@ -4,7 +4,11 @@ import type { DbType } from "../../lib/db";
 import type { AdminService, DashboardAnalytics } from "../admin/admin.service";
 import type { PricingPort } from "../pricing/pricing.service";
 import type { ReferralService } from "../referral/referral.service";
-import { computeSlaDeadline } from "../support/support.service";
+import {
+  OFFICE_OPEN_BOOKING_STATES,
+  officeEscalationDeadline,
+} from "./office-contract";
+import { FAQ_CATEGORY_KEYS, FAQ_CATEGORY_LABELS } from "../faq/faq-categories";
 
 export type OfficeSignupSource = {
   source: string;
@@ -69,6 +73,7 @@ export function createOfficeSnapshotService(deps: {
   signupSources?: (start: Date, end: Date) => Promise<OfficeSignupSource[]>;
   now?: () => Date;
   paymentMode?: () => "sandbox" | "live" | null;
+  campaignLabels?: Readonly<Record<string, string>>;
 }) {
   const { db } = deps;
   return {
@@ -103,6 +108,7 @@ export function createOfficeSnapshotService(deps: {
         audit,
         referralTotals,
         commissions,
+        blogCategories,
       ] = await Promise.all([
         db
           .select({
@@ -114,15 +120,7 @@ export function createOfficeSnapshotService(deps: {
           })
           .from(s.booking)
           .where(
-            inArray(s.booking.currentState, [
-              "awaiting_tutor_review",
-              "reschedule_proposed",
-              "awaiting_reconfirmation",
-              "awaiting_admin_room_approval",
-              "awaiting_participant_confirmation",
-              "confirmed",
-              "scheduled",
-            ]),
+            inArray(s.booking.currentState, [...OFFICE_OPEN_BOOKING_STATES]),
           ),
         db
           .select({
@@ -275,6 +273,14 @@ export function createOfficeSnapshotService(deps: {
           .groupBy(
             sql`to_char(${s.kolCommissionDecision.createdAt} at time zone 'Asia/Jakarta','YYYY-MM')`,
           ),
+        db
+          .select({
+            id: s.blogCategory.id,
+            label: s.blogCategory.titleId,
+            parentId: s.blogCategory.parentId,
+          })
+          .from(s.blogCategory)
+          .where(eq(s.blogCategory.isActive, true)),
       ]);
       const period = async (a: DashboardAnalytics) =>
         projectOfficePeriod(
@@ -322,16 +328,9 @@ export function createOfficeSnapshotService(deps: {
         overdue: number;
       };
       const exceptions = bookings.filter((b) => b.override !== null);
-      const escalated = exceptions.filter((b) => {
-        const meta = b.override as Record<string, unknown>;
-        const at =
-          typeof meta.overriddenAt === "string"
-            ? new Date(meta.overriddenAt)
-            : null;
-        return (
-          at && Number.isFinite(at.getTime()) && computeSlaDeadline(at) <= now
-        );
-      });
+      const escalated = exceptions.filter((b) =>
+        officeEscalationDeadline(b.state, b.override, now),
+      );
       const queueItem = (
         kind: string,
         id: string,
@@ -387,7 +386,7 @@ export function createOfficeSnapshotService(deps: {
               "booking",
               r.id,
               r.state,
-              "admin-bookings",
+              `admin-operations/bookings/${encodeURIComponent(r.id)}`,
               r.deadline,
               null,
               `#${r.ref}`,
@@ -398,7 +397,7 @@ export function createOfficeSnapshotService(deps: {
               "room",
               r.id,
               r.state,
-              "admin-bookings",
+              `admin-operations/bookings/${encodeURIComponent(r.id)}`,
               r.deadline,
               null,
               `#${r.ref}`,
@@ -409,13 +408,18 @@ export function createOfficeSnapshotService(deps: {
               "ticket",
               r.id,
               r.state,
-              "admin-support",
+              "admin-operations?operationsTab=support",
               r.deadline,
               r.category,
             ),
           ),
           ...reviewProfiles.map((r) =>
-            queueItem("tutorReview", r.id, r.state, "admin-tutors"),
+            queueItem(
+              "tutorReview",
+              r.id,
+              r.state,
+              `admin-tutors/${encodeURIComponent(r.id)}`,
+            ),
           ),
           ...achievements.map((r) =>
             queueItem("achievement", r.id, r.state, "admin-achievements"),
@@ -536,6 +540,21 @@ export function createOfficeSnapshotService(deps: {
               )
             : null,
         },
+        referenceData: {
+          competitions: categories.map((r) => ({
+            id: r.id,
+            label: r.name,
+            parentId: r.parentId,
+          })),
+          blogCategories,
+          faqCategories: FAQ_CATEGORY_KEYS.map((id) => ({
+            id,
+            label: FAQ_CATEGORY_LABELS[id].en,
+          })),
+          campaigns: Object.entries(deps.campaignLabels ?? {}).map(
+            ([id, label]) => ({ id, label }),
+          ),
+        },
         taxonomy: categories
           .filter((r) => r.parentId === null)
           .map((r) => ({
@@ -595,6 +614,7 @@ export async function getOfficeSnapshot() {
     pricing: services.pricing,
     referral: services.referral,
     signupSources: getOfficeSignupSources,
+    campaignLabels: env.OFFICE_CAMPAIGN_LABELS,
     paymentMode: () =>
       env.PAYMENT_PROVIDER === "midtrans"
         ? env.MIDTRANS_MODE === "live"

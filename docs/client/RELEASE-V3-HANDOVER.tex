@@ -338,6 +338,23 @@ S05 parent colours & Four OKLCH values per parent, inherited by children, theme 
 
 \noindent\textbf{Surfaces:} \code{/knowledge-bank}, \code{/calendar}, \code{/faq}, \code{/activities}, \code{/admin-knowledge-bank}, \code{/admin-blog}. \textbf{Migrations:} \code{0075}, \code{0077}, \code{0083}--\code{0084}, \code{0086}, \code{0089}.
 
+\subsection{Cogito Office connection addendum --- 13 November 2026}
+
+This addendum covers the main app implementation requested on 10 November. It does not certify the Office deployment or the joint test with Rafsi. The earlier release snapshot above remains historical.
+
+\begin{itemize}
+  \item Referrals and KOL campaigns remain managed in the app. After approval in Office, Office can preview, create or retire a campaign. Retirement preserves attribution and commissions. Campaign action responses exclude partner names, bank details and private notes.
+  \item Commissions and Economy Settings remain authoritative in the app. Office reads summary numbers; it cannot issue refunds, change Marks, record payouts, change pricing or reward settings, or create admins.
+  \item Blog, Activities, FAQ and Calendar support Office draft and publish actions. Knowledge Bank accepts a private PDF draft of at most 20 MiB; publishing stays in the app. Saving an existing published item as a draft takes it offline until it is published again. There is no separate live/draft revision system.
+  \item Every saved Office action is recorded in Audit Log with actor Office and the requester, approver and Office item reference. Approval itself belongs to Office; the app validates the action and business rules using a separate write key.
+  \item The app API exposes \code{GET /office/snapshot} and eleven approved actions under \code{/office/actions/}. The snapshot includes lookup IDs and labels for competitions, blog categories, FAQ categories and approved tracking campaigns. Office uses these IDs and returned app URLs.
+  \item The main app production vault selects \code{CC\_SOURCE=database}, \code{KB\_SOURCE=database} and \code{CONTENT\_ADMIN\_ENABLED=true}. This verifies the configured source, not the currently running container. The separate public website's consumers require their own verification.
+  \item The portable Office OpenAPI file is \code{docs/office-openapi.json}. Regenerate it with \code{bun scripts/export-office-openapi.ts}. Production API documentation remains private; Office connection keys do not require a user login.
+  \item No hosted non-production copy was provisioned by this change. Run integration tests using separate PostgreSQL and Redis. A non-production deployment may use its own HTTPS webhook receiver; production stays pinned to the approved Office receiver. Do not share production data, keys or payment credentials with the test copy.
+\end{itemize}
+
+For payload examples, the content/module map, environment setup and acceptance checklist, read \code{docs/client/OFFICE-INTEGRATION-HANDOVER.md}, \code{docs/OFFICE-HANDOVER.md} and the client environment guide. Live Midtrans acceptance, service ownership, vault recovery and the joint Office test remain operator gates; follow the existing runbook and record actual evidence.
+
 \subsection{Business insights and admin operations}
 
 \begin{itemize}

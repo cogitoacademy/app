@@ -1,3 +1,4 @@
+import { officeActionResultSchemas } from "../../../../../apps/server/src/office/schemas";
 import { resetDatabase } from "../helpers/test-client";
 import { testPdf } from "../helpers/pdf";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -94,6 +95,13 @@ async function action(name: string, input: unknown) {
   );
   expect(preview.ok).toBe(true);
   expect(preview.dryRun).toBe(true);
+  for (const value of [
+    "Private Office partner",
+    "001122334455",
+    "Private Office holder",
+    "Private Office notes",
+  ])
+    expect(JSON.stringify(preview)).not.toContain(value);
   expect(stored.size).toBe(storedBefore);
   expect(
     (
@@ -103,9 +111,28 @@ async function action(name: string, input: unknown) {
         .where(eq(auditLog.action, `office.${name}`))
     ).length,
   ).toBe(beforeAudits.length);
-  const result = await executeOfficeAction(name, envelope(input), config);
+  const request = envelope(input);
+  const result = await executeOfficeAction(name, request, config);
+  const replay = await executeOfficeAction(name, request, config);
+  expect(JSON.parse(JSON.stringify(replay))).toEqual(
+    JSON.parse(JSON.stringify(result)),
+  );
+  const parsed = officeActionResultSchemas[
+    name as keyof typeof officeActionResultSchemas
+  ].safeParse(JSON.parse(JSON.stringify(result.result)));
+  if (!parsed.success)
+    throw new Error(
+      `${name} response violates OpenAPI: ${JSON.stringify(parsed.error.issues)}`,
+    );
   expect(result.ok).toBe(true);
   expect(result.dryRun).toBe(false);
+  for (const value of [
+    "Private Office partner",
+    "001122334455",
+    "Private Office holder",
+    "Private Office notes",
+  ])
+    expect(JSON.stringify(result)).not.toContain(value);
   ids.add(String(result.id));
   const rows = await db
     .select()
@@ -188,6 +215,10 @@ describe("Office actions guarded database acceptance", () => {
       code,
       expiresAt: new Date(Date.now() + 86400_000).toISOString(),
       flatAmountIdr: 1000,
+      partnerName: "Private Office partner",
+      bankAccountNumber: "001122334455",
+      bankAccountHolderName: "Private Office holder",
+      notes: "Private Office notes",
     });
     await action("referrals.retireKolCampaign", { code });
     const event = await action("calendar.saveDraft", {

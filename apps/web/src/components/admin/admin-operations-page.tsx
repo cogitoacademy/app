@@ -246,8 +246,10 @@ const LEDGER_PAGE_SIZE = 10;
 const ROOM_PAGE_SIZE = 10;
 const ROOM_APPROVAL_PAGE_SIZE = 10;
 
-export function AdminOperationsPage() {
-  const [tab, setTab] = useState("queue");
+export function AdminOperationsPage({
+  initialTab = "queue",
+}: { initialTab?: "queue" | "support" } = {}) {
+  const [tab, setTab] = useState<string>(initialTab);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bookingSearch, setBookingSearch] = useState("");
   const [category, setCategory] = useState<OverrideCategoryFilter>("all");

@@ -48,7 +48,25 @@ mock.module("../../modules/content-admin/content-admin.service", () => ({
 mock.module("../../modules/referral/referral.service", () => ({
   createReferralService: (deps: any) => {
     referralDeps = deps;
-    return {};
+    const campaign = {
+      id: "campaign-1",
+      code: "OFFICE26",
+      activationAt: new Date("2026-01-01"),
+      expiresAt: new Date("2027-01-01"),
+      attributionWindowDays: 90,
+      flatAmountIdr: 1000,
+      percentBps: 0,
+      pausedAt: null,
+      retiredAt: null,
+      partnerName: "Private Partner",
+      bankAccountNumber: "00123456789",
+      bankAccountHolderName: "Private Holder",
+      notes: "Private notes",
+    };
+    return {
+      createKolCampaign: async () => campaign,
+      retireKolCampaign: async () => campaign,
+    };
   },
 }));
 mock.module("../../modules/activity/activity.service", () => ({
@@ -149,3 +167,40 @@ test("knowledge draft uses configured private storage fallback", async () => {
   expect(result).toMatchObject({ ok: true, id: "resource-1" });
   expect(put).toHaveBeenCalledTimes(1);
 });
+
+for (const name of [
+  "referrals.createKolCampaign",
+  "referrals.retireKolCampaign",
+]) {
+  for (const dryRun of [true, false])
+    test(`${name} returns no partner/bank details (${dryRun ? "preview" : "write"})`, async () => {
+      process.env.OFFICE_WRITES_ENABLED = "true";
+      const result = await executeOfficeAction(name, {
+        ...body(
+          name.endsWith("createKolCampaign")
+            ? {
+                name: "Campaign",
+                code: "OFFICE26",
+                expiresAt: "2027-01-01T00:00:00Z",
+                flatAmountIdr: 1000,
+              }
+            : { code: "OFFICE26" },
+        ),
+        dryRun,
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        dryRun,
+        id: "campaign-1",
+        result: { id: "campaign-1", flatAmountIdr: 1000 },
+      });
+      for (const secret of [
+        "Private Partner",
+        "00123456789",
+        "Private Holder",
+        "Private notes",
+        "bankAccountNumber",
+      ])
+        expect(JSON.stringify(result)).not.toContain(secret);
+    });
+}

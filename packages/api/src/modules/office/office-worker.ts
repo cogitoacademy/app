@@ -1,8 +1,11 @@
 import { Queue, Worker } from "bullmq";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../lib/db";
 import { booking, officeOutbox } from "@cogito-app/db/schema";
-import { computeSlaDeadline } from "../support/support.service";
+import {
+  OFFICE_OPEN_BOOKING_STATES,
+  officeEscalationDeadline,
+} from "./office-contract";
 import { deliverOfficeEvent, enqueueOfficeEvent } from "./office-events";
 import { log } from "../../lib/logger";
 
@@ -35,17 +38,22 @@ async function enqueueDueEvents() {
     ON CONFLICT DO NOTHING`);
   // Reuse the dashboard's authoritative WIB SLA calculator, rather than a second SQL interpretation.
   const exceptions = await db
-    .select({ id: booking.id, meta: booking.overrideMeta })
+    .select({
+      id: booking.id,
+      meta: booking.overrideMeta,
+      state: booking.currentState,
+    })
     .from(booking)
-    .where(sql`${booking.overrideMeta} IS NOT NULL`);
+    .where(
+      and(
+        sql`${booking.overrideMeta} IS NOT NULL`,
+        inArray(booking.currentState, [...OFFICE_OPEN_BOOKING_STATES]),
+      ),
+    );
   const escalations: Promise<void>[] = [];
   for (const row of exceptions) {
     const at = (row.meta as { overriddenAt?: string } | null)?.overriddenAt;
-    if (
-      at &&
-      Number.isFinite(Date.parse(at)) &&
-      computeSlaDeadline(new Date(at)).getTime() <= Date.now()
-    ) {
+    if (at && officeEscalationDeadline(row.state, row.meta, new Date())) {
       escalations.push(
         enqueueOfficeEvent(
           db,

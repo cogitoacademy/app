@@ -1,3 +1,4 @@
+import { officeSnapshotSchema } from "../../../../../apps/server/src/office/schemas";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { db } from "@cogito-app/db";
 import { auditLog, booking, user } from "@cogito-app/db/schema";
@@ -76,6 +77,9 @@ describe("Office snapshot database contract", () => {
       referral: services.referral,
       signupSources: getOfficeSignupSources,
     }).getSnapshot();
+    expect(
+      officeSnapshotSchema.parse(JSON.parse(JSON.stringify(snapshot))),
+    ).toBeDefined();
     const admin = await services.admin.getDashboardAnalytics({ period: "30d" });
     const period = snapshot.periods["30d"];
     expect(period.bookings).toBe(admin.summary.bookings);

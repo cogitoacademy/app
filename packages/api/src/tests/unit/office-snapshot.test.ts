@@ -36,6 +36,7 @@ describe("Office snapshot query orchestration", () => {
       >[0]["pricing"],
       paymentMode: () => "live",
       signupSources,
+      campaignLabels: { test: "test" },
     }).getSnapshot();
     expect(
       fixture.admin.getDashboardAnalytics.mock.calls.map((args) => args[0]),
@@ -61,7 +62,7 @@ describe("Office snapshot query orchestration", () => {
     expect(result.queueItems.find((item) => item.id === "late")).toMatchObject({
       urgency: "high",
       ref: "#1",
-      appUrl: "https://app.cogitoacademy.id/admin-bookings",
+      appUrl: "https://app.cogitoacademy.id/admin-operations/bookings/late",
     });
     expect(
       result.queueItems.find((item) => item.id === "future")?.urgency,
@@ -136,6 +137,19 @@ describe("Office snapshot query orchestration", () => {
     expect(
       fixture.queryLog.find((query) => query.table === s.auditLog)?.limit,
     ).toBe(200);
+    expect(result.referenceData.campaigns).toEqual([
+      { id: "test", label: "test" },
+    ]);
+    expect(result.referenceData.competitions).toEqual([
+      { id: "root", label: "Debate", parentId: null },
+      { id: "child", label: "BP", parentId: "root" },
+    ]);
+    expect(result.referenceData.blogCategories).toEqual([
+      { id: "blog-category", label: "Blog category", parentId: null },
+    ]);
+    expect(
+      result.referenceData.faqCategories.some((c) => c.id === "about"),
+    ).toBe(true);
     expect(result.taxonomy).toEqual([
       { group: "Debate", specializations: ["BP"] },
     ]);
