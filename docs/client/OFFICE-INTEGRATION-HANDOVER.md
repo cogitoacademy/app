@@ -14,17 +14,17 @@ Start here:
 
 Office owns the request, CEO approval and its internal workflow. Once approved, its backend sends the action to the main app. The main app validates it using the same business rules as the admin screens, saves it transactionally, and records actor `office` with `officeItemId`, `requestedBy` and `approvedBy`. There is no second approval step in the main app.
 
-| Area | Main app surface | Office capability |
-| --- | --- | --- |
-| Referrals and KOL campaigns | Referrals (`/admin-referrals`) | Read snapshot; preview/create an approved campaign; retire its code. Existing attribution and commissions remain. |
-| Commissions | Referrals → commissions | Read monthly totals. Reconciliation and recording transfers stay in the app. |
-| Economy Settings | `/admin-economy` | Read student-facing pricing and referral settings. No changes from Office. |
-| Blog | `/admin-blog` | Save a draft and publish a specified locale (`id` or `en`). |
-| Activities | `/activities` | Save draft and publish. |
-| FAQ | `/faq` | Save draft and publish; use category keys from reference data. |
-| Competition Calendar | `/calendar` | Save draft and publish; use parent competition IDs from reference data. |
-| Knowledge Bank | `/knowledge-bank` | Add an unpublished PDF draft. Publishing stays in the app. |
-| Audit Log | `/admin-audit` | Read the privacy-filtered latest 200 entries in the snapshot. Main app records saved Office actions automatically. |
+| Area                        | Main app surface               | Office capability                                                                                                  |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Referrals and KOL campaigns | Referrals (`/admin-referrals`) | Read snapshot; preview/create an approved campaign; retire its code. Existing attribution and commissions remain.  |
+| Commissions                 | Referrals → commissions        | Read monthly totals. Reconciliation and recording transfers stay in the app.                                       |
+| Economy Settings            | `/admin-economy`               | Read student-facing pricing and referral settings. No changes from Office.                                         |
+| Blog                        | `/admin-blog`                  | Save a draft and publish a specified locale (`id` or `en`).                                                        |
+| Activities                  | `/activities`                  | Save draft and publish.                                                                                            |
+| FAQ                         | `/faq`                         | Save draft and publish; use category keys from reference data.                                                     |
+| Competition Calendar        | `/calendar`                    | Save draft and publish; use parent competition IDs from reference data.                                            |
+| Knowledge Bank              | `/knowledge-bank`              | Add an unpublished PDF draft. Publishing stays in the app.                                                         |
+| Audit Log                   | `/admin-audit`                 | Read the privacy-filtered latest 200 entries in the snapshot. Main app records saved Office actions automatically. |
 
 Refunds, Marks/wallets, payouts, tax, pricing, referral reward settings, booking overrides, tutor/achievement approvals, invitations, messages, admins and deletes are outside the Office write API.
 
@@ -32,11 +32,11 @@ Refunds, Marks/wallets, payouts, tax, pricing, referral reward settings, booking
 
 Base URL: `https://api.cogitoacademy.id`. Office requests come from its backend, never from browser JavaScript. The keys do not sign a user into either application.
 
-| Operation | Authentication |
-| --- | --- |
-| `GET /office/snapshot` | `Authorization: Bearer <OFFICE_READ_KEY>` |
+| Operation                     | Authentication                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `GET /office/snapshot`        | `Authorization: Bearer <OFFICE_READ_KEY>`                                                   |
 | `POST /office/actions/<name>` | `Authorization: Bearer <OFFICE_WRITE_KEY>`; main app must have `OFFICE_WRITES_ENABLED=true` |
-| Main app → Office event | Office verifies using `OFFICE_WEBHOOK_SECRET` |
+| Main app → Office event       | Office verifies using `OFFICE_WEBHOOK_SECRET`                                               |
 
 Store the three existing generated values privately on both backends. The production vault explicitly enables Office writes; verify the running deployment instead of assuming that a vault edit changed it. Do not expose tokens in logs, screenshots or frontend env. Reads are limited to 120/hour and writes to 60/hour. The snapshot cache lasts up to 120 seconds; show `generatedAt` and use the action response to confirm immediate success.
 
@@ -48,8 +48,12 @@ The additional `referenceData` object avoids hardcoded database IDs:
 
 ```json
 {
-  "competitions": [{ "id": "competition-debate", "label": "Debate", "parentId": null }],
-  "blogCategories": [{ "id": "<actual category ID>", "label": "Study tips", "parentId": null }],
+  "competitions": [
+    { "id": "competition-debate", "label": "Debate", "parentId": null }
+  ],
+  "blogCategories": [
+    { "id": "<actual category ID>", "label": "Study tips", "parentId": null }
+  ],
   "faqCategories": [{ "id": "about", "label": "About Cogito" }],
   "campaigns": [{ "id": "test", "label": "test" }]
 }
@@ -107,19 +111,19 @@ The preview has `dryRun=true`; its new record IDs are provisional and are rolled
 
 ## The eleven approved actions
 
-| Name | `input` |
-| --- | --- |
-| `referrals.createKolCampaign` | Same validated campaign form fields as the app. Dates are ISO strings; commission is whole IDR / basis points. See the OpenAPI schema for optional fields and defaults. |
-| `referrals.retireKolCampaign` | `{ "code": "OFFICE26" }` |
-| `calendar.saveDraft` | Optional `id`, title, description/location, ISO start/end dates, `categoryIds`, education levels, scale, organizer, registration deadline/links. Nullable fields must be supplied as shown in the schema. |
-| `calendar.publish` | `{ "id": "<saved calendar ID>" }` |
-| `blog.saveDraft` | Optional `id`, `lang`, title, `body` in the app editor's block format, `category` ID, optional `coverImageUrl` and supported SEO fields. |
-| `blog.publish` | `{ "id": "<article ID>", "lang": "id" }` |
-| `activities.saveDraft` | Optional `id`, title, shortDescription, location, ISO `dateTime`, rich-text `body`, optional coverImageUrl. |
-| `activities.publish` | `{ "id": "<activity ID>" }` |
-| `faq.saveDraft` | Optional `id`, question, answer (at most 20,000 characters), category key, onLanding. |
-| `faq.publish` | `{ "id": "<FAQ ID>" }` |
-| `knowledge.addDraft` | title, nullable description, category identifier, Office PDF `fileUrl`. |
+| Name                          | `input`                                                                                                                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `referrals.createKolCampaign` | Same validated campaign form fields as the app. Dates are ISO strings; commission is whole IDR / basis points. See the OpenAPI schema for optional fields and defaults.                                   |
+| `referrals.retireKolCampaign` | `{ "code": "OFFICE26" }`                                                                                                                                                                                  |
+| `calendar.saveDraft`          | Optional `id`, title, description/location, ISO start/end dates, `categoryIds`, education levels, scale, organizer, registration deadline/links. Nullable fields must be supplied as shown in the schema. |
+| `calendar.publish`            | `{ "id": "<saved calendar ID>" }`                                                                                                                                                                         |
+| `blog.saveDraft`              | Optional `id`, `lang`, title, `body` in the app editor's block format, `category` ID, optional `coverImageUrl` and supported SEO fields.                                                                  |
+| `blog.publish`                | `{ "id": "<article ID>", "lang": "id" }`                                                                                                                                                                  |
+| `activities.saveDraft`        | Optional `id`, title, shortDescription, location, ISO `dateTime`, rich-text `body`, optional coverImageUrl.                                                                                               |
+| `activities.publish`          | `{ "id": "<activity ID>" }`                                                                                                                                                                               |
+| `faq.saveDraft`               | Optional `id`, question, answer (at most 20,000 characters), category key, onLanding.                                                                                                                     |
+| `faq.publish`                 | `{ "id": "<FAQ ID>" }`                                                                                                                                                                                    |
+| `knowledge.addDraft`          | title, nullable description, category identifier, Office PDF `fileUrl`.                                                                                                                                   |
 
 For example, blog `input` uses these blocks, not HTML:
 
