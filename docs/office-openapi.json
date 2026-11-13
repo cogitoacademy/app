@@ -12,9 +12,7 @@
   "paths": {
     "/office/snapshot": {
       "get": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Privacy-filtered admin snapshot (120/hour; Redis cache 120 seconds)",
         "security": [
           {
@@ -40,19 +38,13 @@
                         "paymentMode": {
                           "nullable": true,
                           "type": "string",
-                          "enum": [
-                            "sandbox",
-                            "live"
-                          ]
+                          "enum": ["sandbox", "live"]
                         },
                         "apiVersion": {
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "paymentMode",
-                        "apiVersion"
-                      ],
+                      "required": ["paymentMode", "apiVersion"],
                       "additionalProperties": false
                     },
                     "queues": {
@@ -278,10 +270,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "format",
-                                  "bookings"
-                                ],
+                                "required": ["format", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -297,10 +286,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "name",
-                                  "bookings"
-                                ],
+                                "required": ["name", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -319,11 +305,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "category",
-                                  "demand",
-                                  "supply"
-                                ],
+                                "required": ["category", "demand", "supply"],
                                 "additionalProperties": false
                               }
                             },
@@ -456,10 +438,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "format",
-                                  "bookings"
-                                ],
+                                "required": ["format", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -475,10 +454,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "name",
-                                  "bookings"
-                                ],
+                                "required": ["name", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -497,11 +473,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "category",
-                                  "demand",
-                                  "supply"
-                                ],
+                                "required": ["category", "demand", "supply"],
                                 "additionalProperties": false
                               }
                             },
@@ -634,10 +606,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "format",
-                                  "bookings"
-                                ],
+                                "required": ["format", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -653,10 +622,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "name",
-                                  "bookings"
-                                ],
+                                "required": ["name", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -675,11 +641,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "category",
-                                  "demand",
-                                  "supply"
-                                ],
+                                "required": ["category", "demand", "supply"],
                                 "additionalProperties": false
                               }
                             },
@@ -812,10 +774,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "format",
-                                  "bookings"
-                                ],
+                                "required": ["format", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -831,10 +790,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "name",
-                                  "bookings"
-                                ],
+                                "required": ["name", "bookings"],
                                 "additionalProperties": false
                               }
                             },
@@ -853,11 +809,7 @@
                                     "type": "number"
                                   }
                                 },
-                                "required": [
-                                  "category",
-                                  "demand",
-                                  "supply"
-                                ],
+                                "required": ["category", "demand", "supply"],
                                 "additionalProperties": false
                               }
                             },
@@ -913,12 +865,7 @@
                           "additionalProperties": false
                         }
                       },
-                      "required": [
-                        "7d",
-                        "30d",
-                        "90d",
-                        "thisMonth"
-                      ],
+                      "required": ["7d", "30d", "90d", "thisMonth"],
                       "additionalProperties": false
                     },
                     "upcoming": {
@@ -961,11 +908,7 @@
                               "type": "number"
                             }
                           },
-                          "required": [
-                            "pending",
-                            "claimed",
-                            "expired"
-                          ],
+                          "required": ["pending", "claimed", "expired"],
                           "additionalProperties": false
                         },
                         "profiles": {
@@ -1005,19 +948,11 @@
                               "type": "number"
                             }
                           },
-                          "required": [
-                            "dueLast30d",
-                            "filedOnTime",
-                            "overdue"
-                          ],
+                          "required": ["dueLast30d", "filedOnTime", "overdue"],
                           "additionalProperties": false
                         }
                       },
-                      "required": [
-                        "invitations",
-                        "profiles",
-                        "sessionReports"
-                      ],
+                      "required": ["invitations", "profiles", "sessionReports"],
                       "additionalProperties": false
                     },
                     "classes": {
@@ -1187,11 +1122,7 @@
                                 "type": "number"
                               }
                             },
-                            "required": [
-                              "month",
-                              "count",
-                              "totalIdr"
-                            ],
+                            "required": ["month", "count", "totalIdr"],
                             "additionalProperties": false
                           }
                         }
@@ -1308,11 +1239,7 @@
                                 "type": "number"
                               }
                             },
-                            "required": [
-                              "name",
-                              "marks",
-                              "priceIdr"
-                            ],
+                            "required": ["name", "marks", "priceIdr"],
                             "additionalProperties": false
                           }
                         },
@@ -1333,10 +1260,7 @@
                                 "type": "number"
                               }
                             },
-                            "required": [
-                              "competition",
-                              "marks"
-                            ],
+                            "required": ["competition", "marks"],
                             "additionalProperties": false
                           }
                         }
@@ -1364,10 +1288,7 @@
                             }
                           }
                         },
-                        "required": [
-                          "group",
-                          "specializations"
-                        ],
+                        "required": ["group", "specializations"],
                         "additionalProperties": false
                       }
                     },
@@ -1390,11 +1311,7 @@
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "id",
-                              "label",
-                              "parentId"
-                            ],
+                            "required": ["id", "label", "parentId"],
                             "additionalProperties": false
                           }
                         },
@@ -1414,11 +1331,7 @@
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "id",
-                              "label",
-                              "parentId"
-                            ],
+                            "required": ["id", "label", "parentId"],
                             "additionalProperties": false
                           }
                         },
@@ -1434,10 +1347,7 @@
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "id",
-                              "label"
-                            ],
+                            "required": ["id", "label"],
                             "additionalProperties": false
                           }
                         },
@@ -1453,10 +1363,7 @@
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "id",
-                              "label"
-                            ],
+                            "required": ["id", "label"],
                             "additionalProperties": false
                           }
                         }
@@ -1485,10 +1392,7 @@
                               },
                               "lang": {
                                 "type": "string",
-                                "enum": [
-                                  "id",
-                                  "en"
-                                ]
+                                "enum": ["id", "en"]
                               },
                               "status": {
                                 "type": "string"
@@ -1529,12 +1433,7 @@
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                               }
                             },
-                            "required": [
-                              "id",
-                              "title",
-                              "status",
-                              "date"
-                            ],
+                            "required": ["id", "title", "status", "date"],
                             "additionalProperties": false
                           }
                         },
@@ -1583,12 +1482,7 @@
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "id",
-                              "title",
-                              "category",
-                              "status"
-                            ],
+                            "required": ["id", "title", "category", "status"],
                             "additionalProperties": false
                           }
                         },
@@ -1618,10 +1512,7 @@
                           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                         }
                       },
-                      "required": [
-                        "count",
-                        "lastAddedAt"
-                      ],
+                      "required": ["count", "lastAddedAt"],
                       "additionalProperties": false
                     },
                     "audit": {
@@ -1646,11 +1537,7 @@
                           },
                           "actor": {
                             "type": "string",
-                            "enum": [
-                              "admin",
-                              "system",
-                              "office"
-                            ]
+                            "enum": ["admin", "system", "office"]
                           }
                         },
                         "required": [
@@ -1699,9 +1586,7 @@
     },
     "/office/actions/referrals.createKolCampaign": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -1754,10 +1639,7 @@
                       },
                       "campaignType": {
                         "type": "string",
-                        "enum": [
-                          "internal",
-                          "kol"
-                        ]
+                        "enum": ["internal", "kol"]
                       },
                       "partnerName": {
                         "nullable": true,
@@ -1811,11 +1693,7 @@
                         "maximum": 10000
                       }
                     },
-                    "required": [
-                      "name",
-                      "code",
-                      "expiresAt"
-                    ]
+                    "required": ["name", "code", "expiresAt"]
                   }
                 },
                 "required": [
@@ -1841,9 +1719,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -1866,10 +1742,7 @@
                         },
                         "campaignType": {
                           "type": "string",
-                          "enum": [
-                            "internal",
-                            "kol"
-                          ]
+                          "enum": ["internal", "kol"]
                         },
                         "activationAt": {
                           "type": "string",
@@ -1916,13 +1789,7 @@
                       "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -1937,9 +1804,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -1948,11 +1813,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -1978,9 +1839,7 @@
     },
     "/office/actions/referrals.retireKolCampaign": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -2025,9 +1884,7 @@
                         "pattern": "^[A-Za-z0-9]{4,32}$"
                       }
                     },
-                    "required": [
-                      "code"
-                    ],
+                    "required": ["code"],
                     "additionalProperties": false
                   }
                 },
@@ -2054,9 +1911,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -2079,10 +1934,7 @@
                         },
                         "campaignType": {
                           "type": "string",
-                          "enum": [
-                            "internal",
-                            "kol"
-                          ]
+                          "enum": ["internal", "kol"]
                         },
                         "activationAt": {
                           "type": "string",
@@ -2129,13 +1981,7 @@
                       "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -2150,9 +1996,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -2161,11 +2005,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -2191,9 +2031,7 @@
     },
     "/office/actions/calendar.saveDraft": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -2272,21 +2110,13 @@
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "enum": [
-                            "sd",
-                            "smp",
-                            "sma",
-                            "mahasiswa"
-                          ]
+                          "enum": ["sd", "smp", "sma", "mahasiswa"]
                         }
                       },
                       "scale": {
                         "nullable": true,
                         "type": "string",
-                        "enum": [
-                          "international",
-                          "national"
-                        ]
+                        "enum": ["international", "national"]
                       },
                       "organizer": {
                         "nullable": true,
@@ -2366,9 +2196,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -2422,21 +2250,13 @@
                           "type": "array",
                           "items": {
                             "type": "string",
-                            "enum": [
-                              "sd",
-                              "smp",
-                              "sma",
-                              "mahasiswa"
-                            ]
+                            "enum": ["sd", "smp", "sma", "mahasiswa"]
                           }
                         },
                         "scale": {
                           "nullable": true,
                           "type": "string",
-                          "enum": [
-                            "international",
-                            "national"
-                          ]
+                          "enum": ["international", "national"]
                         },
                         "organizer": {
                           "nullable": true,
@@ -2498,13 +2318,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -2519,9 +2333,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -2530,11 +2342,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -2560,9 +2368,7 @@
     },
     "/office/actions/calendar.publish": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -2608,9 +2414,7 @@
                         "maxLength": 200
                       }
                     },
-                    "required": [
-                      "id"
-                    ],
+                    "required": ["id"],
                     "additionalProperties": false
                   }
                 },
@@ -2637,9 +2441,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -2693,21 +2495,13 @@
                           "type": "array",
                           "items": {
                             "type": "string",
-                            "enum": [
-                              "sd",
-                              "smp",
-                              "sma",
-                              "mahasiswa"
-                            ]
+                            "enum": ["sd", "smp", "sma", "mahasiswa"]
                           }
                         },
                         "scale": {
                           "nullable": true,
                           "type": "string",
-                          "enum": [
-                            "international",
-                            "national"
-                          ]
+                          "enum": ["international", "national"]
                         },
                         "organizer": {
                           "nullable": true,
@@ -2769,13 +2563,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -2790,9 +2578,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -2801,11 +2587,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -2831,9 +2613,7 @@
     },
     "/office/actions/blog.saveDraft": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -2880,10 +2660,7 @@
                       },
                       "lang": {
                         "type": "string",
-                        "enum": [
-                          "id",
-                          "en"
-                        ]
+                        "enum": ["id", "en"]
                       },
                       "title": {
                         "type": "string",
@@ -2900,23 +2677,17 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "heading"
-                                  ]
+                                  "enum": ["heading"]
                                 },
                                 "level": {
                                   "anyOf": [
                                     {
                                       "type": "number",
-                                      "enum": [
-                                        2
-                                      ]
+                                      "enum": [2]
                                     },
                                     {
                                       "type": "number",
-                                      "enum": [
-                                        3
-                                      ]
+                                      "enum": [3]
                                     }
                                   ]
                                 },
@@ -2926,11 +2697,7 @@
                                   "maxLength": 300
                                 }
                               },
-                              "required": [
-                                "type",
-                                "level",
-                                "text"
-                              ],
+                              "required": ["type", "level", "text"],
                               "additionalProperties": false
                             },
                             {
@@ -2938,9 +2705,7 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "paragraph"
-                                  ]
+                                  "enum": ["paragraph"]
                                 },
                                 "runs": {
                                   "minItems": 1,
@@ -2965,17 +2730,12 @@
                                         "maxLength": 2048
                                       }
                                     },
-                                    "required": [
-                                      "text"
-                                    ],
+                                    "required": ["text"],
                                     "additionalProperties": false
                                   }
                                 }
                               },
-                              "required": [
-                                "type",
-                                "runs"
-                              ],
+                              "required": ["type", "runs"],
                               "additionalProperties": false
                             },
                             {
@@ -2983,16 +2743,11 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "list"
-                                  ]
+                                  "enum": ["list"]
                                 },
                                 "style": {
                                   "type": "string",
-                                  "enum": [
-                                    "ordered",
-                                    "unordered"
-                                  ]
+                                  "enum": ["ordered", "unordered"]
                                 },
                                 "items": {
                                   "minItems": 1,
@@ -3021,19 +2776,13 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   }
                                 }
                               },
-                              "required": [
-                                "type",
-                                "style",
-                                "items"
-                              ],
+                              "required": ["type", "style", "items"],
                               "additionalProperties": false
                             },
                             {
@@ -3041,9 +2790,7 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "quote"
-                                  ]
+                                  "enum": ["quote"]
                                 },
                                 "runs": {
                                   "minItems": 1,
@@ -3068,9 +2815,7 @@
                                         "maxLength": 2048
                                       }
                                     },
-                                    "required": [
-                                      "text"
-                                    ],
+                                    "required": ["text"],
                                     "additionalProperties": false
                                   }
                                 },
@@ -3079,10 +2824,7 @@
                                   "maxLength": 300
                                 }
                               },
-                              "required": [
-                                "type",
-                                "runs"
-                              ],
+                              "required": ["type", "runs"],
                               "additionalProperties": false
                             },
                             {
@@ -3090,9 +2832,7 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "callout"
-                                  ]
+                                  "enum": ["callout"]
                                 },
                                 "title": {
                                   "type": "string",
@@ -3122,18 +2862,12 @@
                                         "maxLength": 2048
                                       }
                                     },
-                                    "required": [
-                                      "text"
-                                    ],
+                                    "required": ["text"],
                                     "additionalProperties": false
                                   }
                                 }
                               },
-                              "required": [
-                                "type",
-                                "title",
-                                "runs"
-                              ],
+                              "required": ["type", "title", "runs"],
                               "additionalProperties": false
                             },
                             {
@@ -3141,9 +2875,7 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "image"
-                                  ]
+                                  "enum": ["image"]
                                 },
                                 "mediaId": {
                                   "type": "string",
@@ -3160,11 +2892,7 @@
                                   "maxLength": 500
                                 }
                               },
-                              "required": [
-                                "type",
-                                "mediaId",
-                                "alt"
-                              ],
+                              "required": ["type", "mediaId", "alt"],
                               "additionalProperties": false
                             },
                             {
@@ -3172,16 +2900,11 @@
                               "properties": {
                                 "type": {
                                   "type": "string",
-                                  "enum": [
-                                    "embed"
-                                  ]
+                                  "enum": ["embed"]
                                 },
                                 "provider": {
                                   "type": "string",
-                                  "enum": [
-                                    "instagram",
-                                    "tiktok"
-                                  ]
+                                  "enum": ["instagram", "tiktok"]
                                 },
                                 "url": {
                                   "type": "string",
@@ -3194,11 +2917,7 @@
                                   "maxLength": 100
                                 }
                               },
-                              "required": [
-                                "type",
-                                "provider",
-                                "url"
-                              ],
+                              "required": ["type", "provider", "url"],
                               "additionalProperties": false
                             }
                           ]
@@ -3238,9 +2957,7 @@
                               "maxLength": 500
                             }
                           },
-                          "required": [
-                            "text"
-                          ],
+                          "required": ["text"],
                           "additionalProperties": false
                         }
                       },
@@ -3261,20 +2978,12 @@
                               "maxLength": 5000
                             }
                           },
-                          "required": [
-                            "question",
-                            "answer"
-                          ],
+                          "required": ["question", "answer"],
                           "additionalProperties": false
                         }
                       }
                     },
-                    "required": [
-                      "lang",
-                      "title",
-                      "body",
-                      "category"
-                    ],
+                    "required": ["lang", "title", "body", "category"],
                     "additionalProperties": false
                   }
                 },
@@ -3301,9 +3010,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -3372,9 +3079,7 @@
                                 "maxLength": 500
                               }
                             },
-                            "required": [
-                              "text"
-                            ],
+                            "required": ["text"],
                             "additionalProperties": false
                           }
                         },
@@ -3389,23 +3094,17 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "heading"
-                                    ]
+                                    "enum": ["heading"]
                                   },
                                   "level": {
                                     "anyOf": [
                                       {
                                         "type": "number",
-                                        "enum": [
-                                          2
-                                        ]
+                                        "enum": [2]
                                       },
                                       {
                                         "type": "number",
-                                        "enum": [
-                                          3
-                                        ]
+                                        "enum": [3]
                                       }
                                     ]
                                   },
@@ -3415,11 +3114,7 @@
                                     "maxLength": 300
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "level",
-                                  "text"
-                                ],
+                                "required": ["type", "level", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -3427,9 +3122,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "runs": {
                                     "minItems": 1,
@@ -3454,17 +3147,12 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "runs"
-                                ],
+                                "required": ["type", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -3472,16 +3160,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "minItems": 1,
@@ -3510,19 +3193,13 @@
                                             "maxLength": 2048
                                           }
                                         },
-                                        "required": [
-                                          "text"
-                                        ],
+                                        "required": ["text"],
                                         "additionalProperties": false
                                       }
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               },
                               {
@@ -3530,9 +3207,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "quote"
-                                    ]
+                                    "enum": ["quote"]
                                   },
                                   "runs": {
                                     "minItems": 1,
@@ -3557,9 +3232,7 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   },
@@ -3568,10 +3241,7 @@
                                     "maxLength": 300
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "runs"
-                                ],
+                                "required": ["type", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -3579,9 +3249,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "callout"
-                                    ]
+                                    "enum": ["callout"]
                                   },
                                   "title": {
                                     "type": "string",
@@ -3611,18 +3279,12 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "title",
-                                  "runs"
-                                ],
+                                "required": ["type", "title", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -3630,9 +3292,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "image"
-                                    ]
+                                    "enum": ["image"]
                                   },
                                   "mediaId": {
                                     "type": "string",
@@ -3649,11 +3309,7 @@
                                     "maxLength": 500
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "mediaId",
-                                  "alt"
-                                ],
+                                "required": ["type", "mediaId", "alt"],
                                 "additionalProperties": false
                               },
                               {
@@ -3661,16 +3317,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "embed"
-                                    ]
+                                    "enum": ["embed"]
                                   },
                                   "provider": {
                                     "type": "string",
-                                    "enum": [
-                                      "instagram",
-                                      "tiktok"
-                                    ]
+                                    "enum": ["instagram", "tiktok"]
                                   },
                                   "url": {
                                     "type": "string",
@@ -3683,11 +3334,7 @@
                                     "maxLength": 100
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "provider",
-                                  "url"
-                                ],
+                                "required": ["type", "provider", "url"],
                                 "additionalProperties": false
                               }
                             ]
@@ -3711,10 +3358,7 @@
                                 "maxLength": 5000
                               }
                             },
-                            "required": [
-                              "question",
-                              "answer"
-                            ],
+                            "required": ["question", "answer"],
                             "additionalProperties": false
                           }
                         },
@@ -3734,17 +3378,11 @@
                         },
                         "locale": {
                           "type": "string",
-                          "enum": [
-                            "id",
-                            "en"
-                          ]
+                          "enum": ["id", "en"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "draft",
-                            "published"
-                          ]
+                          "enum": ["draft", "published"]
                         },
                         "readingMinutes": {
                           "type": "number"
@@ -3782,13 +3420,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -3803,9 +3435,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -3814,11 +3444,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -3844,9 +3470,7 @@
     },
     "/office/actions/blog.publish": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -3893,16 +3517,10 @@
                       },
                       "lang": {
                         "type": "string",
-                        "enum": [
-                          "id",
-                          "en"
-                        ]
+                        "enum": ["id", "en"]
                       }
                     },
-                    "required": [
-                      "id",
-                      "lang"
-                    ],
+                    "required": ["id", "lang"],
                     "additionalProperties": false
                   }
                 },
@@ -3929,9 +3547,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -4000,9 +3616,7 @@
                                 "maxLength": 500
                               }
                             },
-                            "required": [
-                              "text"
-                            ],
+                            "required": ["text"],
                             "additionalProperties": false
                           }
                         },
@@ -4017,23 +3631,17 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "heading"
-                                    ]
+                                    "enum": ["heading"]
                                   },
                                   "level": {
                                     "anyOf": [
                                       {
                                         "type": "number",
-                                        "enum": [
-                                          2
-                                        ]
+                                        "enum": [2]
                                       },
                                       {
                                         "type": "number",
-                                        "enum": [
-                                          3
-                                        ]
+                                        "enum": [3]
                                       }
                                     ]
                                   },
@@ -4043,11 +3651,7 @@
                                     "maxLength": 300
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "level",
-                                  "text"
-                                ],
+                                "required": ["type", "level", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -4055,9 +3659,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "runs": {
                                     "minItems": 1,
@@ -4082,17 +3684,12 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "runs"
-                                ],
+                                "required": ["type", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -4100,16 +3697,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "minItems": 1,
@@ -4138,19 +3730,13 @@
                                             "maxLength": 2048
                                           }
                                         },
-                                        "required": [
-                                          "text"
-                                        ],
+                                        "required": ["text"],
                                         "additionalProperties": false
                                       }
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               },
                               {
@@ -4158,9 +3744,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "quote"
-                                    ]
+                                    "enum": ["quote"]
                                   },
                                   "runs": {
                                     "minItems": 1,
@@ -4185,9 +3769,7 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   },
@@ -4196,10 +3778,7 @@
                                     "maxLength": 300
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "runs"
-                                ],
+                                "required": ["type", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -4207,9 +3786,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "callout"
-                                    ]
+                                    "enum": ["callout"]
                                   },
                                   "title": {
                                     "type": "string",
@@ -4239,18 +3816,12 @@
                                           "maxLength": 2048
                                         }
                                       },
-                                      "required": [
-                                        "text"
-                                      ],
+                                      "required": ["text"],
                                       "additionalProperties": false
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "title",
-                                  "runs"
-                                ],
+                                "required": ["type", "title", "runs"],
                                 "additionalProperties": false
                               },
                               {
@@ -4258,9 +3829,7 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "image"
-                                    ]
+                                    "enum": ["image"]
                                   },
                                   "mediaId": {
                                     "type": "string",
@@ -4277,11 +3846,7 @@
                                     "maxLength": 500
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "mediaId",
-                                  "alt"
-                                ],
+                                "required": ["type", "mediaId", "alt"],
                                 "additionalProperties": false
                               },
                               {
@@ -4289,16 +3854,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "embed"
-                                    ]
+                                    "enum": ["embed"]
                                   },
                                   "provider": {
                                     "type": "string",
-                                    "enum": [
-                                      "instagram",
-                                      "tiktok"
-                                    ]
+                                    "enum": ["instagram", "tiktok"]
                                   },
                                   "url": {
                                     "type": "string",
@@ -4311,11 +3871,7 @@
                                     "maxLength": 100
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "provider",
-                                  "url"
-                                ],
+                                "required": ["type", "provider", "url"],
                                 "additionalProperties": false
                               }
                             ]
@@ -4339,10 +3895,7 @@
                                 "maxLength": 5000
                               }
                             },
-                            "required": [
-                              "question",
-                              "answer"
-                            ],
+                            "required": ["question", "answer"],
                             "additionalProperties": false
                           }
                         },
@@ -4362,17 +3915,11 @@
                         },
                         "locale": {
                           "type": "string",
-                          "enum": [
-                            "id",
-                            "en"
-                          ]
+                          "enum": ["id", "en"]
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "draft",
-                            "published"
-                          ]
+                          "enum": ["draft", "published"]
                         },
                         "readingMinutes": {
                           "type": "number"
@@ -4410,13 +3957,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -4431,9 +3972,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -4442,11 +3981,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -4472,9 +4007,7 @@
     },
     "/office/actions/activities.saveDraft": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -4544,9 +4077,7 @@
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "doc"
-                            ]
+                            "enum": ["doc"]
                           },
                           "blocks": {
                             "minItems": 1,
@@ -4559,9 +4090,7 @@
                                   "properties": {
                                     "type": {
                                       "type": "string",
-                                      "enum": [
-                                        "paragraph"
-                                      ]
+                                      "enum": ["paragraph"]
                                     },
                                     "content": {
                                       "maxItems": 500,
@@ -4585,17 +4114,12 @@
                                             "maxLength": 2048
                                           }
                                         },
-                                        "required": [
-                                          "text"
-                                        ],
+                                        "required": ["text"],
                                         "additionalProperties": false
                                       }
                                     }
                                   },
-                                  "required": [
-                                    "type",
-                                    "content"
-                                  ],
+                                  "required": ["type", "content"],
                                   "additionalProperties": false
                                 },
                                 {
@@ -4603,16 +4127,11 @@
                                   "properties": {
                                     "type": {
                                       "type": "string",
-                                      "enum": [
-                                        "list"
-                                      ]
+                                      "enum": ["list"]
                                     },
                                     "style": {
                                       "type": "string",
-                                      "enum": [
-                                        "ordered",
-                                        "unordered"
-                                      ]
+                                      "enum": ["ordered", "unordered"]
                                     },
                                     "items": {
                                       "minItems": 1,
@@ -4640,29 +4159,20 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     }
                                   },
-                                  "required": [
-                                    "type",
-                                    "style",
-                                    "items"
-                                  ],
+                                  "required": ["type", "style", "items"],
                                   "additionalProperties": false
                                 }
                               ]
                             }
                           }
                         },
-                        "required": [
-                          "type",
-                          "blocks"
-                        ],
+                        "required": ["type", "blocks"],
                         "additionalProperties": false
                       },
                       "coverImageUrl": {
@@ -4704,9 +4214,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -4762,9 +4270,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -4777,9 +4283,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -4803,17 +4307,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -4821,16 +4320,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -4858,29 +4352,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "bodyId": {
@@ -4889,9 +4374,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -4904,9 +4387,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -4930,17 +4411,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -4948,16 +4424,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -4985,29 +4456,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "state": {
@@ -5049,13 +4511,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -5070,9 +4526,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -5081,11 +4535,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -5111,9 +4561,7 @@
     },
     "/office/actions/activities.publish": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -5159,9 +4607,7 @@
                         "maxLength": 200
                       }
                     },
-                    "required": [
-                      "id"
-                    ],
+                    "required": ["id"],
                     "additionalProperties": false
                   }
                 },
@@ -5188,9 +4634,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -5246,9 +4690,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -5261,9 +4703,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -5287,17 +4727,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5305,16 +4740,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -5342,29 +4772,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "bodyId": {
@@ -5373,9 +4794,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -5388,9 +4807,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -5414,17 +4831,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5432,16 +4844,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -5469,29 +4876,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "state": {
@@ -5533,13 +4931,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -5554,9 +4946,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -5565,11 +4955,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -5595,9 +4981,7 @@
     },
     "/office/actions/faq.saveDraft": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -5670,12 +5054,7 @@
                         "type": "boolean"
                       }
                     },
-                    "required": [
-                      "question",
-                      "answer",
-                      "category",
-                      "onLanding"
-                    ],
+                    "required": ["question", "answer", "category", "onLanding"],
                     "additionalProperties": false
                   }
                 },
@@ -5702,9 +5081,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -5724,9 +5101,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -5739,9 +5114,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -5765,17 +5138,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5783,16 +5151,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -5820,29 +5183,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "questionIdRich": {
@@ -5851,9 +5205,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -5866,9 +5218,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -5892,17 +5242,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5910,16 +5255,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -5947,29 +5287,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "answerEnRich": {
@@ -5977,9 +5308,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -5992,9 +5321,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6018,17 +5345,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6036,16 +5358,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -6073,29 +5390,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "answerIdRich": {
@@ -6104,9 +5412,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -6119,9 +5425,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6145,17 +5449,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6163,16 +5462,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -6200,29 +5494,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "category": {
@@ -6270,18 +5555,13 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "text": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "text"
-                                ],
+                                "required": ["type", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -6289,16 +5569,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "type": "array",
@@ -6307,11 +5582,7 @@
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               }
                             ]
@@ -6327,18 +5598,13 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "text": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "text"
-                                ],
+                                "required": ["type", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -6346,16 +5612,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "type": "array",
@@ -6364,11 +5625,7 @@
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               }
                             ]
@@ -6397,13 +5654,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -6418,9 +5669,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -6429,11 +5678,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -6459,9 +5704,7 @@
     },
     "/office/actions/faq.publish": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -6507,9 +5750,7 @@
                         "maxLength": 200
                       }
                     },
-                    "required": [
-                      "id"
-                    ],
+                    "required": ["id"],
                     "additionalProperties": false
                   }
                 },
@@ -6536,9 +5777,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -6558,9 +5797,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -6573,9 +5810,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6599,17 +5834,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6617,16 +5847,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -6654,29 +5879,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "questionIdRich": {
@@ -6685,9 +5901,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -6700,9 +5914,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6726,17 +5938,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6744,16 +5951,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -6781,29 +5983,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "answerEnRich": {
@@ -6811,9 +6004,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -6826,9 +6017,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6852,17 +6041,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6870,16 +6054,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -6907,29 +6086,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "answerIdRich": {
@@ -6938,9 +6108,7 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "doc"
-                              ]
+                              "enum": ["doc"]
                             },
                             "blocks": {
                               "minItems": 1,
@@ -6953,9 +6121,7 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "paragraph"
-                                        ]
+                                        "enum": ["paragraph"]
                                       },
                                       "content": {
                                         "maxItems": 500,
@@ -6979,17 +6145,12 @@
                                               "maxLength": 2048
                                             }
                                           },
-                                          "required": [
-                                            "text"
-                                          ],
+                                          "required": ["text"],
                                           "additionalProperties": false
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "content"
-                                    ],
+                                    "required": ["type", "content"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -6997,16 +6158,11 @@
                                     "properties": {
                                       "type": {
                                         "type": "string",
-                                        "enum": [
-                                          "list"
-                                        ]
+                                        "enum": ["list"]
                                       },
                                       "style": {
                                         "type": "string",
-                                        "enum": [
-                                          "ordered",
-                                          "unordered"
-                                        ]
+                                        "enum": ["ordered", "unordered"]
                                       },
                                       "items": {
                                         "minItems": 1,
@@ -7034,29 +6190,20 @@
                                                 "maxLength": 2048
                                               }
                                             },
-                                            "required": [
-                                              "text"
-                                            ],
+                                            "required": ["text"],
                                             "additionalProperties": false
                                           }
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "type",
-                                      "style",
-                                      "items"
-                                    ],
+                                    "required": ["type", "style", "items"],
                                     "additionalProperties": false
                                   }
                                 ]
                               }
                             }
                           },
-                          "required": [
-                            "type",
-                            "blocks"
-                          ],
+                          "required": ["type", "blocks"],
                           "additionalProperties": false
                         },
                         "category": {
@@ -7104,18 +6251,13 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "text": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "text"
-                                ],
+                                "required": ["type", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -7123,16 +6265,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "type": "array",
@@ -7141,11 +6278,7 @@
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               }
                             ]
@@ -7161,18 +6294,13 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "paragraph"
-                                    ]
+                                    "enum": ["paragraph"]
                                   },
                                   "text": {
                                     "type": "string"
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "text"
-                                ],
+                                "required": ["type", "text"],
                                 "additionalProperties": false
                               },
                               {
@@ -7180,16 +6308,11 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
-                                    "enum": [
-                                      "list"
-                                    ]
+                                    "enum": ["list"]
                                   },
                                   "style": {
                                     "type": "string",
-                                    "enum": [
-                                      "ordered",
-                                      "unordered"
-                                    ]
+                                    "enum": ["ordered", "unordered"]
                                   },
                                   "items": {
                                     "type": "array",
@@ -7198,11 +6321,7 @@
                                     }
                                   }
                                 },
-                                "required": [
-                                  "type",
-                                  "style",
-                                  "items"
-                                ],
+                                "required": ["type", "style", "items"],
                                 "additionalProperties": false
                               }
                             ]
@@ -7231,13 +6350,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -7252,9 +6365,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -7263,11 +6374,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
@@ -7293,9 +6400,7 @@
     },
     "/office/actions/knowledge.addDraft": {
       "post": {
-        "tags": [
-          "Office"
-        ],
+        "tags": ["Office"],
         "summary": "Approved Office action (60/hour; idempotent for seven days)",
         "security": [
           {
@@ -7356,12 +6461,7 @@
                         "format": "uri"
                       }
                     },
-                    "required": [
-                      "title",
-                      "description",
-                      "category",
-                      "fileUrl"
-                    ],
+                    "required": ["title", "description", "category", "fileUrl"],
                     "additionalProperties": false
                   }
                 },
@@ -7388,9 +6488,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        true
-                      ]
+                      "enum": [true]
                     },
                     "dryRun": {
                       "type": "boolean"
@@ -7454,13 +6552,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "ok",
-                    "dryRun",
-                    "id",
-                    "appUrl",
-                    "result"
-                  ],
+                  "required": ["ok", "dryRun", "id", "appUrl", "result"],
                   "additionalProperties": false
                 }
               }
@@ -7475,9 +6567,7 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "enum": [
-                        false
-                      ]
+                      "enum": [false]
                     },
                     "code": {
                       "type": "string"
@@ -7486,11 +6576,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "ok",
-                    "code",
-                    "message"
-                  ],
+                  "required": ["ok", "code", "message"],
                   "additionalProperties": false
                 }
               }
