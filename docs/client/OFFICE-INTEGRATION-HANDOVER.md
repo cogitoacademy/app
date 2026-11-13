@@ -40,7 +40,7 @@ Base URL: `https://api.cogitoacademy.id`. Office requests come from its backend,
 | `POST /office/actions/<name>` | `Authorization: Bearer <OFFICE_WRITE_KEY>`; main app must have `OFFICE_WRITES_ENABLED=true` |
 | Main app → Office event       | Office verifies using `OFFICE_WEBHOOK_SECRET`                                               |
 
-Store the three existing generated values privately on both backends. The production vault explicitly enables Office writes; verify the running deployment instead of assuming that a vault edit changed it. Do not expose tokens in logs, screenshots or frontend env. Reads are limited to 120/hour and writes to 60/hour. The snapshot cache lasts up to 120 seconds; show `generatedAt` and use the action response to confirm immediate success.
+Store the three existing generated values privately on both backends. Authorized operators may retrieve them in Coolify; env changes must go through SOPS and approved apply/restart, never direct Coolify edits. The environment guide contains the Windows setup and edit steps. The production vault explicitly enables Office writes; verify the running deployment instead of assuming that a vault edit changed it. Do not expose tokens in logs, screenshots or frontend env. Reads are limited to 120/hour and writes to 60/hour. The snapshot cache lasts up to 120 seconds; show `generatedAt` and use the action response to confirm immediate success.
 
 ## Read the snapshot and lookup IDs
 

@@ -29,3 +29,5 @@ Office campaign reporting: set server `OFFICE_CAMPAIGN_LABELS` to a JSON object,
 Local validation: 248 non-DB tests and 8 guarded PostgreSQL/Redis integration tests passed (1,096 assertions total); all four typecheck tasks and the lint baseline passed. Database tests used newly created isolated cogito-office-test containers at loopback 6769/cogito-test and Redis 6389. The 23-page PDF handover was rebuilt and visually inspected. These checks do not establish hosted CI or live Office acceptance.
 
 Client-only Office access: added docs/client/OFFICE-LLM-IMPLEMENTATION.md as a coding-agent handoff, paired with portable OpenAPI and existing client guides. This documents the existing contract without extending API behavior.
+
+Client env guide updated: Coolify is for viewing existing secrets only; edits use SOPS, reviewed encrypted changes and apply/restart. Removed the direct-Coolify incident-edit exception.

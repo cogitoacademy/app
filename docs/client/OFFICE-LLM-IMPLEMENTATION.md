@@ -30,7 +30,7 @@ COGITO_OFFICE_WRITE_KEY=<existing shared OFFICE_WRITE_KEY>
 COGITO_OFFICE_WEBHOOK_SECRET=<existing shared OFFICE_WEBHOOK_SECRET>
 ```
 
-The operator supplies the matching existing secrets privately. Do not generate new independent keys on Office and expect them to work. The main app separately controls `OFFICE_WRITES_ENABLED`; disabling an Office UI button is not equivalent to this switch. A 403 may mean that the main-app operator has disabled writes, including previews.
+The operator supplies the matching existing secrets privately. Authorized operators may view/retrieve them in Coolify, but must never edit env values there. Main-app changes must originate in SOPS and be applied/restarted through the approved deployment workflow; see OFFICE-ENV-CLIENT-GUIDE.md for setup and commands. Do not generate new independent keys on Office and expect them to work. The main app separately controls `OFFICE_WRITES_ENABLED`; disabling an Office UI button is not equivalent to this switch. A 403 may mean that the main-app operator has disabled writes, including previews.
 
 Base URL has no `/rpc` or `/api-reference` prefix. Use ordinary JSON, without the oRPC `{"json": ...}` envelope. Successful data is also plain JSON, without that wrapper. Authentication uses the case-sensitive prefix `Authorization: Bearer <key>`.
 
