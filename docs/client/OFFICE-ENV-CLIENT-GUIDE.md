@@ -13,6 +13,26 @@ Source links:
 - [Automatic environment apply workflow](../../.github/workflows/infra-apply.yml)
 - [Deployment and recovery procedures](../RUNBOOK.md)
 
+## Quick rule: view in Coolify, change through SOPS
+
+**Yes: an authorized operator may reveal/copy the three existing Office secrets in Coolify. Do not add, edit, delete or save environment values in Coolify, including during incidents.** The main app's configuration source is the encrypted `infra/secrets/prod.env` vault. Changes go through SOPS, Git review/merge and the approved apply/restart workflow. A direct UI edit creates drift and may be overwritten by the next apply.
+
+For initial connection only, the Office maintainer does not need the main app's age key or full production vault. Obtain the three deployed values from Coolify or the password manager. SOPS access is needed by the trusted operator who maintains the main-app vault, not by every Office developer or coding agent.
+
+### Read existing values in Coolify
+
+1. Sign in through Cogito's approved Coolify access. Select the correct production project/environment and the **`cogito-api` backend**, not the web frontend or a test deployment. UI labels may differ by Coolify version.
+2. Open its environment settings. If your role permits revealing sensitive values, view only `OFFICE_READ_KEY`, `OFFICE_WRITE_KEY` and `OFFICE_WEBHOOK_SECRET`. If values stay masked or your role cannot reveal them, ask the authorized operator to share them through the password manager; do not reset them to gain access.
+3. Copy the values privately into the approved password-manager entry for the Office maintainer. Do not click Save/Update, add rows, change values or rotate keys here. Do not send secrets in this ZIP, chat, screenshots, issues or an LLM prompt.
+4. A saved Coolify setting may be pending restart or differ from the vault. The operator must confirm the intended SOPS values were applied and the API restarted; verify actual reads/actions/webhook delivery. Viewing the UI alone does not prove runtime matching.
+5. Configure the matching values on the Office backend using its operator-approved secret deployment process. Do not manually edit Coolify env on either deployment. The Office repository's SOPS/deployment setup has not been inspected; its maintainer must identify its configuration source rather than assuming the main-app vault automatically configures Office.
+
+### If a value needs changing
+
+The operator needs GitHub repository access, Git, SOPS, a registered age private key stored outside the repo, an editor, repository development dependencies for the guard/hooks, and permission to merge/apply production configuration. An age public key alone cannot decrypt the vault. A Coolify login cannot substitute for the age private key.
+
+Follow sections 2–4 for setup and age-key enrollment, section 6 for the exact edit/commit/apply steps, and section 7 for coordinated rotation. If you cannot decrypt, obtain authorized access from the existing vault owner; do not work around it by editing Coolify. Never give the private age key to a coding agent just to implement the Office API.
+
 ## 1. What you are receiving
 
 There are two separate kinds of keys:
@@ -26,7 +46,7 @@ The vault is `infra/secrets/prod.env` in the repository. Its values look like `E
 
 Office does not need a copy of the entire vault or its private key just to connect. Give the Office backend only the three connection secrets it needs. App and Office user logins stay separate from this connection.
 
-**Status when this guide was prepared:** PR #365 is open. Its vault contains three generated, independent 32-byte Office secrets and `OFFICE_WRITES_ENABLED=true`. This is repository configuration; the deployed values, Rafsi's vault access, and the joint live test have not been verified here. Until the PR is merged, a fresh clone of `main` may not contain these settings.
+**Status when this guide was prepared:** PR #365 has merged to main. Its vault contains three generated, independent 32-byte Office secrets and `OFFICE_WRITES_ENABLED=true`. This is repository configuration; the deployed values, Rafsi's vault access, and the joint live test have not been verified here. Pull current main before editing. Repository configuration alone does not certify deployed settings.
 
 ## 2. Get the required access
 
@@ -68,7 +88,7 @@ Set-Location cogito-app
 
 Authenticate with your own authorized GitHub account if prompted. Do not put a GitHub token in the clone URL.
 
-For normal operations after PR #365 is merged:
+For normal operations:
 
 ```powershell
 git switch main
@@ -192,11 +212,18 @@ git switch -c ops/office-env-update
 sops infra/secrets/prod.env
 ```
 
-Edit only the intended value, save, close the editor, and wait for SOPS. Keep one `KEY=value` per line and no duplicate key names. Do not edit the `ENC[...]` text manually. The webhook URL is currently fixed by the application's validation; changing the receiver address also requires an application change.
+Edit only the intended value, save, close the editor, and wait for SOPS. Keep one `KEY=value` per line and no duplicate key names. Do not edit the `ENC[...]` text manually. The production webhook URL is fixed to https://office.cogitoacademy.id/hooks/app. A separate non-production deployment may configure its own HTTPS receiver; do not change production to point at a test receiver.
 
 For the five existing Office settings, encryption coverage and the Coolify allowlist are already included in PR #365. For a new variable, a maintainer must also update `.sops.yaml` `encrypted_regex`, `app_env_keys` in `infra/ansible/coolify-resources.yml`, and relevant env schema/examples. Adding a line to the vault alone does not deliver a new setting to the application.
 
-With Bun and repository dependencies installed, verify encryption:
+Install the repository dependencies with its pinned Bun version before running the guard and Git hooks (from the repository root):
+
+```powershell
+bun --version
+bun install --frozen-lockfile
+```
+
+Check the `packageManager` field in `package.json` for the required Bun version. Then verify encryption:
 
 ```powershell
 bun scripts/check-sops-encrypted.ts infra/secrets/prod.env
@@ -229,15 +256,13 @@ For an env-only restart, the running image may retain its previous code version;
 
 If the apply run fails or does not start, ask the operator to inspect it and rerun the failed job or use the documented manual fallback in [INFRA-PLAYBOOK](../INFRA-PLAYBOOK.md). A manual dispatch may run broader infrastructure steps; review its scope first.
 
-### Manual Coolify changes during an incident
+### If apply fails or the change is urgent
 
-Connect using the approved Cogito Tailscale/SSH access and open the existing Coolify dashboard. Select the main app's **`cogito-api`** application, then its environment settings. Update the intended variable once, save, and restart/redeploy the API. Check health and the Office behavior afterwards. Do not select the web app or create duplicate env rows.
-
-Record the same intended change in the encrypted vault and merge it afterwards. Otherwise a later automated apply can overwrite the manual setting. Detailed access/tunnel instructions are in [the infra apply runbook](../../infra/APPLY-RUNBOOK.md); use the operator's authorized SSH identity.
+Keep the intended change in the SOPS vault. Ask the authorized operator to repair/rerun the apply or execute the documented vault-based apply procedure in [the infra apply runbook](../../infra/APPLY-RUNBOOK.md). Review the exact target and scope first. Coolify remains a place to inspect settings, deployment state and logs, not an alternate editor for env values. Do not bypass SOPS even during an incident.
 
 ## 7. Rotate a key or stop Office writes
 
-To stop Office actions while leaving reads available, set `OFFICE_WRITES_ENABLED=false` through SOPS and apply it using section 6. During an incident, use the manual Coolify path if waiting for a PR is unsuitable, then reconcile the vault. To restore writes, set `true`, apply, and recheck behavior.
+To stop Office actions while leaving reads available, set `OFFICE_WRITES_ENABLED=false` through SOPS and apply it using section 6. During an incident, escalate to the authorized operator for the approved SOPS-based apply path; do not change the switch directly in Coolify. To restore writes, set `true`, apply, and recheck behavior.
 
 Changing the vault file does not alter an already running process. Disabling writes does not stop snapshot reads or outgoing event delivery.
 
@@ -252,7 +277,7 @@ Read-key rotation affects summary reads; write-key rotation affects actions; web
 
 ## 8. Joint connection test with Rafsi
 
-Use a separate non-production app and Office receiver for fixture writes, retries, and switch testing. Such a deployment was not verified for this guide. Do not point a staging app at the production Office receiver without an explicitly agreed test arrangement; the app currently validates a fixed webhook URL.
+Use a separate non-production app and Office receiver for fixture writes, retries, and switch testing. Such a deployment was not verified for this guide. Do not point a staging app at the production Office receiver without an explicitly agreed test arrangement; the production app pins its webhook URL; a separate non-production deployment can configure its own HTTPS receiver. Asset downloads remain restricted to https://office.cogitoacademy.id/.
 
 The main app's Office interface is server-to-server:
 
@@ -277,7 +302,7 @@ Together, record these results without secret values:
 
 Action requests include `dryRun`, a UUID `idempotencyKey`, `officeItemId`, `requestedBy`, `approvedBy`, and `input`. The Office maintainer should use the exact schema from [the action definitions](../../packages/api/src/modules/office/office-actions.types.ts) and [OpenAPI definitions](../../apps/server/src/office/openapi.ts). Use separate preview and execution request IDs; reuse the execution ID for retries of that execution.
 
-**Campaign-label note:** source tracking and campaign-label export are separate. Current code uses optional `OFFICE_CAMPAIGN_LABELS` to allow only approved, non-personal campaign labels in the snapshot; its default is `{}`, so campaign labels may be empty. It is additional configuration beyond the five connection variables. A maintainer must add its encryption and env-delivery declarations if configuring it through this vault. Follow [OFFICE-HANDOVER](../OFFICE-HANDOVER.md); never use a person's name as a campaign label.
+**Campaign-label note:** source tracking and campaign-label export are separate. Current code uses optional `OFFICE_CAMPAIGN_LABELS` to allow only approved, non-personal campaign labels in the snapshot; its default is `{"test":"test"}` for the documented test marker; other labels must be approved. It is additional configuration beyond the five connection variables. Its encryption policy and Coolify env-delivery declarations are included; use snapshot.referenceData.campaigns for the approved IDs. Follow [OFFICE-HANDOVER](../OFFICE-HANDOVER.md); never use a person's name as a campaign label.
 
 Office actions cover approved campaigns and content only. They do not grant payment refunds, wallet changes, payouts, pricing changes, admin creation, or deletion. Knowledge Bank publishing remains in the app.
 

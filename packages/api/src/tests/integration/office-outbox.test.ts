@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { officeOutbox, supportTicket, user } from "@cogito-app/db/schema";
 import { assertSafeTestDatabaseUrl } from "../helpers/test-database-safety";
-import { Queue } from "bullmq";
+import { Queue, QueueEvents } from "bullmq";
 import { startOfficeOutboxScheduler } from "../../modules/office/office-worker";
 
 describe("Office transactional outbox", () => {
@@ -34,13 +34,18 @@ describe("Office transactional outbox", () => {
       const queue = new Queue("cogito-office", {
         connection: { url: process.env.REDIS_URL! },
       });
+      const events = new QueueEvents("cogito-office", {
+        connection: { url: process.env.REDIS_URL! },
+      });
+      await events.waitUntilReady();
+      let job: Awaited<ReturnType<typeof queue.add>> | undefined;
       try {
         await db.insert(officeOutbox).values({
           id,
           type: "ticket.opened",
           payload: { id: "ticket-test" },
         });
-        const job = await queue.add(
+        job = await queue.add(
           "deliver",
           { id },
           {
@@ -49,16 +54,11 @@ describe("Office transactional outbox", () => {
             backoff: { type: "exponential", delay: 100 },
           },
         );
-        const deadline = Date.now() + 10_000;
-        let row: typeof officeOutbox.$inferSelect | undefined;
-        do {
-          [row] = await db
-            .select()
-            .from(officeOutbox)
-            .where(eq(officeOutbox.id, id));
-          if (row?.sentAt) break;
-          await Bun.sleep(50);
-        } while (Date.now() < deadline);
+        await job.waitUntilFinished(events, 10_000);
+        const [row] = await db
+          .select()
+          .from(officeOutbox)
+          .where(eq(officeOutbox.id, id));
         expect(calls).toBe(2);
         expect(row?.attempts).toBe(2);
         expect(row?.sentAt).toBeInstanceOf(Date);
@@ -66,6 +66,7 @@ describe("Office transactional outbox", () => {
         await job.remove();
       } finally {
         await scheduler.close();
+        await events.close();
         await queue.close();
         await db.delete(officeOutbox).where(eq(officeOutbox.id, id));
         if (originalUrl === undefined) delete process.env.OFFICE_WEBHOOK_URL;

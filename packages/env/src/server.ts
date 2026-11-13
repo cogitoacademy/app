@@ -36,12 +36,19 @@ const boolSchema = (defaultValue: boolean) =>
   }, z.boolean());
 
 const serverShape = {
-  OFFICE_CAMPAIGN_LABELS: officeCampaignLabelsSchema.prefault("{}"),
+  OFFICE_CAMPAIGN_LABELS:
+    officeCampaignLabelsSchema.prefault('{"test":"test"}'),
   OFFICE_READ_KEY: z.string().min(32).optional(),
   OFFICE_WRITE_KEY: z.string().min(32).optional(),
   OFFICE_WEBHOOK_SECRET: z.string().min(32).optional(),
   OFFICE_WEBHOOK_URL: z
-    .literal("https://office.cogitoacademy.id/hooks/app")
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        url.protocol === "https:" && !url.username && !url.password && !url.hash
+      );
+    }, "Use an HTTPS Office receiver without credentials or a fragment")
     .optional(),
   OFFICE_WRITES_ENABLED: z.enum(["true", "false"]).default("false"),
   DATABASE_URL: z.string().min(1),
@@ -119,6 +126,18 @@ const serverShape = {
 } as const;
 
 export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
+  if (
+    val.NODE_ENV === "production" &&
+    val.OFFICE_WEBHOOK_URL &&
+    val.OFFICE_WEBHOOK_URL !== "https://office.cogitoacademy.id/hooks/app"
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["OFFICE_WEBHOOK_URL"],
+      message:
+        "Production Office receiver must be https://office.cogitoacademy.id/hooks/app",
+    });
+  }
   // Shared test-mode UAT allowlist validation: whenever set, every entry must
   // be a valid email and the trimmed list must not be empty.
   const validateSharedTestAllowedEmails = (value: string) => {

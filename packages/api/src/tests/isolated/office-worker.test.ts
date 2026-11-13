@@ -4,7 +4,7 @@ type Job = { name: string; data: { id?: string }; attemptsMade?: number };
 let processJob: (job: Job) => Promise<void>;
 let onFailed: (job?: Job) => void;
 let deliveryRow: Record<string, unknown> | undefined;
-let exceptions: { id: string; meta: unknown }[] = [];
+let exceptions: { id: string; meta: unknown; state?: string }[] = [];
 let pending: { id: string }[] = [];
 let previous: { state: string }[] = [];
 let executeCount = 0;
@@ -177,7 +177,21 @@ test("dispatch enqueues pending rows with bounded retries and only overdue valid
     { id: "empty", meta: {} },
     { id: "invalid", meta: { overriddenAt: "garbage" } },
     { id: "future", meta: { overriddenAt: "2099-01-01T00:00:00Z" } },
-    { id: "overdue", meta: { overriddenAt: "2000-01-01T00:00:00Z" } },
+    {
+      id: "overdue",
+      state: "scheduled",
+      meta: { overriddenAt: "2000-01-01T00:00:00Z" },
+    },
+    {
+      id: "completed",
+      state: "completed",
+      meta: { overriddenAt: "2000-01-01T00:00:00Z" },
+    },
+    {
+      id: "cancelled",
+      state: "cancelled",
+      meta: { overriddenAt: "2000-01-01T00:00:00Z" },
+    },
   ];
   pending = [{ id: "pending" }];
   await processJob({ name: "dispatch", data: {} });

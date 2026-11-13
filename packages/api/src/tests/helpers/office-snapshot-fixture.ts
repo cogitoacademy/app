@@ -130,6 +130,10 @@ export function snapshotFixture(populated = true) {
         { id: "child", name: "BP", parentId: "root" },
       ],
     ],
+    [
+      s.blogCategory,
+      [{ id: "blog-category", label: "Blog category", parentId: null }],
+    ],
     [s.blogArticleVersion, [{ id: "blog", title: "Blog", status: "draft" }]],
     [
       s.activityArticle,

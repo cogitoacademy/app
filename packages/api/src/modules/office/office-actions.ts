@@ -29,6 +29,8 @@ import {
   type OfficeActionName,
 } from "./office-actions.types";
 
+import { officeActionAppUrl, officeKolResultSchema } from "./office-contract";
+
 const SEVEN_DAYS = 7 * 86400_000;
 class PreviewRollback extends Error {
   constructor(readonly result: Record<string, unknown>) {
@@ -85,7 +87,12 @@ export async function executeOfficeAction(
         .from(officeActionReceipt)
         .where(eq(officeActionReceipt.idempotencyKey, body.idempotencyKey));
       if (receipt && receipt.createdAt.getTime() > Date.now() - SEVEN_DAYS)
-        return receipt.result;
+        return name.startsWith("referrals.")
+          ? {
+              ...receipt.result,
+              result: officeKolResultSchema.parse(receipt.result.result),
+            }
+          : receipt.result;
       // Drizzle transactions expose the same query surface; nested transaction() creates a savepoint.
       const connection = tx as unknown as DbType;
       const baseAudit = createAuditModule().service;
@@ -132,12 +139,15 @@ export async function executeOfficeAction(
         const input = createKolCampaignInput.parse(body.input);
         const row = await referral.createKolCampaign(null, input);
         id = row.id;
-        result = row;
+        result = officeKolResultSchema.parse(row);
       } else if (action === "referrals.retireKolCampaign") {
         const input = officeActionSchemas[action].parse(body.input);
         const row = await referral.retireKolCampaign(input.code);
         id = row.id;
-        result = row;
+        result = officeKolResultSchema.parse({
+          ...row,
+          code: input.code.toUpperCase(),
+        });
       } else if (
         action === "calendar.saveDraft" ||
         action === "calendar.publish"
@@ -407,7 +417,7 @@ export async function executeOfficeAction(
         ok: true,
         dryRun: body.dryRun,
         id,
-        appUrl: `https://app.cogitoacademy.id/${name.startsWith("referrals.") ? "admin-referrals" : name.startsWith("blog.") ? "admin-blog" : name.startsWith("faq.") ? "admin-faq" : name.startsWith("activities.") ? "admin-activities" : "admin-content"}`,
+        appUrl: officeActionAppUrl(name, id),
         result,
       };
       if (body.dryRun) throw new PreviewRollback(response);
