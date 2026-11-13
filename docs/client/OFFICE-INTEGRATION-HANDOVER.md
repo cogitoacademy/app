@@ -4,6 +4,8 @@
 
 Start here:
 
+- [LLM implementation brief](OFFICE-LLM-IMPLEMENTATION.md): give this and the portable OpenAPI to the coding agent in the Office repository.
+
 - [Portable Office OpenAPI](../office-openapi.json): import into your API client or use to implement the Office backend.
 - [Environment and vault access](OFFICE-ENV-CLIENT-GUIDE.md): how Rafsi obtains and changes the three shared secrets.
 - [Operator checklist](../OFFICE-HANDOVER.md): ownership, credential cleanup, recovery and joint testing.
