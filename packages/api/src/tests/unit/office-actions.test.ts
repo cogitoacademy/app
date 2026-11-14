@@ -17,6 +17,7 @@ const fixtures = {
   "referrals.createKolCampaign": {
     name: "Campaign",
     code: "OFFICE26",
+    welcomeMarks: 15,
     activationAt: "2026-11-10T00:00:00+07:00",
     expiresAt: "2027-01-01T00:00:00+07:00",
     flatAmountIdr: 10000,

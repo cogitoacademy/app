@@ -494,6 +494,7 @@ test("campaign creation validates its dates, maps duplicate codes and preserves 
   const input = {
     name: "October campaign",
     code: "KOL123",
+    welcomeMarks: 15,
     expiresAt: new Date("2026-11-01T00:00:00Z"),
     attributionWindowDays: 90,
     flatAmountIdr: 10000,
@@ -508,6 +509,7 @@ test("campaign creation validates its dates, maps duplicate codes and preserves 
   ).rejects.toMatchObject({ code: "REFERRAL_CAMPAIGN_INVALID" });
   expect(await f.service.createKolCampaign("admin-id", input)).toMatchObject({
     code: "KOL123",
+    welcomeMarks: 15,
     activationAt: new Date("2026-10-28T00:00:00Z"),
   });
   expect(f.audit.record).toHaveBeenCalledWith(
@@ -537,6 +539,7 @@ test("admin campaign listing returns the campaign and its referral code", async 
     id: "campaign-id",
     name: "October campaign",
     code: "KOL123",
+    welcomeMarks: 15,
   };
   const f = fixture([[campaign]]);
   expect(await f.service.listKolCampaigns()).toEqual([campaign]);
@@ -729,6 +732,7 @@ test.each(["campaign", "code"] as const)(
       f.service.createKolCampaign("admin-id", {
         name: "Campaign",
         code: "KOL123",
+        welcomeMarks: 15,
         expiresAt: new Date("2026-11-01T00:00:00Z"),
         attributionWindowDays: 90,
         flatAmountIdr: 10000,
@@ -1096,5 +1100,49 @@ test.each(["refunded", "partial", "missing-time"] as const)(
       }),
     );
     expect(f.results).toEqual([]);
+  },
+);
+
+test.each([0, 20, 50])(
+  "campaign signup credits its own %s Marks independently of global settings and replays once",
+  async (welcomeMarks) => {
+    const campaign = {
+      id: "campaign-id",
+      welcomeMarks,
+      activationAt: new Date("2026-01-01"),
+      expiresAt: new Date("2027-01-01"),
+      pausedAt: null,
+      retiredAt: null,
+      flatAmountIdr: 10000,
+      percentBps: 0,
+      attributionWindowDays: 90,
+    };
+    const f = fixture([
+      [{ id: "student-id", role: "student" }],
+      [],
+      [{ version: 3, welcomeMarks: 99 }],
+      [{ id: "code-id", kind: "kol", campaignId: campaign.id }],
+      [campaign],
+    ]);
+    if (welcomeMarks > 0) f.results.push([{ id: "ledger-id" }]);
+    const choice = await f.service.applyEmailSignupChoice(f.db, {
+      userId: "student-id",
+      code: "KOL123",
+    });
+    expect(choice?.welcomeMarksSnapshot).toBe(welcomeMarks);
+    if (welcomeMarks > 0)
+      expect(f.wallet.credit).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amount: welcomeMarks }),
+      );
+    else expect(f.wallet.credit).not.toHaveBeenCalled();
+    f.results.push([{ id: "student-id", role: "student" }], [choice]);
+    expect(
+      await f.service.applyEmailSignupChoice(f.db, {
+        userId: "student-id",
+        code: "KOL123",
+      }),
+    ).toEqual(choice);
+    expect(f.wallet.credit).toHaveBeenCalledTimes(welcomeMarks > 0 ? 1 : 0);
   },
 );

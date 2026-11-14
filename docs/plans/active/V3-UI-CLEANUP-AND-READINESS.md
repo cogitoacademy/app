@@ -141,3 +141,8 @@ This does not establish external Midtrans notification delivery, browser return/
 Admin booking detail now provides an icon-only retry action for confirmed online bookings with a failed Google Meet attempt and no URL. The admin API locks and validates the booking, reruns existing meeting finalization, records the successful transition as admin, and audits the result. Admin Classes keeps its failed-meeting retry and now uses the same accessible icon-only control. No schema change.
 
 Live retry evidence (31 October): the admin class retry handler was invoked for the failed dev session after confirming target `localhost:6767/cogito-app`. Its last stored error was `EAI_AGAIN oauth2.googleapis.com`; host DNS/HTTPS and a read-only OAuth/Calendar probe then passed. The handler retry completed with meeting status `created`, a Meet URL and event ID, and no error. Evidence: `tmp/v3-only-dev/academy-meet-retry-live.json`. No Google Cloud Console changes were required.
+
+
+## Campaign signup Marks (14 November 2026)
+
+Campaign signup Marks: implementation complete in source (required per-campaign amount, creation/listing, signup snapshot, validation, migration 0094). Focused tests/type checks recorded in the task handoff. Migration application and live browser/database acceptance remain pending.

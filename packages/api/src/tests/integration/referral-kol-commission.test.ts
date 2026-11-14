@@ -95,6 +95,7 @@ async function createKolSignup(input: {
   notes?: string;
 }) {
   const campaign = await referral.createKolCampaign(adminId, {
+    welcomeMarks: 0,
     name: input.name,
     campaignType: input.campaignType,
     partnerName: input.partnerName,
@@ -1551,6 +1552,7 @@ describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
   test("pausing a KOL campaign blocks new signups and resumes cleanly", async () => {
     const code = `K${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
     const campaign = await referral.createKolCampaign(adminId, {
+      welcomeMarks: 0,
       name: "Pause boundary",
       code,
       activationAt: new Date("2099-01-01T00:00:00.000Z"),

@@ -4,6 +4,7 @@ import { percentToBasisPoints } from "./tax-rate-input";
 export const emptyCampaignDraft = {
   name: "",
   code: "",
+  welcomeMarks: "15",
   campaignType: "kol" as "internal" | "kol",
   partnerName: "",
   bankName: "",
@@ -30,6 +31,7 @@ export function parseCampaignDraft(draft: CampaignDraft, now = new Date()) {
   const parsed = createKolCampaignInput.safeParse({
     name: draft.name,
     code: draft.code,
+    welcomeMarks: draft.welcomeMarks.trim() ? Number(draft.welcomeMarks) : NaN,
     campaignType: draft.campaignType,
     partnerName: draft.partnerName || null,
     bankName: draft.bankName || null,

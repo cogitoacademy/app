@@ -511,6 +511,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     const campaign = await services.referral.createKolCampaign(adminId, {
       name: "October creator campaign",
       code: "KOL2026",
+      welcomeMarks: 50,
       activationAt,
       expiresAt,
       attributionWindowDays: 90,
@@ -535,7 +536,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
       kind: "kol",
       codeSnapshot: "KOL2026",
       campaignId: campaign.id,
-      welcomeMarksSnapshot: 15,
+      welcomeMarksSnapshot: 50,
       friendRewardMarksSnapshot: null,
       kolFlatAmountIdrSnapshot: 0,
       kolPercentBpsSnapshot: 1_000,

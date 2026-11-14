@@ -93,6 +93,7 @@ async function mock(page: Page, role = "admin") {
 
 const campaign = {
   id: "campaign-1",
+  welcomeMarks: 15,
   name: "Demo KOL",
   code: "DEMO2026",
   activationAt: "2030-01-01T02:15:00.000Z",
@@ -175,6 +176,7 @@ async function fill(page: Page) {
     .click();
   await page.getByLabel("Campaign name", { exact: true }).fill("Demo KOL");
   await page.getByLabel("Referral code", { exact: true }).fill("demo2026");
+  await page.getByLabel("Marks for code users", { exact: true }).fill("50");
   await fillDateTimeInput(
     page,
     "kol-activationAt",
@@ -200,10 +202,14 @@ test("creates once with WIB dates, uppercase code, exact bps and refreshes immut
   await expect(
     page.getByRole("row").filter({ hasText: "DEMO2026" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "DEMO2026" }),
+  ).toContainText("50 Marks");
   expect(state.payloads).toHaveLength(1);
   expect(state.payloads[0].json).toEqual({
     name: "Demo KOL",
     code: "DEMO2026",
+    welcomeMarks: 50,
     campaignType: "kol",
     partnerName: null,
     bankName: null,

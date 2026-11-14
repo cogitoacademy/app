@@ -30,6 +30,7 @@ export const officeKolResultSchema = z.object({
   campaignType: z.enum(["internal", "kol"]).optional(),
   activationAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
+  welcomeMarks: z.number().int().min(0).max(100_000),
   attributionWindowDays: z.number(),
   flatAmountIdr: z.number(),
   percentBps: z.number(),

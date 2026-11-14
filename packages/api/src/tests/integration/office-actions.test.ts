@@ -211,6 +211,7 @@ describe("Office actions guarded database acceptance", () => {
     const code =
       `O${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`.toUpperCase();
     await action("referrals.createKolCampaign", {
+      welcomeMarks: 15,
       name: prefix,
       code,
       expiresAt: new Date(Date.now() + 86400_000).toISOString(),

@@ -13,6 +13,7 @@ const id = "12345678-1234-4234-8234-123456789012";
 const campaign = {
   name: "Campaign",
   code: "KOL2026",
+  welcomeMarks: 15,
   expiresAt: "2030-12-01T00:00:00Z",
   flatAmountIdr: 5000,
 };
@@ -236,6 +237,10 @@ test("campaign and settlement validation rejects invalid financial terms before 
     { activationAt: "2031-01-01T00:00:00Z" },
     { attributionWindowDays: 366 },
     { code: "invalid!" },
+    { welcomeMarks: -1 },
+    { welcomeMarks: 1.5 },
+    { welcomeMarks: 100001 },
+    { welcomeMarks: undefined as never },
   ]) {
     // eslint-disable-next-line no-await-in-loop -- Assert each independently invalid financial contract.
     await expect(
