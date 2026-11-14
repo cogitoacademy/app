@@ -76,6 +76,7 @@ All eleven actions use ordinary JSON, **not** the `{"json": ...}` wrapper used b
   "approvedBy": "office-approver",
   "input": {
     "name": "November campaign",
+    "welcomeMarks": 15,
     "code": "OFFICE26",
     "activationAt": "2026-11-20T00:00:00+07:00",
     "expiresAt": "2027-01-01T00:00:00+07:00",
@@ -85,7 +86,7 @@ All eleven actions use ordinary JSON, **not** the `{"json": ...}` wrapper used b
 }
 ```
 
-Send this example to `POST /office/actions/referrals.createKolCampaign`, replacing the example UUID and metadata. Always preview KOL terms before execution because saved terms are permanent. `dryRun=true` validates through the real services then rolls back the database transaction; it does not write storage or an audit entry. For execution, send `dryRun=false` with a fresh UUID. Retry that execution with the same UUID; within seven days it returns the first saved result without performing another write. Keep the action and input the same when retrying. Do not share one execution UUID between different Office items.
+Send this example to `POST /office/actions/referrals.createKolCampaign`, replacing the example UUID and metadata. `welcomeMarks` is required (whole Marks, 0–100,000) and credits each person signing up with the campaign code; 0 disables the signup reward. The preview, result and snapshot terms include this value. Always preview KOL terms before execution because saved terms are permanent. `dryRun=true` validates through the real services then rolls back the database transaction; it does not write storage or an audit entry. For execution, send `dryRun=false` with a fresh UUID. Retry that execution with the same UUID; within seven days it returns the first saved result without performing another write. Keep the action and input the same when retrying. Do not share one execution UUID between different Office items.
 
 A successful response has this shape:
 

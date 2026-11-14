@@ -54,6 +54,7 @@ import {
 const labels = {
   name: "Campaign name",
   code: "Referral code",
+  welcomeMarks: "Marks for code users",
   campaignType: "Campaign type",
   partnerName: "Partner / KOL name (optional)",
   bankName: "Bank name (optional)",
@@ -295,7 +296,8 @@ export function KolCampaignsSection({
                           key === "percent"
                             ? "decimal"
                             : key === "attributionWindowDays" ||
-                                key === "flatAmountIdr"
+                                key === "flatAmountIdr" ||
+                                key === "welcomeMarks"
                               ? "numeric"
                               : "text"
                         }
@@ -303,6 +305,9 @@ export function KolCampaignsSection({
                         aria-describedby={
                           [
                             key === "name" ? "kol-name-description" : null,
+                            key === "welcomeMarks"
+                              ? "kol-welcomeMarks-description"
+                              : null,
                             errors[key] ? `kol-${key}-error` : null,
                           ]
                             .filter(Boolean)
@@ -317,6 +322,13 @@ export function KolCampaignsSection({
                       <FieldDescription id="kol-name-description">
                         Use a campaign title, such as UGM Competition - November
                         2026.
+                      </FieldDescription>
+                    ) : null}
+                    {key === "welcomeMarks" ? (
+                      <FieldDescription id="kol-welcomeMarks-description">
+                        Marks credited to each person who signs up with this
+                        code. Enter 0 to give no Marks. Saved campaign rewards
+                        are fixed.
                       </FieldDescription>
                     ) : null}
                     {errors[key] ? (
@@ -396,6 +408,7 @@ export function KolCampaignsSection({
                 <TableRow>
                   <TableHead>Campaign</TableHead>
                   <TableHead>Code</TableHead>
+                  <TableHead>Marks for code users</TableHead>
                   <TableHead>Type / partner</TableHead>
                   <TableHead>Bank details</TableHead>
                   <TableHead>Activation</TableHead>
@@ -423,6 +436,7 @@ export function KolCampaignsSection({
                       <TableCell className="font-mono">
                         {campaign.code}
                       </TableCell>
+                      <TableCell>{campaign.welcomeMarks} Marks</TableCell>
                       <TableCell>
                         <Badge variant="secondary">
                           {campaign.campaignType === "internal"

@@ -233,6 +233,7 @@ export const officeSnapshotSchema = z.object({
         terms: officeKolResultSchema.pick({
           activationAt: true,
           expiresAt: true,
+          welcomeMarks: true,
           attributionWindowDays: true,
           flatAmountIdr: true,
           percentBps: true,

@@ -4006,3 +4006,7 @@ Office deployment configuration: the SOPS production vault and Coolify app env a
 ### Office integration contract (13 November 2026)
 
 Office contract corrections (13 November 2026): KOL responses (including receipt replay) project only non-personal campaign fields. Snapshot exposes referenceData with competition/blog/FAQ category IDs and approved campaign labels. Action/queue links use real routes; support opens the operations support tab. Snapshot and outbox share the active booking-state set and SLA calculation, so completed/cancelled bookings cannot newly escalate. Eleven concrete action schemas and snapshot output are exported in docs/office-openapi.json. Existing saveDraft behavior remains a single draft state (saving a published item takes it offline); no revision system, new actions or database migration were added. Non-production HTTPS webhook receivers are configurable while production remains fixed. See client/OFFICE-INTEGRATION-HANDOVER.md. Joint Office/production acceptance remains unverified.
+
+## Campaign signup Marks (14 November 2026)
+
+Campaign code signup rewards are stored per campaign as `welcomeMarks` (0–100,000), displayed in the admin creation form/list and snapshotted into `referral_choice`. Global Welcome Marks now governs friend codes only. Migration 0094 backfills existing campaigns from the currently effective referral setting (fallback 15); historical choices/ledger entries are unchanged.

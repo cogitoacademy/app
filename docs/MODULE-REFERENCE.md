@@ -3018,3 +3018,7 @@ Office configuration ownership: SOPS production vault stores credentials; the Co
 ### Office integration contract (13 November 2026)
 
 Office contract ownership: Office approves items and sends the approved action with requester/approver metadata; main app validates and executes existing services within the action transaction. office-contract.ts centralizes the KOL output projection, action URLs, active booking states and escalation eligibility. Dry runs still roll back, seven-day receipts still serialize concurrent retries, and receipt replay cannot expose private KOL metadata. office-snapshot.ts adds read-only category/campaign lookup projections without sending full admin DTOs. office-worker.ts filters terminal booking states using the same eligibility as snapshot. Existing draft/publish semantics are retained; this change does not add independent live and draft revisions or extend the eleven-action allowlist.
+
+## Campaign signup Marks (14 November 2026)
+
+Campaign creation persists `referral_campaign.welcome_marks` and includes it in the existing creation audit. Both email and Google signup choices snapshot this campaign value as `welcomeMarksSnapshot`; friend codes continue to use global settings. Positive amounts use the existing once-only signup ledger key; zero creates no welcome credit. Replays return the saved choice and do not recalculate its reward.

@@ -33,6 +33,7 @@ export const referralCampaign = pgTable(
     pausedAt: timestamp("paused_at", { withTimezone: true }),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
     attributionWindowDays: integer("attribution_window_days").notNull(),
+    welcomeMarks: integer("welcome_marks").notNull(),
     flatAmountIdr: integer("flat_amount_idr").notNull().default(0),
     percentBps: integer("percent_bps").notNull().default(0),
     createdBy: text("created_by").references(() => user.id, {
@@ -54,6 +55,10 @@ export const referralCampaign = pgTable(
     check(
       "referral_campaign_type_valid",
       sql`${table.campaignType} IN ('internal', 'kol')`,
+    ),
+    check(
+      "referral_campaign_welcome_marks_valid",
+      sql`${table.welcomeMarks} BETWEEN 0 AND 100000`,
     ),
     check(
       "referral_campaign_terms_valid",

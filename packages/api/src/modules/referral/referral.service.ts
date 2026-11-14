@@ -268,7 +268,7 @@ export function createReferralService(deps: {
           codeSnapshot: code,
           referrerUserId: null,
           campaignId: campaign.id,
-          welcomeMarksSnapshot: config.welcomeMarks,
+          welcomeMarksSnapshot: campaign.welcomeMarks,
           friendRewardMarksSnapshot: null,
           kolFlatAmountIdrSnapshot: campaign.flatAmountIdr,
           kolPercentBpsSnapshot: campaign.percentBps,
@@ -579,6 +579,7 @@ export function createReferralService(deps: {
           .insert(referralCampaign)
           .values({
             name: input.name,
+            welcomeMarks: input.welcomeMarks,
             campaignType: input.campaignType ?? "kol",
             partnerName: input.partnerName?.trim() || null,
             bankName: input.bankName?.trim() || null,
@@ -638,6 +639,7 @@ export function createReferralService(deps: {
       .select({
         id: referralCampaign.id,
         name: referralCampaign.name,
+        welcomeMarks: referralCampaign.welcomeMarks,
         campaignType: referralCampaign.campaignType,
         partnerName: referralCampaign.partnerName,
         bankName: referralCampaign.bankName,

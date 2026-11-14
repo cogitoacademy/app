@@ -1069,6 +1069,11 @@
                                     "type": "string",
                                     "format": "date-time"
                                   },
+                                  "welcomeMarks": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100000
+                                  },
                                   "attributionWindowDays": {
                                     "type": "number"
                                   },
@@ -1082,6 +1087,7 @@
                                 "required": [
                                   "activationAt",
                                   "expiresAt",
+                                  "welcomeMarks",
                                   "attributionWindowDays",
                                   "flatAmountIdr",
                                   "percentBps"
@@ -1637,6 +1643,11 @@
                         "maxLength": 32,
                         "pattern": "^[A-Za-z0-9]+$"
                       },
+                      "welcomeMarks": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
                       "campaignType": {
                         "type": "string",
                         "enum": ["internal", "kol"]
@@ -1693,7 +1704,7 @@
                         "maximum": 10000
                       }
                     },
-                    "required": ["name", "code", "expiresAt"]
+                    "required": ["name", "code", "welcomeMarks", "expiresAt"]
                   }
                 },
                 "required": [
@@ -1752,6 +1763,11 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "welcomeMarks": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000
+                        },
                         "attributionWindowDays": {
                           "type": "number"
                         },
@@ -1780,6 +1796,7 @@
                         "id",
                         "activationAt",
                         "expiresAt",
+                        "welcomeMarks",
                         "attributionWindowDays",
                         "flatAmountIdr",
                         "percentBps",
@@ -1944,6 +1961,11 @@
                           "type": "string",
                           "format": "date-time"
                         },
+                        "welcomeMarks": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000
+                        },
                         "attributionWindowDays": {
                           "type": "number"
                         },
@@ -1972,6 +1994,7 @@
                         "id",
                         "activationAt",
                         "expiresAt",
+                        "welcomeMarks",
                         "attributionWindowDays",
                         "flatAmountIdr",
                         "percentBps",

@@ -497,6 +497,7 @@ export function createOfficeSnapshotService(deps: {
             terms: {
               activationAt: r.activationAt,
               expiresAt: r.expiresAt,
+              welcomeMarks: r.welcomeMarks,
               attributionWindowDays: r.attributionWindowDays,
               flatAmountIdr: r.flatAmountIdr,
               percentBps: r.percentBps,

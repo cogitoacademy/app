@@ -51,6 +51,7 @@ mock.module("../../modules/referral/referral.service", () => ({
     const campaign = {
       id: "campaign-1",
       code: "OFFICE26",
+      welcomeMarks: 15,
       activationAt: new Date("2026-01-01"),
       expiresAt: new Date("2027-01-01"),
       attributionWindowDays: 90,
@@ -181,6 +182,7 @@ for (const name of [
             ? {
                 name: "Campaign",
                 code: "OFFICE26",
+                welcomeMarks: 15,
                 expiresAt: "2027-01-01T00:00:00Z",
                 flatAmountIdr: 1000,
               }
@@ -192,7 +194,7 @@ for (const name of [
         ok: true,
         dryRun,
         id: "campaign-1",
-        result: { id: "campaign-1", flatAmountIdr: 1000 },
+        result: { id: "campaign-1", welcomeMarks: 15, flatAmountIdr: 1000 },
       });
       for (const secret of [
         "Private Partner",

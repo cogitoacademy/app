@@ -124,8 +124,8 @@ export function ReferralSettingsCard() {
             Referral settings
           </h2>
           <Text className="text-sm text-muted">
-            Welcome Marks, friend reward, and the semester cap. Every change is
-            audited.
+            Welcome Marks for friend codes, friend reward, and the semester cap.
+            Campaigns set their own signup Marks. Every change is audited.
           </Text>
         </div>
         <Button
@@ -174,8 +174,8 @@ export function ReferralSettingsCard() {
             <DialogHeader>
               <DialogTitle>Edit referral settings</DialogTitle>
               <DialogDescription>
-                These values apply to signups and friend rewards from the next
-                decision onward.
+                These values apply to friend-code signups and friend rewards
+                from the next decision onward.
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="space-y-4">

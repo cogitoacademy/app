@@ -397,9 +397,9 @@ startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
   `{ expectedVersion, welcomeMarks, friendRewardMarks, semesterCapMarks,
 reason }`; creates an audited settings revision.
 - `POST /rpc/adminReferral/createKolCampaign` — admin; input
-  `{ name, code, activationAt?, expiresAt, attributionWindowDays,
+  `{ name, code, welcomeMarks, activationAt?, expiresAt, attributionWindowDays,
 flatAmountIdr, percentBps, campaignType?, partnerName?, bankName?, bankAccountNumber?, bankAccountHolderName?, notes? }`. Expiry must follow activation, codes are
-  globally unique. KOL campaigns require a positive commission component; internal campaigns may have zero commission.
+  globally unique. `welcomeMarks` is a required integer from 0 to 100,000 credited to the code user at signup. KOL campaigns require a positive commission component; internal campaigns may have zero commission.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
   campaign dates, code, attribution window, saved terms, and `pausedAt`.
 - `POST /rpc/adminReferral/setKolCampaignPaused` — admin; input
@@ -2961,3 +2961,7 @@ Office deployment note: OFFICE_READ_KEY and OFFICE_WRITE_KEY are backend credent
 ### Office integration contract (13 November 2026)
 
 Office server-to-server contract: GET /office/snapshot now includes referenceData.competitions and referenceData.blogCategories ({id,label,parentId}), referenceData.faqCategories and referenceData.campaigns ({id,label}). Existing taxonomy and analytics fields retain their shape. POST /office/actions/:name still accepts the same eleven names and the ordinary JSON envelope {dryRun,idempotencyKey,officeItemId,requestedBy,approvedBy,input}; this is not an oRPC json wrapper. KOL result and replay omit partner/bank/notes fields. Action URLs now use real app routes; blog links carry the article ID. GET /openapi.json includes concrete action paths with runtime-derived input schemas and typed results; production/staging documentation access remains disabled. A portable Office-only specification is checked in at docs/office-openapi.json (regenerate with bun scripts/export-office-openapi.ts); request/response examples are in client/OFFICE-INTEGRATION-HANDOVER.md.
+
+## Campaign signup Marks (14 November 2026)
+
+`POST /rpc/adminReferral/createKolCampaign` requires `welcomeMarks`: integer 0–100,000, alongside the existing campaign fields, in the `{ "json": <input> }` envelope. Creation and `/rpc/adminReferral/listKolCampaigns` return `welcomeMarks`. Office `referrals.createKolCampaign` uses the same required input. Saved campaign reward terms remain immutable; 0 disables the signup credit for that campaign.

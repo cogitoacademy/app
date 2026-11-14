@@ -27,6 +27,12 @@ test("every concrete action has its runtime input schema and a typed response", 
   const schema =
     paths["/office/actions/referrals.createKolCampaign"].post.requestBody
       .content["application/json"].schema;
+  expect(schema.properties.input.required).toContain("welcomeMarks");
+  expect(schema.properties.input.properties.welcomeMarks).toMatchObject({
+    type: "integer",
+    minimum: 0,
+    maximum: 100000,
+  });
   expect(schema.properties.input.properties.expiresAt).toMatchObject({
     type: "string",
     format: "date-time",

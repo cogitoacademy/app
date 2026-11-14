@@ -93,3 +93,17 @@ test("partner details are trimmed and account numbers retain leading zeroes", ()
     expect(result.errors[field]).toBeTruthy();
   }
 });
+
+test("campaign Marks accept zero and custom amounts but reject missing or invalid values", () => {
+  for (const amount of ["0", "20", "50", "100000"]) {
+    expect(
+      parseCampaignDraft({ ...draft, welcomeMarks: amount }).input
+        ?.welcomeMarks,
+    ).toBe(Number(amount));
+  }
+  for (const amount of ["", " ", "-1", "1.5", "100001", "nope"]) {
+    const result = parseCampaignDraft({ ...draft, welcomeMarks: amount });
+    expect(result.input).toBeNull();
+    expect(result.errors.welcomeMarks).toBeTruthy();
+  }
+});

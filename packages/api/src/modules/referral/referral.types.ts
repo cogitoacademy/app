@@ -34,6 +34,7 @@ export const createKolCampaignInput = z
   .object({
     name: z.string().trim().min(1).max(100),
     code: referralCodeInput,
+    welcomeMarks: z.number().int().min(0).max(100_000),
     campaignType: z.enum(["internal", "kol"]).optional(),
     partnerName: z.string().trim().max(100).nullable().optional(),
     bankName: z.string().trim().max(100).nullable().optional(),
