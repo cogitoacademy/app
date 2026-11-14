@@ -9,7 +9,11 @@ import {
   AccordionPanel,
 } from "@cogito-app/ui/components/selia/accordion";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -172,77 +176,64 @@ export function TutorDrawer({
         direction={isDesktop ? "right" : "bottom"}
         className={isDesktop ? "w-full max-w-lg" : undefined}
       >
-        <div className="relative max-h-[270px] md:h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
-          {selectedTutor.user?.image ? (
-            <img
-              src={selectedTutor.user.image}
-              alt={tutorName}
-              className="size-full object-cover object-top"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center bg-avatar h-[270px]">
-              <Avatar size="lg" className="size-24!">
-                <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
-              </Avatar>
-            </div>
-          )}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent"
-          />
-          {heroSubjects.length > 0 ? (
-            <div className="absolute inset-x-4 bottom-4 z-10 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-              {heroSubjects.map((subject) => (
-                <Badge
-                  key={subject.id}
-                  variant="secondary"
-                  size="md"
-                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${subject.parentColors ? competitionPaletteClassName : ""}`}
-                  style={getCompetitionPaletteStyle(subject.parentColors)}
-                >
-                  {subject.label}
-                </Badge>
-              ))}
-              {subjectLabels.length > heroSubjects.length ? (
-                <Badge
-                  variant="secondary"
-                  size="md"
-                  className="shrink-0 bg-background/90 text-foreground"
-                >
-                  +{subjectLabels.length - heroSubjects.length}
-                </Badge>
-              ) : null}
-            </div>
-          ) : null}
+        <div className="flex shrink-0 justify-end px-4 pt-4">
           <DrawerClose
             render={
-              <Button
-                variant="outline"
-                size="xs-icon"
-                aria-label="Close"
-                className="absolute top-4 right-4 z-20 bg-background/90 text-foreground shadow-sm hover:bg-background"
-              />
+              <Button variant="plain" size="xs-icon" aria-label="Close" />
             }
           >
             <IconX className="size-4" />
           </DrawerClose>
         </div>
         <DrawerBody>
-          <div className="flex justify-between items-start flex-wrap gap-y-3  ">
-            <DrawerTitle className="truncate text-xl md:text-2xl">
-              {tutorName}
-            </DrawerTitle>
-            {t.modality && (
-              <div>
-                <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+          <div className="flex items-center gap-4 [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md">
+            <Avatar size="lg" className="size-20!">
+              <AvatarImage
+                src={selectedTutor.user?.image ?? undefined}
+                alt={tutorName}
+              />
+              <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <DrawerTitle className="break-words text-xl md:text-2xl">
+                {tutorName}
+              </DrawerTitle>
+              {t.affiliation ? (
+                <Text className="mt-1 font-medium">{t.affiliation}</Text>
+              ) : null}
+              {t.modality ? (
+                <Badge
+                  className="mt-2"
+                  variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}
+                >
                   {MODALITY_LABELS[t.modality] ?? t.modality}
                 </Badge>
-              </div>
-            )}
+              ) : null}
+            </div>
           </div>
-
-          {t.affiliation ? (
-            <Text className="font-medium">{t.affiliation}</Text>
+          {heroSubjects.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {heroSubjects.map((subject) => (
+                <Badge
+                  key={subject.id}
+                  variant="secondary"
+                  size="md"
+                  className={
+                    subject.parentColors
+                      ? competitionPaletteClassName
+                      : undefined
+                  }
+                  style={getCompetitionPaletteStyle(subject.parentColors)}
+                >
+                  {subject.label}
+                </Badge>
+              ))}
+              {subjectLabels.length > heroSubjects.length ? (
+                <Badge variant="secondary" size="md">
+                  +{subjectLabels.length - heroSubjects.length}
+                </Badge>
+              ) : null}
+            </div>
           ) : null}
           {t.shortBio && (
             <div className="mt-3">

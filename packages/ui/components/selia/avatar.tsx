@@ -43,7 +43,7 @@ export function AvatarImage({
   return (
     <BaseAvatar.Image
       data-slot="avatar-image"
-      className={cn("size-full rounded-full", className)}
+      className={cn("size-full rounded-full object-cover", className)}
       {...props}
     />
   );
