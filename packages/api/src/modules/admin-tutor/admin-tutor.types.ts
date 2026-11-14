@@ -5,6 +5,8 @@ import {
   tutorEducationInput,
 } from "../tutor/tutor-achievements";
 
+import { tutorExperiencesInput } from "../tutor/tutor-experiences";
+
 export const createInviteInput = z.object({
   email: z.string().email().max(320),
   displayName: z.string().min(1).max(255),
@@ -73,4 +75,5 @@ export const updateTutorAchievementsInput = z.object({
   version: z.number().int(),
   education: tutorEducationInput,
   achievements: tutorAchievementsInput,
+  experiences: tutorExperiencesInput.optional(),
 });

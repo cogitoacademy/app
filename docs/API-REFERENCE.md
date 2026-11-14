@@ -1801,10 +1801,10 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **RPC path:** `/rpc/adminTutor/updateTutorAchievements`
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, version, education, achievements }`; `education` accepts up to 2 `{ university, degree }` entries and `achievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards as one or more full titles
+- **Input:** `{ tutorProfileId, version, education, achievements, experiences? }`; `education` accepts up to 2 `{ university, degree }` entries and `achievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards as one or more full titles
 - **Output:** Updated `TutorProfile` row
 - **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `OPTIMISTIC_LOCK` (409) when `version` no longer matches
-- **Description:** Lets an admin normalize education and competition copy during profile review. The update increments the profile version, records an audit event, and mirrors matching pending achievement fields when a published tutor has a pending edit proposal.
+- **Description:** `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries (null end year means ongoing); omission preserves experiences, and `[]` clears them. Lets an admin normalize education, competition, and work experience copy during profile review. The update increments the profile version, records an audit event, and mirrors matching pending achievement fields when a published tutor has a pending edit proposal.
 
 ---
 
