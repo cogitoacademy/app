@@ -792,6 +792,60 @@ describe("AdminTutor Service", () => {
       expect(updateArgs.achievements).toBeUndefined();
     });
 
+    test.each([false, true])(
+      "updates experiences in the correct review layer (pending=%s)",
+      async (pending) => {
+        const experiences = [
+          {
+            role: "Tutor",
+            organization: "Cogito",
+            startYear: 2024,
+            endYear: null,
+            description: "Teaching",
+          },
+        ];
+        const profile = {
+          ...makeProfile(),
+          version: 2,
+          experiences: [],
+          pendingProfileChanges: pending
+            ? { experiences: [], shortBio: "Pending bio" }
+            : null,
+        };
+        const deps = makeDeps({
+          adminTutorRepo: {
+            ...makeDeps().adminTutorRepo,
+            getTutorProfileById: mock(async () => profile),
+            updateTutorProfileWithVersion: mock(async () => [
+              { ...profile, version: 3 },
+            ]),
+          },
+        });
+        await createAdminTutorService(deps as any).updateTutorAchievements(
+          "admin1",
+          {
+            tutorProfileId: "p1",
+            version: 2,
+            education: [],
+            achievements: [],
+            experiences,
+          },
+        );
+        const updates = (
+          deps.adminTutorRepo.updateTutorProfileWithVersion as any
+        ).mock.calls[0][3];
+        if (pending) {
+          expect(updates.experiences).toBeUndefined();
+          expect(updates.pendingProfileChanges).toEqual({
+            experiences,
+            shortBio: "Pending bio",
+          });
+        } else {
+          expect(updates.experiences).toEqual(experiences);
+        }
+      },
+    );
+
     test("updateTutorAchievements rejects a stale profile version", async () => {
       const profile = {
         ...makeProfile(),
