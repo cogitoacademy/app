@@ -55,7 +55,11 @@ import {
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "@/components/tutor/tutor-achievements";
-import { type TutorExperience } from "@/components/tutor/tutor-experiences";
+import {
+  TutorExperiencesEditor,
+  validateTutorExperienceDraft,
+  type TutorExperience,
+} from "@/components/tutor/tutor-experiences";
 import { TutorProfileHistory } from "@/components/tutor/profile-history";
 import { TutorPendingChanges } from "@/components/admin/tutor-pending-changes";
 import { getTutorProfileFieldLabel } from "@/components/tutor/profile-field-presentation";
@@ -496,6 +500,7 @@ export function TutorReviewCard({
   const [achievementDraft, setAchievementDraft] = useState({
     education: [] as TutorEducationEntry[],
     achievements: [] as TutorAchievement[],
+    experiences: [] as TutorExperience[],
   });
   const achievementsUpdateMutation = useMutation(
     orpc.adminTutor.updateTutorAchievements.mutationOptions({
@@ -508,7 +513,7 @@ export function TutorReviewCard({
           queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
         });
         toastManager.add({
-          title: "Tutor achievements updated",
+          title: "Tutor credentials updated",
           description: "The corrected format is now ready for review.",
           type: "success",
         });
@@ -516,7 +521,7 @@ export function TutorReviewCard({
       },
       onError: (error: unknown) => {
         toastManager.add({
-          title: "Tutor achievements could not be updated",
+          title: "Tutor credentials could not be updated",
           description: getUserFacingError(error),
           type: "error",
         });
@@ -534,6 +539,12 @@ export function TutorReviewCard({
     setAchievementDraft({
       education: pendingEducation ?? profile.education ?? [],
       achievements: pendingAchievements ?? profile.achievements ?? [],
+      experiences:
+        (profile.pendingProfileChanges?.experiences as
+          | TutorExperience[]
+          | undefined) ??
+        profile.experiences ??
+        [],
     });
     setAchievementsEditOpen(true);
   }
@@ -543,10 +554,20 @@ export function TutorReviewCard({
       achievementDraft.education,
       achievementDraft.achievements,
     );
-    if (validation.education || validation.achievements) {
+    const experienceValidation = validateTutorExperienceDraft(
+      achievementDraft.experiences,
+    );
+    if (
+      validation.education ||
+      validation.achievements ||
+      experienceValidation.experiences
+    ) {
       toastManager.add({
-        title: "Check the achievement entries",
-        description: validation.education ?? validation.achievements,
+        title: "Check the credential entries",
+        description:
+          validation.education ??
+          validation.achievements ??
+          experienceValidation.experiences,
         type: "error",
       });
       return;
@@ -555,6 +576,12 @@ export function TutorReviewCard({
     achievementsUpdateMutation.mutate({
       tutorProfileId: profile.id,
       version: profile.version,
+      experiences: achievementDraft.experiences.map((entry) => ({
+        ...entry,
+        role: entry.role.trim(),
+        organization: entry.organization.trim(),
+        description: entry.description.trim(),
+      })),
       education: achievementDraft.education.map((entry) => ({
         university: entry.university.trim(),
         degree: entry.degree.trim(),
@@ -1255,10 +1282,10 @@ export function TutorReviewCard({
       >
         <DialogPopup className="sm:max-w-4xl">
           <DialogHeader className="flex-col items-start gap-1.5">
-            <DialogTitle>Edit tutor achievements</DialogTitle>
+            <DialogTitle>Edit tutor credentials</DialogTitle>
             <DialogDescription>
-              Normalize the education and competition entries before approving
-              this tutor profile.
+              Normalize the education, competition, and work experience entries
+              before approving this tutor profile.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="min-h-0">
@@ -1276,6 +1303,13 @@ export function TutorReviewCard({
               }
               idPrefix={`admin-edit-${profile.id}-achievements`}
             />
+            <TutorExperiencesEditor
+              experiences={achievementDraft.experiences}
+              onExperiencesChange={(experiences) =>
+                setAchievementDraft((current) => ({ ...current, experiences }))
+              }
+              idPrefix={`admin-edit-${profile.id}-experiences`}
+            />
           </DialogBody>
           <DialogFooter>
             <Button
@@ -1292,7 +1326,7 @@ export function TutorReviewCard({
               progress={achievementsUpdateMutation.isPending}
               disabled={achievementsUpdateMutation.isPending}
             >
-              Save achievements
+              Save credentials
             </Button>
           </DialogFooter>
         </DialogPopup>

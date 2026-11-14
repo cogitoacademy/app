@@ -679,7 +679,22 @@ export function createAdminTutorService(deps: {
       if (!hasPendingAchievements) {
         updates.achievements = input.achievements;
       }
-      if (hasPendingEducation || hasPendingAchievements) {
+      const hasPendingExperiences = Object.prototype.hasOwnProperty.call(
+        pendingProfileChanges,
+        "experiences",
+      );
+      if (input.experiences !== undefined) {
+        if (hasPendingExperiences) {
+          pendingProfileChanges.experiences = input.experiences;
+        } else {
+          updates.experiences = input.experiences;
+        }
+      }
+      if (
+        hasPendingEducation ||
+        hasPendingAchievements ||
+        (hasPendingExperiences && input.experiences !== undefined)
+      ) {
         updates.pendingProfileChanges = pendingProfileChanges;
       }
 
