@@ -2,6 +2,8 @@
 
 ## Completed
 
+- Tutor photos preserve aspect ratio; the detail drawer uses a compact rounded avatar matching the tutor card. Desktop and 390px mobile rendering inspected with a complete synthetic profile; live uploaded-photo acceptance remains separate. Evidence: `docs/assets/tutor-photo/`.
+
 - Balance uses V3 catalog, quotes and explicit package/custom/recommended choices only. Inactive pricing blocks top-up; no legacy package fallback.
 - Tutor discovery/drawer/booking creation require competition-scoped V3 prices. Old profile price editors, review tables and display fallbacks are removed.
 - Booking honorarium reads pinned V3 IDR snapshots. Series totals require actual session snapshots; missing data is unavailable rather than a guessed Marks conversion. List cards show per-session amounts.
