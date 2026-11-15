@@ -186,7 +186,7 @@ export function TutorDrawer({
         </div>
         <DrawerBody>
           <div className="flex items-center gap-4 [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md">
-            <Avatar size="lg" className="size-20!">
+            <Avatar size="lg" className="size-24!">
               <AvatarImage
                 src={selectedTutor.user?.image ?? undefined}
                 alt={tutorName}

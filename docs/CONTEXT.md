@@ -2,7 +2,7 @@
 
 ## Tutor photo proportions (14 November 2026)
 
-Shared Selia AvatarImage uses object-cover so landscape and portrait images keep their proportions while filling the avatar. The tutor detail drawer uses an 80px avatar next to the name, affiliation and modality, with rounded-md corners matching the tutor card. Subject badges wrap below this identity group. Upload storage and RPC contracts are unchanged.
+Shared Selia AvatarImage uses object-cover so landscape and portrait images keep their proportions while filling the avatar. The tutor detail drawer uses a 96px avatar next to the name, affiliation and modality, with rounded-md corners matching the tutor card. Subject badges wrap below this identity group. Upload storage and RPC contracts are unchanged.
 
 ## CI coverage reuse (7 November 2026)
 
