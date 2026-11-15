@@ -650,6 +650,74 @@ describe("AdminTutor Service", () => {
       );
     });
 
+    test("admin introduction correction rejects a missing profile without writing or auditing", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      await expect(
+        createAdminTutorService(deps as any).updateTutorIntroduction("admin1", {
+          tutorProfileId: "p1",
+          version: 1,
+          affiliation: "Headline",
+          shortBio: "Bio",
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).not.toHaveBeenCalled();
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
+    });
+
+    test("admin introduction correction audits the updated row when reread is missing", async () => {
+      const profile = {
+        ...makeProfile(),
+        affiliation: "Old",
+        shortBio: "Old bio",
+      };
+      const updated = {
+        ...profile,
+        version: 2,
+        affiliation: "Headline",
+        shortBio: "Bio",
+      };
+      let reads = 0;
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            ++reads === 1 ? profile : null,
+          ),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const result = await createAdminTutorService(
+        deps as any,
+      ).updateTutorIntroduction("admin1", {
+        tutorProfileId: "p1",
+        version: 1,
+        affiliation: "Headline",
+        shortBio: "Bio",
+      });
+      expect(result as unknown).toBe(updated);
+      expect(deps.adminTutorRepo.getTutorProfileById).toHaveBeenCalledTimes(2);
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_introduction_updated",
+          beforeState: expect.objectContaining({
+            affiliation: "Old",
+            shortBio: "Old bio",
+          }),
+          afterState: expect.objectContaining({
+            affiliation: "Headline",
+            shortBio: "Bio",
+          }),
+        }),
+      );
+    });
+
     test("admin introduction correction rejects a stale version without an audit", async () => {
       const deps = makeDeps({
         adminTutorRepo: {

@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import { createAdminTutorService } from "../../modules/admin-tutor/admin-tutor.service";
 import { createAdminTutorHandler } from "../../modules/admin-tutor/admin-tutor.handler";
 import { ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
+import { TutorProfileNotFoundError } from "../../modules/admin-tutor/admin-tutor.errors";
 
 function makeAdminTutorRepo(overrides: Record<string, unknown> = {}) {
   return {
@@ -49,6 +50,33 @@ function makeDb() {
 }
 
 describe("AdminTutorHandler", () => {
+  test("routes introduction corrections and maps domain errors", async () => {
+    const input = {
+      tutorProfileId: "p1",
+      version: 2,
+      affiliation: "UGM",
+      shortBio: "Tutor",
+    };
+    const updateTutorIntroduction = mock(
+      async (_adminId: string, _input: typeof input) => ({ id: "p1" }),
+    );
+    const handler = createAdminTutorHandler({ updateTutorIntroduction } as any);
+    const context = { session: { user: { id: "admin-1" } } } as any;
+
+    expect(
+      await handler.updateTutorIntroduction({ context, input }),
+    ).toMatchObject({ id: "p1" });
+    expect(updateTutorIntroduction).toHaveBeenCalledWith("admin-1", input);
+    updateTutorIntroduction.mockImplementation(async () => {
+      throw new TutorProfileNotFoundError("p1");
+    });
+    await expect(
+      handler.updateTutorIntroduction({ context, input }),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Tutor profile not found",
+    });
+  });
   test("routes inspectInvitee and sendInviteAgain through the domain mapper", async () => {
     const service = {
       inspectInvitee: mock(async (input: unknown) => ({ input })),
