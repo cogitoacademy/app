@@ -26,6 +26,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
   Table,
   TableBody,
@@ -61,6 +62,7 @@ import {
   validateTutorExperienceDraft,
   type TutorExperience,
 } from "@/components/tutor/tutor-experiences";
+import { TutorProfileHighlights } from "@/components/tutor/tutor-profile-highlights";
 import { TutorProfileHistory } from "@/components/tutor/profile-history";
 import { TutorPendingChanges } from "@/components/admin/tutor-pending-changes";
 import { getTutorProfileFieldLabel } from "@/components/tutor/profile-field-presentation";
@@ -1409,6 +1411,7 @@ export function TutorReviewCard({
           </DialogHeader>
           <DialogBody className="min-h-0">
             <TutorAchievementsEditor
+              showPreview={false}
               education={achievementDraft.education}
               achievements={achievementDraft.achievements}
               onEducationChange={(education) =>
@@ -1422,13 +1425,38 @@ export function TutorReviewCard({
               }
               idPrefix={`admin-edit-${profile.id}-achievements`}
             />
+            <Separator className="my-6" />
             <TutorExperiencesEditor
+              showPreview={false}
               experiences={achievementDraft.experiences}
               onExperiencesChange={(experiences) =>
                 setAchievementDraft((current) => ({ ...current, experiences }))
               }
               idPrefix={`admin-edit-${profile.id}-experiences`}
             />
+            <section
+              className="mt-6 space-y-4 border-t border-border pt-6"
+              aria-label="Public preview"
+            >
+              <Heading level={3} size="sm">
+                Public preview
+              </Heading>
+              {achievementDraft.education.length ||
+              achievementDraft.achievements.length ||
+              achievementDraft.experiences.length ? (
+                <TutorProfileHighlights
+                  education={achievementDraft.education}
+                  achievements={achievementDraft.achievements}
+                  experiences={achievementDraft.experiences}
+                  idPrefix={`admin-edit-${profile.id}-preview`}
+                />
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  Add education, an achievement, or an experience to see the
+                  public profile preview.
+                </Text>
+              )}
+            </section>
           </DialogBody>
           <DialogFooter>
             <Button

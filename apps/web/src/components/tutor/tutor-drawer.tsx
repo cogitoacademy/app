@@ -14,7 +14,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
-import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import {
@@ -37,10 +36,10 @@ import {
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
-  TutorAchievementsDisplay,
   type TutorAchievement,
   type TutorEducationEntry,
 } from "./tutor-achievements";
+import { TutorProfileHighlights } from "./tutor-profile-highlights";
 import type { TutorExperience } from "./tutor-experiences";
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -282,46 +281,14 @@ export function TutorDrawer({
           }
 
           {hasProfileHighlights ? (
-            <section
-              aria-label="Tutor profile highlights"
-              className="mt-5 flex flex-col gap-3"
-            >
-              {hasEducation ? (
-                <Card className="bg-accent shadow-none">
-                  <CardBody className="p-4">
-                    <TutorAchievementsDisplay
-                      className="flex flex-col"
-                      education={selectedTutor.education}
-                      idPrefix="tutor-drawer-education"
-                    />
-                  </CardBody>
-                </Card>
-              ) : null}
-
-              {hasAchievements ? (
-                <Card className="bg-accent shadow-none">
-                  <CardBody className="p-4">
-                    <TutorAchievementsDisplay
-                      className="flex flex-col"
-                      achievements={selectedTutor.achievements}
-                      idPrefix="tutor-drawer-achievements"
-                    />
-                  </CardBody>
-                </Card>
-              ) : null}
-
-              {hasExperiences ? (
-                <Card className="bg-accent shadow-none">
-                  <CardBody className="p-4">
-                    <TutorAchievementsDisplay
-                      className="flex flex-col"
-                      experiences={selectedTutor.experiences}
-                      idPrefix="tutor-drawer-experiences"
-                    />
-                  </CardBody>
-                </Card>
-              ) : null}
-            </section>
+            <div className="mt-5">
+              <TutorProfileHighlights
+                education={selectedTutor.education}
+                achievements={selectedTutor.achievements}
+                experiences={selectedTutor.experiences}
+                idPrefix="tutor-drawer"
+              />
+            </div>
           ) : null}
 
           <DrawerDescription className="sr-only">

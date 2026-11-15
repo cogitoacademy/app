@@ -3030,3 +3030,6 @@ Tutor invitations and queued notifications use the welcome email layout and inli
 ### Admin tutor introduction editing
 
 adminTutor.updateTutorIntroduction updates live affiliation/shortBio, synchronizes matching pending proposal fields, preserves unrelated pending edits and moderation state, and records tutor_introduction_updated with before/after snapshots in the same transaction.
+
+
+Admin credentials public preview and the public tutor drawer share TutorProfileHighlights: education, achievements, and experiences use the same accent cards, spacing, and typography. One preview follows all admin credential fields, with a small heading matching Education and a separator before Experiences.
