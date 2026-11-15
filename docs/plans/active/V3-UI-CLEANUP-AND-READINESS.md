@@ -153,3 +153,7 @@ Campaign signup Marks: implementation complete in source (required per-campaign 
 ### Transactional email branding (15 November 2026)
 
 Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+Implemented admin tutor headline and brief-description editing with shared tutor input validation, optimistic locking, and profile history. Live browser acceptance remains pending.

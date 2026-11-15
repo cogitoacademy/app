@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { updateMyProfileInput } from "../tutor/tutor.types";
 import { profileImageUrl } from "../../lib/url-schema";
 import {
   tutorAchievementsInput,
@@ -70,6 +71,7 @@ export const reviewTutorProfileInput = z.object({
   profileImageUrl: profileImageUrl.optional(),
 });
 
+
 export const updateTutorAchievementsInput = z.object({
   tutorProfileId: z.string().max(100),
   version: z.number().int(),
@@ -77,3 +79,11 @@ export const updateTutorAchievementsInput = z.object({
   achievements: tutorAchievementsInput,
   experiences: tutorExperiencesInput.optional(),
 });
+
+export const updateTutorIntroductionInput = updateMyProfileInput
+  .pick({ shortBio: true, affiliation: true })
+  .required()
+  .extend({
+    tutorProfileId: z.string().min(1).max(100),
+    version: z.number().int(),
+  });

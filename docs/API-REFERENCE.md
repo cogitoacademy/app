@@ -2969,3 +2969,7 @@ Office server-to-server contract: GET /office/snapshot now includes referenceDat
 ### Transactional email branding (15 November 2026)
 
 Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+POST /rpc/adminTutor/updateTutorIntroduction (admin only): envelope {"json":{"tutorProfileId":"...","version":0,"affiliation":"Headline","shortBio":"Brief description"}}. Returns the updated profile in the RPC json envelope. Headline max 255 characters; description max 2000 characters and 50 words. Stale versions reject.

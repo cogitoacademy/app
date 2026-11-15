@@ -616,6 +616,59 @@ describe("AdminTutor Service", () => {
       expect(result.id).toBe("p1");
     });
 
+    test("admin introduction correction updates live and pending values with an audit", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        pendingProfileChanges: { affiliation: "Old", education: [] },
+      };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await service.updateTutorIntroduction("admin1", {
+        tutorProfileId: "p1",
+        version: 2,
+        affiliation: "New headline",
+        shortBio: "Brief introduction",
+      });
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).toHaveBeenCalledWith(expect.anything(), "p1", 2, {
+        affiliation: "New headline",
+        shortBio: "Brief introduction",
+        pendingProfileChanges: { affiliation: "New headline", education: [] },
+      });
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_introduction_updated",
+          actorId: "admin1",
+        }),
+      );
+    });
+
+    test("admin introduction correction rejects a stale version without an audit", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          updateTutorProfileWithVersion: mock(async () => []),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.updateTutorIntroduction("admin1", {
+          tutorProfileId: "p1",
+          version: 0,
+          affiliation: "Headline",
+          shortBio: "Bio",
+        }),
+      ).rejects.toThrow(TutorProfileOptimisticLockError);
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
+    });
+
     test("updateTutorAchievements normalizes entries and records an audit", async () => {
       const profile = {
         ...makeProfile(),

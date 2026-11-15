@@ -3026,3 +3026,7 @@ Campaign creation persists `referral_campaign.welcome_marks` and includes it in 
 ### Transactional email branding (15 November 2026)
 
 Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+adminTutor.updateTutorIntroduction updates live affiliation/shortBio, synchronizes matching pending proposal fields, preserves unrelated pending edits and moderation state, and records tutor_introduction_updated with before/after snapshots in the same transaction.

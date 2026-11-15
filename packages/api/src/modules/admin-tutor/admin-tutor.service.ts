@@ -35,6 +35,7 @@ import {
   type ReviewAction,
   inspectInviteeInput,
   updateTutorAchievementsInput,
+  updateTutorIntroductionInput,
 } from "./admin-tutor.types";
 import type { AdminTutorAuditPort } from "./index";
 import type { EmailPort } from "../email/email.service";
@@ -108,6 +109,10 @@ type ListInvitesInput = z.infer<typeof listInvitesInput>;
 type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
 type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
+type UpdateTutorIntroductionInput = z.infer<
+  typeof updateTutorIntroductionInput
+>;
+
 type UpdateTutorAchievementsInput = z.infer<
   typeof updateTutorAchievementsInput
 >;
@@ -713,7 +718,78 @@ export function createAdminTutorService(deps: {
     });
   }
 
+  async function updateTutorIntroduction(
+    adminId: string,
+    input: UpdateTutorIntroductionInput,
+  ): Promise<TutorProfileRow> {
+    return db.transaction(async (tx) => {
+      const existing = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+      if (!existing) {
+        throw new TutorProfileNotFoundError(input.tutorProfileId);
+      }
+
+      const pendingProfileChanges = {
+        ...(existing.pendingProfileChanges as Record<string, unknown> | null),
+      };
+      const updates: TutorProfileUpdates = {};
+      for (const key of ["shortBio", "affiliation"] as const) {
+        updates[key] = input[key];
+        // Keep an older pending proposal from overwriting the admin correction.
+        if (Object.prototype.hasOwnProperty.call(pendingProfileChanges, key)) {
+          pendingProfileChanges[key] = input[key];
+          updates.pendingProfileChanges = pendingProfileChanges;
+        }
+      }
+
+      const rows = await adminTutorRepo.updateTutorProfileWithVersion(
+        tx,
+        input.tutorProfileId,
+        input.version,
+        updates,
+      );
+      const [updated] = rows;
+      if (!updated) {
+        throw new TutorProfileOptimisticLockError(
+          input.tutorProfileId,
+          input.version,
+        );
+      }
+
+      const updatedProfile = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+      const beforeState = createTutorProfileAuditSnapshot(existing);
+      const afterState = createTutorProfileAuditSnapshot(
+        updatedProfile ?? updated,
+      );
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "tutor_introduction_updated",
+        targetId: input.tutorProfileId,
+        targetType: "tutor_profile",
+        beforeState,
+        afterState,
+        details: {
+          changedFields: getChangedTutorProfileAuditFields(
+            beforeState,
+            afterState,
+          ),
+        },
+      });
+
+      return updated;
+    });
+  }
+
   return {
+    updateTutorIntroduction,
     inspectInvitee,
     createInvite,
     listInvites,

@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { IconInbox } from "@tabler/icons-react";
@@ -496,6 +497,35 @@ export function TutorReviewCard({
       },
     }),
   );
+  const [introductionOpen, setIntroductionOpen] = useState(false);
+  const [introductionDraft, setIntroductionDraft] = useState({
+    affiliation: "",
+    shortBio: "",
+  });
+  const introductionMutation = useMutation(
+    orpc.adminTutor.updateTutorIntroduction.mutationOptions({
+      onSuccess: () => {
+        setIntroductionOpen(false);
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfiles.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
+        });
+        toastManager.add({
+          title: "Tutor introduction updated",
+          type: "success",
+        });
+        onAction?.();
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Could not update introduction",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
   const [achievementsEditOpen, setAchievementsEditOpen] = useState(false);
   const [achievementDraft, setAchievementDraft] = useState({
     education: [] as TutorEducationEntry[],
@@ -895,6 +925,21 @@ export function TutorReviewCard({
         <main className="order-2 min-w-0 space-y-4 xl:order-1">
           <ReviewSection
             title="Profile"
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setIntroductionDraft({
+                    affiliation: profile.affiliation ?? "",
+                    shortBio: profile.shortBio ?? "",
+                  });
+                  setIntroductionOpen(true);
+                }}
+              >
+                Edit introduction
+              </Button>
+            }
             status={sectionStatuses.profile}
             showStatus={showSectionStatus("profile")}
           >
@@ -1207,6 +1252,80 @@ export function TutorReviewCard({
           />
         </aside>
       </div>
+
+      <Dialog
+        open={introductionOpen}
+        onOpenChange={(open) => {
+          if (!introductionMutation.isPending) setIntroductionOpen(open);
+        }}
+      >
+        <DialogPopup>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              introductionMutation.mutate({
+                tutorProfileId: profile.id,
+                version: profile.version,
+                affiliation: introductionDraft.affiliation.trim(),
+                shortBio: introductionDraft.shortBio.trim(),
+              });
+            }}
+          >
+            <DialogHeader className="flex-col items-start gap-1.5">
+              <DialogTitle>Edit tutor introduction</DialogTitle>
+              <DialogDescription>
+                Changes apply immediately. Any pending version of these fields
+                will also be corrected.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-4">
+              <Field>
+                <FieldLabel>Headline</FieldLabel>
+                <Input
+                  maxLength={255}
+                  value={introductionDraft.affiliation}
+                  onChange={(event) =>
+                    setIntroductionDraft((draft) => ({
+                      ...draft,
+                      affiliation: event.target.value,
+                    }))
+                  }
+                  disabled={introductionMutation.isPending}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Brief description</FieldLabel>
+                <Textarea
+                  maxLength={2000}
+                  rows={6}
+                  value={introductionDraft.shortBio}
+                  onChange={(event) =>
+                    setIntroductionDraft((draft) => ({
+                      ...draft,
+                      shortBio: event.target.value,
+                    }))
+                  }
+                  disabled={introductionMutation.isPending}
+                />
+                <FieldDescription>Use 50 words or fewer.</FieldDescription>
+              </Field>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={introductionMutation.isPending}
+                onClick={() => setIntroductionOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={introductionMutation.isPending}>
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogPopup>
+      </Dialog>
 
       <Dialog
         open={noteAction !== null}

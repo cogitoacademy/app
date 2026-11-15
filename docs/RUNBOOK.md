@@ -4977,3 +4977,7 @@ Apply `0094_campaign_welcome_marks.sql` with the normal forward migration runner
 ### Transactional email branding (15 November 2026)
 
 Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+Tutor introduction correction needs no migration or environment change. In admin tutor review, select Edit introduction, correct headline/brief description, save and reload. Verify history, public text for a published tutor, pending proposal synchronization, validation, and stale-version rejection.
