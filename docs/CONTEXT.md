@@ -4019,5 +4019,4 @@ Tutor invitations and queued notifications use the welcome email layout and inli
 
 Admin tutor review supports direct headline (affiliation) and brief-description (shortBio) corrections through Edit introduction. Changes are version checked and audited; matching pending fields are corrected as well.
 
-
 Admin credentials public preview and the public tutor drawer share TutorProfileHighlights: education, achievements, and experiences use the same accent cards, spacing, and typography. One preview follows all admin credential fields, with a small heading matching Education and a separator before Experiences.

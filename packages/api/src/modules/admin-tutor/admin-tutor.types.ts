@@ -71,7 +71,6 @@ export const reviewTutorProfileInput = z.object({
   profileImageUrl: profileImageUrl.optional(),
 });
 
-
 export const updateTutorAchievementsInput = z.object({
   tutorProfileId: z.string().max(100),
   version: z.number().int(),
