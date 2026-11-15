@@ -1,3 +1,9 @@
+import {
+  authEmailLayout,
+  emailLink,
+  emailHeadingStyle,
+  emailNoteStyle,
+} from "@cogito-app/auth/auth-email-layout";
 import { z } from "zod";
 import {
   InviteNotFoundError,
@@ -74,54 +80,19 @@ export function buildTutorInviteEmail(
 
   return {
     subject: "You’re invited to teach with Cogito",
-    html: `<!doctype html>
-<html lang="en">
-  <body style="margin:0;background:#f2f2f3;color:#161718;font-family:Inter,Arial,Helvetica,sans-serif;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Accept your invitation and set up your Cogito tutor profile.</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f2f2f3;padding:32px 16px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e2e3e4;border-radius:12px;overflow:hidden;box-shadow:0 5px 10px rgba(0,0,0,0.03);">
-            <tr>
-              <td style="padding:18px 28px;border-bottom:1px solid #e2e3e4;">
-                <table role="presentation" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td width="36" height="36" align="center" valign="middle" style="width:36px;height:36px;border-radius:9px;background:#161718;color:#ffffff;font-size:18px;font-weight:700;">C</td>
-                    <td style="padding-left:10px;color:#161718;font-size:18px;font-weight:700;letter-spacing:-0.2px;">Cogito</td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:32px 28px;">
-                <p style="margin:0 0 16px;font-size:16px;line-height:24px;">Hi ${name},</p>
-                <div style="display:inline-block;margin:0 0 16px;padding:6px 10px;border-radius:999px;background:#fff5dc;color:#8a5a00;font-size:12px;font-weight:700;">Tutor invitation</div>
-                <h1 style="margin:0 0 14px;color:#161718;font-size:28px;line-height:35px;font-weight:700;letter-spacing:-0.5px;">You’re invited to tutor with Cogito.</h1>
-                <p style="margin:0 0 24px;color:#61666b;font-size:16px;line-height:25px;">Join Cogito’s focused learning workspace and help ambitious students move toward their academic goals. Start by accepting your invitation and setting up your tutor profile.</p>
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 28px;">
-                  <tr>
-                    <td style="border-radius:9px;background:#e09e06;border:1px solid #b37e05;">
-                      <a href="${safeInviteUrl}" style="display:inline-block;padding:14px 22px;color:#161718;font-size:15px;font-weight:700;text-decoration:none;">Accept invitation &amp; set up profile</a>
-                    </td>
-                  </tr>
-                </table>
-                <div style="margin:0 0 24px;padding:18px;background:#f2f2f3;border:1px solid #e2e3e4;border-radius:10px;">
-                  <p style="margin:0 0 8px;color:#161718;font-size:14px;font-weight:700;">Use the invited email</p>
-                  <p style="margin:0;color:#61666b;font-size:14px;line-height:22px;">Sign in or create your account with <strong style="color:#161718;">${email}</strong>. It must match this invitation before you can continue.</p>
-                </div>
-                <p style="margin:0 0 8px;color:#61666b;font-size:13px;line-height:20px;">This invitation expires on <strong style="color:#161718;">${expiry} UTC</strong>.</p>
-                <p style="margin:0;color:#777c81;font-size:12px;line-height:19px;word-break:break-all;">Button not working? Copy and paste this link into your browser:<br><a href="${safeInviteUrl}" style="color:#8a5a00;">${safeInviteUrl}</a></p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:18px 28px;border-top:1px solid #e2e3e4;background:#fafafa;color:#777c81;font-size:12px;line-height:19px;">If you weren’t expecting this invitation, you can safely ignore this email.</td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`,
+    html: authEmailLayout(
+      `
+<p>Hi ${name},</p>
+<h1 style="${emailHeadingStyle}">You’re invited to tutor with Cogito.</h1>
+<p>Join Cogito’s focused learning workspace and help ambitious students move toward their academic goals. Start by accepting your invitation and setting up your tutor profile.</p>
+${emailLink(inviteUrl, "Accept invitation & set up profile")}
+<p><strong>Use the invited email</strong><br>Sign in or create your account with <strong>${email}</strong>. It must match this invitation before you can continue.</p>
+<p>This invitation expires on <strong>${expiry} UTC</strong>.</p>
+<p style="${emailNoteStyle}">Button not working? Copy and paste this link into your browser:<br><a href="${safeInviteUrl}">${safeInviteUrl}</a></p>
+<p style="${emailNoteStyle}">If you weren’t expecting this invitation, you can safely ignore this email.</p>
+`,
+      new URL("/auth-email-header.png", appBaseUrl).href,
+    ),
   };
 }
 

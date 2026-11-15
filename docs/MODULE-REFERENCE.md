@@ -3022,3 +3022,7 @@ Office contract ownership: Office approves items and sends the approved action w
 ## Campaign signup Marks (14 November 2026)
 
 Campaign creation persists `referral_campaign.welcome_marks` and includes it in the existing creation audit. Both email and Google signup choices snapshot this campaign value as `welcomeMarksSnapshot`; friend codes continue to use global settings. Positive amounts use the existing once-only signup ledger key; zero creates no welcome credit. Replays return the saved choice and do not recalculate its reward.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.

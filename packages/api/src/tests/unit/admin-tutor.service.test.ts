@@ -96,7 +96,8 @@ describe("AdminTutor Service", () => {
 
       expect(message.subject).toBe("You’re invited to teach with Cogito");
       expect(message.html).toContain("You’re invited to tutor with Cogito");
-      expect(message.html).toContain("background:#e09e06");
+      expect(message.html).toContain("cid:cogito-auth-header");
+      expect(message.html).toContain("padding:13px 22px;color:#ffffff");
       expect(message.html).toContain("Accept invitation &amp; set up profile");
       expect(message.html).toContain("23 August 2026 at 12:00 UTC");
       expect(message.html).toContain(

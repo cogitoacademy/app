@@ -1,3 +1,4 @@
+import { authEmailLayout, emailLink } from "@cogito-app/auth/auth-email-layout";
 import type { DbOrTx } from "../../lib/tx";
 import type { DbType } from "../../lib/db";
 import type { NotificationRepo } from "./notification.repo";
@@ -132,12 +133,7 @@ export function notificationEmailHtml(notification: {
     if (actionUrl.protocol !== "https:" && actionUrl.protocol !== "http:") {
       return notification.body;
     }
-    const href = actionUrl.href
-      .replaceAll("&", "&amp;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;");
-    return `${notification.body}<p><a href="${href}">${linkLabel}</a></p>`;
+    return `${notification.body}<p>${emailLink(actionUrl.href, linkLabel)}</p>`;
   } catch {
     return notification.body;
   }
@@ -293,7 +289,10 @@ export function createNotificationService(
         const res = await emailPort.send({
           to: row.recipientEmail,
           subject: notif.title,
-          html: notificationEmailHtml(notif),
+          html: authEmailLayout(
+            notificationEmailHtml(notif),
+            "https://app.cogitoacademy.id/auth-email-header.png",
+          ),
           category: notif.category as
             | "booking"
             | "payment"

@@ -437,7 +437,7 @@ describe("academy class missing-report reminders", () => {
         },
       }),
     ).toContain(
-      '<a href="https://cogito.example/class-reports?from=mail&amp;next=1">',
+      '<a href="https://cogito.example/class-reports?from=mail&amp;next=1"',
     );
     expect(
       notificationEmailHtml({

@@ -16,7 +16,7 @@ export function emailLink(url: string, label: string): string {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error("Auth email links must use HTTP or HTTPS");
   }
-  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${orange}" style="border-radius:8px;background-color:${orange};"><a href="${escapeHtml(url)}" style="display:inline-block;border:1px solid ${orange};border-radius:8px;padding:13px 22px;color:#262626;font-size:14px;line-height:20px;font-weight:700;text-decoration:none;">${escapeHtml(label)}</a></td></tr></table>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="${orange}" style="border-radius:8px;background-color:${orange};"><a href="${escapeHtml(url)}" style="display:inline-block;border:1px solid ${orange};border-radius:8px;padding:13px 22px;color:#ffffff;font-size:14px;line-height:20px;font-weight:700;text-decoration:none;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 // Only trusted template markup belongs in content; escape all interpolated user data.
@@ -41,7 +41,6 @@ export function authEmailLayout(content: string, headerUrl?: string): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;table-layout:fixed;background-color:#ffffff;border:1px solid #e5e5e5;border-radius:12px;">
 <tr><td>${header}</td></tr>
 <tr><td style="padding:28px 24px;overflow-wrap:anywhere;word-wrap:break-word;font-size:14px;line-height:23px;">${content}</td></tr>
-<tr><td style="padding:20px 24px;border-top:1px solid #e5e5e5;"><p style="margin:0;font-size:12px;line-height:18px;font-weight:700;color:${blue};">Cogito Academy</p></td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;

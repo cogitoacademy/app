@@ -998,7 +998,7 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
     expect(emailPort.send).toHaveBeenCalledWith({
       to: "user@example.com",
       subject: "Booking Confirmed",
-      html: "Your booking is confirmed",
+      html: expect.stringContaining("cid:cogito-auth-header"),
       category: "booking",
       idempotencyKey: "d1",
     });

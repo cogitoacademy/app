@@ -4973,3 +4973,7 @@ Office rollout: no database migration or secret rotation is required for these c
 ## Campaign signup Marks (14 November 2026)
 
 Apply `0094_campaign_welcome_marks.sql` with the normal forward migration runner against the authorized target before deploying API/web together. It backfills campaign Marks from the latest effective referral settings revision (fallback 15), then requires a whole value from 0 to 100,000. No reset or reseed. Existing signup choices and credits remain unchanged. Verify creation/listing and signup with custom and zero Marks; global referral edits should only affect new friend-code signups.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.

@@ -4010,3 +4010,7 @@ Office contract corrections (13 November 2026): KOL responses (including receipt
 ## Campaign signup Marks (14 November 2026)
 
 Campaign code signup rewards are stored per campaign as `welcomeMarks` (0–100,000), displayed in the admin creation form/list and snapshotted into `referral_choice`. Global Welcome Marks now governs friend codes only. Migration 0094 backfills existing campaigns from the currently effective referral setting (fallback 15); historical choices/ledger entries are unchanged.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
