@@ -26,6 +26,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
   Table,
   TableBody,
@@ -34,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { IconInbox } from "@tabler/icons-react";
@@ -60,6 +62,7 @@ import {
   validateTutorExperienceDraft,
   type TutorExperience,
 } from "@/components/tutor/tutor-experiences";
+import { TutorProfileHighlights } from "@/components/tutor/tutor-profile-highlights";
 import { TutorProfileHistory } from "@/components/tutor/profile-history";
 import { TutorPendingChanges } from "@/components/admin/tutor-pending-changes";
 import { getTutorProfileFieldLabel } from "@/components/tutor/profile-field-presentation";
@@ -496,6 +499,35 @@ export function TutorReviewCard({
       },
     }),
   );
+  const [introductionOpen, setIntroductionOpen] = useState(false);
+  const [introductionDraft, setIntroductionDraft] = useState({
+    affiliation: "",
+    shortBio: "",
+  });
+  const introductionMutation = useMutation(
+    orpc.adminTutor.updateTutorIntroduction.mutationOptions({
+      onSuccess: () => {
+        setIntroductionOpen(false);
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfiles.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
+        });
+        toastManager.add({
+          title: "Tutor introduction updated",
+          type: "success",
+        });
+        onAction?.();
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Could not update introduction",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
   const [achievementsEditOpen, setAchievementsEditOpen] = useState(false);
   const [achievementDraft, setAchievementDraft] = useState({
     education: [] as TutorEducationEntry[],
@@ -895,6 +927,21 @@ export function TutorReviewCard({
         <main className="order-2 min-w-0 space-y-4 xl:order-1">
           <ReviewSection
             title="Profile"
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setIntroductionDraft({
+                    affiliation: profile.affiliation ?? "",
+                    shortBio: profile.shortBio ?? "",
+                  });
+                  setIntroductionOpen(true);
+                }}
+              >
+                Edit introduction
+              </Button>
+            }
             status={sectionStatuses.profile}
             showStatus={showSectionStatus("profile")}
           >
@@ -1209,6 +1256,80 @@ export function TutorReviewCard({
       </div>
 
       <Dialog
+        open={introductionOpen}
+        onOpenChange={(open) => {
+          if (!introductionMutation.isPending) setIntroductionOpen(open);
+        }}
+      >
+        <DialogPopup>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              introductionMutation.mutate({
+                tutorProfileId: profile.id,
+                version: profile.version,
+                affiliation: introductionDraft.affiliation.trim(),
+                shortBio: introductionDraft.shortBio.trim(),
+              });
+            }}
+          >
+            <DialogHeader className="flex-col items-start gap-1.5">
+              <DialogTitle>Edit tutor introduction</DialogTitle>
+              <DialogDescription>
+                Changes apply immediately. Any pending version of these fields
+                will also be corrected.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-4">
+              <Field>
+                <FieldLabel>Headline</FieldLabel>
+                <Input
+                  maxLength={255}
+                  value={introductionDraft.affiliation}
+                  onChange={(event) =>
+                    setIntroductionDraft((draft) => ({
+                      ...draft,
+                      affiliation: event.target.value,
+                    }))
+                  }
+                  disabled={introductionMutation.isPending}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Brief description</FieldLabel>
+                <Textarea
+                  maxLength={2000}
+                  rows={6}
+                  value={introductionDraft.shortBio}
+                  onChange={(event) =>
+                    setIntroductionDraft((draft) => ({
+                      ...draft,
+                      shortBio: event.target.value,
+                    }))
+                  }
+                  disabled={introductionMutation.isPending}
+                />
+                <FieldDescription>Use 50 words or fewer.</FieldDescription>
+              </Field>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={introductionMutation.isPending}
+                onClick={() => setIntroductionOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={introductionMutation.isPending}>
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
         open={noteAction !== null}
         onOpenChange={(open) => {
           if (!open && !isPending) {
@@ -1290,6 +1411,7 @@ export function TutorReviewCard({
           </DialogHeader>
           <DialogBody className="min-h-0">
             <TutorAchievementsEditor
+              showPreview={false}
               education={achievementDraft.education}
               achievements={achievementDraft.achievements}
               onEducationChange={(education) =>
@@ -1303,13 +1425,38 @@ export function TutorReviewCard({
               }
               idPrefix={`admin-edit-${profile.id}-achievements`}
             />
+            <Separator className="my-6" />
             <TutorExperiencesEditor
+              showPreview={false}
               experiences={achievementDraft.experiences}
               onExperiencesChange={(experiences) =>
                 setAchievementDraft((current) => ({ ...current, experiences }))
               }
               idPrefix={`admin-edit-${profile.id}-experiences`}
             />
+            <section
+              className="mt-6 space-y-4 border-t border-border pt-6"
+              aria-label="Public preview"
+            >
+              <Heading level={3} size="sm">
+                Public preview
+              </Heading>
+              {achievementDraft.education.length ||
+              achievementDraft.achievements.length ||
+              achievementDraft.experiences.length ? (
+                <TutorProfileHighlights
+                  education={achievementDraft.education}
+                  achievements={achievementDraft.achievements}
+                  experiences={achievementDraft.experiences}
+                  idPrefix={`admin-edit-${profile.id}-preview`}
+                />
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  Add education, an achievement, or an experience to see the
+                  public profile preview.
+                </Text>
+              )}
+            </section>
           </DialogBody>
           <DialogFooter>
             <Button

@@ -47,6 +47,8 @@ function historyLabel(action: string) {
       return "Admin unpublished the profile";
     case "tutor_profile_suspend":
       return "Admin suspended the profile";
+    case "tutor_introduction_updated":
+      return "Admin corrected headline and brief description";
     case "tutor_achievements_updated":
       return "Admin corrected achievements format";
     case "tutor_invite_created":

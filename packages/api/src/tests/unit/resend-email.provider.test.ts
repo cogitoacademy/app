@@ -18,7 +18,7 @@ describe("ResendEmailProvider", () => {
     const result = await provider.send({
       to: "user@example.com",
       subject: "Test",
-      html: "<p>Hello</p>",
+      html: '<p>Hello</p><img src="cid:cogito-auth-header">',
       category: "booking",
     });
 
@@ -34,7 +34,9 @@ describe("ResendEmailProvider", () => {
     expect(body.from).toBe("noreply@example.com");
     expect(body.to).toEqual(["user@example.com"]);
     expect(body.subject).toBe("Test");
-    expect(body.html).toBe("<p>Hello</p>");
+    expect(body.html).toContain("cid:cogito-auth-header");
+    expect(body.attachments[0].content_id).toBe("cogito-auth-header");
+    expect(body.attachments[0].content.length).toBeGreaterThan(0);
     expect(body.tags).toEqual([{ name: "category", value: "booking" }]);
 
     globalThis.fetch = origFetch;

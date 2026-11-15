@@ -2965,3 +2965,11 @@ Office server-to-server contract: GET /office/snapshot now includes referenceDat
 ## Campaign signup Marks (14 November 2026)
 
 `POST /rpc/adminReferral/createKolCampaign` requires `welcomeMarks`: integer 0–100,000, alongside the existing campaign fields, in the `{ "json": <input> }` envelope. Creation and `/rpc/adminReferral/listKolCampaigns` return `welcomeMarks`. Office `referrals.createKolCampaign` uses the same required input. Saved campaign reward terms remain immutable; 0 disables the signup credit for that campaign.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+POST /rpc/adminTutor/updateTutorIntroduction (admin only): envelope {"json":{"tutorProfileId":"...","version":0,"affiliation":"Headline","shortBio":"Brief description"}}. Returns the updated profile in the RPC json envelope. Headline max 255 characters; description max 2000 characters and 50 words. Stale versions reject.

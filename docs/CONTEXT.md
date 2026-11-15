@@ -2,7 +2,7 @@
 
 ## Tutor photo proportions (14 November 2026)
 
-Shared Selia AvatarImage uses object-cover so landscape and portrait images keep their proportions while filling the avatar. The tutor detail drawer uses an 80px avatar next to the name, affiliation and modality, with rounded-md corners matching the tutor card. Subject badges wrap below this identity group. Upload storage and RPC contracts are unchanged.
+Shared Selia AvatarImage uses object-cover so landscape and portrait images keep their proportions while filling the avatar. The tutor detail drawer uses a 96px avatar next to the name, affiliation and modality, with rounded-md corners matching the tutor card. Subject badges wrap below this identity group. Upload storage and RPC contracts are unchanged.
 
 ## CI coverage reuse (7 November 2026)
 
@@ -4010,3 +4010,13 @@ Office contract corrections (13 November 2026): KOL responses (including receipt
 ## Campaign signup Marks (14 November 2026)
 
 Campaign code signup rewards are stored per campaign as `welcomeMarks` (0–100,000), displayed in the admin creation form/list and snapshotted into `referral_choice`. Global Welcome Marks now governs friend codes only. Migration 0094 backfills existing campaigns from the currently effective referral setting (fallback 15); historical choices/ledger entries are unchanged.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+Admin tutor review supports direct headline (affiliation) and brief-description (shortBio) corrections through Edit introduction. Changes are version checked and audited; matching pending fields are corrected as well.
+
+Admin credentials public preview and the public tutor drawer share TutorProfileHighlights: education, achievements, and experiences use the same accent cards, spacing, and typography. One preview follows all admin credential fields, with a small heading matching Education and a separator before Experiences.

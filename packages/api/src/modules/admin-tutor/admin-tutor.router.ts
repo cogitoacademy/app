@@ -9,6 +9,7 @@ import {
   reviewTutorProfileInput,
   inspectInviteeInput,
   updateTutorAchievementsInput,
+  updateTutorIntroductionInput,
 } from "./admin-tutor.types";
 import type { AdminTutorHandler } from "./admin-tutor.handler";
 
@@ -126,5 +127,15 @@ export function createAdminTutorRouter(handler: AdminTutorHandler) {
       })
       .input(updateTutorAchievementsInput)
       .handler(handler.updateTutorAchievements),
+    updateTutorIntroduction: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/tutors/profiles/introduction/update",
+        tags: ["Admin Tutors"],
+        summary: "Edit tutor introduction",
+        description: "Corrects a tutor headline and brief description",
+      })
+      .input(updateTutorIntroductionInput)
+      .handler(handler.updateTutorIntroduction),
   };
 }

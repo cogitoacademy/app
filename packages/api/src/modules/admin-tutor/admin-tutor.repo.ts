@@ -59,6 +59,7 @@ export interface ListTutorProfilesRepoInput {
 }
 
 export interface TutorProfileUpdates {
+  shortBio?: string;
   onboardingStatus?: string;
   adminReviewNote?: string | null;
   publishedAt?: Date | null;

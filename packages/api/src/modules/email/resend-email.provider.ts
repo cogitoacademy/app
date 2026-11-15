@@ -46,7 +46,7 @@ export function createResendEmailProvider(
             to: [message.to],
             subject: message.subject,
             html: message.html,
-            ...(message.category === "auth"
+            ...(message.html.includes("cid:cogito-auth-header")
               ? {
                   attachments: [
                     {

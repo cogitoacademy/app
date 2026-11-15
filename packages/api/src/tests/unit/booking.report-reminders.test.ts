@@ -906,7 +906,7 @@ describe("legacy booking missing-report reminders", () => {
         },
       }),
     ).toContain(
-      '<a href="https://cogito.example/bookings/b1?from=mail&amp;next=1">Open this booking</a>',
+      '<a href="https://cogito.example/bookings/b1?from=mail&amp;next=1"',
     );
     expect(
       notificationEmailHtml({

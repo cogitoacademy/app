@@ -149,3 +149,13 @@ Live retry evidence (31 October): the admin class retry handler was invoked for 
 Campaign signup Marks: implementation complete in source (required per-campaign amount, creation/listing, signup snapshot, validation, migration 0094). Focused tests/type checks recorded in the task handoff. Migration application and live browser/database acceptance remain pending.
 
 - Implemented (2026-11-14): Admin tutor **Edit format** includes the shared work experience editor; saves validate entries, preserve pending review placement, and use the existing version lock and audit trail. Live browser acceptance remains pending.
+
+### Transactional email branding (15 November 2026)
+
+Tutor invitations and queued notifications use the welcome email layout and inline header image. Shared email buttons use white text. The shared layout has no footer. Resend attaches the bundled header when HTML references its CID, including non-auth categories. API payloads and dispatch eligibility are unchanged; no environment change is required.
+
+### Admin tutor introduction editing
+
+Implemented admin tutor headline and brief-description editing with shared tutor input validation, optimistic locking, and profile history. Live browser acceptance remains pending.
+
+Admin credentials public preview and the public tutor drawer share TutorProfileHighlights: education, achievements, and experiences use the same accent cards, spacing, and typography. One preview follows all admin credential fields, with a small heading matching Education and a separator before Experiences.

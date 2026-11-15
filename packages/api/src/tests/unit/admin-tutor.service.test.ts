@@ -96,7 +96,8 @@ describe("AdminTutor Service", () => {
 
       expect(message.subject).toBe("You’re invited to teach with Cogito");
       expect(message.html).toContain("You’re invited to tutor with Cogito");
-      expect(message.html).toContain("background:#e09e06");
+      expect(message.html).toContain("cid:cogito-auth-header");
+      expect(message.html).toContain("padding:13px 22px;color:#ffffff");
       expect(message.html).toContain("Accept invitation &amp; set up profile");
       expect(message.html).toContain("23 August 2026 at 12:00 UTC");
       expect(message.html).toContain(
@@ -613,6 +614,127 @@ describe("AdminTutor Service", () => {
         adminNote: "Please update bio",
       });
       expect(result.id).toBe("p1");
+    });
+
+    test("admin introduction correction updates live and pending values with an audit", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        pendingProfileChanges: { affiliation: "Old", education: [] },
+      };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await service.updateTutorIntroduction("admin1", {
+        tutorProfileId: "p1",
+        version: 2,
+        affiliation: "New headline",
+        shortBio: "Brief introduction",
+      });
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).toHaveBeenCalledWith(expect.anything(), "p1", 2, {
+        affiliation: "New headline",
+        shortBio: "Brief introduction",
+        pendingProfileChanges: { affiliation: "New headline", education: [] },
+      });
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_introduction_updated",
+          actorId: "admin1",
+        }),
+      );
+    });
+
+    test("admin introduction correction rejects a missing profile without writing or auditing", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      await expect(
+        createAdminTutorService(deps as any).updateTutorIntroduction("admin1", {
+          tutorProfileId: "p1",
+          version: 1,
+          affiliation: "Headline",
+          shortBio: "Bio",
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).not.toHaveBeenCalled();
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
+    });
+
+    test("admin introduction correction audits the updated row when reread is missing", async () => {
+      const profile = {
+        ...makeProfile(),
+        affiliation: "Old",
+        shortBio: "Old bio",
+      };
+      const updated = {
+        ...profile,
+        version: 2,
+        affiliation: "Headline",
+        shortBio: "Bio",
+      };
+      let reads = 0;
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            ++reads === 1 ? profile : null,
+          ),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const result = await createAdminTutorService(
+        deps as any,
+      ).updateTutorIntroduction("admin1", {
+        tutorProfileId: "p1",
+        version: 1,
+        affiliation: "Headline",
+        shortBio: "Bio",
+      });
+      expect(result as unknown).toBe(updated);
+      expect(deps.adminTutorRepo.getTutorProfileById).toHaveBeenCalledTimes(2);
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_introduction_updated",
+          beforeState: expect.objectContaining({
+            affiliation: "Old",
+            shortBio: "Old bio",
+          }),
+          afterState: expect.objectContaining({
+            affiliation: "Headline",
+            shortBio: "Bio",
+          }),
+        }),
+      );
+    });
+
+    test("admin introduction correction rejects a stale version without an audit", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          updateTutorProfileWithVersion: mock(async () => []),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.updateTutorIntroduction("admin1", {
+          tutorProfileId: "p1",
+          version: 0,
+          affiliation: "Headline",
+          shortBio: "Bio",
+        }),
+      ).rejects.toThrow(TutorProfileOptimisticLockError);
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
     });
 
     test("updateTutorAchievements normalizes entries and records an audit", async () => {
