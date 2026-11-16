@@ -21,7 +21,7 @@
     "@cogito-app/auth": "workspace:*",
     "@cogito-app/db": "workspace:*",
     "@cogito-app/env": "workspace:*",
-    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/cors": "^1.4.3",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
@@ -29,13 +29,13 @@
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
-    "evlog": "^2.25.0",
+    "evlog": "^2.35.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
-    "tsdown": "^0.22.14",
+    "tsdown": "^0.23.7",
     "typescript": "catalog:"
   }
 }
