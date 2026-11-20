@@ -25,6 +25,9 @@ const LIMITERS: Record<string, { windowMs: number; maxRequests: number }> = {
   upload: { windowMs: 60_000, maxRequests: 30 },
   // Content proxy: the Sanity file route streams real bytes (bandwidth) — 30/min.
   content: { windowMs: 60_000, maxRequests: 30 },
+  // The marketing site calls the calendar server-side, so requests share the
+  // web server's IP. Keep a read-specific bucket rather than the blog budget.
+  publicCalendar: { windowMs: 60_000, maxRequests: 300 },
   publicBlog: { windowMs: 60_000, maxRequests: 120 },
   blogSitemap: { windowMs: 60_000, maxRequests: 12 },
   reportExport: { windowMs: 60_000, maxRequests: 10 },

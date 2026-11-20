@@ -69,6 +69,18 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/reports/student/pdf")).toBe("reportExport");
   });
 
+  test("public calendar read has its own bucket", () => {
+    expect(matchRateLimitPath("/rpc/publicContent/calendar/list")).toBe(
+      "publicCalendar",
+    );
+    expect(matchRateLimitPath("/rpc/publicContent/calendar/list?x=1")).toBe(
+      "publicCalendar",
+    );
+    expect(
+      matchRateLimitPath("/rpc/publicContent/calendar/listExtra"),
+    ).toBeNull();
+  });
+
   test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
     expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
     expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);

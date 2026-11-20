@@ -30,7 +30,8 @@ The marketing site reads the competition calendar from the app with
 `POST /rpc/publicContent/calendar/list`. The route is anonymous and accepts
 `{"json":{"locale":"id"}}` or `{"json":{"locale":"en"}}`. The current app
 calendar stores English values, so both locales return the same content. No
-database migration or environment variable is required for this endpoint.
+database migration or environment variable is required for this endpoint, and
+it is limited to 300 requests per minute per IP by path.
 
 Smoke-test with no cookie:
 

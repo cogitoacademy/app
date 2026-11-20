@@ -18,6 +18,7 @@ part of this slice.
 - [x] Query only active events ordered by start date, using a strict public
       column allowlist.
 - [x] Project categories with `id`, `slug`, `name`, and optional `parentColors`.
+- [x] Rate-limit the path to 300 requests per minute per IP.
 - [x] Add focused unit/integration tests and docs.
 
 ## Contract

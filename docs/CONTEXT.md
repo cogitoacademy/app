@@ -13,9 +13,10 @@ The strict DTO contains `id`, `title`, `description`, `location`, `startDate`,
 `endDate`, `categories[{ id, slug, name, parentColors }]`, `educationLevels`,
 `scale`, `organizer`, `registrationDeadline`, `registrationLink`, and
 `socialMediaLink`. Source hashes, versions, audit fields, active/sort flags, and
-Knowledge Bank data are never selected or returned. This slice adds no database
-migration and does not change the authenticated `content.listCompetitions`
-behavior or the 63-event seed.
+Knowledge Bank data are never selected or returned. The path is limited to 300
+requests per minute per IP. This slice adds no database migration and does not
+change the authenticated `content.listCompetitions` behavior or the 63-event
+seed.
 
 Focused unit and guarded PostgreSQL integration tests cover anonymous access,
 active-only filtering, ordering, category/palette shape, and privacy. See
