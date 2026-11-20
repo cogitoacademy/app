@@ -1,6 +1,11 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 
-import { tutorProfile } from "@cogito-app/db/schema";
+import {
+  calendarEvent,
+  calendarEventCategory,
+  subjectCategory,
+  tutorProfile,
+} from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 
 async function listPublishedTutors(db: DbType) {
@@ -62,10 +67,100 @@ async function listPublishedTutors(db: DbType) {
   });
 }
 
+export type PublicCalendarCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  lightTextColor: string | null;
+  lightBackgroundColor: string | null;
+  darkTextColor: string | null;
+  darkBackgroundColor: string | null;
+};
+
+export type PublicCalendarEventRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startDate: Date;
+  endDate: Date;
+  educationLevels: string[];
+  scale: string | null;
+  organizer: string | null;
+  registrationDeadline: Date | null;
+  registrationLink: string | null;
+  socialMediaLink: string | null;
+  categories: PublicCalendarCategoryRow[];
+};
+
+async function listActiveCalendarEvents(db: DbType) {
+  const events = await db
+    .select({
+      // Positive allowlist: source hashes, versions, audit columns and
+      // Knowledge Bank data are never selected here.
+      id: calendarEvent.id,
+      title: calendarEvent.title,
+      description: calendarEvent.description,
+      location: calendarEvent.location,
+      startDate: calendarEvent.startDate,
+      endDate: calendarEvent.endDate,
+      educationLevels: calendarEvent.educationLevels,
+      scale: calendarEvent.scale,
+      organizer: calendarEvent.organizer,
+      registrationDeadline: calendarEvent.registrationDeadline,
+      registrationLink: calendarEvent.registrationLink,
+      socialMediaLink: calendarEvent.socialMediaLink,
+    })
+    .from(calendarEvent)
+    .where(eq(calendarEvent.isActive, true))
+    .orderBy(asc(calendarEvent.startDate), asc(calendarEvent.id));
+
+  if (events.length === 0) return [];
+
+  const categories = await db
+    .select({
+      eventId: calendarEventCategory.eventId,
+      id: subjectCategory.id,
+      slug: subjectCategory.slug,
+      name: subjectCategory.name,
+      lightTextColor: subjectCategory.lightTextColor,
+      lightBackgroundColor: subjectCategory.lightBackgroundColor,
+      darkTextColor: subjectCategory.darkTextColor,
+      darkBackgroundColor: subjectCategory.darkBackgroundColor,
+    })
+    .from(calendarEventCategory)
+    .innerJoin(
+      subjectCategory,
+      eq(calendarEventCategory.categoryId, subjectCategory.id),
+    )
+    .where(
+      inArray(
+        calendarEventCategory.eventId,
+        events.map((event) => event.id),
+      ),
+    )
+    .orderBy(asc(subjectCategory.sortOrder), asc(subjectCategory.id));
+
+  const categoriesByEvent = new Map<string, PublicCalendarCategoryRow[]>();
+  for (const { eventId, ...category } of categories) {
+    const list = categoriesByEvent.get(eventId);
+    if (list) list.push(category);
+    else categoriesByEvent.set(eventId, [category]);
+  }
+
+  return events.map((event): PublicCalendarEventRow => ({
+    ...event,
+    categories: categoriesByEvent.get(event.id) ?? [],
+  }));
+}
+
 export function createPublicContentRepo(db: DbType) {
   return {
     listPublishedTutors() {
       return listPublishedTutors(db);
+    },
+    listActiveCalendarEvents() {
+      return listActiveCalendarEvents(db);
     },
   };
 }

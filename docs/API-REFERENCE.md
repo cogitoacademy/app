@@ -1927,6 +1927,15 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Description:** Reads only profiles whose `onboardingStatus` is `published`, using positive selected-column allowlists and an explicit public DTO mapper. Assigned catalog children and parents must both be active; inactive catalog types are omitted, and activity flags are not returned. `id` is the app tutor-profile ID; `profileImageUrl` comes from the canonical account image; subject IDs/slugs come from the app competition catalog. `modality` describes online/offline teaching format and is not a physical location. No location, Sanity ID, `userId`, price/rate, payout, tax, terms, or review fields are returned. Empty data returns `{"json": [], "meta": [...]}`. Database and mapping failures stay errors and are not translated to an empty list.
 - **Consumer:** The marketing site's Next server can call this route without forwarding an app user session. Browser CORS is not enabled by this API slice.
 
+### `publicContent.calendar.list`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/calendar/list` with `{"json":{"locale":"id"}}`
+- **Input:** `{ locale?: "en" | "id" }`; defaults to `en`. The locale is accepted for marketing-contract compatibility but does not change the current response: the app calendar stores one English value per field.
+- **Output:** `PublicCompetition[]`, each item has exactly `id`, `title`, `description`, `location`, `startDate`, `endDate`, `categories`, `educationLevels`, `scale`, `organizer`, `registrationDeadline`, `registrationLink`, and `socialMediaLink`. Category items are `{ id, slug, name, parentColors }`; `parentColors` is `{ lightTextColor, lightBackgroundColor, darkTextColor, darkBackgroundColor }` when all four palette values exist, otherwise `null`.
+- **Description:** Reads `calendar_event` from PostgreSQL and returns only `isActive = true` events ordered by `startDate` ascending, then ID. Categories come from `calendar_event_category` joined to `subject_category`, ordered by catalog sort order then ID. Source hashes, versions, audit timestamps, sort/active flags, Knowledge Bank rows, and all other private fields are never selected or returned. An empty calendar returns `{"json": [], "meta": [...]}`; database or mapping failures remain RPC errors.
+- **Consumer:** The marketing calendar at `cogitoacademy/website` calls this route server-side for its calendar pages. No app session is forwarded. Browser CORS is not enabled by this API slice.
+
 ### `publicContent.faq.list`
 
 - **Auth:** Public; no session cookie is required

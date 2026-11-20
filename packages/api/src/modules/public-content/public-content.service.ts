@@ -1,5 +1,18 @@
-import type { PublicContentRepo, PublicTutorRow } from "./public-content.repo";
-import type { PublicTutorDto } from "./public-content.types";
+import type {
+  PublicCalendarEventRow,
+  PublicContentRepo,
+  PublicTutorRow,
+} from "./public-content.repo";
+import type {
+  PublicCalendarEventDto,
+  PublicTutorDto,
+} from "./public-content.types";
+import type { CompetitionPalette } from "../competition-catalog/competition-catalog.types";
+
+function nonEmpty(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -145,6 +158,56 @@ export function toPublicTutorDto(row: PublicTutorRow): PublicTutorDto {
   };
 }
 
+function toPalette(
+  category: PublicCalendarEventRow["categories"][number],
+): CompetitionPalette | null {
+  const {
+    lightTextColor,
+    lightBackgroundColor,
+    darkTextColor,
+    darkBackgroundColor,
+  } = category;
+  if (
+    !lightTextColor ||
+    !lightBackgroundColor ||
+    !darkTextColor ||
+    !darkBackgroundColor
+  ) {
+    return null;
+  }
+  return {
+    lightTextColor,
+    lightBackgroundColor,
+    darkTextColor,
+    darkBackgroundColor,
+  };
+}
+
+export function toPublicCalendarEventDto(
+  row: PublicCalendarEventRow,
+): PublicCalendarEventDto {
+  return {
+    id: row.id,
+    title: row.title,
+    description: nonEmpty(row.description),
+    location: nonEmpty(row.location),
+    startDate: row.startDate.toISOString(),
+    endDate: row.endDate.toISOString(),
+    categories: row.categories.map((category) => ({
+      id: category.id,
+      slug: category.slug,
+      name: category.name,
+      parentColors: toPalette(category),
+    })),
+    educationLevels: row.educationLevels ?? [],
+    scale: row.scale,
+    organizer: row.organizer,
+    registrationDeadline: row.registrationDeadline?.toISOString() ?? null,
+    registrationLink: row.registrationLink,
+    socialMediaLink: row.socialMediaLink,
+  };
+}
+
 export function createPublicContentService(deps: { repo: PublicContentRepo }) {
   const { repo } = deps;
 
@@ -153,7 +216,12 @@ export function createPublicContentService(deps: { repo: PublicContentRepo }) {
     return rows.map(toPublicTutorDto);
   }
 
-  return { listTutors };
+  async function listCalendar() {
+    const rows = await repo.listActiveCalendarEvents();
+    return rows.map(toPublicCalendarEventDto);
+  }
+
+  return { listTutors, listCalendar };
 }
 
 export type PublicContentService = ReturnType<

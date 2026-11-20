@@ -12,4 +12,7 @@ export function createPublicContentModule(deps: { db: DbType }) {
 
 export type { PublicContentHandler } from "./public-content.handler";
 export type { PublicContentService } from "./public-content.service";
-export type { PublicTutorDto } from "./public-content.types";
+export type {
+  PublicTutorDto,
+  PublicCalendarEventDto,
+} from "./public-content.types";

@@ -1,6 +1,14 @@
 import { z } from "zod";
 
+import type { CompetitionPalette } from "../competition-catalog/competition-catalog.types";
+
 export const listPublicTutorsInput = z.object({}).strict();
+// The marketing site sends a locale. The app calendar currently stores one
+// English value per field, so the locale is accepted for contract compatibility
+// but does not change the response.
+export const listPublicCalendarInput = z
+  .object({ locale: z.enum(["en", "id"]).default("en") })
+  .strict();
 
 export type PublicTutorDto = {
   id: string;
@@ -38,4 +46,25 @@ export type PublicTutorDto = {
     };
   }>;
   modality: "online" | "offline" | "both" | null;
+};
+
+export type PublicCalendarEventDto = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startDate: string;
+  endDate: string;
+  categories: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    parentColors: CompetitionPalette | null;
+  }>;
+  educationLevels: string[];
+  scale: string | null;
+  organizer: string | null;
+  registrationDeadline: string | null;
+  registrationLink: string | null;
+  socialMediaLink: string | null;
 };
