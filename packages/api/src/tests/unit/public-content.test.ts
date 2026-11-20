@@ -1,15 +1,22 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createRouterClient } from "@orpc/server";
+import { RPCHandler } from "@orpc/server/fetch";
 
 import type { Context } from "../../context";
 import type { DbType } from "../../lib/db";
 import { createPublicContentRouter } from "../../modules/public-content/public-content.router";
+import { createPublicContentHandler } from "../../modules/public-content/public-content.handler";
 import { createPublicContentRepo } from "../../modules/public-content/public-content.repo";
-import type { PublicTutorRow } from "../../modules/public-content/public-content.repo";
+import type {
+  PublicCalendarEventRow,
+  PublicTutorRow,
+} from "../../modules/public-content/public-content.repo";
 import {
   createPublicContentService,
+  toPublicCalendarEventDto,
   toPublicTutorDto,
 } from "../../modules/public-content/public-content.service";
+import { listPublicCalendarInput } from "../../modules/public-content/public-content.types";
 
 function makeSensitiveRow() {
   return {
@@ -367,4 +374,216 @@ test("public tutor mapping rejects incomplete experience dates and nonarray awar
     { competitionName: "Olympiad", year: 2026, awards: [] },
   ]);
   expect(dto.experiences).toEqual([]);
+});
+
+const calendarPalette = {
+  lightTextColor: "oklch(0.2 0.02 250)",
+  lightBackgroundColor: "oklch(0.96 0.03 250)",
+  darkTextColor: "oklch(0.92 0.02 250)",
+  darkBackgroundColor: "oklch(0.25 0.04 250)",
+};
+
+function makeCalendarRow(
+  overrides: Partial<PublicCalendarEventRow> = {},
+): PublicCalendarEventRow {
+  return {
+    id: "event-public-id",
+    title: "English Competition",
+    description: "English description",
+    location: "Jakarta, Indonesia",
+    startDate: new Date("2026-11-01T00:00:00.000Z"),
+    endDate: new Date("2026-11-02T00:00:00.000Z"),
+    educationLevels: ["sma"],
+    scale: "national",
+    organizer: "Organizer",
+    registrationDeadline: new Date("2026-10-30T00:00:00.000Z"),
+    registrationLink: "https://example.test/register",
+    socialMediaLink: "https://example.test/social",
+    categories: [
+      {
+        id: "category-public-id",
+        slug: "competition-debate",
+        name: "Debate",
+        ...calendarPalette,
+      },
+      {
+        id: "category-without-palette",
+        slug: "competition-other",
+        name: "Other",
+        lightTextColor: "oklch(0.2 0.02 250)",
+        lightBackgroundColor: null,
+        darkTextColor: "oklch(0.92 0.02 250)",
+        darkBackgroundColor: "oklch(0.25 0.04 250)",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe("public competition calendar", () => {
+  test("maps the app competition fields and category palette", () => {
+    const dto = toPublicCalendarEventDto(makeCalendarRow());
+
+    expect(dto).toMatchObject({
+      id: "event-public-id",
+      title: "English Competition",
+      description: "English description",
+      location: "Jakarta, Indonesia",
+      startDate: "2026-11-01T00:00:00.000Z",
+      endDate: "2026-11-02T00:00:00.000Z",
+      registrationDeadline: "2026-10-30T00:00:00.000Z",
+      registrationLink: "https://example.test/register",
+      socialMediaLink: "https://example.test/social",
+      educationLevels: ["sma"],
+      scale: "national",
+      organizer: "Organizer",
+    });
+    expect(dto.categories[0]).toEqual({
+      id: "category-public-id",
+      slug: "competition-debate",
+      name: "Debate",
+      parentColors: calendarPalette,
+    });
+    expect(dto.categories[1]).toMatchObject({
+      name: "Other",
+      parentColors: null,
+    });
+  });
+
+  test("maps only the strict public calendar keys and never leaks private fields", () => {
+    const row = {
+      ...makeCalendarRow(),
+      sourceId: "PRIVATE_SOURCE_ID_SENTINEL",
+      sourceHash: "PRIVATE_SOURCE_HASH_SENTINEL",
+      version: 42,
+      isActive: true,
+      sortOrder: 7,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      futureDatabaseColumn: "FUTURE_DATABASE_SENTINEL",
+      kbResource: "PRIVATE_KB_SENTINEL",
+    } as unknown as PublicCalendarEventRow;
+
+    const dto = toPublicCalendarEventDto(row);
+    expect(Object.keys(dto)).toEqual([
+      "id",
+      "title",
+      "description",
+      "location",
+      "startDate",
+      "endDate",
+      "categories",
+      "educationLevels",
+      "scale",
+      "organizer",
+      "registrationDeadline",
+      "registrationLink",
+      "socialMediaLink",
+    ]);
+    expect(Object.keys(dto.categories[0]!)).toEqual([
+      "id",
+      "slug",
+      "name",
+      "parentColors",
+    ]);
+    const serialized = JSON.stringify(dto);
+    for (const sentinel of [
+      "PRIVATE_",
+      "FUTURE_",
+      "sourceId",
+      "sourceHash",
+      "version",
+      "isActive",
+      "sortOrder",
+      "createdAt",
+      "updatedAt",
+    ])
+      expect(serialized).not.toContain(sentinel);
+  });
+
+  test("accepts the website locale input and rejects unknown locales or extra keys", () => {
+    expect(listPublicCalendarInput.parse({})).toEqual({ locale: "en" });
+    expect(listPublicCalendarInput.parse({ locale: "id" })).toEqual({
+      locale: "id",
+    });
+    expect(listPublicCalendarInput.safeParse({ locale: "fr" }).success).toBe(
+      false,
+    );
+    expect(
+      listPublicCalendarInput.safeParse({ locale: "en", extra: true }).success,
+    ).toBe(false);
+  });
+
+  test("serves calendar events through an anonymous route", async () => {
+    const service = createPublicContentService({
+      repo: {
+        listActiveCalendarEvents: async () => [makeCalendarRow()],
+        listPublishedTutors: async () => [],
+      } as any,
+    });
+    const client = createRouterClient(
+      createPublicContentRouter(createPublicContentHandler({ service })),
+      { context: {} as Context },
+    );
+
+    const rows = await client.calendar.list({});
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.title).toBe("English Competition");
+    await expect(client.calendar.list({ locale: "id" })).resolves.toMatchObject(
+      [{ title: "English Competition" }],
+    );
+  });
+
+  test("uses a positive calendar-event column allowlist", async () => {
+    const chain: any = Promise.resolve([]);
+    Object.assign(chain, {
+      from: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+    });
+    const select = mock((_columns: unknown) => chain);
+    const repo = createPublicContentRepo({ select } as unknown as DbType);
+
+    await expect(repo.listActiveCalendarEvents()).resolves.toEqual([]);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(Object.keys(select.mock.calls[0]![0] as object)).toEqual([
+      "id",
+      "title",
+      "description",
+      "location",
+      "startDate",
+      "endDate",
+      "educationLevels",
+      "scale",
+      "organizer",
+      "registrationDeadline",
+      "registrationLink",
+      "socialMediaLink",
+    ]);
+  });
+
+  test("resolves the anonymous HTTP route at /rpc/publicContent/calendar/list", async () => {
+    const handler = {
+      listTutors: async () => [],
+      listCalendar: async ({ input }: { input: { locale: string } }) => [
+        { locale: input.locale },
+      ],
+    } as any;
+    const rpc = new RPCHandler({
+      publicContent: createPublicContentRouter(handler),
+    });
+    const { matched, response } = await rpc.handle(
+      new Request("http://localhost/rpc/publicContent/calendar/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { locale: "id" } }),
+      }),
+      { prefix: "/rpc", context: {} as Context },
+    );
+    expect(matched).toBe(true);
+    expect(response?.status).toBe(200);
+    await expect(response?.json()).resolves.toMatchObject({
+      json: [{ locale: "id" }],
+    });
+  });
 });

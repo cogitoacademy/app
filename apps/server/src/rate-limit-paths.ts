@@ -13,6 +13,7 @@ export type RateLimitKind =
   | "achievement"
   | "upload"
   | "content"
+  | "publicCalendar"
   | "publicBlog"
   | "blogSitemap"
   | "reportExport";
@@ -117,6 +118,9 @@ export function matchRateLimitPath(path: string): RateLimitKind | null {
   if (urlPath === "/rpc/upload/createUploadUrl") return "upload";
   // The Knowledge Bank file proxy streams real bytes (bandwidth) — 30/min.
   if (urlPath.startsWith("/content/knowledge-bank/")) return "content";
+  // The marketing calendar is anonymous and reads PostgreSQL. It has its own
+  // read bucket so it does not share the heavier blog/content limits.
+  if (urlPath === "/rpc/publicContent/calendar/list") return "publicCalendar";
   if (urlPath === "/rpc/publicContent/blog/sitemap") return "blogSitemap";
   if (urlPath.startsWith("/rpc/publicContent/blog/")) return "publicBlog";
   if (urlPath.startsWith("/reports/student/")) return "reportExport";

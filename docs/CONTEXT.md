@@ -1,5 +1,27 @@
 # Cogito App — Codebase Context
 
+## App-sourced public competition calendar (20 November 2026)
+
+The marketing site now reads the competition calendar from the app instead of
+Sanity. `publicContent.calendar.list` (`POST /rpc/publicContent/calendar/list`)
+is anonymous, accepts the site's `{ locale: "en" | "id" }` input, and returns
+active `calendar_event` rows from PostgreSQL ordered by start date. The current
+calendar content is English-only, so `locale` is accepted but does not change
+the response.
+
+The strict DTO contains `id`, `title`, `description`, `location`, `startDate`,
+`endDate`, `categories[{ id, slug, name, parentColors }]`, `educationLevels`,
+`scale`, `organizer`, `registrationDeadline`, `registrationLink`, and
+`socialMediaLink`. Source hashes, versions, audit fields, active/sort flags, and
+Knowledge Bank data are never selected or returned. The path is limited to 300
+requests per minute per IP. This slice adds no database migration and does not
+change the authenticated `content.listCompetitions` behavior or the 63-event
+seed.
+
+Focused unit and guarded PostgreSQL integration tests cover anonymous access,
+active-only filtering, ordering, category/palette shape, and privacy. See
+[the public calendar plan](plans/active/PUBLIC-CALENDAR-API.md).
+
 ## Tutor photo proportions (14 November 2026)
 
 Shared Selia AvatarImage uses object-cover so landscape and portrait images keep their proportions while filling the avatar. The tutor detail drawer uses a 96px avatar next to the name, affiliation and modality, with rounded-md corners matching the tutor card. Subject badges wrap below this identity group. Upload storage and RPC contracts are unchanged.
@@ -3211,6 +3233,7 @@ file are the permanent record; plan-file archives are not maintained.
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `docs/plans/active/PUBLIC-CALENDAR-API.md`            | Active — anonymous app-sourced calendar endpoint; API/web deploy and marketing smoke test remain                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active

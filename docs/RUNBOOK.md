@@ -24,6 +24,41 @@ before backend tests start reading those paths. Manifests and unknown paths
 remain inputs. Run policy tests with
 `node --test .github/scripts/coverage-reuse.test.mjs`.
 
+## App-sourced competition calendar API (20 November 2026)
+
+The marketing site reads the competition calendar from the app with
+`POST /rpc/publicContent/calendar/list`. The route is anonymous and accepts
+`{"json":{"locale":"id"}}` or `{"json":{"locale":"en"}}`. The current app
+calendar stores English values, so both locales return the same content. No
+database migration or environment variable is required for this endpoint, and
+it is limited to 300 requests per minute per IP by path.
+
+Smoke-test with no cookie:
+
+```sh
+curl -sS https://<api-host>/rpc/publicContent/calendar/list \
+  -H 'Content-Type: application/json' \
+  --data '{"json":{"locale":"id"}}'
+```
+
+Verify only active events are returned, ordered by start date, with categories
+and palette values, and without source hashes, versions, audit fields, or
+Knowledge Bank data. Deploy the API with the web bundle so the existing
+authenticated calendar and admin editor stay in sync; no seed or backfill step
+is involved.
+
+```sh
+bun test packages/api/src/tests/unit/public-content.test.ts
+bun test --timeout 30000 --env-file <local-test-env> \
+  packages/api/src/tests/integration/public-calendar.test.ts
+bun run --cwd apps/server check-types
+bun run --cwd apps/web check-types
+```
+
+The integration test inserts and removes its own event/category fixtures on a
+local `cogito-test` database. No reset, migration, seed, or production write is
+part of this slice.
+
 ## Web CSP and client-side image uploads (3 November 2026)
 
 Blog hero and gallery uploads and the profile photo crop preview decode the

@@ -1608,20 +1608,23 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 
 ## Public Content Module
 
-**Purpose:** Provide the marketing site a public tutor read from the app's published tutor profiles without returning private profile or account data.
+**Purpose:** Provide the marketing site public tutor and competition-calendar reads from app-managed PostgreSQL without returning private profile, calendar, or Knowledge Bank data.
 
 **Files:**
 
-- `public-content.repo.ts` — published-only query with positive profile, account, and catalog column allowlists; inactive subject or parent categories are filtered out
-- `public-content.service.ts` — strict DTO mapper for public identity, profile copy, structured education/achievements/experience, subject catalog labels, and teaching modality
-- `public-content.handler.ts` and `public-content.router.ts` — anonymous `publicContent.tutors.list` procedure with a strict empty-object input
+- `public-content.repo.ts` — published-only tutor query with positive profile, account, and catalog column allowlists; active-calendar query with a positive event/category column allowlist and start-date ordering
+- `public-content.service.ts` — strict DTO mappers for public tutor identity/profile data and app-sourced competition calendar events with category palettes
+- `public-content.handler.ts` and `public-content.router.ts` — anonymous `publicContent.tutors.list` and `publicContent.calendar.list` procedures with strict inputs
 - `index.ts` — module composition factory
 
-**Service method:**
+**Service methods:**
 
-- `listTutors()` — returns the public DTO list; an empty database result remains `[]`, while database/mapping failures propagate as RPC errors
+- `listTutors()` — returns the public tutor DTO list; an empty database result remains `[]`, while database/mapping failures propagate as RPC errors
+- `listCalendar()` — returns active calendar events ordered by start date; the marketing site's `locale` input is accepted but current calendar content is English-only
 
 The DTO exposes only `id` (tutor profile ID), `name`, `profileImageUrl`, `shortBio`, `affiliation`, `education`, `achievements`, `experiences`, `subjects`, and `modality`. Subject rows expose app-catalog `id`, `slug`, English `name`, nullable `nameId`, and a parent with the same identity/name fields plus the four explicit light/dark text/background palette values; each child receives its parent's palette. Inactive child or parent categories are filtered from the query and checked again by the mapper; activity flags are never public. JSON profile entries and related catalog rows are mapped field by field, so new database or JSON properties do not flow through. The repository selects only the fields used by that DTO. `modality` describes teaching format; the tutor schema has no physical city/location field. `tutors.listPublished` remains student-authenticated and retains its existing booking-discovery projection.
+
+The calendar DTO exposes exactly `id`, `title`, `description`, `location`, `startDate`, `endDate`, `categories`, `educationLevels`, `scale`, `organizer`, `registrationDeadline`, `registrationLink`, and `socialMediaLink`. Categories expose `id`, `slug`, `name`, and `parentColors` (all four palette values or `null`). The repository filters `isActive = true` in SQL and orders by `startDate`, then ID. Source IDs/hashes, version/audit fields, active/sort flags, Knowledge Bank rows, and other selected-column additions are never projected. The marketing site sends a locale, but the app calendar currently stores one English value per field and the response is not localized.
 
 ## FAQ Module
 
