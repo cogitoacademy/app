@@ -142,15 +142,15 @@ async function listActiveCalendarEvents(db: DbType) {
     .orderBy(asc(subjectCategory.sortOrder), asc(subjectCategory.id));
 
   const categoriesByEvent = new Map<string, PublicCalendarCategoryRow[]>();
+  for (const event of events) categoriesByEvent.set(event.id, []);
   for (const { eventId, ...category } of categories) {
-    const list = categoriesByEvent.get(eventId);
-    if (list) list.push(category);
-    else categoriesByEvent.set(eventId, [category]);
+    // The category query is restricted to the selected event IDs.
+    categoriesByEvent.get(eventId)!.push(category);
   }
 
   return events.map((event): PublicCalendarEventRow => ({
     ...event,
-    categories: categoriesByEvent.get(event.id) ?? [],
+    categories: categoriesByEvent.get(event.id)!,
   }));
 }
 

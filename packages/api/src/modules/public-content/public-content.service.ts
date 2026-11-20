@@ -199,7 +199,7 @@ export function toPublicCalendarEventDto(
       name: category.name,
       parentColors: toPalette(category),
     })),
-    educationLevels: row.educationLevels ?? [],
+    educationLevels: row.educationLevels,
     scale: row.scale,
     organizer: row.organizer,
     registrationDeadline: row.registrationDeadline?.toISOString() ?? null,
