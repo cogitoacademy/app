@@ -2,8 +2,9 @@ import { z } from "zod";
 import { eventFields } from "../content-admin/content-admin.types";
 import {
   blogBodySchema,
-  blogKeyFactsSchema,
   blogFaqSchema,
+  blogKeyFactsSchema,
+  blogSlugSchema,
 } from "../blog/blog.types";
 import { faqCategorySchema } from "../faq/faq-categories";
 import { faqAnswerRichTextSchema } from "../faq/faq-rich-text";
@@ -57,10 +58,18 @@ export const officeActionSchemas = {
       title: z.string().trim().min(1).max(200),
       body: blogBodySchema,
       category: id,
+      subcategory: id.optional(),
+      slug: blogSlugSchema.optional(),
       coverImageUrl: cover,
+      coverDescription: z.string().trim().max(500).optional(),
       seoTitle: z.string().max(60).optional(),
       metaDescription: z.string().max(155).optional(),
       lead: z.string().max(1000).optional(),
+      mainKeyword: z.string().trim().max(200).optional(),
+      secondaryKeywords: z
+        .array(z.string().trim().min(1).max(100))
+        .max(20)
+        .optional(),
       keyFacts: blogKeyFactsSchema.optional(),
       faq: blogFaqSchema.optional(),
     })

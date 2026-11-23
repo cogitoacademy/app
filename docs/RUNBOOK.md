@@ -85,7 +85,7 @@ Verification steps:
 2. Run `bun run db:migrate`.
 3. Run the blog integration test against the local `cogito-test` database: `bun test --env-file apps/server/.env.test packages/api/src/tests/integration/blog.test.ts`.
 4. Sign in as admin, open `/admin-blog`, create a category, then create an article.
-5. Upload a hero image, fill both locale tabs, save, and publish one locale at a time. Body images require alt text before save; the editor reports the missing image position.
+5. Upload a hero image in each language tab, fill both locale tabs, save, and publish one locale at a time. Body images require alt text before save; the editor reports the missing image position.
 6. Confirm `POST /rpc/publicContent/blog/list` with `{"json":{"locale":"id"}}` returns the published card and excludes the unpublished locale.
 
 Public blog reads use `/rpc/publicContent/blog/*` and are rate-limited by path in `apps/server/src/routes/rate-limits.ts`: 120 requests per minute for list/get/categories and 12 per minute for the sitemap. If a marketing page receives 429 responses, check that it is not calling the sitemap per page render.
@@ -95,6 +95,89 @@ The marketing site must not add `app/[locale]/loading.tsx`. That route-level str
 No environment variable is specific to the blog. Media reuse the existing R2 or local upload configuration, and public image URLs come from `R2_PUBLIC_URL` (or the local upload base URL).
 
 Marketing deploy order: apply migration 0086 and deploy the app API first, then deploy `cogito-acad`. The marketing project needs `COGITO_APP_API_URL` pointed at the app origin, `NEXT_PUBLIC_SITE_URL=https://www.cogitoacademy.id`, and `NEXT_PUBLIC_R2_HOST` set to the R2 public host so `next/image` accepts blog images. Blog pages revalidate every 60 seconds; there is no publish webhook, so a new article appears after the ISR window or a redeploy. If the API is unreachable, the marketing article pages render a localized retry state and the sitemap returns 503 with `Retry-After`.
+
+## Blog per-language covers, tables, and consent (23 November 2026)
+
+Migration `0095_lame_sue_storm.sql` is additive plus a backfill. It adds `blog_article_version.hero_media_id`, adds `blog_article.consent_recorded`, `consent_recorded_at`, and `consent_notes`, and copies each existing article-level hero into both language versions. Apply it with the normal forward runner (`bun run db:migrate`) against the exact target; do not reset or reseed.
+
+Deploy order for the table block: deploy the marketing site first (it accepts and renders `type: "table"`), then apply migration 0095 and deploy the app API/admin. The marketing schema rejects an unknown block type, so publishing a table before the renderer deploys would blank the article page.
+
+After deploy:
+
+1. Re-upload existing covers from the original 3200 px files if the current image was normalized to 2000 px. New blog uploads now keep up to 3200 px at WebP quality 0.90.
+2. Open a two-language article and verify the Indonesian and English tabs show different cover previews and cover descriptions.
+3. Insert a table in the body editor, save, publish, and verify the marketing page renders it and scrolls horizontally on mobile.
+4. Check the rendered head: canonical uses `https://www.cogitoacademy.id`, paired articles emit `id`, `en`, and `x-default` → English, and the tab title is `Judul | Cogito Academy`.
+5. Check `Consent recorded` in Article settings. A checked box requires a date; the fields stay admin-only.
+
+The legacy `blog_article.hero_media_id` column is intentionally left in place for one release. After the new API is healthy and no reads reference it, a follow-up migration drops it. Do not drop it before the new API is live.
+
+Operator follow-up: set the marketing `NEXT_PUBLIC_SITE_URL` to `https://www.cogitoacademy.id` and make the apex → www redirect permanent (308/301). The code normalizes an apex value, but the environment should not depend on that guard.
+
+### One-off merge of the existing separate English articles
+
+The pilot created separate Indonesian and English articles before per-language covers shipped. To give those pairs real `hreflang` alternates, keep the Indonesian article and move the English language version onto it inside one transaction. Take the article IDs from `POST /rpc/publicContent/blog/sitemap` (the `articleId` field) and the slugs from the public URLs.
+
+Preflight, read-only:
+
+```sql
+SELECT a.id, v.locale, v.slug, v.status
+FROM blog_article a
+JOIN blog_article_version v ON v.article_id = a.id
+WHERE a.id IN ('<id-article>', '<en-article>')
+ORDER BY v.locale, v.slug;
+
+SELECT * FROM blog_article_related
+WHERE article_id IN ('<id-article>', '<en-article>')
+   OR related_article_id IN ('<id-article>', '<en-article>');
+SELECT * FROM blog_article_gallery
+WHERE article_id IN ('<id-article>', '<en-article>');
+```
+
+Merge, only after a verified backup and confirmation that the English article has exactly one `en` version and the Indonesian article has no `en` version:
+
+```sql
+BEGIN;
+UPDATE blog_article_version
+SET article_id = '<id-article>'
+WHERE article_id = '<en-article>' AND locale = 'en';
+INSERT INTO blog_article_gallery (article_id, media_id, sort_order, alt_id, alt_en)
+SELECT '<id-article>', media_id, sort_order, alt_id, alt_en
+FROM blog_article_gallery WHERE article_id = '<en-article>'
+ON CONFLICT DO NOTHING;
+DELETE FROM blog_article_gallery WHERE article_id = '<en-article>';
+INSERT INTO blog_article_related (article_id, related_article_id, sort_order)
+SELECT '<id-article>', related_article_id, sort_order
+FROM blog_article_related WHERE article_id = '<en-article>'
+  AND related_article_id <> '<id-article>'
+ON CONFLICT DO NOTHING;
+UPDATE blog_article_related AS r
+SET related_article_id = '<id-article>'
+WHERE r.related_article_id = '<en-article>'
+  AND r.article_id <> '<id-article>'
+  AND NOT EXISTS (
+    SELECT 1 FROM blog_article_related AS existing
+    WHERE existing.article_id = r.article_id
+      AND existing.related_article_id = '<id-article>'
+  );
+DELETE FROM blog_article_related
+WHERE article_id = '<en-article>' OR related_article_id = '<en-article>';
+UPDATE blog_article AS target
+SET featured_tutor_id = COALESCE(target.featured_tutor_id, source.featured_tutor_id),
+    reviewed_by_tutor_id = COALESCE(target.reviewed_by_tutor_id, source.reviewed_by_tutor_id),
+    featured_tutor_name = COALESCE(target.featured_tutor_name, source.featured_tutor_name),
+    reviewed_by_name = COALESCE(target.reviewed_by_name, source.reviewed_by_name),
+    internal_notes = COALESCE(target.internal_notes, source.internal_notes),
+    consent_recorded = target.consent_recorded OR source.consent_recorded,
+    consent_recorded_at = COALESCE(target.consent_recorded_at, source.consent_recorded_at),
+    consent_notes = COALESCE(target.consent_notes, source.consent_notes)
+FROM blog_article AS source
+WHERE target.id = '<id-article>' AND source.id = '<en-article>';
+DELETE FROM blog_article WHERE id = '<en-article>';
+COMMIT;
+```
+
+After commit, verify `publicContent.blog.get` for both locales returns the other as `alternate`, and `/blog-sitemap.xml` emits both locales plus `x-default` → English. Repeat for every pilot pair (`apa-itu-mun`, `apa-itu-world-scholar-s-cup-panduan-lengkap-untuk-pemula`). If a pair has gallery or related rows on both sides, review the preflight output before running; the script keeps the Indonesian article's rows and adds missing English rows.
 
 ## Academy single-language cutover (1 November 2026)
 

@@ -20,6 +20,7 @@ import type {
 } from "@cogito-app/api/modules/blog/blog.types";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import {
   Dialog,
   DialogPopup,
@@ -79,6 +80,7 @@ const EMPTY_DRAFT: Draft = {
   keyFacts: [],
   body: [],
   faq: [],
+  heroMediaId: null,
   heroAlt: null,
 };
 
@@ -95,6 +97,7 @@ function draftFrom(version: AdminBlogVersionDto | null): Draft {
     keyFacts: version.keyFacts,
     body: version.body,
     faq: version.faq,
+    heroMediaId: version.heroMediaId,
     heroAlt: version.heroAlt,
   };
 }
@@ -178,8 +181,13 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     featuredTutorId: "",
     reviewedByTutorId: "",
     internalNotes: "",
+    consentRecorded: false,
+    consentRecordedAt: "",
+    consentNotes: "",
   });
-  const [heroMedia, setHeroMedia] = useState<BlogMediaDto | null>(null);
+  const [versionHeroMedia, setVersionHeroMedia] = useState<
+    Record<BlogLocale, BlogMediaDto | null>
+  >({ id: null, en: null });
   const [gallery, setGallery] = useState<AdminBlogArticleDto["gallery"]>([]);
   const [uploading, setUploading] = useState(false);
   const [activeLocale, setActiveLocale] = useState<BlogLocale>("id");
@@ -216,12 +224,18 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       featuredTutorId: data.featuredTutor?.id ?? "",
       reviewedByTutorId: data.reviewedByTutor?.id ?? "",
       internalNotes: data.internalNotes ?? "",
+      consentRecorded: data.consentRecorded,
+      consentRecordedAt: data.consentRecordedAt ?? "",
+      consentNotes: data.consentNotes ?? "",
     });
     setManualPeople({
       featured: !!data.featuredTutorName,
       reviewer: !!data.reviewedByName,
     });
-    setHeroMedia(data.heroMedia);
+    setVersionHeroMedia({
+      id: data.versions.id?.heroMedia ?? null,
+      en: data.versions.en?.heroMedia ?? null,
+    });
     setGallery(data.gallery);
     setRelatedIds(data.relatedArticleIds);
     clearDirty();
@@ -230,11 +244,13 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
 
   const mediaOptions = useMemo(() => {
     const map = new Map<string, BlogMediaDto>();
-    if (heroMedia) map.set(heroMedia.id, heroMedia);
+    for (const image of Object.values(versionHeroMedia)) {
+      if (image) map.set(image.id, image);
+    }
     for (const image of gallery) map.set(image.id, image);
     for (const image of article.data?.bodyMedia ?? []) map.set(image.id, image);
     return [...map.values()];
-  }, [heroMedia, gallery, article.data?.bodyMedia]);
+  }, [versionHeroMedia, gallery, article.data?.bodyMedia]);
 
   function markDirty() {
     if (interacted.current && Date.now() >= suppressDirtyUntil.current) {
@@ -270,6 +286,9 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       featuredTutorId: shared.featuredTutorId || null,
       reviewedByTutorId: shared.reviewedByTutorId || null,
       internalNotes: shared.internalNotes || null,
+      consentRecorded: shared.consentRecorded,
+      consentRecordedAt: shared.consentRecordedAt || null,
+      consentNotes: shared.consentNotes || null,
     });
     await Promise.all([
       client.adminBlog.replaceGallery({
@@ -307,6 +326,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
       seoTitle: draft.seoTitle || draft.title.slice(0, 60),
     });
     setVersions((value) => ({ ...value, [locale]: saved }));
+    setVersionHeroMedia((value) => ({ ...value, [locale]: saved.heroMedia }));
     setDrafts((value) => ({ ...value, [locale]: draftFrom(saved) }));
     return saved;
   }
@@ -387,37 +407,48 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     onError: (error) => toastError("Article could not be archived", error),
   });
 
-  async function handleUpload(
-    file: File | undefined,
-    target: "hero" | "gallery",
-  ) {
+  async function handleHeroUpload(locale: BlogLocale, file: File | undefined) {
     if (!file) return;
     setUploading(true);
     try {
       const media = await uploadBlogImage(file);
-      if (target === "hero") {
-        setHeroMedia(media);
-        await client.adminBlog.updateArticle({
-          articleId,
-          expectedVersion: article.data!.version,
-          heroMediaId: media.id,
-        });
-      } else {
-        const next = [
-          ...gallery,
-          { ...media, sortOrder: gallery.length, altId: null, altEn: null },
-        ];
-        setGallery(next);
-        await client.adminBlog.replaceGallery({
-          articleId,
-          expectedVersion: article.data!.version,
-          images: next.map((image) => ({
-            mediaId: image.id,
-            altId: image.altId,
-            altEn: image.altEn,
-          })),
-        });
-      }
+      setVersionHeroMedia((value) => ({ ...value, [locale]: media }));
+      changeDraft(locale, "heroMediaId", media.id);
+      toastManager.add({
+        title: "Cover uploaded. Save this language to apply it.",
+        type: "success",
+      });
+    } catch (error) {
+      toastError("Image could not be uploaded", error);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeHero(locale: BlogLocale) {
+    setVersionHeroMedia((value) => ({ ...value, [locale]: null }));
+    changeDraft(locale, "heroMediaId", null);
+  }
+
+  async function handleGalleryUpload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const media = await uploadBlogImage(file);
+      const next = [
+        ...gallery,
+        { ...media, sortOrder: gallery.length, altId: null, altEn: null },
+      ];
+      setGallery(next);
+      await client.adminBlog.replaceGallery({
+        articleId,
+        expectedVersion: article.data!.version,
+        images: next.map((image) => ({
+          mediaId: image.id,
+          altId: image.altId,
+          altEn: image.altEn,
+        })),
+      });
       await article.refetch();
       toastManager.add({ title: "Image uploaded", type: "success" });
     } catch (error) {
@@ -572,7 +603,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
     if (!draft.metaDescription.trim()) missing.push("metaDescription");
     if (!draft.lead.trim()) missing.push("lead");
     if (draft.body.length === 0) missing.push("body");
-    if (!heroMedia) missing.push("heroMedia");
+    if (!drafts[locale].heroMediaId) missing.push("heroMedia");
     if (!draft.heroAlt?.trim()) missing.push("heroAlt");
     if (draft.keyFacts.length === 0) missing.push("keyFacts");
     if (
@@ -685,10 +716,50 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
         </AccordionItem>
         <AccordionItem value="facts">
           <AccordionHeader>
-            <AccordionTrigger>Key facts & image descriptions</AccordionTrigger>
+            <AccordionTrigger>
+              Key facts, cover & image descriptions
+            </AccordionTrigger>
           </AccordionHeader>
           <AccordionPanel>
             <div className="space-y-6 pb-4">
+              {localeField("Hero image", (locale) => {
+                const hero = versionHeroMedia[locale];
+                return (
+                  <div className="space-y-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploading}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void handleHeroUpload(locale, file);
+                      }}
+                    />
+                    <FieldDescription>
+                      This cover is used only for the{" "}
+                      {locale === "id" ? "Indonesian" : "English"} article.
+                    </FieldDescription>
+                    {hero ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <img
+                          alt={drafts[locale].heroAlt ?? ""}
+                          className="h-16 w-24 rounded-md object-cover"
+                          src={resolveProfileImageUrl(hero.url) ?? hero.url}
+                        />
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="sm"
+                          onClick={() => removeHero(locale)}
+                        >
+                          Remove cover
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
               {textField("heroAlt", "Cover description")}
               {localeField("Key facts — one per line", (locale) => (
                 <Textarea
@@ -800,7 +871,7 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
         <AccordionItem value="settings">
           <AccordionHeader>
             <AccordionTrigger>
-              Article settings · category, people & cover
+              Article settings · category & people
             </AccordionTrigger>
           </AccordionHeader>
           <AccordionPanel>
@@ -958,29 +1029,6 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                   </Field>
                 </div>
 
-                <Stack direction="row" className="flex-wrap items-center gap-3">
-                  <Field className="flex-1">
-                    <FieldLabel>Hero image</FieldLabel>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploading}
-                      onChange={(event) =>
-                        void handleUpload(event.target.files?.[0], "hero")
-                      }
-                    />
-                  </Field>
-                  {heroMedia ? (
-                    <img
-                      alt={drafts.id.heroAlt ?? ""}
-                      className="h-16 w-24 rounded-md object-cover"
-                      src={
-                        resolveProfileImageUrl(heroMedia.url) ?? heroMedia.url
-                      }
-                    />
-                  ) : null}
-                </Stack>
-
                 <Field>
                   <FieldLabel>Gallery</FieldLabel>
                   <FieldDescription>
@@ -1032,9 +1080,11 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                       type="file"
                       accept="image/*"
                       disabled={uploading}
-                      onChange={(event) =>
-                        void handleUpload(event.target.files?.[0], "gallery")
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void handleGalleryUpload(file);
+                      }}
                     />
                     <Button
                       variant="secondary"
@@ -1082,6 +1132,47 @@ export function BlogEditorPage({ articleId }: { articleId: string }) {
                       </Select>
                     ))}
                   </div>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Consent recorded</FieldLabel>
+                  <FieldDescription>
+                    Internal record for student stories. Keep the signed consent
+                    form offline; this field is not a legal consent gate.
+                  </FieldDescription>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="blog-consent-recorded"
+                      checked={shared.consentRecorded}
+                      onCheckedChange={(checked) =>
+                        updateShared({ consentRecorded: checked === true })
+                      }
+                    />
+                    <label
+                      htmlFor="blog-consent-recorded"
+                      className="text-sm leading-relaxed"
+                    >
+                      Consent has been recorded for the student or family in
+                      this article.
+                    </label>
+                  </div>
+                  <Input
+                    type="date"
+                    aria-label="Consent recorded date"
+                    value={shared.consentRecordedAt}
+                    onChange={(event) =>
+                      updateShared({ consentRecordedAt: event.target.value })
+                    }
+                  />
+                  <Textarea
+                    rows={3}
+                    aria-label="Consent notes"
+                    placeholder="Consent notes, for example the form reference or date received."
+                    value={shared.consentNotes}
+                    onChange={(event) =>
+                      updateShared({ consentNotes: event.target.value })
+                    }
+                  />
                 </Field>
 
                 <Field>

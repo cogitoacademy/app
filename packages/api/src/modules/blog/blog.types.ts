@@ -20,13 +20,16 @@ export type {
   BlogVersionStatus,
 };
 
-export const BLOG_BODY_MAX_BLOCKS = 60;
+export const BLOG_BODY_MAX_BLOCKS = 150;
+export const BLOG_TABLE_MAX_COLUMNS = 8;
+export const BLOG_TABLE_MAX_ROWS = 50;
+export const BLOG_TABLE_CELL_MAX_CHARS = 500;
 export const BLOG_RELATED_MAX = 3;
 export const BLOG_PUBLIC_PAGE_SIZE = 12;
 export const BLOG_PUBLIC_PAGE_SIZE_MAX = 24;
 export const BLOG_SITEMAP_MAX = 5_000;
 
-const slugSchema = z
+export const blogSlugSchema = z
   .string()
   .trim()
   .min(1)
@@ -47,6 +50,10 @@ const nullableText = (max: number) =>
       typeof value === "string" && value.trim() === "" ? null : value,
     z.string().trim().max(max).nullable().optional(),
   );
+const optionalDateOnly = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+  z.iso.date().nullable().optional(),
+);
 
 function isHttpUrl(value: string) {
   try {
@@ -111,6 +118,16 @@ export const blogRunSchema = z
   })
   .strict();
 
+const blogTableCellSchema = z
+  .array(blogRunSchema)
+  .max(20)
+  .refine(
+    (runs) =>
+      runs.reduce((total, run) => total + run.text.length, 0) <=
+      BLOG_TABLE_CELL_MAX_CHARS,
+    `Use at most ${BLOG_TABLE_CELL_MAX_CHARS} characters per table cell`,
+  );
+
 export const blogBlockSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -132,6 +149,39 @@ export const blogBlockSchema = z.discriminatedUnion("type", [
       items: z.array(z.array(blogRunSchema).min(1).max(100)).min(1).max(50),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("table"),
+      header: z
+        .array(blogTableCellSchema)
+        .min(1)
+        .max(BLOG_TABLE_MAX_COLUMNS)
+        .optional(),
+      rows: z
+        .array(z.array(blogTableCellSchema).min(1).max(BLOG_TABLE_MAX_COLUMNS))
+        .min(1)
+        .max(BLOG_TABLE_MAX_ROWS),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+      const expected = value.header?.length ?? value.rows[0]!.length;
+      for (const [index, row] of value.rows.entries()) {
+        if (row.length !== expected) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["rows", index],
+            message: `Every table row must have ${expected} cells`,
+          });
+        }
+      }
+      if (value.header && value.header.length !== value.rows[0]!.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["header"],
+          message: "The header must have the same number of cells as each row",
+        });
+      }
+    }),
   z
     .object({
       type: z.literal("quote"),
@@ -201,7 +251,7 @@ export const blogFaqSchema = z
 
 export const blogVersionFieldsSchema = z
   .object({
-    slug: slugSchema,
+    slug: blogSlugSchema,
     title: z.string().trim().max(200).default(""),
     seoTitle: z.string().trim().max(60).default(""),
     metaDescription: z.string().trim().max(155).default(""),
@@ -215,6 +265,7 @@ export const blogVersionFieldsSchema = z
     keyFacts: blogKeyFactsSchema.default([]),
     body: blogBodySchema.default([]),
     faq: blogFaqSchema.default([]),
+    heroMediaId: optionalIdSchema,
     heroAlt: nullableText(500),
   })
   .strict();
@@ -236,12 +287,14 @@ export const createBlogArticleInput = z
   .object({
     categoryId: optionalIdSchema,
     subcategoryId: optionalIdSchema,
-    heroMediaId: optionalIdSchema,
     featuredTutorName: nullableText(200),
     reviewedByName: nullableText(200),
     featuredTutorId: optionalIdSchema,
     reviewedByTutorId: optionalIdSchema,
     internalNotes: nullableText(5_000),
+    consentRecorded: z.boolean().optional(),
+    consentRecordedAt: optionalDateOnly,
+    consentNotes: nullableText(5_000),
   })
   .strict();
 
@@ -251,12 +304,14 @@ export const updateBlogArticleInput = z
     expectedVersion: z.number().int().positive(),
     categoryId: optionalIdSchema,
     subcategoryId: optionalIdSchema,
-    heroMediaId: optionalIdSchema,
     featuredTutorName: nullableText(200),
     reviewedByName: nullableText(200),
     featuredTutorId: optionalIdSchema,
     reviewedByTutorId: optionalIdSchema,
     internalNotes: nullableText(5_000),
+    consentRecorded: z.boolean().optional(),
+    consentRecordedAt: optionalDateOnly,
+    consentNotes: nullableText(5_000),
   })
   .strict();
 
@@ -368,8 +423,8 @@ const categoryFields = z
     parentId: optionalIdSchema,
     titleId: z.string().trim().min(1).max(200),
     titleEn: z.string().trim().min(1).max(200),
-    slugId: slugSchema,
-    slugEn: slugSchema,
+    slugId: blogSlugSchema,
+    slugEn: blogSlugSchema,
     introId: nullableText(3_000),
     introEn: nullableText(3_000),
     isActive: z.boolean().default(true),
@@ -415,7 +470,7 @@ export const listPublicBlogArticlesInput = z
   .strict();
 
 export const getPublicBlogArticleInput = z
-  .object({ locale: z.enum(BLOG_LOCALES), slug: slugSchema })
+  .object({ locale: z.enum(BLOG_LOCALES), slug: blogSlugSchema })
   .strict();
 
 export const listPublicBlogCategoriesInput = z
@@ -498,6 +553,8 @@ export type AdminBlogVersionDto = {
   keyFacts: BlogKeyFact[];
   body: BlogBlock[];
   faq: BlogFaqItem[];
+  heroMediaId: string | null;
+  heroMedia: BlogMediaDto | null;
   heroAlt: string | null;
   readingMinutes: number;
   status: BlogVersionStatus;
@@ -516,7 +573,6 @@ export type AdminBlogArticleDto = {
   id: string;
   category: BlogCategoryRefDto | null;
   subcategory: BlogCategoryRefDto | null;
-  heroMedia: BlogMediaDto | null;
   gallery: Array<
     BlogMediaDto & {
       sortOrder: number;
@@ -530,6 +586,9 @@ export type AdminBlogArticleDto = {
   reviewedByTutor: BlogTutorRefDto | null;
   relatedArticleIds: string[];
   internalNotes: string | null;
+  consentRecorded: boolean;
+  consentRecordedAt: string | null;
+  consentNotes: string | null;
   archivedAt: string | null;
   version: number;
   versions: { id: AdminBlogVersionDto | null; en: AdminBlogVersionDto | null };

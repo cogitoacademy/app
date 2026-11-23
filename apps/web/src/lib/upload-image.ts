@@ -1,4 +1,8 @@
-import { normalizeBlogImage, type NormalizedImage } from "./blog-image";
+import {
+  normalizeBlogImage,
+  type NormalizedImage,
+  type NormalizeImageOptions,
+} from "./blog-image";
 import { resolveProfileImageUrl } from "./profile-image-url";
 import { client } from "@/utils/orpc";
 
@@ -7,8 +11,11 @@ export type UploadedImage = NormalizedImage & {
   url: string;
 };
 
-export async function uploadImage(file: File): Promise<UploadedImage> {
-  const normalized = await normalizeBlogImage(file);
+export async function uploadImage(
+  file: File,
+  options?: NormalizeImageOptions,
+): Promise<UploadedImage> {
+  const normalized = await normalizeBlogImage(file, options);
   const signed = await client.upload.createUploadUrl({
     filename: normalized.file.name,
     contentType: "image/webp",

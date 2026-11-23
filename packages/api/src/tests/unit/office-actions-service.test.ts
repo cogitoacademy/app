@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { executeOfficeAction } from "../../modules/office/office-actions";
-import { officeActionReceipt } from "@cogito-app/db/schema";
+import { blogCategory, officeActionReceipt } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { StoragePort } from "../../lib/storage";
 
@@ -32,9 +32,13 @@ function fixture(receipts: unknown[] = []) {
           orderBy: () => Query;
           limit: () => Query;
         };
-        const query = Promise.resolve(
-          table === officeActionReceipt ? receipts : [],
-        ) as Query;
+        const rows =
+          table === officeActionReceipt
+            ? receipts
+            : table === blogCategory
+              ? [{ id: "category", parentId: null }]
+              : [];
+        const query = Promise.resolve(rows) as Query;
         query.where = () => query;
         query.orderBy = () => query;
         query.limit = () => query;

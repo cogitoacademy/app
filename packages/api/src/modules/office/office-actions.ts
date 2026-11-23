@@ -190,6 +190,20 @@ export async function executeOfficeAction(
       } else if (action === "blog.saveDraft") {
         const input = officeActionSchemas[action].parse(body.input);
         let article = input.id ? await blog.service.getAdmin(input.id) : null;
+        const selectedCategory = await blog.repo.categoryById(input.category);
+        if (!selectedCategory) throw new Error("OFFICE_TARGET_NOT_FOUND");
+        let categoryId = selectedCategory.id;
+        let subcategoryId: string | null = null;
+        if (selectedCategory.parentId) {
+          categoryId = selectedCategory.parentId;
+          subcategoryId = selectedCategory.id;
+        }
+        if (input.subcategory) {
+          const subcategory = await blog.repo.categoryById(input.subcategory);
+          if (!subcategory || subcategory.parentId !== categoryId)
+            throw new Error("OFFICE_TARGET_NOT_FOUND");
+          subcategoryId = subcategory.id;
+        }
         let heroMediaId: string | undefined;
         if (input.coverImageUrl) {
           const { bytes, contentType } = await downloadOfficeAsset(
@@ -220,7 +234,7 @@ export async function executeOfficeAction(
         }
         if (!article) {
           const created = await blog.service.createArticle(
-            { categoryId: input.category, heroMediaId },
+            { categoryId, subcategoryId },
             null,
           );
           article = await blog.service.getAdmin(created.articleId);
@@ -229,8 +243,8 @@ export async function executeOfficeAction(
             {
               articleId: article.id,
               expectedVersion: article.version,
-              categoryId: input.category,
-              heroMediaId,
+              categoryId,
+              subcategoryId,
             },
             null,
           );
@@ -251,15 +265,18 @@ export async function executeOfficeAction(
         }
         result = await blog.service.saveVersion({
           ...blogVersionFieldsSchema.parse({
-            slug: version?.slug ?? slug(input.title),
+            slug: input.slug ?? version?.slug ?? slug(input.title),
             title: input.title,
             body: input.body,
             seoTitle: input.seoTitle,
             metaDescription: input.metaDescription,
             lead: input.lead,
+            mainKeyword: input.mainKeyword,
+            secondaryKeywords: input.secondaryKeywords,
             keyFacts: input.keyFacts,
             faq: input.faq,
-            heroAlt: input.title,
+            ...(heroMediaId ? { heroMediaId } : {}),
+            heroAlt: input.coverDescription ?? input.title,
           }),
           articleId: article.id,
           locale: input.lang,

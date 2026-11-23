@@ -85,6 +85,14 @@ const completeVersion = {
   body: [
     { type: "heading", level: 2, text: "Mulai dari satu soal" },
     { type: "paragraph", runs: [{ text: "Kerjakan satu soal lebih dulu." }] },
+    {
+      type: "table",
+      header: [[{ text: "Kompetisi" }], [{ text: "Jenjang" }]],
+      rows: [
+        [[{ text: "MUN" }], [{ text: "SMA" }]],
+        [[{ text: "WSC" }], [{ text: "SMP" }]],
+      ],
+    },
   ] as const,
   faq: [{ question: "Apakah harus setiap hari?", answer: "Idealnya iya." }],
   heroAlt: "Siswa belajar matematika",
@@ -173,7 +181,6 @@ describe("Blog Postgres integration", () => {
   test("publishes a complete language version and serves it publicly", async () => {
     const created = await clients.adminClient.adminBlog.createArticle({
       categoryId,
-      heroMediaId: mediaId,
     });
     articleIds.push(created.articleId);
 
@@ -191,6 +198,7 @@ describe("Blog Postgres integration", () => {
       locale: "id",
       expectedVersion: 0,
       slug,
+      heroMediaId: mediaId,
       ...completeVersion,
     });
 
@@ -214,6 +222,7 @@ describe("Blog Postgres integration", () => {
       slug,
     });
     expect(article.title).toBe(completeVersion.title);
+    expect(article.body.some((block) => block.type === "table")).toBe(true);
     expect(
       article.hero?.url.startsWith(`https://cdn.test/${adminId}/hero-`),
     ).toBe(true);
@@ -240,6 +249,7 @@ describe("Blog Postgres integration", () => {
         locale: "id",
         expectedVersion: version.version,
         slug: `${version.slug}-changed`,
+        heroMediaId: mediaId,
         ...completeVersion,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
@@ -257,6 +267,102 @@ describe("Blog Postgres integration", () => {
         slug: version.slug,
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("keeps a separate hero image for each language", async () => {
+    const enMedia = await clients.adminClient.adminBlog.registerMedia({
+      storageKey: `${adminId}/hero-en-${Date.now()}.webp`,
+      filename: "hero-en.webp",
+      contentType: "image/webp",
+      width: 1200,
+      height: 800,
+      byteSize: 100_000,
+    });
+    mediaIds.push(enMedia.id);
+    const created = await clients.adminClient.adminBlog.createArticle({
+      categoryId,
+    });
+    articleIds.push(created.articleId);
+    const savedId = await clients.adminClient.adminBlog.saveVersion({
+      articleId: created.articleId,
+      locale: "id",
+      expectedVersion: 0,
+      slug: `hero-id-${Date.now()}`,
+      heroMediaId: mediaId,
+      ...completeVersion,
+    });
+    const savedEn = await clients.adminClient.adminBlog.saveVersion({
+      articleId: created.articleId,
+      locale: "en",
+      expectedVersion: 0,
+      slug: `hero-en-${Date.now()}`,
+      heroMediaId: enMedia.id,
+      ...completeVersion,
+    });
+    expect(savedId.heroMedia?.url).not.toBe(savedEn.heroMedia?.url);
+
+    await clients.adminClient.adminBlog.publishVersion({
+      articleId: created.articleId,
+      locale: "id",
+      expectedVersion: savedId.version,
+    });
+    await clients.adminClient.adminBlog.publishVersion({
+      articleId: created.articleId,
+      locale: "en",
+      expectedVersion: savedEn.version,
+    });
+
+    const [idArticle, enArticle] = await Promise.all([
+      clients.publicClient.publicContent.blog.get({
+        locale: "id",
+        slug: savedId.slug,
+      }),
+      clients.publicClient.publicContent.blog.get({
+        locale: "en",
+        slug: savedEn.slug,
+      }),
+    ]);
+    expect(idArticle.hero?.url).toBe(savedId.heroMedia?.url);
+    expect(enArticle.hero?.url).toBe(savedEn.heroMedia?.url);
+    expect(idArticle.alternate).toEqual({
+      locale: "en",
+      slug: savedEn.slug,
+    });
+    expect(enArticle.alternate).toEqual({
+      locale: "id",
+      slug: savedId.slug,
+    });
+  });
+
+  test("records student-story consent with a date", async () => {
+    const created = await clients.adminClient.adminBlog.createArticle({
+      categoryId,
+    });
+    articleIds.push(created.articleId);
+    const current = await clients.adminClient.adminBlog.get({
+      articleId: created.articleId,
+    });
+    await expect(
+      clients.adminClient.adminBlog.updateArticle({
+        articleId: created.articleId,
+        expectedVersion: current.version,
+        consentRecorded: true,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    await clients.adminClient.adminBlog.updateArticle({
+      articleId: created.articleId,
+      expectedVersion: current.version,
+      consentRecorded: true,
+      consentRecordedAt: "2026-11-20",
+      consentNotes: "Guardian form on file",
+    });
+    const loaded = await clients.adminClient.adminBlog.get({
+      articleId: created.articleId,
+    });
+    expect(loaded.consentRecorded).toBe(true);
+    expect(loaded.consentRecordedAt).toBe("2026-11-20");
+    expect(loaded.consentNotes).toBe("Guardian form on file");
   });
 
   test("blocks publishing when required fields are missing", async () => {
@@ -296,6 +402,7 @@ describe("Blog Postgres integration", () => {
         locale: "id",
         expectedVersion: current.versions.id!.version,
         slug: current.versions.id!.slug,
+        heroMediaId: mediaId,
         ...completeVersion,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });

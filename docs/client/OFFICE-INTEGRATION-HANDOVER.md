@@ -61,7 +61,7 @@ The additional `referenceData` object avoids hardcoded database IDs:
 }
 ```
 
-These are illustrative values. Use the actual response IDs. `calendar.saveDraft.categoryIds` takes active parent competitions (`parentId=null`); `blog.saveDraft.category` takes a blog category ID; `knowledge.addDraft.category` uses the app's resource category identifier. Existing `taxonomy` retains its original name-only shape. The snapshot's `appUrl` and action response's `appUrl` open the corresponding app surface; opening those pages still requires the normal app login and role.
+These are illustrative values. Use the actual response IDs. `calendar.saveDraft.categoryIds` takes active parent competitions (`parentId=null`); `blog.saveDraft.category` accepts a root category ID or a subcategory ID (the app resolves the parent automatically); `knowledge.addDraft.category` uses the app's resource category identifier. Existing `taxonomy` retains its original name-only shape. The snapshot's `appUrl` and action response's `appUrl` open the corresponding app surface; opening those pages still requires the normal app login and role.
 
 ## Action envelope
 
@@ -114,19 +114,19 @@ The preview has `dryRun=true`; its new record IDs are provisional and are rolled
 
 ## The eleven approved actions
 
-| Name                          | `input`                                                                                                                                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `referrals.createKolCampaign` | Same validated campaign form fields as the app. Dates are ISO strings; commission is whole IDR / basis points. See the OpenAPI schema for optional fields and defaults.                                   |
-| `referrals.retireKolCampaign` | `{ "code": "OFFICE26" }`                                                                                                                                                                                  |
-| `calendar.saveDraft`          | Optional `id`, title, description/location, ISO start/end dates, `categoryIds`, education levels, scale, organizer, registration deadline/links. Nullable fields must be supplied as shown in the schema. |
-| `calendar.publish`            | `{ "id": "<saved calendar ID>" }`                                                                                                                                                                         |
-| `blog.saveDraft`              | Optional `id`, `lang`, title, `body` in the app editor's block format, `category` ID, optional `coverImageUrl` and supported SEO fields.                                                                  |
-| `blog.publish`                | `{ "id": "<article ID>", "lang": "id" }`                                                                                                                                                                  |
-| `activities.saveDraft`        | Optional `id`, title, shortDescription, location, ISO `dateTime`, rich-text `body`, optional coverImageUrl.                                                                                               |
-| `activities.publish`          | `{ "id": "<activity ID>" }`                                                                                                                                                                               |
-| `faq.saveDraft`               | Optional `id`, question, answer (at most 20,000 characters), category key, onLanding.                                                                                                                     |
-| `faq.publish`                 | `{ "id": "<FAQ ID>" }`                                                                                                                                                                                    |
-| `knowledge.addDraft`          | title, nullable description, category identifier, Office PDF `fileUrl`.                                                                                                                                   |
+| Name                          | `input`                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `referrals.createKolCampaign` | Same validated campaign form fields as the app. Dates are ISO strings; commission is whole IDR / basis points. See the OpenAPI schema for optional fields and defaults.                                                                                                                     |
+| `referrals.retireKolCampaign` | `{ "code": "OFFICE26" }`                                                                                                                                                                                                                                                                    |
+| `calendar.saveDraft`          | Optional `id`, title, description/location, ISO start/end dates, `categoryIds`, education levels, scale, organizer, registration deadline/links. Nullable fields must be supplied as shown in the schema.                                                                                   |
+| `calendar.publish`            | `{ "id": "<saved calendar ID>" }`                                                                                                                                                                                                                                                           |
+| `blog.saveDraft`              | Optional `id`, `lang`, title, `body` in the app editor's block format, `category` (root or subcategory ID), optional `subcategory`, `slug`, `coverImageUrl`, `coverDescription`, `mainKeyword`, `secondaryKeywords` and supported SEO fields. The cover is stored on that language version. |
+| `blog.publish`                | `{ "id": "<article ID>", "lang": "id" }`                                                                                                                                                                                                                                                    |
+| `activities.saveDraft`        | Optional `id`, title, shortDescription, location, ISO `dateTime`, rich-text `body`, optional coverImageUrl.                                                                                                                                                                                 |
+| `activities.publish`          | `{ "id": "<activity ID>" }`                                                                                                                                                                                                                                                                 |
+| `faq.saveDraft`               | Optional `id`, question, answer (at most 20,000 characters), category key, onLanding.                                                                                                                                                                                                       |
+| `faq.publish`                 | `{ "id": "<FAQ ID>" }`                                                                                                                                                                                                                                                                      |
+| `knowledge.addDraft`          | title, nullable description, category identifier, Office PDF `fileUrl`.                                                                                                                                                                                                                     |
 
 For example, blog `input` uses these blocks, not HTML:
 
@@ -134,7 +134,11 @@ For example, blog `input` uses these blocks, not HTML:
 {
   "lang": "id",
   "title": "Panduan persiapan kompetisi",
-  "category": "<ID from referenceData.blogCategories>",
+  "category": "<ID from referenceData.blogCategories, root or subcategory>",
+  "slug": "panduan-persiapan-kompetisi",
+  "coverDescription": "Siswa menyiapkan catatan lomba",
+  "mainKeyword": "persiapan kompetisi",
+  "secondaryKeywords": ["latihan lomba", "jadwal kompetisi"],
   "body": [{ "type": "paragraph", "runs": [{ "text": "Isi artikel." }] }]
 }
 ```

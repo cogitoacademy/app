@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -38,6 +39,7 @@ export type BlogBlock =
   | { type: "list"; style: "ordered" | "unordered"; items: BlogRun[][] }
   | { type: "quote"; runs: BlogRun[]; attribution?: string }
   | { type: "callout"; title: string; runs: BlogRun[] }
+  | { type: "table"; header?: BlogRun[][]; rows: BlogRun[][][] }
   | { type: "image"; mediaId: string; alt: string; caption?: string }
   | {
       type: "embed";
@@ -142,6 +144,8 @@ export const blogArticle = pgTable(
     subcategoryId: text("subcategory_id").references(() => blogCategory.id, {
       onDelete: "restrict",
     }),
+    // Deprecated: hero images now live on blog_article_version. Kept for the
+    // expand/contract migration window; the follow-up migration drops it.
     heroMediaId: text("hero_media_id").references(() => blogMedia.id, {
       onDelete: "restrict",
     }),
@@ -156,6 +160,9 @@ export const blogArticle = pgTable(
     featuredTutorName: text("featured_tutor_name"),
     reviewedByName: text("reviewed_by_name"),
     internalNotes: text("internal_notes"),
+    consentRecorded: boolean("consent_recorded").notNull().default(false),
+    consentRecordedAt: date("consent_recorded_at"),
+    consentNotes: text("consent_notes"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     version: integer("version").notNull().default(1),
     createdBy: text("created_by").references(() => user.id, {
@@ -172,7 +179,11 @@ export const blogArticle = pgTable(
       .defaultNow(),
   },
   (t) => [
-    check("blog_article_valid", sql`${t.version} > 0`),
+    check(
+      "blog_article_valid",
+      sql`${t.version} > 0
+        AND (${t.consentRecorded} = false OR ${t.consentRecordedAt} IS NOT NULL)`,
+    ),
     index("blog_article_category_idx").on(t.categoryId, t.subcategoryId),
     index("blog_article_archived_idx").on(t.archivedAt),
   ],
@@ -196,6 +207,9 @@ export const blogArticleVersion = pgTable(
     keyFacts: jsonb("key_facts").$type<BlogKeyFact[]>().notNull().default([]),
     body: jsonb("body").$type<BlogBlock[]>().notNull().default([]),
     faq: jsonb("faq").$type<BlogFaqItem[]>().notNull().default([]),
+    heroMediaId: text("hero_media_id").references(() => blogMedia.id, {
+      onDelete: "restrict",
+    }),
     heroAlt: text("hero_alt"),
     readingMinutes: integer("reading_minutes").notNull().default(1),
     status: text("status").notNull().default("draft"),

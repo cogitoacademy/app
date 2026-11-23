@@ -388,7 +388,7 @@ export function createBlogRepo(db: DbType) {
         )
         .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
         .leftJoin(subCategory, eq(subCategory.id, blogArticle.subcategoryId))
-        .leftJoin(blogMedia, eq(blogMedia.id, blogArticle.heroMediaId))
+        .leftJoin(blogMedia, eq(blogMedia.id, blogArticleVersion.heroMediaId))
         .leftJoin(
           tutorProfile,
           eq(tutorProfile.id, blogArticle.featuredTutorId),
@@ -424,7 +424,7 @@ export function createBlogRepo(db: DbType) {
         )
         .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
         .leftJoin(subCategory, eq(subCategory.id, blogArticle.subcategoryId))
-        .leftJoin(blogMedia, eq(blogMedia.id, blogArticle.heroMediaId))
+        .leftJoin(blogMedia, eq(blogMedia.id, blogArticleVersion.heroMediaId))
         .leftJoin(
           tutorProfile,
           eq(tutorProfile.id, blogArticle.featuredTutorId),
@@ -467,7 +467,7 @@ export function createBlogRepo(db: DbType) {
         )
         .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
         .leftJoin(subCategory, eq(subCategory.id, blogArticle.subcategoryId))
-        .leftJoin(blogMedia, eq(blogMedia.id, blogArticle.heroMediaId))
+        .leftJoin(blogMedia, eq(blogMedia.id, blogArticleVersion.heroMediaId))
         .leftJoin(
           tutorProfile,
           eq(tutorProfile.id, blogArticle.featuredTutorId),
@@ -512,7 +512,7 @@ export function createBlogRepo(db: DbType) {
         )
         .innerJoin(rootCategory, eq(rootCategory.id, blogArticle.categoryId))
         .leftJoin(subCategory, eq(subCategory.id, blogArticle.subcategoryId))
-        .leftJoin(blogMedia, eq(blogMedia.id, blogArticle.heroMediaId))
+        .leftJoin(blogMedia, eq(blogMedia.id, blogArticleVersion.heroMediaId))
         .leftJoin(
           tutorProfile,
           eq(tutorProfile.id, blogArticle.featuredTutorId),

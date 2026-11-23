@@ -1,6 +1,11 @@
 const MAX_LONG_EDGE = 2_000;
 const TARGET_QUALITY = 0.82;
 
+export type NormalizeImageOptions = {
+  maxLongEdge?: number;
+  quality?: number;
+};
+
 export type NormalizedImage = {
   file: File;
   width: number;
@@ -49,7 +54,12 @@ async function decode(file: File) {
   }
 }
 
-export async function normalizeBlogImage(file: File): Promise<NormalizedImage> {
+export async function normalizeBlogImage(
+  file: File,
+  options: NormalizeImageOptions = {},
+): Promise<NormalizedImage> {
+  const maxLongEdge = options.maxLongEdge ?? MAX_LONG_EDGE;
+  const targetQuality = options.quality ?? TARGET_QUALITY;
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file.");
   }
@@ -58,7 +68,7 @@ export async function normalizeBlogImage(file: File): Promise<NormalizedImage> {
   try {
     const scale = Math.min(
       1,
-      MAX_LONG_EDGE / Math.max(source.width, source.height),
+      maxLongEdge / Math.max(source.width, source.height),
     );
     const width = Math.max(1, Math.round(source.width * scale));
     const height = Math.max(1, Math.round(source.height * scale));
@@ -75,7 +85,7 @@ export async function normalizeBlogImage(file: File): Promise<NormalizedImage> {
         (value) =>
           value ? resolve(value) : reject(new Error("Image encoding failed.")),
         "image/webp",
-        TARGET_QUALITY,
+        targetQuality,
       );
     });
 

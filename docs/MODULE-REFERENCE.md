@@ -1668,6 +1668,7 @@ English question and answer documents are required; Indonesian documents are opt
 
 - `packages/db/src/schema/blog.ts` — `blog_media`, `blog_category`, `blog_article`, `blog_article_version`, `blog_article_related`, and `blog_article_gallery`
 - `packages/db/src/migrations/0086_fresh_spirit.sql` — additive blog tables, constraints, and indexes
+- `packages/db/src/migrations/0095_lame_sue_storm.sql` — per-language hero media, consent fields, and backfill
 - `blog.types.ts` — Zod input contracts, block/run/F.A.Q. shapes, embed URL validation, and admin/public DTOs
 - `blog.errors.ts` — domain errors and their oRPC mapping
 - `blog.repo.ts` — Drizzle reads and compare-and-swap writes
@@ -1679,20 +1680,22 @@ English question and answer documents are required; Indonesian documents are opt
 
 **Data rules:**
 
-- `blog_article` stores shared editorial fields: category, optional subcategory, hero media, optional featured and reviewing tutors, internal notes, archive timestamp, and optimistic version.
-- `blog_article_version` stores one row per locale (`id`, `en`) with slug, titles, body, F.A.Q., key facts, reading time, status, and `publishedAt`. A unique index on `(articleId, locale)` caps each article at two versions; `(locale, slug)` is unique.
-- Body is structured JSON, never HTML: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, and `embed`. Paragraph-like blocks hold runs with optional bold, italic, and safe `http`/`https` links.
+- `blog_article` stores shared editorial fields: category, optional subcategory, optional featured and reviewing tutors, internal notes, consent record (`consentRecorded`, `consentRecordedAt`, `consentNotes`), archive timestamp, and optimistic version.
+- `blog_article_version` stores one row per locale (`id`, `en`) with slug, titles, body, F.A.Q., key facts, hero media, hero alt, reading time, status, and `publishedAt`. A unique index on `(articleId, locale)` caps each article at two versions; `(locale, slug)` is unique.
+- Hero media is per locale. `blog_article_version.hero_media_id` is the source of truth; migration 0095 backfilled it from the legacy shared column.
+- Body is structured JSON, never HTML: `heading`, `paragraph`, `list`, `quote`, `callout`, `table`, `image`, and `embed`. Paragraph-like blocks hold runs with optional bold, italic, and safe `http`/`https` links. A table has an optional header and up to 8 columns and 50 rows; every row has equal width.
 - Embeds store `{ provider, url, posterMediaId? }`. Instagram reels/posts/TV and TikTok `/@user/video/<id>` URLs are accepted and normalized; no oEmbed request is made.
-- Media rows store the storage key, content type, dimensions, and byte size. Uploads are normalized in the browser to WebP, max 2000 px on the long edge, which strips EXIF. Registration requires the storage key to start with the caller's user ID.
+- Media rows store the storage key, content type, dimensions, and byte size. Blog uploads are normalized in the browser to WebP, max 3200 px on the long edge and quality 0.90, which strips EXIF. Other image uploads keep the 2000 px / 0.82 default. Registration requires the storage key to start with the caller's user ID.
 
 **Lifecycle rules:**
 
 - Each locale publishes independently. `publishedAt` is stamped once and retained across later publishes and unpublishes.
-- The publish gate requires title, SEO title, slug, meta description, lead, non-empty body, hero media, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image.
+- The publish gate requires title, SEO title, slug, meta description, lead, non-empty body, the language version's hero media, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image.
+- Consent is an internal student-story record, not a publication gate. A checked `consentRecorded` requires `consentRecordedAt`; neither is exposed publicly.
 - A slug is immutable after the version has ever been published; `saveVersion` rejects a rename with `CONFLICT`.
 - Archive stamps `archivedAt` and moves every version to `archived`. Archived articles disappear from public reads, related lists, and the sitemap, and reject edits.
 - Public reads filter `status = 'published'` and `archivedAt is null` in SQL. Draft content, internal notes, editor IDs, tutor profile IDs, and media IDs stay out of the public DTO.
-- Reading time is computed on save from title, lead, body text, and F.A.Q. at 220 words per minute, with a floor of one minute.
+- Reading time is computed on save from title, lead, body text (including table cells), and F.A.Q. at 220 words per minute, with a floor of one minute.
 
 **API surface:**
 
@@ -1703,7 +1706,7 @@ English question and answer documents are required; Indonesian documents are opt
 **Admin UI:**
 
 - `/admin-blog` lists articles with status filters, creates articles, and creates root categories.
-- `/admin-blog/$articleId` edits shared fields plus Indonesian and English versions in tabs. The body editor manipulates structured blocks; there is no rich-text HTML editor.
+- `/admin-blog/$articleId` edits shared fields plus Indonesian and English versions in tabs. Each language has its own hero uploader and cover description. The body editor manipulates structured blocks, including simple tables; there is no rich-text HTML editor. Article settings include the internal consent record.
 - Publishing from the editor saves the current draft first, then publishes the saved version. Unpublish and archive are explicit actions.
 
 ## Content Module

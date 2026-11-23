@@ -1989,7 +1989,7 @@ Blog content is app-managed. PostgreSQL is the only source; Sanity is not involv
 - **Auth:** Public; no session cookie is required
 - **HTTP request:** `POST /rpc/publicContent/blog/get` with `{"json":{"locale":"id","slug":"..."}}`
 - **Output:** A `PublicBlogArticleDto`: the card fields plus `lead`, `seoTitle`, `metaDescription`, `keyFacts`, `body`, `faq`, `gallery`, `media`, `related`, and `alternate`.
-- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. When fewer than three are chosen, the newest published articles from the same subcategory fill the remaining slots. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
+- **Description:** Returns one published version by locale and slug. `body` is a structured block array: `heading`, `paragraph`, `list`, `quote`, `callout`, `table`, `image`, or `embed`. Runs contain `{ text, bold?, italic?, href? }` and no HTML. A table has an optional `header` and `rows`, each row an array of cells, each cell an array of runs. `media` maps media IDs used in the body to `{ id, url, filename, contentType, width, height, byteSize }`. `gallery` items are `{ url, width, height, alt }` with locale alt text. `related` reuses the card projection and keeps the editor's order. When fewer than three are chosen, the newest published articles from the same subcategory fill the remaining slots. `alternate` is `{ locale, slug }` for the sibling locale only when that sibling is published; otherwise it is `null`.
 - **Errors:** `NOT_FOUND` when no published version matches.
 
 ### `publicContent.blog.categories`
@@ -2011,23 +2011,23 @@ Blog content is app-managed. PostgreSQL is the only source; Sanity is not involv
 - **Auth:** Admin
 - **HTTP requests:** `POST /rpc/adminBlog/list` and `POST /rpc/adminBlog/get` with the standard `{"json": <input>}` envelope
 - **Input:** `list` takes `{ status?, locale?, cursor?, limit? }`; `get` takes `{ articleId }`
-- **Output:** `list` returns `{ rows: AdminBlogListRowDto[], nextCursor }` with both locale titles and statuses. `get` returns `AdminBlogArticleDto`, including shared fields, hero, gallery with alt text, tutor references, related IDs, internal notes, article version, both versions, and archive state.
+- **Output:** `list` returns `{ rows: AdminBlogListRowDto[], nextCursor }` with both locale titles and statuses. `get` returns `AdminBlogArticleDto`, including shared fields, per-language hero media, gallery with alt text, tutor references, related IDs, internal notes, consent record, article version, both versions, and archive state.
 - **Description:** Admin reads include drafts. Internal notes and media identifiers never appear in public responses.
 
 ### `adminBlog.createArticle` and `adminBlog.updateArticle`
 
 - **Auth:** Admin
-- **Input:** `createArticle` takes `{ categoryId, subcategoryId?, heroMediaId?, featuredTutorId?, reviewedByTutorId?, internalNotes? }`. `updateArticle` adds `{ articleId, expectedVersion }`.
+- **Input:** `createArticle` takes `{ categoryId, subcategoryId?, featuredTutorId?, reviewedByTutorId?, internalNotes?, consentRecorded?, consentRecordedAt?, consentNotes? }`. `updateArticle` adds `{ articleId, expectedVersion }`.
 - **Output:** `{ articleId, version }` with the shared version incremented by updates
-- **Errors:** `NOT_FOUND` for unknown category or tutor, `BAD_REQUEST` when the subcategory does not belong to the category or a media ID is unregistered, `CONFLICT` for a stale `expectedVersion` or an archived article.
+- **Errors:** `NOT_FOUND` for unknown category or tutor, `BAD_REQUEST` when the subcategory does not belong to the category, when `consentRecorded` is true without `consentRecordedAt`, or when a media ID is unregistered, `CONFLICT` for a stale `expectedVersion` or an archived article.
 
 ### `adminBlog.saveVersion`
 
 - **Auth:** Admin
-- **Input:** `{ articleId, locale, expectedVersion, slug, title, seoTitle, metaDescription, lead, mainKeyword?, secondaryKeywords?, keyFacts, body, faq, heroAlt? }`
-- **Output:** `AdminBlogVersionDto` with computed `readingMinutes` and the incremented version
-- **Description:** Creates the locale version when it does not exist (`expectedVersion` must be 0) or updates it with compare-and-swap. Body embeds must be public Instagram reel/post/TV or TikTok video URLs; the URL is normalized to the `www` host. Links must use `http` or `https`.
-- **Errors:** `CONFLICT` for a duplicate slug, a stale version, or an attempt to rename a slug after the first publish; `BAD_REQUEST` for an unregistered body image.
+- **Input:** `{ articleId, locale, expectedVersion, slug, title, seoTitle, metaDescription, lead, mainKeyword?, secondaryKeywords?, keyFacts, body, faq, heroMediaId?, heroAlt? }`
+- **Output:** `AdminBlogVersionDto` with computed `readingMinutes`, `heroMediaId`, `heroMedia`, and the incremented version
+- **Description:** Creates the locale version when it does not exist (`expectedVersion` must be 0) or updates it with compare-and-swap. `heroMediaId` is per locale; omit it to keep the existing cover, send `null` to clear it. Body embeds must be public Instagram reel/post/TV or TikTok video URLs; the URL is normalized to the `www` host. Links must use `http` or `https`. Tables allow up to 8 columns and 50 rows with equal row widths; a body allows up to 150 blocks.
+- **Errors:** `CONFLICT` for a duplicate slug, a stale version, or an attempt to rename a slug after the first publish; `BAD_REQUEST` for an unregistered body image or hero image.
 
 ### `adminBlog.publishVersion` and `adminBlog.unpublishVersion`
 
@@ -2035,7 +2035,7 @@ Blog content is app-managed. PostgreSQL is the only source; Sanity is not involv
 - **Input:** `{ articleId, locale, expectedVersion }`
 - **Output:** The updated `AdminBlogVersionDto`
 - **Errors:** `BAD_REQUEST` with `data.missingFields` listing every missing field when publish requirements are not met; `NOT_FOUND` when the version does not exist; `CONFLICT` with `data.actualVersion` when `expectedVersion` is stale, or without data when the article is archived.
-- **Description:** Publish requires title, SEO title, slug, meta description, lead, a non-empty body, a hero media ID, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image. The first publish stamps `publishedAt`; later publishes keep it. Both transitions write an audit record.
+- **Description:** Publish requires title, SEO title, slug, meta description, lead, a non-empty body, the language version's hero media ID, hero alt text for the locale, at least one key fact, and locale alt text for every gallery image. The first publish stamps `publishedAt`; later publishes keep it. Both transitions write an audit record.
 
 ### `adminBlog.archiveArticle`, `adminBlog.replaceRelated`, and `adminBlog.replaceGallery`
 
@@ -2945,7 +2945,7 @@ These endpoints use ordinary JSON, independent of the oRPC `{json: input}` envel
 - `GET /office/snapshot`: `Authorization: Bearer <OFFICE_READ_KEY>`; 401 for missing/wrong/unset key, 120 authenticated calls/hour across replicas. Redis caches the snapshot for 120 seconds. Includes system, queues/items, accounts, 7d/30d/90d/thisMonth periods, upcoming sessions, tutors, classes, referrals, calendar, student-facing pricing, taxonomy, content, admin counts and latest 200 audit records. Unavailable facts are null. All calendar-day reporting uses WIB. No tutor fee rate cards or private identity fields are projected.
 - `POST /office/actions/:name`: separate OFFICE_WRITE_KEY, 60 authenticated calls/hour; 403 unless OFFICE_WRITES_ENABLED is exactly `true`. Body `{dryRun:boolean,idempotencyKey:UUID,officeItemId:string,requestedBy:string,approvedBy:string,input:object}`. Maximum HTTP body 1 MiB. Response `{ok:true,dryRun,id,appUrl,result}` or `{ok:false,code,message}`. Replays within seven days return the first committed result. No delete or financial/approval/admin capabilities exist.
 
-Action names: `referrals.createKolCampaign`, `referrals.retireKolCampaign`, `calendar.saveDraft`, `calendar.publish`, `blog.saveDraft`, `blog.publish`, `activities.saveDraft`, `activities.publish`, `faq.saveDraft`, `faq.publish`, `knowledge.addDraft`. Draft updates accept optional `id`; publish takes `id` (blog also `lang`). Campaign create uses existing admin KOL fields; retirement keeps attribution and commission history. Blog takes lang/title/body/category/coverImageUrl; activities title/shortDescription/location/dateTime/body/coverImageUrl; FAQ question/answer/category/onLanding; knowledge title/description/category/fileUrl. Calendar uses existing competition fields. The implementation schemas remain the validation authority.
+Action names: `referrals.createKolCampaign`, `referrals.retireKolCampaign`, `calendar.saveDraft`, `calendar.publish`, `blog.saveDraft`, `blog.publish`, `activities.saveDraft`, `activities.publish`, `faq.saveDraft`, `faq.publish`, `knowledge.addDraft`. Draft updates accept optional `id`; publish takes `id` (blog also `lang`). Campaign create uses existing admin KOL fields; retirement keeps attribution and commission history. Blog takes lang/title/body/category (root or subcategory ID), optional subcategory/slug/coverImageUrl/coverDescription/mainKeyword/secondaryKeywords and supported SEO fields; the cover is saved on the specified language version. Activities title/shortDescription/location/dateTime/body/coverImageUrl; FAQ question/answer/category/onLanding; knowledge title/description/category/fileUrl. Calendar uses existing competition fields. The implementation schemas remain the validation authority.
 
 Assets must originate at `https://office.cogitoacademy.id/`; redirects are refused. Knowledge PDFs are bounded at 20 MiB, validated as PDF and saved unpublished; publishing stays in app. Calendar/KB authoring requires the existing database-content activation configuration. Office action audits store actor `office`, requestedBy, approvedBy and officeItemId privately, while the snapshot audit projection exposes only actor class and target metadata.
 
