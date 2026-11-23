@@ -835,6 +835,49 @@ describe("blog service article creation and updates", () => {
     expect(inserted.heroAlt).toBeNull();
   });
 
+  test("computes reading time for a headerless table", async () => {
+    const { repo, service } = setup({
+      articleById: mock(async () => articleRow()),
+      insertVersion: mock(async (values: any) => ({
+        ...values,
+        id: "v",
+        version: 1,
+        updatedAt: stamp,
+      })),
+    });
+    await service.saveVersion({
+      ...(versionInput as any),
+      expectedVersion: 0,
+      body: [
+        {
+          type: "table",
+          rows: [
+            [[{ text: "Satu" }], [{ text: "Dua" }]],
+            [[{ text: "Tiga" }], [{ text: "Empat" }]],
+          ],
+        },
+      ],
+      heroAlt: null,
+    });
+    const inserted = repo.insertVersion.mock.calls[0]![0] as any;
+    expect(inserted.readingMinutes).toBeGreaterThanOrEqual(1);
+  });
+
+  test("rejects an unregistered hero media", async () => {
+    const { service } = setup({
+      articleById: mock(async () => articleRow()),
+      mediaByIds: mock(async () => [{ id: "m1" }, { id: "m2" }]),
+      mediaById: mock(async () => undefined),
+    });
+    await expect(
+      service.saveVersion({
+        ...(versionInput as any),
+        expectedVersion: 0,
+        heroMediaId: "missing-hero",
+      }),
+    ).rejects.toMatchObject({ code: "BLOG_MEDIA_INVALID" });
+  });
+
   test("rejects a new version with a non-zero expected version", async () => {
     const { service } = setup({
       articleById: mock(async () => articleRow()),

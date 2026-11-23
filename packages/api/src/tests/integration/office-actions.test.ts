@@ -259,6 +259,7 @@ describe("Office actions guarded database acceptance", () => {
       title: prefix,
       lang: "id",
       category: subcategory!.id,
+      subcategory: subcategory!.id,
       slug: officeSlug,
       coverDescription: "Office cover description",
       mainKeyword: "office main keyword",
@@ -317,6 +318,18 @@ describe("Office actions guarded database acceptance", () => {
     expect(revised?.status).toBe("draft");
     expect(revised?.slug).toBe(published?.slug);
     expect(revised?.title).toBe(`${prefix} revised`);
+    await action("blog.saveDraft", {
+      id: article,
+      title: `${prefix} revised without a new cover`,
+      lang: "id",
+      category: category!.id,
+      body: [{ type: "paragraph", runs: [{ text: "No cover update" }] }],
+    });
+    const [withoutCover] = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    expect(withoutCover?.heroMediaId).toBe(revised?.heroMediaId);
     // A new locale has no existing slug/version, including titles whose ASCII slug is empty.
     await action("blog.saveDraft", {
       id: article,

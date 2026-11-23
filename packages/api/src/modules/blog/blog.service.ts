@@ -198,7 +198,7 @@ export function createBlogService(deps: {
 
   function versionDto(
     row: VersionRow,
-    heroMedia: BlogMediaDto | null = null,
+    heroMedia: BlogMediaDto | null,
   ): AdminBlogVersionDto {
     return {
       id: row.id,
