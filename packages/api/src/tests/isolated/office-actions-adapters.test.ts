@@ -23,6 +23,9 @@ mock.module("../../modules/audit", () => ({
 }));
 mock.module("../../modules/blog", () => ({
   createBlogModule: () => ({
+    repo: {
+      categoryById: async (id: string) => ({ id, parentId: null }),
+    },
     service: {
       getAdmin: async () => {
         throw new Error("BLOG_LOOKUP");
