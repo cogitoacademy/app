@@ -22,9 +22,19 @@ import {
   IconArrowForwardUp,
   IconLoader2,
   IconDots,
+  IconTable,
+  IconRowInsertBottom,
+  IconColumnInsertRight,
+  IconTrash,
 } from "@tabler/icons-react";
 import type { Transaction } from "@tiptap/pm/state";
 import { StarterKit } from "@tiptap/starter-kit";
+import {
+  Table,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "@tiptap/extension-table";
 import type {
   BlogBlock,
   BlogMediaDto,
@@ -280,6 +290,10 @@ const extensions = [
   BlogImage,
   BlogCallout,
   BlogEmbed,
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
 ];
 
 export function BlogBodyEditor({
@@ -306,7 +320,7 @@ export function BlogBodyEditor({
         "aria-label": label,
         "aria-multiline": "true",
         class:
-          "min-h-80 w-full px-4 py-6 text-sm leading-6 text-foreground outline-none [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-3xl [&_p]:my-2 [&_p]:leading-6 [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_a]:text-primary [&_a]:underline",
+          "min-h-80 w-full px-4 py-6 text-sm leading-6 text-foreground outline-none [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-3xl [&_p]:my-2 [&_p]:leading-6 [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_a]:text-primary [&_a]:underline [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_td]:align-top [&_th]:border [&_th]:border-border [&_th]:bg-accent [&_th]:p-2 [&_th]:text-left [&_th]:font-semibold",
       },
     },
     onUpdate: ({ editor: current }) =>
@@ -322,6 +336,7 @@ export function BlogBodyEditor({
       bullet: e?.isActive("bulletList"),
       ordered: e?.isActive("orderedList"),
       quote: e?.isActive("blockquote"),
+      table: e?.isActive("table"),
     }),
   });
   useEffect(() => {
@@ -456,6 +471,53 @@ export function BlogBodyEditor({
             <IconDots aria-hidden="true" />
           </MenuTrigger>
           <MenuPopup>
+            <MenuItem
+              onClick={() =>
+                editor
+                  ?.chain()
+                  .focus()
+                  .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                  .run()
+              }
+            >
+              <IconTable />
+              Table
+            </MenuItem>
+            {state?.table ? (
+              <>
+                <MenuItem
+                  onClick={() => editor?.chain().focus().addRowAfter().run()}
+                >
+                  <IconRowInsertBottom />
+                  Add row
+                </MenuItem>
+                <MenuItem
+                  onClick={() => editor?.chain().focus().addColumnAfter().run()}
+                >
+                  <IconColumnInsertRight />
+                  Add column
+                </MenuItem>
+                <MenuItem
+                  onClick={() => editor?.chain().focus().deleteRow().run()}
+                >
+                  <IconTrash />
+                  Delete row
+                </MenuItem>
+                <MenuItem
+                  onClick={() => editor?.chain().focus().deleteColumn().run()}
+                >
+                  <IconTrash />
+                  Delete column
+                </MenuItem>
+                <MenuItem
+                  onClick={() => editor?.chain().focus().deleteTable().run()}
+                >
+                  <IconTrash />
+                  Delete table
+                </MenuItem>
+              </>
+            ) : null}
+            <MenuSeparator />
             <MenuItem
               onClick={() =>
                 editor

@@ -42,7 +42,12 @@ const fixtures = {
     title: "Article",
     lang: "id",
     category: "category-id",
+    subcategory: "subcategory-id",
+    slug: "office-article",
     body: [{ type: "paragraph", runs: [{ text: "Article text" }] }],
+    coverDescription: "Cover description",
+    mainKeyword: "main keyword",
+    secondaryKeywords: ["secondary keyword"],
   },
   "blog.publish": { id, lang: "en" },
   "activities.saveDraft": {

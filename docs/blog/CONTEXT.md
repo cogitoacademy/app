@@ -11,8 +11,8 @@ The server is the source of truth. If this document and the code disagree, the c
 ## Quick start
 
 1. Open `/admin-blog`. Pick an existing article or create one.
-2. Set the category, hero image, gallery, bylines, related articles, and internal notes in the shared panel.
-3. Fill the Indonesian tab, then the English tab.
+2. Set the category, gallery, bylines, related articles, internal notes, and consent record in the shared panel.
+3. Fill the Indonesian tab, then the English tab. Upload a separate cover in each language tab.
 4. Add key facts, FAQ, and alt text for every image.
 5. Save each locale. Fix every item in the publish-gate list.
 6. Publish each locale separately, then open the public URL.
@@ -43,15 +43,15 @@ The canonical host is `https://www.cogitoacademy.id`.
 
 ## 2. One article, two layers
 
-| Layer            | Stores                                                                                                      | Shared across locales |
-| ---------------- | ----------------------------------------------------------------------------------------------------------- | --------------------- |
-| Article          | category, subcategory, hero image, gallery, related articles, bylines, internal notes, archive state        | Yes                   |
-| Language version | slug, title, SEO fields, lead, keywords, key facts, body, FAQ, hero alt, reading time, status, publish date | No                    |
+| Layer            | Stores                                                                                                                  | Shared across locales |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Article          | category, subcategory, gallery, related articles, bylines, internal notes, consent record, archive state                | Yes                   |
+| Language version | slug, title, SEO fields, lead, keywords, key facts, body, FAQ, hero image, hero alt, reading time, status, publish date | No                    |
 
 Consequences:
 
-- Category, hero image, gallery images, related articles, and bylines are shared. Changing them changes both locales.
-- Hero alt text is per locale.
+- Category, gallery images, related articles, and bylines are shared. Changing them changes both locales.
+- Hero image and hero alt text are per locale. Each language can use a different cover.
 - Gallery alt text is per locale, per image.
 - Slugs are per locale and may differ.
 - Publishing one locale does not publish the other.
@@ -59,12 +59,12 @@ Consequences:
 ## 3. Authoring workflow
 
 1. Confirm the category. Create the category first if it does not exist. An article can use one root category and, optionally, one subcategory that belongs to that root.
-2. Open `/admin-blog` and create the article. Choose the category, hero image, byline, related articles, and internal notes.
-3. Write the Indonesian version first. Fill every publish field and add body images with alt text.
+2. Open `/admin-blog` and create the article. Choose the category, byline, related articles, internal notes, and consent record.
+3. Write the Indonesian version first. Fill every publish field, upload the Indonesian cover, and add body images with alt text.
 4. Write the English version as an adaptation of the Indonesian article, not a literal translation. Use the English keyword research, not translated keywords.
-5. Upload the hero image and gallery images. Add alt text for each locale.
+5. Upload the English cover in the English tab and gallery images (shared). Add alt text for each locale.
 6. Add key facts and FAQ entries.
-7. Review both language tabs in the editor. Check headings, links, images, lists, and embeds.
+7. Review both language tabs in the editor. Check headings, links, images, lists, tables, and embeds.
 8. Publish each locale separately. The editor saves the current draft before publishing.
 9. Open the public URL. The marketing site revalidates every 60 seconds, so a new publish can take up to about two minutes to appear.
 
@@ -74,17 +74,17 @@ The editor supports per-locale tabs, a shared panel, publish-gate progress, slug
 
 ### Article fields
 
-| Field              | Required to publish | Limit                                   | Notes                                                                  |
-| ------------------ | ------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
-| Category           | Yes                 | Existing active category                | Root category. Publish fails without it.                               |
-| Subcategory        | No                  | Existing child of the selected category | One level deep only.                                                   |
-| Hero image         | Yes                 | Registered image                        | Shared by both locales.                                                |
-| Featured tutor     | No                  | Existing tutor profile or manual name   | Manual name is shared. Does not create a tutor account.                |
-| Reviewed by        | No                  | Existing tutor profile or manual name   | Public article prefers the linked reviewer name, then the manual name. |
-| Gallery            | No                  | 20 images                               | Each image needs alt text in the locale being published.               |
-| Related articles   | No                  | 3                                       | Used by the public article page.                                       |
-| Internal notes     | No                  | 5,000 characters                        | Admin only. Never public.                                              |
-| Manual byline name | No                  | 200 characters                          | Shared across locales. Only use a real person or team.                 |
+| Field              | Required to publish | Limit                                   | Notes                                                                                                              |
+| ------------------ | ------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Category           | Yes                 | Existing active category                | Root category. Publish fails without it.                                                                           |
+| Subcategory        | No                  | Existing child of the selected category | One level deep only.                                                                                               |
+| Featured tutor     | No                  | Existing tutor profile or manual name   | Manual name is shared. Does not create a tutor account.                                                            |
+| Reviewed by        | No                  | Existing tutor profile or manual name   | Public article prefers the linked reviewer name, then the manual name.                                             |
+| Gallery            | No                  | 20 images                               | Each image needs alt text in the locale being published.                                                           |
+| Related articles   | No                  | 3                                       | Used by the public article page.                                                                                   |
+| Internal notes     | No                  | 5,000 characters                        | Admin only. Never public.                                                                                          |
+| Consent recorded   | No                  | Checkbox + date + 5,000-character note  | Internal student-story record. A checked box requires the consent date. Not a legal consent gate and never public. |
+| Manual byline name | No                  | 200 characters                          | Shared across locales. Only use a real person or team.                                                             |
 
 ### Language version fields
 
@@ -98,8 +98,9 @@ The editor supports per-locale tabs, a shared panel, publish-gate progress, slug
 | Main keyword       | No                        | 200 characters                                            | One per locale.                                                                                            |
 | Secondary keywords | No                        | 20 items, 100 characters each                             | Comma-separated in the editor.                                                                             |
 | Key facts          | Yes                       | 10 items, 500 characters each                             | At least one is required. Three to five works best.                                                        |
-| Body               | Yes                       | 60 blocks                                                 | At least one block.                                                                                        |
+| Body               | Yes                       | 150 blocks                                                | At least one block. Tables count as one block.                                                             |
 | FAQ                | No                        | 20 items                                                  | Question 300 characters, answer 5,000 characters.                                                          |
+| Hero image         | Yes                       | Registered image                                          | Per locale. Indonesian and English may use different covers.                                               |
 | Hero alt           | Yes                       | 500 characters                                            | Describe the image for the active locale.                                                                  |
 | Gallery alt        | Yes when a gallery exists | 500 characters per image per locale                       | Publishing the locale fails if any gallery image lacks its alt.                                            |
 
@@ -132,15 +133,16 @@ The body is structured JSON, never HTML and never Markdown. The admin editor pro
 
 Allowed blocks:
 
-| Type        | Shape                                                                                            | Notes                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `heading`   | `{ "type": "heading", "level": 2 \| 3, "text": "..." }`                                          | H2 sections appear in the table of contents. H3 does not. Do not add H1. |
-| `paragraph` | `{ "type": "paragraph", "runs": [{ "text": "..." }] }`                                           | Runs support `bold`, `italic`, and `href`.                               |
-| `list`      | `{ "type": "list", "style": "ordered" \| "unordered", "items": [[run, ...]] }`                   | Each item is an array of runs.                                           |
-| `quote`     | `{ "type": "quote", "runs": [...], "attribution": "..." }`                                       | Attribution is optional, up to 300 characters.                           |
-| `callout`   | `{ "type": "callout", "title": "...", "runs": [...] }`                                           | Use for one practical tip or warning.                                    |
-| `image`     | `{ "type": "image", "mediaId": "...", "alt": "...", "caption": "..." }`                          | Alt is required. Caption is optional.                                    |
-| `embed`     | `{ "type": "embed", "provider": "instagram" \| "tiktok", "url": "...", "posterMediaId": "..." }` | Poster is optional.                                                      |
+| Type        | Shape                                                                                            | Notes                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `heading`   | `{ "type": "heading", "level": 2 \| 3, "text": "..." }`                                          | H2 sections appear in the table of contents. H3 does not. Do not add H1.    |
+| `paragraph` | `{ "type": "paragraph", "runs": [{ "text": "..." }] }`                                           | Runs support `bold`, `italic`, and `href`.                                  |
+| `list`      | `{ "type": "list", "style": "ordered" \| "unordered", "items": [[run, ...]] }`                   | Each item is an array of runs.                                              |
+| `quote`     | `{ "type": "quote", "runs": [...], "attribution": "..." }`                                       | Attribution is optional, up to 300 characters.                              |
+| `callout`   | `{ "type": "callout", "title": "...", "runs": [...] }`                                           | Use for one practical tip or warning.                                       |
+| `table`     | `{ "type": "table", "header": [[run, ...]], "rows": [[[run, ...]]] }`                            | Header is optional. Up to 8 columns and 50 rows; all rows need equal width. |
+| `image`     | `{ "type": "image", "mediaId": "...", "alt": "...", "caption": "..." }`                          | Alt is required. Caption is optional.                                       |
+| `embed`     | `{ "type": "embed", "provider": "instagram" \| "tiktok", "url": "...", "posterMediaId": "..." }` | Poster is optional.                                                         |
 
 Run shape:
 
@@ -155,9 +157,11 @@ Run shape:
 
 Rules:
 
+- A body has 1 to 150 blocks.
 - A run has 1 to 5,000 characters.
 - Paragraph and quote blocks allow up to 200 runs.
 - Lists allow up to 50 items; each item allows up to 100 runs.
+- Tables allow up to 8 columns and 50 rows. Every row must have the same number of cells as the header (or the first row when no header exists), and each cell allows up to 500 characters.
 - Links must use `http` or `https`. `javascript:` and `data:` URLs are rejected.
 - Instagram embeds accept public reel, post, and TV URLs.
 - TikTok embeds accept `https://www.tiktok.com/@user/video/<id>` URLs.
@@ -174,7 +178,7 @@ Rules:
 - Slugs are independent. A good slug is short, descriptive, and stable.
 - Once a locale has been published, its slug cannot change. A rename returns `SLUG_IMMUTABLE`; create a new article instead.
 - The language switch appears only when the sibling locale is published.
-- `x-default` points to the Indonesian URL when a published sibling exists.
+- `x-default` points to the English URL when a published sibling exists.
 - A single-language article emits only its own hreflang alternate.
 
 ## 7. SEO and public rendering
@@ -190,7 +194,7 @@ The marketing site handles metadata, structured data, sitemap, and caching.
 | Table of contents | H2 blocks                                                               |
 | Canonical         | Self URL                                                                |
 | `hreflang`        | Self, plus sibling only when the sibling is published                   |
-| `x-default`       | Indonesian URL when a sibling is published                              |
+| `x-default`       | English URL when a sibling is published                                 |
 | Structured data   | `BlogPosting` and `BreadcrumbList`                                      |
 | Sitemap           | `/blog-sitemap.xml`, published versions only                            |
 | Social image      | Generated 1200x630 card from the hero, title, category, and Cogito mark |
@@ -268,13 +272,14 @@ Run this for each locale separately.
 | `CONFLICT` (`BLOG_CATEGORY_IN_USE`)                    | The category still has articles or children.           | Move or delete the references, refresh, then delete.                      |
 | `BAD_REQUEST` (`BLOG_CATEGORY_INVALID`)                | The category or subcategory is invalid.                | Check that the subcategory belongs to the selected root category.         |
 | `BAD_REQUEST` (`BLOG_MEDIA_INVALID`)                   | The media upload or registration is invalid.           | Re-upload through the editor. Check type, size, and ownership.            |
+| `BAD_REQUEST` (`BLOG_CONSENT_INVALID`)                 | Consent is marked recorded without a date.             | Set the consent date or clear the checkbox.                               |
 
 ## 11. Known limits
 
 - No full-page draft preview. The editor shows the body as formatted content; the public page is visible only after publish.
 - No automated redirects for slug changes. Slugs are immutable after first publish instead.
 - No publish webhook. Public changes appear after the 60-second revalidation window.
-- No student stories or student photos until a consent model exists.
+- No student stories or student photos until a real consent process exists. The `Consent recorded` field is an internal record, not a legal consent gate.
 - No author profile URL until public tutor profiles exist.
 - Category hubs show articles from the published locale only. A locale with no published articles has an empty blog home.
 - A category hub returns 404 until that locale has at least two published articles in the category.

@@ -3,7 +3,10 @@ import { uploadImage } from "@/lib/upload-image";
 import { client } from "@/utils/orpc";
 
 export async function uploadBlogImage(file: File): Promise<BlogMediaDto> {
-  const image = await uploadImage(file);
+  const image = await uploadImage(file, {
+    maxLongEdge: 3_200,
+    quality: 0.9,
+  });
 
   return client.adminBlog.registerMedia({
     storageKey: image.key,

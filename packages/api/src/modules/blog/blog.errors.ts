@@ -114,6 +114,14 @@ export class BlogArticleArchivedError extends DomainError {
   }
 }
 
+export class BlogConsentInvalidError extends DomainError {
+  readonly domain = "blog";
+
+  constructor(message: string) {
+    super("BLOG_CONSENT_INVALID", message);
+  }
+}
+
 export function mapBlogError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof BlogNotFoundError) return notFound(err.message, err);
   if (err instanceof BlogVersionNotFoundError)
@@ -141,5 +149,7 @@ export function mapBlogError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof BlogCategoryInvalidError)
     return badRequest(err.message, err);
   if (err instanceof BlogMediaInvalidError) return badRequest(err.message, err);
+  if (err instanceof BlogConsentInvalidError)
+    return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

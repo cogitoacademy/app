@@ -35,6 +35,15 @@ function runs(node: JSONContent): BlogRun[] {
   if (node.type === "hardBreak") return [{ text: "\n" }];
   return (node.content ?? []).flatMap(runs);
 }
+function tableRow(cells: BlogRun[][], cellType: "tableHeader" | "tableCell") {
+  return {
+    type: "tableRow" as const,
+    content: cells.map((cell) => ({
+      type: cellType,
+      content: [{ type: "paragraph" as const, content: inline(cell) }],
+    })),
+  };
+}
 export function blogBlocksToTiptap(blocks: BlogBlock[]): JSONContent {
   return {
     type: "doc",
@@ -68,6 +77,16 @@ export function blogBlocksToTiptap(blocks: BlogBlock[]): JSONContent {
                 type: "blogCallout",
                 attrs: { title: block.title },
                 content: inline(block.runs),
+              };
+            case "table":
+              return {
+                type: "table",
+                content: [
+                  ...(block.header
+                    ? [tableRow(block.header, "tableHeader")]
+                    : []),
+                  ...block.rows.map((row) => tableRow(row, "tableCell")),
+                ],
               };
             case "image":
               return { type: "blogImage", attrs: { ...block } };
@@ -123,6 +142,40 @@ export function tiptapToBlogBlocks(doc: JSONContent): BlogBlock[] {
             runs: content,
           },
         ];
+      case "table": {
+        const rows = (node.content ?? []).map((row) =>
+          (row.content ?? []).map((cell) => runs(cell)),
+        );
+        if (rows.length === 0) return [];
+        const firstRow = node.content?.[0]?.content ?? [];
+        const hasHeader =
+          firstRow.length > 0 &&
+          firstRow.every((cell) => cell.type === "tableHeader");
+        let header = hasHeader ? rows[0] : undefined;
+        let body = hasHeader ? rows.slice(1) : rows;
+        if (body.length === 0 && header) {
+          body = [header];
+          header = undefined;
+        }
+        const width = Math.max(...body.map((row) => row.length));
+        const padded = body.map((row) => [
+          ...row,
+          ...Array.from({ length: width - row.length }, () => []),
+        ]);
+        const paddedHeader = header
+          ? [
+              ...header,
+              ...Array.from({ length: width - header.length }, () => []),
+            ]
+          : undefined;
+        return [
+          {
+            type: "table",
+            ...(paddedHeader ? { header: paddedHeader } : {}),
+            rows: padded,
+          },
+        ];
+      }
       case "blogImage":
         return [
           {

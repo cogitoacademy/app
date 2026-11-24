@@ -25,6 +25,9 @@ const articleRow = (over: Record<string, unknown> = {}) => ({
   featuredTutorId: null,
   reviewedByTutorId: null,
   internalNotes: null,
+  consentRecorded: false,
+  consentRecordedAt: null,
+  consentNotes: null,
   archivedAt: null,
   version: 1,
   createdAt: stamp,
@@ -46,6 +49,7 @@ const versionRow = (over: Record<string, unknown> = {}) => ({
   keyFacts: [{ text: "Fact" }],
   body: [{ type: "paragraph", runs: [{ text: "Halo" }] }],
   faq: [],
+  heroMediaId: null,
   heroAlt: "Alt",
   readingMinutes: 1,
   status: "draft",
@@ -301,7 +305,8 @@ describe("blog service admin article detail", () => {
     });
     const result = await service.getAdmin("a");
     expect(result.subcategory).toBeNull();
-    expect(result.heroMedia).toBeNull();
+    expect(result.consentRecorded).toBe(false);
+    expect(result.consentRecordedAt).toBeNull();
     expect(result.featuredTutor).toBeNull();
     expect(result.reviewedByTutor).toBeNull();
     expect(result.versions).toEqual({ id: null, en: null });
@@ -390,7 +395,6 @@ describe("blog service admin article detail", () => {
       articleById: mock(async () =>
         articleRow({
           subcategoryId: "s",
-          heroMediaId: "h",
           featuredTutorId: "t1",
           reviewedByTutorId: "t2",
         }),
@@ -403,15 +407,17 @@ describe("blog service admin article detail", () => {
         titleEn: "Title",
         parentId: null,
       })),
-      mediaById: mock(async () => ({
-        id: "h",
-        storageKey: "hero.webp",
-        filename: "hero.webp",
-        contentType: "image/webp",
-        width: 10,
-        height: 10,
-        byteSize: 100,
-      })),
+      mediaByIds: mock(async () => [
+        {
+          id: "h",
+          storageKey: "hero.webp",
+          filename: "hero.webp",
+          contentType: "image/webp",
+          width: 10,
+          height: 10,
+          byteSize: 100,
+        },
+      ]),
       galleryForArticle: mock(async () => [
         {
           media: {
@@ -430,13 +436,15 @@ describe("blog service admin article detail", () => {
       ]),
       tutorsByIds: mock(async () => [{ id: "t1", name: "Tutor One" }]),
       versionsForArticle: mock(async () => [
-        versionRow({ locale: "id" }),
+        versionRow({ locale: "id", heroMediaId: "h" }),
         versionRow({ id: "ve", locale: "en", publishedAt: "not-a-date" }),
       ]),
       relatedIds: mock(async () => ["r1"]),
     });
     const result = await service.getAdmin("a");
-    expect(result.heroMedia?.url).toBe("https://cdn.test/hero.webp");
+    expect(result.versions.id?.heroMedia?.url).toBe(
+      "https://cdn.test/hero.webp",
+    );
     expect(result.gallery[0]?.altId).toBe("alt");
     expect(result.featuredTutor).toEqual({ id: "t1", name: "Tutor One" });
     expect(result.reviewedByTutor).toBeNull();
@@ -563,7 +571,7 @@ describe("blog service article creation and updates", () => {
       ),
     ).rejects.toMatchObject({ code: "BLOG_NOT_FOUND" });
 
-    const badHero = setup({
+    const badConsent = setup({
       categoryById: mock(async (id: string) => ({
         id,
         parentId: null,
@@ -574,11 +582,11 @@ describe("blog service article creation and updates", () => {
       })),
     });
     await expect(
-      badHero.service.createArticle(
-        { categoryId: "c", heroMediaId: "h" } as any,
+      badConsent.service.createArticle(
+        { categoryId: "c", consentRecorded: true } as any,
         "admin",
       ),
-    ).rejects.toMatchObject({ code: "BLOG_MEDIA_INVALID" });
+    ).rejects.toMatchObject({ code: "BLOG_CONSENT_INVALID" });
 
     const badTutor = setup({
       categoryById: mock(async (id: string) => ({
@@ -663,16 +671,16 @@ describe("blog service article creation and updates", () => {
       ),
     ).rejects.toMatchObject({ code: "BLOG_ARTICLE_ARCHIVED" });
 
-    const badHero = setup({
+    const badConsent = setup({
       articleById: mock(async () => articleRow()),
       categoryById: mock(async () => category),
     });
     await expect(
-      badHero.service.updateArticle(
-        { articleId: "a", expectedVersion: 1, heroMediaId: "h" } as any,
+      badConsent.service.updateArticle(
+        { articleId: "a", expectedVersion: 1, consentRecorded: true } as any,
         "admin",
       ),
-    ).rejects.toMatchObject({ code: "BLOG_MEDIA_INVALID" });
+    ).rejects.toMatchObject({ code: "BLOG_CONSENT_INVALID" });
 
     const stale = setup({
       articleById: mock(async () => articleRow({ version: 3 })),
@@ -827,6 +835,49 @@ describe("blog service article creation and updates", () => {
     expect(inserted.heroAlt).toBeNull();
   });
 
+  test("computes reading time for a headerless table", async () => {
+    const { repo, service } = setup({
+      articleById: mock(async () => articleRow()),
+      insertVersion: mock(async (values: any) => ({
+        ...values,
+        id: "v",
+        version: 1,
+        updatedAt: stamp,
+      })),
+    });
+    await service.saveVersion({
+      ...(versionInput as any),
+      expectedVersion: 0,
+      body: [
+        {
+          type: "table",
+          rows: [
+            [[{ text: "Satu" }], [{ text: "Dua" }]],
+            [[{ text: "Tiga" }], [{ text: "Empat" }]],
+          ],
+        },
+      ],
+      heroAlt: null,
+    });
+    const inserted = repo.insertVersion.mock.calls[0]![0] as any;
+    expect(inserted.readingMinutes).toBeGreaterThanOrEqual(1);
+  });
+
+  test("rejects an unregistered hero media", async () => {
+    const { service } = setup({
+      articleById: mock(async () => articleRow()),
+      mediaByIds: mock(async () => [{ id: "m1" }, { id: "m2" }]),
+      mediaById: mock(async () => undefined),
+    });
+    await expect(
+      service.saveVersion({
+        ...(versionInput as any),
+        expectedVersion: 0,
+        heroMediaId: "missing-hero",
+      }),
+    ).rejects.toMatchObject({ code: "BLOG_MEDIA_INVALID" });
+  });
+
   test("rejects a new version with a non-zero expected version", async () => {
     const { service } = setup({
       articleById: mock(async () => articleRow()),
@@ -909,7 +960,8 @@ describe("blog service article creation and updates", () => {
 });
 
 describe("blog service publishing", () => {
-  const publishable = () => versionRow({ status: "draft", publishedAt: null });
+  const publishable = () =>
+    versionRow({ status: "draft", publishedAt: null, heroMediaId: "h" });
 
   test("rejects missing articles, archived articles, and missing versions", async () => {
     const missingArticle = setup();
@@ -1916,7 +1968,9 @@ describe("uncategorized blog drafts", () => {
       articleById: mock(async () =>
         articleRow({ categoryId: null, heroMediaId: "hero" }),
       ),
-      versionByArticleLocale: mock(async () => versionRow()),
+      versionByArticleLocale: mock(async () =>
+        versionRow({ heroMediaId: "h" }),
+      ),
     });
     await expect(
       service.publishVersion(
@@ -1926,9 +1980,15 @@ describe("uncategorized blog drafts", () => {
     ).rejects.toMatchObject({ code: "PUBLISH_INVALID" });
     expect(repo.updateVersionIfVersion).not.toHaveBeenCalled();
   });
-  test("saving shared details preserves an existing cover", async () => {
+  test("saving shared details preserves consent fields", async () => {
     const { service, repo } = setup({
-      articleById: mock(async () => articleRow({ heroMediaId: "hero" })),
+      articleById: mock(async () =>
+        articleRow({
+          consentRecorded: true,
+          consentRecordedAt: "2026-11-01",
+          consentNotes: "Form on file",
+        }),
+      ),
       categoryById: mock(async () => ({
         id: "c",
         parentId: null,
@@ -1941,7 +2001,9 @@ describe("uncategorized blog drafts", () => {
       "admin",
     );
     expect(repo.updateArticleIfVersion.mock.calls[0]?.[2]).toMatchObject({
-      heroMediaId: "hero",
+      consentRecorded: true,
+      consentRecordedAt: "2026-11-01",
+      consentNotes: "Form on file",
     });
   });
 });

@@ -14,6 +14,7 @@ import {
   BlogArticleArchivedError,
   BlogCategoryInUseError,
   BlogCategoryInvalidError,
+  BlogConsentInvalidError,
   BlogMediaInvalidError,
   BlogNotFoundError,
   BlogPublishInvalidError,
@@ -93,6 +94,15 @@ function bodyText(blocks: BlogBlock[]): string[] {
         return block.runs.map((run) => run.text);
       case "callout":
         return [block.title, ...block.runs.map((run) => run.text)];
+      case "table":
+        return [
+          ...(block.header ?? []).flatMap((cell) =>
+            cell.map((run) => run.text),
+          ),
+          ...block.rows.flatMap((row) =>
+            row.flatMap((cell) => cell.map((run) => run.text)),
+          ),
+        ];
       case "image":
         return [block.alt, block.caption ?? ""];
       case "embed":
@@ -186,7 +196,10 @@ export function createBlogService(deps: {
     };
   }
 
-  function versionDto(row: VersionRow): AdminBlogVersionDto {
+  function versionDto(
+    row: VersionRow,
+    heroMedia: BlogMediaDto | null,
+  ): AdminBlogVersionDto {
     return {
       id: row.id,
       articleId: row.articleId,
@@ -201,6 +214,8 @@ export function createBlogService(deps: {
       keyFacts: row.keyFacts as BlogKeyFact[],
       body: row.body as BlogBlock[],
       faq: row.faq as BlogFaqItem[],
+      heroMediaId: row.heroMediaId,
+      heroMedia,
       heroAlt: row.heroAlt,
       readingMinutes: row.readingMinutes,
       status: row.status as AdminBlogVersionDto["status"],
@@ -208,6 +223,15 @@ export function createBlogService(deps: {
       version: row.version,
       updatedAt: nonNullIso(row.updatedAt),
     };
+  }
+
+  async function versionWithMedia(
+    row: VersionRow,
+  ): Promise<AdminBlogVersionDto> {
+    const hero = row.heroMediaId
+      ? await repo.mediaById(row.heroMediaId)
+      : undefined;
+    return versionDto(row, hero ? mediaDto(hero) : null);
   }
 
   function publicCard(
@@ -322,7 +346,6 @@ export function createBlogService(deps: {
 
   function missingPublishFields(input: {
     version: VersionRow;
-    heroMediaId: string | null;
     gallery: Array<{ altId: string | null; altEn: string | null }>;
   }) {
     const missing: string[] = [];
@@ -333,7 +356,7 @@ export function createBlogService(deps: {
     if (!version.metaDescription.trim()) missing.push("metaDescription");
     if (!version.lead.trim()) missing.push("lead");
     if ((version.body as BlogBlock[]).length === 0) missing.push("body");
-    if (!input.heroMediaId) missing.push("heroMedia");
+    if (!version.heroMediaId) missing.push("heroMedia");
     if (!version.heroAlt?.trim()) missing.push("heroAlt");
     if ((version.keyFacts as BlogKeyFact[]).length === 0)
       missing.push("keyFacts");
@@ -426,9 +449,6 @@ export function createBlogService(deps: {
       const subcategory = article.subcategoryId
         ? await repo.categoryById(article.subcategoryId)
         : undefined;
-      const hero = article.heroMediaId
-        ? await repo.mediaById(article.heroMediaId)
-        : undefined;
       const gallery = await repo.galleryForArticle(article.id);
       const tutorIds = [
         article.featuredTutorId,
@@ -437,13 +457,21 @@ export function createBlogService(deps: {
       const tutors = await repo.tutorsByIds(tutorIds);
       const versions = await repo.versionsForArticle(article.id);
       const relatedArticleIds = await repo.relatedIds(article.id);
-      const bodyMedia = await repo.mediaByIds([
-        ...new Set(
-          versions.flatMap((version) =>
-            bodyMediaIds(version.body as BlogBlock[]),
-          ),
+      const bodyMediaIdSet = new Set(
+        versions.flatMap((version) =>
+          bodyMediaIds(version.body as BlogBlock[]),
         ),
+      );
+      const media = await repo.mediaByIds([
+        ...new Set([
+          ...bodyMediaIdSet,
+          ...versions.flatMap((version) =>
+            version.heroMediaId ? [version.heroMediaId] : [],
+          ),
+        ]),
       ]);
+      const mediaById = new Map(media.map((row) => [row.id, row]));
+      const bodyMedia = media.filter((row) => bodyMediaIdSet.has(row.id));
 
       const toTutor = (id: string | null): BlogTutorRefDto | null => {
         if (!id) return null;
@@ -451,11 +479,19 @@ export function createBlogService(deps: {
         return tutor ? { id: tutor.id, name: tutor.name } : null;
       };
 
+      const toVersion = (locale: BlogLocale) => {
+        const version = versions.find((row) => row.locale === locale);
+        if (!version) return null;
+        const hero = version.heroMediaId
+          ? mediaById.get(version.heroMediaId)
+          : undefined;
+        return versionDto(version, hero ? mediaDto(hero) : null);
+      };
+
       return {
         id: article.id,
         category: category ? categoryRef(category) : null,
         subcategory: subcategory ? categoryRef(subcategory) : null,
-        heroMedia: hero ? mediaDto(hero) : null,
         bodyMedia: bodyMedia.map(mediaDto),
         gallery: gallery.map((row) => ({
           ...mediaDto(row.media),
@@ -469,15 +505,14 @@ export function createBlogService(deps: {
         reviewedByTutor: toTutor(article.reviewedByTutorId),
         relatedArticleIds,
         internalNotes: article.internalNotes,
+        consentRecorded: article.consentRecorded,
+        consentRecordedAt: article.consentRecordedAt ?? null,
+        consentNotes: article.consentNotes,
         archivedAt: iso(article.archivedAt),
         version: article.version,
         versions: {
-          id: versions.find((row) => row.locale === "id")
-            ? versionDto(versions.find((row) => row.locale === "id")!)
-            : null,
-          en: versions.find((row) => row.locale === "en")
-            ? versionDto(versions.find((row) => row.locale === "en")!)
-            : null,
+          id: toVersion("id"),
+          en: toVersion("en"),
         },
         createdAt: nonNullIso(article.createdAt),
         updatedAt: nonNullIso(article.updatedAt),
@@ -487,10 +522,12 @@ export function createBlogService(deps: {
     async createArticle(input: CreateBlogArticleInput, actorId: string | null) {
       if (input.categoryId) await ensureCategory(input.categoryId);
       await ensureSubcategory(input.categoryId, input.subcategoryId);
-      if (input.heroMediaId) {
-        const media = await repo.mediaById(input.heroMediaId);
-        if (!media)
-          throw new BlogMediaInvalidError("Hero image is not registered.");
+      const consentRecorded = input.consentRecorded ?? false;
+      const consentRecordedAt = input.consentRecordedAt ?? null;
+      if (consentRecorded && !consentRecordedAt) {
+        throw new BlogConsentInvalidError(
+          "Set the consent date when consent is recorded.",
+        );
       }
       await ensureTutors([
         ...(input.featuredTutorId ? [input.featuredTutorId] : []),
@@ -499,12 +536,14 @@ export function createBlogService(deps: {
       const row = await repo.createArticle({
         categoryId: input.categoryId ?? null,
         subcategoryId: input.subcategoryId ?? null,
-        heroMediaId: input.heroMediaId ?? null,
         featuredTutorName: input.featuredTutorName ?? null,
         reviewedByName: input.reviewedByName ?? null,
         featuredTutorId: input.featuredTutorId ?? null,
         reviewedByTutorId: input.reviewedByTutorId ?? null,
         internalNotes: input.internalNotes ?? null,
+        consentRecorded,
+        consentRecordedAt,
+        consentNotes: input.consentNotes ?? null,
         createdBy: actorId,
         updatedBy: actorId,
       });
@@ -530,10 +569,22 @@ export function createBlogService(deps: {
             : null
           : input.subcategoryId;
       await ensureSubcategory(categoryId, subcategoryId);
-      if (input.heroMediaId) {
-        const media = await repo.mediaById(input.heroMediaId);
-        if (!media)
-          throw new BlogMediaInvalidError("Hero image is not registered.");
+      const consentRecorded =
+        input.consentRecorded === undefined
+          ? article.consentRecorded
+          : input.consentRecorded;
+      const consentRecordedAt =
+        input.consentRecordedAt === undefined
+          ? article.consentRecordedAt
+          : input.consentRecordedAt;
+      const consentNotes =
+        input.consentNotes === undefined
+          ? article.consentNotes
+          : input.consentNotes;
+      if (consentRecorded && !consentRecordedAt) {
+        throw new BlogConsentInvalidError(
+          "Set the consent date when consent is recorded.",
+        );
       }
       await ensureTutors([
         ...(input.featuredTutorId ? [input.featuredTutorId] : []),
@@ -545,10 +596,6 @@ export function createBlogService(deps: {
         {
           categoryId,
           subcategoryId: subcategoryId ?? null,
-          heroMediaId:
-            input.heroMediaId === undefined
-              ? article.heroMediaId
-              : input.heroMediaId,
           featuredTutorName:
             input.featuredTutorName === undefined
               ? article.featuredTutorName
@@ -569,6 +616,9 @@ export function createBlogService(deps: {
             input.internalNotes === undefined
               ? article.internalNotes
               : input.internalNotes,
+          consentRecorded,
+          consentRecordedAt,
+          consentNotes,
           updatedBy: actorId,
         },
       );
@@ -598,6 +648,15 @@ export function createBlogService(deps: {
         input.articleId,
         input.locale,
       );
+      const heroMediaId =
+        input.heroMediaId === undefined
+          ? (existing?.heroMediaId ?? null)
+          : input.heroMediaId;
+      if (heroMediaId) {
+        const media = await repo.mediaById(heroMediaId);
+        if (!media)
+          throw new BlogMediaInvalidError("Hero image is not registered.");
+      }
       const values = {
         slug: input.slug,
         title: input.title,
@@ -609,6 +668,7 @@ export function createBlogService(deps: {
         keyFacts: input.keyFacts,
         body,
         faq: input.faq,
+        heroMediaId,
         heroAlt: input.heroAlt ?? null,
         readingMinutes: readingMinutes({
           title: input.title,
@@ -631,7 +691,7 @@ export function createBlogService(deps: {
           locale: input.locale,
           ...values,
         });
-        return versionDto(row);
+        return versionWithMedia(row);
       }
 
       if (existing.publishedAt && existing.slug !== input.slug) {
@@ -650,7 +710,7 @@ export function createBlogService(deps: {
           existing.version,
         );
       }
-      return versionDto(row);
+      return versionWithMedia(row);
     },
 
     async publishVersion(
@@ -675,7 +735,6 @@ export function createBlogService(deps: {
       const gallery = await repo.galleryForArticle(article.id);
       const missing = missingPublishFields({
         version,
-        heroMediaId: article.heroMediaId,
         gallery,
       });
       if (!article.categoryId) missing.push("categoryId");
@@ -708,7 +767,7 @@ export function createBlogService(deps: {
         afterState: { status: row.status },
         details: { articleId: version.articleId, locale: version.locale },
       });
-      return versionDto(row);
+      return versionWithMedia(row);
     },
 
     async unpublishVersion(
@@ -751,7 +810,7 @@ export function createBlogService(deps: {
         afterState: { status: row.status },
         details: { articleId: version.articleId, locale: version.locale },
       });
-      return versionDto(row);
+      return versionWithMedia(row);
     },
 
     async archiveArticle(

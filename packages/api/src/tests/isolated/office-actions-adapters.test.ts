@@ -23,6 +23,14 @@ mock.module("../../modules/audit", () => ({
 }));
 mock.module("../../modules/blog", () => ({
   createBlogModule: () => ({
+    repo: {
+      categoryById: async (id: string) => {
+        if (id === "missing-category" || id === "missing-sub") return undefined;
+        if (id === "wrong-sub") return { id, parentId: "other" };
+        if (id === "sub") return { id, parentId: "category" };
+        return { id, parentId: null };
+      },
+    },
     service: {
       getAdmin: async () => {
         throw new Error("BLOG_LOOKUP");
@@ -131,6 +139,61 @@ test("a new blog draft does not require a cover image", async () => {
         lang: "id",
         title: "Title",
         category: "category",
+        body: [{ type: "paragraph", runs: [{ text: "Body" }] }],
+      }),
+    ),
+  ).rejects.toThrow("BLOG_CREATE");
+});
+test("a blog draft rejects an unknown category", async () => {
+  await expect(
+    executeOfficeAction(
+      "blog.saveDraft",
+      body({
+        lang: "id",
+        title: "Title",
+        category: "missing-category",
+        body: [{ type: "paragraph", runs: [{ text: "Body" }] }],
+      }),
+    ),
+  ).rejects.toThrow("OFFICE_TARGET_NOT_FOUND");
+});
+test("a blog draft rejects an unknown subcategory", async () => {
+  await expect(
+    executeOfficeAction(
+      "blog.saveDraft",
+      body({
+        lang: "id",
+        title: "Title",
+        category: "category",
+        subcategory: "missing-sub",
+        body: [{ type: "paragraph", runs: [{ text: "Body" }] }],
+      }),
+    ),
+  ).rejects.toThrow("OFFICE_TARGET_NOT_FOUND");
+});
+test("a blog draft rejects a subcategory under another parent", async () => {
+  await expect(
+    executeOfficeAction(
+      "blog.saveDraft",
+      body({
+        lang: "id",
+        title: "Title",
+        category: "category",
+        subcategory: "wrong-sub",
+        body: [{ type: "paragraph", runs: [{ text: "Body" }] }],
+      }),
+    ),
+  ).rejects.toThrow("OFFICE_TARGET_NOT_FOUND");
+});
+test("a blog draft accepts a subcategory under the selected category", async () => {
+  await expect(
+    executeOfficeAction(
+      "blog.saveDraft",
+      body({
+        lang: "id",
+        title: "Title",
+        category: "category",
+        subcategory: "sub",
         body: [{ type: "paragraph", runs: [{ text: "Body" }] }],
       }),
     ),

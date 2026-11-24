@@ -43,6 +43,14 @@ describe("blog rich text", () => {
         url: "https://www.tiktok.com/@cogito/video/123",
         posterMediaId: "poster",
       },
+      {
+        type: "table",
+        header: [[{ text: "Competition" }], [{ text: "Level" }]],
+        rows: [
+          [[{ text: "MUN", bold: true }], [{ text: "SMA" }]],
+          [[{ text: "WSC" }], [{ text: "SMP" }]],
+        ],
+      },
     ];
     expect(tiptapToBlogBlocks(blogBlocksToTiptap(blocks))).toEqual(blocks);
   });

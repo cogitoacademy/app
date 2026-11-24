@@ -208,6 +208,18 @@ describe("Office actions guarded database acceptance", () => {
       })
       .returning();
     ids.add(category!.id);
+    const [subcategory] = await db
+      .insert(blogCategory)
+      .values({
+        id: crypto.randomUUID(),
+        parentId: category!.id,
+        titleId: `${prefix} sub`,
+        titleEn: `${prefix} sub`,
+        slugId: `${prefix}-sub`,
+        slugEn: `${prefix}-sub`,
+      })
+      .returning();
+    ids.add(subcategory!.id);
     const code =
       `O${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`.toUpperCase();
     await action("referrals.createKolCampaign", {
@@ -242,10 +254,16 @@ describe("Office actions guarded database acceptance", () => {
       )[0]?.isActive,
     ).toBe(false);
     await action("calendar.publish", { id: event });
+    const officeSlug = `office-${Date.now()}`;
     const article = await action("blog.saveDraft", {
       title: prefix,
       lang: "id",
-      category: category!.id,
+      category: subcategory!.id,
+      subcategory: subcategory!.id,
+      slug: officeSlug,
+      coverDescription: "Office cover description",
+      mainKeyword: "office main keyword",
+      secondaryKeywords: ["office secondary", "office third"],
       body: [{ type: "paragraph", runs: [{ text: "Test article" }] }],
       coverImageUrl: "https://office.cogitoacademy.id/test.jpg",
       seoTitle: "Test article",
@@ -253,6 +271,24 @@ describe("Office actions guarded database acceptance", () => {
       lead: "Test lead",
       keyFacts: [{ text: "Fact" }],
     });
+    const [savedArticle] = await db
+      .select()
+      .from(blogArticle)
+      .where(eq(blogArticle.id, article));
+    expect(savedArticle?.categoryId).toBe(category!.id);
+    expect(savedArticle?.subcategoryId).toBe(subcategory!.id);
+    const [savedVersion] = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    expect(savedVersion?.slug).toBe(officeSlug);
+    expect(savedVersion?.heroAlt).toBe("Office cover description");
+    expect(savedVersion?.mainKeyword).toBe("office main keyword");
+    expect(savedVersion?.secondaryKeywords).toEqual([
+      "office secondary",
+      "office third",
+    ]);
+    expect(savedVersion?.heroMediaId).toBeTruthy();
     await action("blog.publish", { id: article, lang: "id" });
     await expect(
       executeOfficeAction(
@@ -282,6 +318,18 @@ describe("Office actions guarded database acceptance", () => {
     expect(revised?.status).toBe("draft");
     expect(revised?.slug).toBe(published?.slug);
     expect(revised?.title).toBe(`${prefix} revised`);
+    await action("blog.saveDraft", {
+      id: article,
+      title: `${prefix} revised without a new cover`,
+      lang: "id",
+      category: category!.id,
+      body: [{ type: "paragraph", runs: [{ text: "No cover update" }] }],
+    });
+    const [withoutCover] = await db
+      .select()
+      .from(blogArticleVersion)
+      .where(eq(blogArticleVersion.articleId, article));
+    expect(withoutCover?.heroMediaId).toBe(revised?.heroMediaId);
     // A new locale has no existing slug/version, including titles whose ASCII slug is empty.
     await action("blog.saveDraft", {
       id: article,

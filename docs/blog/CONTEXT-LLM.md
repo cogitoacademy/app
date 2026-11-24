@@ -11,7 +11,7 @@ This file is written to be read by both humans and machines. Every constraint he
 3. Never change a slug after that locale has been published. The server rejects it with `SLUG_IMMUTABLE`.
 4. Never publish without explicit human approval, unless the user is an authorized admin and directly asks you to publish.
 5. Never use HTML or Markdown as the stored body. Emit structured blocks only.
-6. Never create student stories, student profiles, or student photos. No consent model exists.
+6. Never publish student stories, student profiles, or student photos unless a real signed consent process exists and the admin has recorded consent in the article. The consent fields are an internal record, not legal consent.
 7. Never invent a byline, reviewer, or credential. Use only names supplied by the user or returned by the API.
 8. Ask only for blocking inputs. If a non-blocking field is missing, omit it rather than inventing a value.
 9. When facts conflict, prefer the code, then `CONTEXT.md`, then this file.
@@ -139,8 +139,8 @@ Rules:
 - `mainKeyword` max 200. `secondaryKeywords` max 20 items, 100 characters each.
 - `keyFacts` max 10 items, 500 characters each, at least 1 to publish.
 - `faq` max 20 items. Question max 300, answer max 5,000.
-- `heroAlt` max 500. Required to publish.
-- Body max 60 blocks.
+- `heroAlt` max 500. Required to publish. The cover image itself is per locale (`heroMediaId` on the language version).
+- Body max 150 blocks.
 
 ## 6. Block contract
 
@@ -152,6 +152,7 @@ Allowed block types and exact shapes:
 { "type": "list", "style": "unordered", "items": [[{ "text": "Item one" }], [{ "text": "Item two" }]] }
 { "type": "quote", "runs": [{ "text": "Quoted text" }], "attribution": "Name, role" }
 { "type": "callout", "title": "Practical tip", "runs": [{ "text": "One useful tip." }] }
+{ "type": "table", "header": [[{ "text": "Competition" }], [{ "text": "Level" }]], "rows": [[[{ "text": "MUN" }], [{ "text": "SMA" }]]] }
 { "type": "image", "mediaId": "<registered-media-id>", "alt": "What the image shows", "caption": "Optional caption" }
 { "type": "embed", "provider": "instagram", "url": "https://www.instagram.com/reel/<id>/", "posterMediaId": "<registered-media-id>" }
 ```
@@ -163,6 +164,7 @@ Constraints:
 - `href` must be `http` or `https`. No `javascript:` or `data:`.
 - Paragraph and quote: 1 to 200 runs.
 - List: 1 to 50 items; each item has 1 to 100 runs.
+- Table: up to 8 columns and 50 rows. `header` is optional. Every row must have the same number of cells as the header (or the first row when no header exists). Each cell is an array of runs with at most 500 characters.
 - `attribution` max 300. `callout.title` max 300. `image.alt` max 500. `image.caption` max 500.
 - Image `alt` is required and must not be empty.
 - Embed URL max 2,048 characters, must use `https`, and has no query string or fragment.
@@ -182,7 +184,7 @@ A locale can publish only when every item is true. This is the server gate, not 
 - [ ] `metaDescription` is non-empty.
 - [ ] `lead` is non-empty.
 - [ ] `body` has at least one block.
-- [ ] `heroMediaId` is set.
+- [ ] `heroMediaId` is set on this language version.
 - [ ] `heroAlt` is non-empty for this locale.
 - [ ] `keyFacts` has at least one item.
 - [ ] Every gallery image has alt text for this locale.
@@ -200,12 +202,12 @@ Order:
 
 1. Resolve the category with `adminBlog.categories.list`. Create one with `adminBlog.categories.create` only if the user approved a new category.
 2. Create the article with `adminBlog.createArticle`:
-   `{ "categoryId": "...", "subcategoryId": null, "heroMediaId": "...", "featuredTutorName": null, "reviewedByName": "...", "internalNotes": "..." }`
+   `{ "categoryId": "...", "subcategoryId": null, "featuredTutorName": null, "reviewedByName": "...", "internalNotes": "...", "consentRecorded": false, "consentRecordedAt": null, "consentNotes": null }`
 3. Upload media when needed:
    `upload.createUploadUrl` with `{ filename, contentType, contentLength }`. Send the bytes to `uploadUrl` with the returned `method` and `fields`; use `PUT` for R2 and `POST` for local mode. Then call `adminBlog.registerMedia` with `{ storageKey, filename, contentType, width, height, byteSize }`. The storage key must belong to the signed-in admin.
 4. Save each locale with `adminBlog.saveVersion`:
-   `{ articleId, locale, expectedVersion: 0, ...versionPayload }`
-   Use `expectedVersion: 0` for the first save. Use the returned `version` for later saves.
+   `{ articleId, locale, expectedVersion: 0, heroMediaId: "<registered-media-id>", ...versionPayload }`
+   Use `expectedVersion: 0` for the first save. Use the returned `version` for later saves. Each locale has its own `heroMediaId`; a different cover per language is expected.
 5. Replace gallery and related records when they changed:
    `adminBlog.replaceGallery` with `{ articleId, expectedVersion: <article version>, images: [{ mediaId, altId, altEn }] }`
    `adminBlog.replaceRelated` with `{ articleId, expectedVersion: <article version>, relatedArticleIds: [] }`
@@ -248,7 +250,7 @@ Server-enforced rules are in sections 5 to 7. These are editorial rules.
 - Do not fabricate a quote or attribute a quote to a generic "expert".
 - Do not stuff the main keyword. Use it in the title, lead, one H2, and naturally in the body.
 - Do not add a call to action in every section. One clear next step is enough.
-- Do not use student stories or student photos.
+- Do not use student stories or student photos without a real signed consent process and a recorded consent entry.
 - Do not use a tutor photo unless the user supplied a licensed image and the tutor approved publication.
 - Link to Cogito pages with the correct locale prefix: `/id/...` or `/en/...`.
 - Use descriptive link text. Do not use "click here".
@@ -279,7 +281,7 @@ Stop and explain when the user asks to:
 - Publish a locale whose required fields are incomplete.
 - Add a category that does not exist without approval.
 - Rename a slug that was already published.
-- Publish a student story, student profile, or student photo.
+- Publish a student story, student profile, or student photo without a real signed consent process and a recorded consent entry.
 - Invent a statistic, fee, date, competition rule, reviewer, tutor, or credential.
 - Insert raw HTML, iframe markup, JavaScript, or Markdown into the body.
 - Use an Instagram or TikTok URL that fails the allowed patterns.

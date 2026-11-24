@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   blogBlockSchema,
+  blogBodySchema,
   blogRunSchema,
   createBlogArticleInput,
   normalizeEmbedUrl,
@@ -100,14 +101,14 @@ describe("blog type schemas", () => {
     const parsed = createBlogArticleInput.parse({
       categoryId: "c",
       subcategoryId: "",
-      heroMediaId: "   ",
       featuredTutorId: "t",
       internalNotes: "   ",
+      consentRecordedAt: "",
     });
     expect(parsed.subcategoryId).toBeNull();
-    expect(parsed.heroMediaId).toBeNull();
     expect(parsed.featuredTutorId).toBe("t");
     expect(parsed.internalNotes).toBeNull();
+    expect(parsed.consentRecordedAt).toBeNull();
   });
 
   test("rejects duplicate related articles", () => {
@@ -197,4 +198,56 @@ test("manual blog names are optional, bounded and normalize blank values", async
     createBlogArticleInput.safeParse({ featuredTutorName: "a".repeat(201) })
       .success,
   ).toBe(false);
+});
+
+describe("blog table blocks", () => {
+  const table = {
+    type: "table",
+    header: [[{ text: "A" }], [{ text: "B", bold: true }]],
+    rows: [
+      [[{ text: "1" }], [{ text: "2", href: "https://example.com" }]],
+      [[{ text: "3" }], [{ text: "4" }]],
+    ],
+  };
+
+  test("accepts a simple table with an optional header", () => {
+    expect(blogBlockSchema.safeParse(table).success).toBe(true);
+    expect(
+      blogBlockSchema.safeParse({
+        type: "table",
+        rows: [[[{ text: "only" }]]],
+      }).success,
+    ).toBe(true);
+  });
+
+  test("rejects mismatched rows, too many columns, and oversized cells", () => {
+    expect(
+      blogBlockSchema.safeParse({
+        ...table,
+        rows: [[[{ text: "1" }]], [[{ text: "2" }], [{ text: "3" }]]],
+      }).success,
+    ).toBe(false);
+    expect(
+      blogBlockSchema.safeParse({
+        type: "table",
+        rows: [
+          Array.from({ length: 9 }, (_, index) => [{ text: String(index) }]),
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      blogBlockSchema.safeParse({
+        type: "table",
+        rows: [[[{ text: "x".repeat(501) }]]],
+      }).success,
+    ).toBe(false);
+  });
+
+  test("accepts 150 blocks and rejects 151", () => {
+    const block = { type: "paragraph", runs: [{ text: "Text" }] };
+    expect(blogBodySchema.safeParse(Array(150).fill(block)).success).toBe(true);
+    expect(blogBodySchema.safeParse(Array(151).fill(block)).success).toBe(
+      false,
+    );
+  });
 });

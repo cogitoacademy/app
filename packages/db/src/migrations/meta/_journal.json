@@ -666,6 +666,13 @@
       "when": 1794661040220,
       "tag": "0094_campaign_welcome_marks",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1795422840396,
+      "tag": "0095_lame_sue_storm",
+      "breakpoints": true
     }
   ]
 }

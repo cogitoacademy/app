@@ -162,6 +162,8 @@ The marketing renderer in `cogito-acad` is implemented on branch `feat/bilingual
 
 Phase 5 content and the Phase 6 admin E2E suite are not implemented. Full Sanity removal also remains separate; competitions and student resources are unchanged. See `docs/plans/active/BILINGUAL-BLOG.md` for the remaining phases.
 
+Blog client-feedback revision (23 November 2026): hero media moved from the shared article to `blog_article_version`, with migration `0095_lame_sue_storm.sql` backfilling existing covers. The editor now uploads a separate cover per language; `adminBlog.saveVersion` accepts `heroMediaId`; the publish gate requires the version's own hero. Bodies allow 150 blocks and a simple `table` block (optional header, up to 8 columns and 50 rows). Article settings add an internal `Consent recorded` checkbox/date/note pair, which is not a legal consent gate and never public. The Office `blog.saveDraft` action accepts `slug`, `coverDescription`, `mainKeyword`, `secondaryKeywords`, and `subcategory`; `category` may be a root or subcategory ID and parent resolution is automatic. The marketing site now emits www canonicals, `x-default` → English, short `Judul | Cogito Academy` titles, quality-90 blog images, and table rendering. The legacy shared hero column remains for one release before a follow-up drop.
+
 ## Class catalog and referral controls (2 November 2026)
 
 The student class page now has an **Upcoming classes** section above the class

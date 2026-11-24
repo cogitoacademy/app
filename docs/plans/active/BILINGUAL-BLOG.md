@@ -1,6 +1,6 @@
 # Bilingual Blog — App-Managed Content Plan
 
-Status: App slice and marketing renderer implemented; content pilot and release verification pending
+Status: App slice, marketing renderer, and client-feedback revision implemented; content pilot and release verification pending
 Date: 2026-11-02
 Primary repository: `cogito-app` (DB, API, admin, media)
 Renderer repository: `cogito-acad` (public blog pages, metadata, sitemap)
@@ -21,7 +21,7 @@ Branch `feat/bilingual-blog` in `cogito-acad` contains the renderer and the Phas
 
 - Routes `/[locale]/blog`, `/[locale]/blog/[slug]`, the Indonesian and English category hubs, and `/blog-sitemap.xml`.
 - Zod-validated API client, article cards, structured block renderer, click-to-load Instagram/TikTok facades, table of contents, FAQ, related articles, sticky consultation, `BlogPosting` and `BreadcrumbList` JSON-LD, and a generated 1200x630 OG card.
-- Article metadata emits self and sibling `hreflang`, with Indonesian `x-default` only when a sibling is published. Single-language articles emit only their self alternate.
+- Article metadata emits self and sibling `hreflang`, with English `x-default` only when a sibling is published. Single-language articles emit only their self alternate.
 - The category hub returns 404 when fewer than two published articles exist in that locale, and mixed locale/segment pairs return 404.
 - Marketing tests cover payload rejection, 404/500 mapping, metadata alternates, and sitemap alternates. `next build` completes with zero published articles.
 - Phase 0 landed in the same branch: canonical `www` host, apex 308 redirect, real 404s, robots cleanup, sitemap dates, homepage `h1` and metadata, and hidden landing FAQ on API failure.
@@ -34,6 +34,8 @@ Deviations from the original Phase 3 sketch:
 - The marketing renderer lives in its own branch and PR because it is a separate repository and deployment.
 
 Open work: the content pilot, editorial checklist, admin E2E, and release verification remain for Phases 5 and 6.
+
+Client-feedback revision (23 November 2026, app PR pending): hero media is now per language version with migration `0095_lame_sue_storm.sql` and a backfill from the legacy shared column. The admin studio uploads a separate cover in each language tab; `adminBlog.saveVersion` accepts `heroMediaId`; the publish gate requires the version's own cover. `blog.saveDraft` now accepts `slug`, `coverDescription`, `mainKeyword`, `secondaryKeywords`, and an optional `subcategory`, and resolves a subcategory ID passed as `category`. Bodies allow 150 blocks and a structured `table` block (optional header, up to 8 columns and 50 rows). Article settings add an internal consent record (`consentRecorded`, `consentRecordedAt`, `consentNotes`) for future student stories; it is not a legal consent gate. The marketing PR adds www canonicals, `x-default` → English, short blog titles, quality-90 images, and table rendering.
 
 ## Goal
 
@@ -93,7 +95,7 @@ Traffic targets are not part of the acceptance gate. Organic performance is revi
 
 ## Non-goals
 
-- Student stories, student profiles, and student photos. No consent model exists, and a checkbox is not consent.
+- Student stories, student profiles, and student photos until a real consent process exists. The admin now records an internal consent checkbox/date/note, but that record is not legal consent.
 - Tutor profile pages. Byline shows the tutor name as text until public profiles ship.
 - Program pages and a required related-program field.
 - Subcategory hub pages beyond the pilot category.
@@ -104,14 +106,14 @@ Traffic targets are not part of the acceptance gate. Organic performance is revi
 
 ## Decisions
 
-1. **Data model:** `blog_article` stores shared fields; `blog_article_version` stores per-language fields. Two versions maximum, one per locale, enforced by a unique constraint.
+1. **Data model:** `blog_article` stores shared fields; `blog_article_version` stores per-language fields, including the hero image. Two versions maximum, one per locale, enforced by a unique constraint.
 2. **Publish state:** lives on the version row (`draft`, `in_review`, `published`, `archived`). The shared article has no publish flag.
 3. **Slug lock:** once a version has `publishedAt`, the service rejects any slug change. This is a real server-side guarantee, not an editorial convention.
 4. **Tutors:** `featuredTutorId` and `reviewedByTutorId` are real foreign keys to `tutor_profile`. No duplicate person records, no cross-system ID strings. The public DTO includes the tutor name and a profile URL only when the tutor is publicly visible.
 5. **Categories:** one row can be a root category or a subcategory through `parentId`, one level deep. Articles reference a root category and an optional subcategory that belongs to it.
 6. **Media:** use the existing signed-upload flow. A `blog_media` row records the storage key, content type, uploader, and optional pixel dimensions. The public URL is derived with `StoragePort.resolvePublicUrl`. No image bytes pass through the app in Phase 1. Delivery uses the existing R2 public host and the marketing site's `next/image` optimizer. An app image proxy is a documented option, not a Phase 1 requirement.
 7. **Freshness:** marketing pages use ISR with `revalidate = 60`. Publish and unpublish become visible within two minutes without a cross-service webhook. Add a webhook only if 60 seconds proves insufficient.
-8. **`x-default`:** points to Indonesian, matching `defaultLocale: 'id'` in the marketing router. The source spec proposed English; that conflicts with the site's actual default.
+8. **`x-default`:** points to English for blog pages, per the client's 23 November 2026 decision. The site router still defaults to Indonesian; this is a blog-specific SEO choice and is documented in the blog docs.
 9. **Body format:** JSONB Portable-Text-like blocks validated by Zod. No raw HTML column. Marketing renders blocks as React components and never uses `dangerouslySetInnerHTML`.
 10. **Admin access:** `adminProcedure` only. No editor role in Phase 1. If a non-admin editor role is needed, that is a separate authorization change.
 11. **Social embeds:** store a structured `{ provider, url, posterMediaId? }` object, never raw embed HTML. Validate the host and URL shape at write time. Render a facade first and load the provider only after a click. Do not call Meta oEmbed in Phase 1. Meta removed `thumbnail_url` from Instagram oEmbed responses in 2025, so the poster must be uploaded or omitted.
@@ -192,7 +194,9 @@ Constraints and indexes:
 - `id`: uuid primary key.
 - `categoryId`: uuid, not null, references `blog_category`, `onDelete: restrict`.
 - `subcategoryId`: uuid, nullable, references `blog_category`, `onDelete: restrict`.
-- `heroMediaId`: uuid, nullable, references `blog_media`, `onDelete: restrict`. Required by the publish gate, not by the insert.
+- `consentRecorded`: boolean, not null, default false.
+- `consentRecordedAt`: date, nullable. Required when `consentRecorded` is true.
+- `consentNotes`: text, nullable. Admin-only.
 - `featuredTutorId`: uuid, nullable, references `tutor_profile`, `onDelete: set null`.
 - `reviewedByTutorId`: uuid, nullable, references `tutor_profile`, `onDelete: set null`.
 - `internalNotes`: text, nullable.
@@ -214,6 +218,7 @@ Validation in the service: `subcategoryId`, when set, must have `parentId = cate
 - `keyFacts`: jsonb, not null, default `[]`.
 - `body`: jsonb, not null.
 - `faq`: jsonb, not null, default `[]`.
+- `heroMediaId`: uuid, nullable, references `blog_media`, `onDelete: restrict`. Per locale; required by the publish gate.
 - `heroAlt`: text, nullable. Required by the publish gate.
 - `readingMinutes`: integer, not null, default 1.
 - `status`: text, not null, default `draft`. Check in `('draft','in_review','published','archived')`.
@@ -286,6 +291,7 @@ type BlogBlock =
   | { type: "list"; style: "ordered" | "unordered"; items: BlogRun[][] }
   | { type: "quote"; runs: BlogRun[]; attribution?: string }
   | { type: "callout"; title: string; runs: BlogRun[] }
+  | { type: "table"; header?: BlogRun[][]; rows: BlogRun[][][] }
   | { type: "image"; mediaId: string; alt: string; caption?: string }
   | {
       type: "embed";
@@ -295,7 +301,7 @@ type BlogBlock =
     };
 ```
 
-`BlogRun` supports `text`, `bold`, `italic`, and `href`. Links accept `http:` and `https:` only. Limits: 60 blocks per body, 5,000 characters per text run, 300 characters per heading, 500 characters per paragraph run set. Reject unknown block types and unknown keys with `.strict()`.
+`BlogRun` supports `text`, `bold`, `italic`, and `href`. Links accept `http:` and `https:` only. Limits: 150 blocks per body, 5,000 characters per text run, 300 characters per heading, 500 characters per paragraph run set, and up to 8 columns / 50 rows per table. Reject unknown block types and unknown keys with `.strict()`.
 
 Embed validation:
 
@@ -318,7 +324,7 @@ Validate that a subcategory's parent is a root category and that a root category
 
 - `adminBlog.list({ status?, locale?, cursor?, limit? })` returns article ID, title per locale, category, locale statuses, updated time, and publish state.
 - `adminBlog.get({ articleId })` returns shared fields, both version drafts, gallery, related IDs, and media metadata.
-- `adminBlog.createArticle({ categoryId, subcategoryId?, heroMediaId?, featuredTutorId?, reviewedByTutorId?, internalNotes? })` returns the new article ID.
+- `adminBlog.createArticle({ categoryId, subcategoryId?, featuredTutorId?, reviewedByTutorId?, internalNotes?, consentRecorded?, consentRecordedAt?, consentNotes? })` returns the new article ID.
 - `adminBlog.updateArticle({ articleId, expectedArticleVersion, ...sharedFields })`.
 - `adminBlog.saveVersion({ articleId, locale, expectedVersion, ...localeFields })`. Creates the row on first save.
 - `adminBlog.publishVersion({ articleId, locale, expectedVersion })`.
@@ -422,7 +428,7 @@ Head contract:
 - Self canonical.
 - Self `hreflang`.
 - Sibling `hreflang` only when the sibling is published.
-- `x-default` points to Indonesian when a sibling exists. For a single-language article, emit only the self alternate. Document this choice in the plan and the blog docs.
+- `x-default` points to English when a sibling exists. For a single-language article, emit only the self alternate. Document this choice in the plan and the blog docs.
 - `BlogPosting`: `headline`, `description`, `image` with 16:9, 4:3, and 1:1 entries, `datePublished`, `dateModified`, `inLanguage`, `author` (`Person` only when a public tutor profile URL exists, otherwise `Organization`), `publisher` with a raster logo and explicit width and height, `mainEntityOfPage`.
 - `BreadcrumbList`: blog home, category, article.
 - No `VideoObject`. No author URL that 404s.
